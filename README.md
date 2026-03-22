@@ -12,4 +12,4 @@ Then open `http://localhost:8000`.
 
 ## Deployment
 
-This repository is configured to deploy automatically to GitHub Pages via GitHub Actions when changes are pushed to `main`.
+This repository is published directly by GitHub Pages from the root of the `main` branch.
