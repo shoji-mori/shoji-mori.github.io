@@ -9,7 +9,7 @@
   <meta name="description" content="Personal academic website of Shoji Mori, Shuimu Fellow at Tsinghua University. Researcher in theoretical astrophysics, protoplanetary disks, and planet formation.">
   <meta name="keywords" content="Shoji Mori, Astrophysicist, Tsinghua University, Protoplanetary Disks, Planet Formation, MHD Simulations, Theoretical Astronomy">
   <link rel="canonical" href="https://shoji-mori.github.io/">
-  
+
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://shoji-mori.github.io/">
@@ -120,8 +120,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Outfit:wght@300;400;500;700&amp;display=swap" rel="stylesheet">
-  
-  <link rel="stylesheet" href="style.css?v=7">
+
+  <link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
   <a href="#home" class="skip-link">Skip to main content</a>
@@ -145,9 +145,10 @@
       <ul class="nav-links" id="primary-nav">
         <li><a href="#home"><span class="en" lang="en">Home</span><span class="ja" lang="ja">ホーム</span></a></li>
         <li><a href="#research"><span class="en" lang="en">Research</span><span class="ja" lang="ja">研究内容</span></a></li>
-        <li><a href="#publications"><span class="en" lang="en">Publications</span><span class="ja" lang="ja">論文</span></a></li>
+        <li><a href="#publications"><span class="en" lang="en">Publications</span><span class="ja" lang="ja">論文・解説</span></a></li>
         <li><a href="#presentations"><span class="en" lang="en">Presentations</span><span class="ja" lang="ja">学会発表</span></a></li>
-        <li><a href="#cv"><span class="en" lang="en">CV</span><span class="ja" lang="ja">経歴</span></a></li>
+        <li><a href="#materials"><span class="en" lang="en">Materials</span><span class="ja" lang="ja">公開資料</span></a></li>
+        <li><a href="#cv"><span class="en" lang="en">Experience</span><span class="ja" lang="ja">経歴</span></a></li>
         <li><a href="#contact"><span class="en" lang="en">Contact</span><span class="ja" lang="ja">連絡先</span></a></li>
         <li>
           <button id="lang-toggle" class="lang-btn" aria-label="Toggle language">
@@ -172,6 +173,7 @@
             <span class="en" lang="en">Shoji Mori</span>
             <span class="ja" lang="ja">森 昇志</span>
           </h1>
+
           <div class="hero-copy">
             <p class="hero-line en" lang="en">I study how planets are born. The stage for planet formation is the protoplanetary disk that surrounds a young star. The physical structure of this disk, including its temperature, density, and flows of material, strongly affects what kinds of planets can form. By clarifying the physical processes operating in these disks, I aim to understand how Earth and the Solar System formed, and where the diversity of planets comes from.</p>
             <p class="hero-line ja" lang="ja">私は、惑星がどのように誕生するかを研究しています。惑星誕生の舞台となるのが、若い星のまわりに広がる原始惑星系円盤です。この円盤の温度や密度、物質の流れなどの物理構造がどのような惑星ができるかを大きく左右します。私は、この円盤で起きるさまざまな物理過程を解き明かすことで、地球や太陽系の成り立ち、そして惑星の多様さがどこから生まれるのかを理解したいと考えています。</p>
@@ -188,7 +190,7 @@
             </a>
           </div>
         </div>
-        
+
         <div class="hero-image fade-in" style="transition-delay: 0.15s;">
           <img src="me.jpg" alt="Shoji Mori Portrait" id="profile-img">
         </div>
@@ -198,6 +200,11 @@
     <!-- RESEARCH SECTION -->
     <section id="research">
       <div class="container">
+        <h2 class="sr-only">
+          <span class="en" lang="en">Research</span>
+          <span class="ja" lang="ja">研究内容</span>
+        </h2>
+
         <div class="research-overview narrow" id="research-overview">
           <h2 class="fade-in">
             <span class="en">Research</span>
@@ -210,6 +217,7 @@
 
             <p class="research-intro-text en" lang="en">By studying what happens inside protoplanetary disks from a physical point of view, I want to understand how Earth and the Solar System came into being. To do this, I work on disk structure and evolution, the physical processes that operate there, and ways to test these ideas through astronomical observations and constraints from Solar System materials.</p>
             <p class="research-intro-text ja" lang="ja">私は、原始惑星系円盤の中で何が起きているのかを物理の観点から理解することで、地球や太陽系がどのように生まれたのかを明らかにしたいと考えています。そのために、円盤の構造や進化、そこで働く物理過程、そして天体観測や太陽系物質を通じた検証に取り組んでいます。</p>
+
           </div>
 
           <div class="research-topic-list fade-in">
@@ -286,85 +294,27 @@
     <!-- PUBLICATIONS SECTION -->
     <section id="publications">
       <div class="container">
-        <h2 class="fade-in">
-          <span class="en">Selected Publications</span>
-          <span class="ja">主要論文</span>
-        </h2>
-        
-        <div class="pub-list">
-          
-          <div class="glass-card pub-item fade-in">
-            <div class="pub-year">2025</div>
-            <div class="pub-details">
-              <h4 class="en">Radiative Nonideal Magnetohydrodynamic Simulations of Inner Protoplanetary Disks: Temperature Structures, Asymmetric Winds, and Episodic Surface Accretion</h4>
-              <h4 class="ja">Radiative Nonideal Magnetohydrodynamic Simulations of Inner Protoplanetary Disks: Temperature Structures, Asymmetric Winds, and Episodic Surface Accretion</h4>
-              <p class="pub-authors"><span class="en"><strong>Shoji Mori</strong>, Xuening Bai, Kengo Tomida</span><span class="ja"><strong>森 昇志</strong>, Xuening Bai, 富田 賢吾</span></p>
-              <p class="pub-journal">The Astrophysical Journal, Vol 992</p>
-            </div>
+        <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem;">
+          <h2 class="fade-in" id="publications-heading" style="margin-bottom: 0;">
+            <span class="en">Selected Publications</span>
+            <span class="ja">主要論文・解説</span>
+            <span class="print-title-ja" style="display: none;">論文・解説リスト</span>
+            <span class="print-title-en" style="display: none;">Publication list</span>
+          </h2>
+          <div class="pdf-export-controls fade-in" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button id="pub-pdf-btn-ja" class="filter-btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+              <span>📄</span> PDF (JP)
+            </button>
+            <button id="pub-pdf-btn-en" class="filter-btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+              <span>📄</span> PDF (EN)
+            </button>
           </div>
-
-          <div class="glass-card pub-item fade-in">
-            <div class="pub-year">2025</div>
-            <div class="pub-details">
-              <h4 class="en">Long-term Evolution of the Temperature Structure in Magnetized Protoplanetary Disks and Its Implication for the Dichotomy of Planetary Composition</h4>
-              <h4 class="ja">Long-term Evolution of the Temperature Structure in Magnetized Protoplanetary Disks and Its Implication for the Dichotomy of Planetary Composition</h4>
-              <p class="pub-authors"><span class="en"><strong>Shoji Mori</strong>, Masahiro Ogihara, Masanobu Kunitomo</span><span class="ja"><strong>森 昇志</strong>, 荻原 正博, 國友 正信</span></p>
-              <p class="pub-journal">Astronomy &amp; Astrophysics, Vol 697</p>
-              <button class="abstract-toggle en" type="button" lang="en" aria-expanded="false" aria-controls="abstract-2025-aa">View Abstract</button>
-              <button class="abstract-toggle ja" type="button" lang="ja" aria-expanded="false" aria-controls="abstract-2025-aa">要旨を表示</button>
-              <div class="abstract-content" id="abstract-2025-aa" aria-hidden="true">
-                <p>This study investigates the long-term thermal evolution of protoplanetary disks under the influence of magnetic fields. We show that magnetically driven accretion significantly alters the temperature profile, potentially explaining the observed dichotomy in the chemical composition of planets in our solar system and exoplanetary systems.</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="glass-card pub-item fade-in">
-            <div class="pub-year">2024</div>
-            <div class="pub-details">
-              <h4 class="en">Synthetic Observations of the Infalling Rotating Envelope: Links between the Physical Structure and Observational Features</h4>
-              <h4 class="ja">Synthetic Observations of the Infalling Rotating Envelope: Links between the Physical Structure and Observational Features</h4>
-              <p class="pub-authors"><span class="en"><strong>Shoji Mori</strong>, Yuri Aikawa, Yoko Oya, Satoshi Yamamoto, Nami Sakai</span><span class="ja"><strong>森 昇志</strong>, 相川 祐理, 大屋 瑶子, 山本 智, 坂井 南美</span></p>
-              <p class="pub-journal">The Astrophysical Journal, Vol 961</p>
-              <button class="abstract-toggle en" type="button" lang="en" aria-expanded="false" aria-controls="abstract-2024-apj">View Abstract</button>
-              <button class="abstract-toggle ja" type="button" lang="ja" aria-expanded="false" aria-controls="abstract-2024-apj">要旨を表示</button>
-              <div class="abstract-content" id="abstract-2024-apj" aria-hidden="true">
-                <p>We perform radiative transfer calculations to produce synthetic observational maps of infalling rotating envelopes. By comparing our models with ALMA data, we identify specific spectral signatures that can be used to probe the physical structure and kinematics of the gas surrounding young protostars.</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="glass-card pub-item fade-in">
-            <div class="pub-year">2021</div>
-            <div class="pub-details">
-              <h4 class="en">Evolution of the Water Snow Line in Magnetically Accreting Protoplanetary Disks</h4>
-              <h4 class="ja">磁気降着原始惑星系円盤における水スノーラインの進化</h4>
-              <p class="pub-authors"><span class="en"><strong>Shoji Mori</strong>, Satoshi Okuzumi, Masanobu Kunitomo, Xuening Bai</span><span class="ja"><strong>森 昇志</strong>, 奥住 聡, 國友 正信, Xuening Bai</span></p>
-              <p class="pub-journal">The Astrophysical Journal, Vol 916</p>
-              <button class="abstract-toggle en" type="button" lang="en" aria-expanded="false" aria-controls="abstract-2021-apj">View Abstract</button>
-              <button class="abstract-toggle ja" type="button" lang="ja" aria-expanded="false" aria-controls="abstract-2021-apj">要旨を表示</button>
-              <div class="abstract-content" id="abstract-2021-apj" aria-hidden="true">
-                <p>We model the movement of the water snow line in disks undergoing magnetic accretion. Our results suggest that the snow line's position is highly sensitive to the ionization state and magnetic field strength, with significant implications for the initial water content of forming planets.</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="glass-card pub-item fade-in">
-            <div class="pub-year">2019</div>
-            <div class="pub-details">
-              <h4 class="en">Temperature Structure in the Inner Regions of Protoplanetary Disks: Inefficient Accretion Heating by the Energy Dissipation Profile of Non-Ideal Magnetohydrodynamics</h4>
-              <h4 class="ja">原始惑星系円盤内側領域の温度構造：非理想磁気流体力学による非効率な降着加熱</h4>
-              <p class="pub-authors"><span class="en"><strong>Shoji Mori</strong>, Xuening Bai, Satoshi Okuzumi</span><span class="ja"><strong>森 昇志</strong>, Xuening Bai, 奥住 聡</span></p>
-              <p class="pub-journal">The Astrophysical Journal, Vol 872</p>
-              <button class="abstract-toggle en" type="button" lang="en" aria-expanded="false" aria-controls="abstract-2019-apj">View Abstract</button>
-              <button class="abstract-toggle ja" type="button" lang="ja" aria-expanded="false" aria-controls="abstract-2019-apj">要旨を表示</button>
-              <div class="abstract-content" id="abstract-2019-apj" aria-hidden="true">
-                <p>This paper examines how non-ideal MHD effects influence the heating of the inner disk. We find that traditional accretion heating models may overestimate the midplane temperature, as much of the magnetic energy is dissipated in the lower-density surface layers rather than the disk midplane.</p>
-              </div>
-            </div>
-          </div>
-
         </div>
-        
+
+        <div id="publications-container" class="pub-list">
+          <!-- Dynamically filled by script.js -->
+        </div>
+
         <!-- Full Publications Links -->
         <div class="pub-links fade-in" style="margin-top: 3rem; display: flex; gap: 1rem; flex-wrap: wrap; justify-content: flex-start;">
           <a href="https://scholar.google.com/citations?user=XUF28swAAAAJ" target="_blank" class="filter-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
@@ -391,21 +341,260 @@
     <!-- PRESENTATIONS SECTION -->
     <section id="presentations">
       <div class="container">
-        <h2 class="fade-in">
+        <h2 class="fade-in" id="presentations-heading">
           <span class="en">Presentations</span>
           <span class="ja">学会発表</span>
+          <span class="print-title-ja" style="display: none;">発表リスト</span>
+          <span class="print-title-en" style="display: none;">Publication list</span>
         </h2>
-        
+
         <!-- Filter Tabs -->
-        <div class="filter-tabs fade-in">
-          <button class="filter-btn active" data-filter="all"><span class="en">All</span><span class="ja">すべて</span></button>
-          <button class="filter-btn" data-filter="international"><span class="en">International</span><span class="ja">国際学会</span></button>
-          <button class="filter-btn" data-filter="domestic"><span class="en">Domestic</span><span class="ja">国内学会</span></button>
+        <div class="filter-tabs-wrapper fade-in" style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 1rem; margin-bottom: 2rem; position: relative;">
+          <div class="filter-tabs" style="margin-bottom: 0;">
+            <button class="filter-btn active" data-filter="all"><span class="en">All</span><span class="ja">すべて</span></button>
+            <button class="filter-btn" data-filter="international"><span class="en">International</span><span class="ja">国際学会</span></button>
+            <button class="filter-btn" data-filter="domestic"><span class="en">Domestic</span><span class="ja">国内学会</span></button>
+          </div>
+          <div class="pdf-btns" style="display: flex; gap: 0.5rem;">
+            <button id="pdf-btn-ja" class="filter-btn print-btn" aria-label="Save as Japanese PDF" style="display: flex; align-items: center; gap: 0.4rem; justify-content: center; padding: 0.6rem 1rem;">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>PDF (JP)</span>
+            </button>
+            <button id="pdf-btn-en" class="filter-btn print-btn" aria-label="Save as English PDF" style="display: flex; align-items: center; gap: 0.4rem; justify-content: center; padding: 0.6rem 1rem;">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>PDF (EN)</span>
+            </button>
+          </div>
         </div>
-        
+
         <!-- Dynamic Scroll Box -->
         <div id="presentations-container" class="glass-scroll-box fade-in">
           <!-- Populated by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- OPEN MATERIALS SECTION -->
+    <section id="materials">
+      <div class="container">
+        <h2 class="fade-in">
+          <span class="en">Open Materials</span>
+          <span class="ja">公開資料</span>
+        </h2>
+
+        <p class="fade-in en" style="color: var(--text-muted); margin-bottom: 1rem;">A small archive of publicly shared slides, posters, and theses linked from this site.</p>
+        <p class="fade-in ja" style="color: var(--text-muted); margin-bottom: 1rem;">このサイトから参照できる、公開スライド・ポスター・学位論文の一覧です。</p>
+
+        <div class="research-grid">
+          <div class="glass-card fade-in">
+            <h3 class="en" style="font-size:1.1rem; margin-bottom: 1rem;">Slides</h3>
+            <h3 class="ja" style="font-size:1.1rem; margin-bottom: 1rem;">スライド</h3>
+            <div class="pub-list compact-seminar-list">
+              <div class="pub-item">
+                <div class="pub-year">2025</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">Global Nonideal MHD Simulations of Protoplanetary Disks: Episodic Surface Accretion</h4>
+                  <h4 class="ja" lang="ja">原始惑星系円盤の大局的非理想磁気流体力学シミュレーション：間欠的な表層降着</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">The Astronomical Society of Japan Autumn Meeting 2025</span>
+                    <span class="ja" lang="ja">日本天文学会2025年秋季年会</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/slides/slide-20250911-asj-autumn-global-nonideal-mhd.pdf" target="_blank" rel="noopener">PDF</a></span>
+                    <span class="ja" lang="ja"><a href="files/slides/slide-20250911-asj-autumn-global-nonideal-mhd.pdf" target="_blank" rel="noopener">PDF</a></span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="pub-item">
+                <div class="pub-year">2025</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">Magnetic Circumplanetary Disks</h4>
+                  <h4 class="ja" lang="ja">Magnetic Circumplanetary Disks</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">Circumplanetary Disks and Satellite Formation III</span>
+                    <span class="ja" lang="ja">Circumplanetary Disks and Satellite Formation III</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/slides/slide-20250128-cpdsf3-magnetic-circumplanetary-disks.pdf" target="_blank" rel="noopener">PDF</a></span>
+                    <span class="ja" lang="ja"><a href="files/slides/slide-20250128-cpdsf3-magnetic-circumplanetary-disks.pdf" target="_blank" rel="noopener">PDF</a></span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="pub-item">
+                <div class="pub-year">2023</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">Temperature Structure of Protoplanetary Disks Explored through Magnetohydrodynamic Simulations</h4>
+                  <h4 class="ja" lang="ja">磁気流体力学シミュレーションから探る原始惑星系円盤の温度構造</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">CPS Seminar · Center for Planetary Science, Kobe University</span>
+                    <span class="ja" lang="ja">CPS セミナー · 神戸大学 惑星科学研究センター</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/slides/slide-20230424-cps-seminar.pdf" target="_blank" rel="noopener">Slides</a> / <a href="https://www.cps-jp.org/modules/mosir/player.php?v=20230424_01_mori" target="_blank" rel="noopener">Video</a></span>
+                    <span class="ja" lang="ja"><a href="files/slides/slide-20230424-cps-seminar.pdf" target="_blank" rel="noopener">スライド</a> / <a href="https://www.cps-jp.org/modules/mosir/player.php?v=20230424_01_mori" target="_blank" rel="noopener">動画</a></span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="pub-item">
+                <div class="pub-year">2022</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">Practical Example of Hydrodynamics Simulations 1: Nonideal MHD Simulations of Protoplanetary Disks</h4>
+                  <h4 class="ja" lang="ja">流体力学シミュレーションの実用例 1: 原始惑星系円盤の非理想MHDシミュレーション</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">CfCA Hydrodynamics School 2021</span>
+                    <span class="ja" lang="ja">CfCA 2021年度流体学校</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/slides/slide-20220309-cfca-hydrodynamics-school.pdf" target="_blank" rel="noopener">PDF</a></span>
+                    <span class="ja" lang="ja"><a href="files/slides/slide-20220309-cfca-hydrodynamics-school.pdf" target="_blank" rel="noopener">PDF</a></span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.1s;">
+            <h3 class="en" style="font-size:1.1rem; margin-bottom: 1rem;">Posters</h3>
+            <h3 class="ja" style="font-size:1.1rem; margin-bottom: 1rem;">ポスター</h3>
+            <div class="pub-list compact-seminar-list">
+              <div class="pub-item">
+                <div class="pub-year">2025</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">Thermal Structure of Magnetized Protoplanetary Disks and Its Implications for Planet Formation</h4>
+                  <h4 class="ja" lang="ja">Thermal Structure of Magnetized Protoplanetary Disks and Its Implications for Planet Formation</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">International Conference on Exoplanets and Planet Formation</span>
+                    <span class="ja" lang="ja">International Conference on Exoplanets and Planet Formation</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/posters/poster-20251208-epf-thermal-structure-magnetized-ppds.pdf" target="_blank" rel="noopener">PDF</a></span>
+                    <span class="ja" lang="ja"><a href="files/posters/poster-20251208-epf-thermal-structure-magnetized-ppds.pdf" target="_blank" rel="noopener">PDF</a></span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="pub-item">
+                <div class="pub-year">2023</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">Temperature Structure of Magnetized Protoplanetary Disks</h4>
+                  <h4 class="ja" lang="ja">Temperature Structure of Magnetized Protoplanetary Disks</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">Exoplanets &amp; Planet Formation Workshop 2023</span>
+                    <span class="ja" lang="ja">Exoplanets &amp; Planet Formation Workshop 2023</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/posters/poster-20231216-epf-temperature-structure-magnetized-ppds.pdf" target="_blank" rel="noopener">PDF</a></span>
+                    <span class="ja" lang="ja"><a href="files/posters/poster-20231216-epf-temperature-structure-magnetized-ppds.pdf" target="_blank" rel="noopener">PDF</a></span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="pub-item">
+                <div class="pub-year">2017</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">Snowline depending on MHD structure in Protoplanetary Disks</h4>
+                  <h4 class="ja" lang="ja">原始惑星系円盤において磁気流体構造に依存するスノーライン</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">47th Summer School on Astronomy and Astrophysics for Young Astronomers</span>
+                    <span class="ja" lang="ja">2017年度 第47回 天文・天体物理若手夏の学校</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/posters/poster-20170725-summer-school-snowline-mhd-structure.pdf" target="_blank" rel="noopener">PDF</a></span>
+                    <span class="ja" lang="ja"><a href="files/posters/poster-20170725-summer-school-snowline-mhd-structure.pdf" target="_blank" rel="noopener">PDF</a></span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="pub-item">
+                <div class="pub-year">2016</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">Supression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks</h4>
+                  <h4 class="ja" lang="ja">電子加熱による原始惑星系円盤中の磁気乱流の抑制</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">2016 46th Summer School on Astronomy and Astrophysics for Young Astronomers</span>
+                    <span class="ja" lang="ja">2016年度 第46回 天文・天体物理若手夏の学校</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/posters/poster-20160726-summer-school-electron-heating-magnetic-turbulence.pdf" target="_blank" rel="noopener">PDF</a></span>
+                    <span class="ja" lang="ja"><a href="files/posters/poster-20160726-summer-school-electron-heating-magnetic-turbulence.pdf" target="_blank" rel="noopener">PDF</a></span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="pub-item">
+                <div class="pub-year">2015</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">Effects of Electron Heating on Protoplanetary Disks</h4>
+                  <h4 class="ja" lang="ja">電子加熱が原始惑星系円盤に与える影響</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">2015 45th Summer School on Astronomy and Astrophysics for Young Astronomers</span>
+                    <span class="ja" lang="ja">2015年度 第45回 天文・天体物理若手夏の学校</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/posters/poster-20150727-summer-school-effects-of-electron-heating.pdf" target="_blank" rel="noopener">PDF</a></span>
+                    <span class="ja" lang="ja"><a href="files/posters/poster-20150727-summer-school-effects-of-electron-heating.pdf" target="_blank" rel="noopener">PDF</a></span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.2s;">
+            <h3 class="en" style="font-size:1.1rem; margin-bottom: 1rem;">Theses</h3>
+            <h3 class="ja" style="font-size:1.1rem; margin-bottom: 1rem;">学位論文</h3>
+            <div class="pub-list compact-seminar-list">
+              <div class="pub-item">
+                <div class="pub-year">2019</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">Understanding the Turbulent and Thermal Structure of Protoplanetary Disks with Magnetohydrodynamic Simulations</h4>
+                  <h4 class="ja" lang="ja">原始惑星系円盤の乱流と熱構造の理解 ― 磁気流体力学シミュレーションによる研究</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">Ph.D. Thesis · Tokyo Institute of Technology</span>
+                    <span class="ja" lang="ja">博士論文 · 東京工業大学</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/thesis/thesis-201903-phd-thesis.pdf" target="_blank" rel="noopener">PDF</a></span>
+                    <span class="ja" lang="ja"><a href="files/thesis/thesis-201903-phd-thesis.pdf" target="_blank" rel="noopener">PDF</a></span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="pub-item">
+                <div class="pub-year">2016</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">The Effects of Electron Heating on the Magnetorotational Instability in Protoplanetary Disks</h4>
+                  <h4 class="ja" lang="ja">原始惑星系円盤における電子加熱が磁気回転不安定に与える影響</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">M.S. Thesis · Tokyo Institute of Technology</span>
+                    <span class="ja" lang="ja">修士論文 · 東京工業大学</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/thesis/thesis-201603-master-thesis.pdf" target="_blank" rel="noopener">PDF</a></span>
+                    <span class="ja" lang="ja"><a href="files/thesis/thesis-201603-master-thesis.pdf" target="_blank" rel="noopener">PDF</a></span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="pub-item">
+                <div class="pub-year">2014</div>
+                <div class="pub-details">
+                  <h4 class="en" lang="en">The Dead Zones in Considering the Nonlinear Ohm's Law in Protoplanetary Disks</h4>
+                  <h4 class="ja" lang="ja">原始惑星系円盤における非線形オームを考慮したデッドゾーン</h4>
+                  <p class="pub-journal">
+                    <span class="en" lang="en">B.S. Thesis · Tokyo Institute of Technology</span>
+                    <span class="ja" lang="ja">卒業論文 · 東京工業大学</span>
+                  </p>
+                  <p class="pub-meta pub-link">
+                    <span class="en" lang="en"><a href="files/thesis/thesis-201403-undergraduate-thesis.pdf" target="_blank" rel="noopener">PDF</a></span>
+                    <span class="ja" lang="ja"><a href="files/thesis/thesis-201403-undergraduate-thesis.pdf" target="_blank" rel="noopener">PDF</a></span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -417,21 +606,21 @@
           <span class="en">Experience &amp; Education</span>
           <span class="ja">経歴</span>
         </h2>
-        
+
         <div class="timeline">
-          
+
           <div class="timeline-item fade-in">
-            <div class="timeline-date">2023 - Present</div>
+            <div class="timeline-date">2023.12 - Present</div>
             <div class="glass-card">
               <h3 class="en">Shuimu Fellow</h3>
               <h3 class="ja">Shuimuフェロー</h3>
-              <p class="en"><strong>Tsinghua University</strong>, Institute of Advanced Sciences, Beijing</p>
+              <p class="en"><strong>Tsinghua University</strong>, Institute for Advanced Study, Beijing</p>
               <p class="ja"><strong>清華大学</strong>, 高等研究所, 中国 北京</p>
             </div>
           </div>
-          
+
           <div class="timeline-item fade-in">
-            <div class="timeline-date">2021 - 2023</div>
+            <div class="timeline-date">2021.04 - 2023.11</div>
             <div class="glass-card">
               <h3 class="en">JSPS Research Fellow (PD)</h3>
               <h3 class="ja">日本学術振興会 特別研究員 (PD)</h3>
@@ -441,7 +630,7 @@
           </div>
 
           <div class="timeline-item fade-in">
-            <div class="timeline-date">2019 - 2021</div>
+            <div class="timeline-date">2019.04 - 2021.03</div>
             <div class="glass-card">
               <h3 class="en">Postdoctoral Researcher</h3>
               <h3 class="ja">ポスドク研究員</h3>
@@ -451,37 +640,43 @@
           </div>
 
           <div class="timeline-item fade-in">
-            <div class="timeline-date">2016 - 2019</div>
+            <div class="timeline-date">2016.04 - 2019.03</div>
             <div class="glass-card">
               <h3 class="en">Ph.D. in Earth and Planetary Sciences</h3>
               <h3 class="ja">博士（理学）地球惑星科学専攻</h3>
               <p class="en"><strong>Tokyo Institute of Technology</strong></p>
               <p class="ja"><strong>東京工業大学</strong></p>
+              <p class="en" style="color:var(--text-muted); font-size: 0.9rem; margin-top:0.4rem; margin-bottom:0.4rem;">Degree conferred: 2019.03.26</p>
+              <p class="ja" style="color:var(--text-muted); font-size: 0.9rem; margin-top:0.4rem; margin-bottom:0.4rem;">学位取得: 2019.03.26</p>
+              <p class="en" style="color:var(--accent-cyan); font-weight:500; font-size: 0.9rem; margin-top:0.4rem; margin-bottom:0.4rem;">JSPS Research Fellow (DC2) (2017–2019)</p>
+              <p class="ja" style="color:var(--accent-cyan); font-weight:500; font-size: 0.9rem; margin-top:0.4rem; margin-bottom:0.4rem;">日本学術振興会 特別研究員 (DC2) (2017–2019)</p>
               <p class="en"><em>Thesis: "Understanding the turbulent and thermal structure of protoplanetary disks with magnetohydrodynamic simulations"</em></p>
               <p class="ja"><em>博士論文: 「原始惑星系円盤の乱流と熱構造の理解 ― 磁気流体力学シミュレーションによる研究」</em></p>
-              <a href="files/thesis/Mori2019_PhDThesis.pdf" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+              <a href="files/thesis/thesis-201903-phd-thesis.pdf" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
                 <span style="font-size: 1rem;">📄</span> Thesis (PDF)
               </a>
             </div>
           </div>
 
           <div class="timeline-item fade-in">
-            <div class="timeline-date">2014 - 2016</div>
+            <div class="timeline-date">2014.04 - 2016.03</div>
             <div class="glass-card">
               <h3 class="en">M.S. in Earth and Planetary Sciences</h3>
               <h3 class="ja">修士（理学）地球惑星科学専攻</h3>
               <p class="en"><strong>Tokyo Institute of Technology</strong></p>
               <p class="ja"><strong>東京工業大学</strong></p>
+              <p class="en" style="color:var(--text-muted); font-size: 0.9rem; margin-top:0.4rem; margin-bottom:0.4rem;">Degree conferred: 2016.03.28</p>
+              <p class="ja" style="color:var(--text-muted); font-size: 0.9rem; margin-top:0.4rem; margin-bottom:0.4rem;">学位取得: 2016.03.28</p>
               <p class="en"><em>Thesis: "The Effects of Electron Heating on the Magnetorotational Instability in Protoplanetary Disks"</em></p>
               <p class="ja"><em>修士論文: 「原始惑星系円盤における電子加熱が磁気回転不安定に与える影響」</em></p>
-              <a href="files/thesis/Mori2016_MasterThesis.pdf" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+              <a href="files/thesis/thesis-201603-master-thesis.pdf" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
                 <span style="font-size: 1rem;">📄</span> Thesis (PDF)
               </a>
             </div>
           </div>
 
           <div class="timeline-item fade-in">
-            <div class="timeline-date">2010 - 2014</div>
+            <div class="timeline-date">2010.04 - 2014.03</div>
             <div class="glass-card">
               <h3 class="en">B.S. in Earth and Planetary Sciences</h3>
               <h3 class="ja">学士（理学）地球惑星科学科</h3>
@@ -489,7 +684,7 @@
               <p class="ja"><strong>東京工業大学</strong></p>
               <p class="en"><em>Thesis: "The Dead Zones in Considering the Nonlinear Ohm's Law in Protoplanetary Disks"</em></p>
               <p class="ja"><em>卒業論文: 「原始惑星系円盤における非線形オームを考慮したデッドゾーン」</em></p>
-              <a href="files/thesis/Mori2014_UndergraduateThesis.pdf" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+              <a href="files/thesis/thesis-201403-undergraduate-thesis.pdf" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
                 <span style="font-size: 1rem;">📄</span> Thesis (PDF)
               </a>
             </div>
@@ -498,13 +693,13 @@
         </div>
 
         <!-- Grants & Fellowships Subsection -->
-        <h2 class="fade-in" style="margin-top: 4rem;">
+        <h2 class="fade-in" style="margin-top: 2.5rem;">
           <span class="en">Grants &amp; Competitive Funds</span>
           <span class="ja">競争的資金等の研究課題</span>
         </h2>
-        
+
         <div class="research-grid">
-          
+
           <div class="glass-card fade-in">
             <div class="pub-year" style="margin-bottom: 0.5rem;">2022.04 - 2025.03</div>
             <h3 class="en" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">Dust dynamics in protoplanetary disks explored through magnetohydrodynamic simulations</h3>
@@ -554,7 +749,19 @@
             <p class="ja" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">総額: 4,000,000円</p>
           </div>
 
-          <div class="glass-card fade-in">
+          <div class="glass-card fade-in" style="transition-delay: 0.2s;">
+            <div class="pub-year" style="margin-bottom: 0.5rem;">2019.06</div>
+            <h3 class="en" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">From Stars to Planets II: Connecting Our Understanding of Star and Planet Formation</h3>
+            <h3 class="ja" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">From Stars to Planets II: Connecting Our Understanding of Star and Planet Formation</h3>
+            <p class="en" style="color:var(--accent-pink); font-weight:500; font-size: 0.9rem; margin-bottom:0.5rem;">Astronomical Society of Japan Hayakawa Fund (Travel Grant Recipient)</p>
+            <p class="ja" style="color:var(--accent-pink); font-weight:500; font-size: 0.9rem; margin-bottom:0.5rem;">日本天文学会 早川幸男基金（渡航助成）</p>
+            <p class="en" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Date: 2019.06.15-23</p>
+            <p class="ja" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">期間: 2019.06.15-23</p>
+            <p class="en" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Destination: Gothenburg, Sweden / Support: Full</p>
+            <p class="ja" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">渡航先: スウェーデン・ヨーテボリ / 助成: 全額</p>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.3s;">
             <div class="pub-year" style="margin-bottom: 0.5rem;">2016.04 - 2020.03</div>
             <h3 class="en" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">Integrated Evolution Model of Dust and Ice Snowlines in Protoplanetary Disks</h3>
             <h3 class="ja" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">原始惑星系円盤のダストと氷昇華線の統合進化モデル</h3>
@@ -565,7 +772,7 @@
             </a>
           </div>
 
-          <div class="glass-card fade-in" style="transition-delay: 0.1s;">
+          <div class="glass-card fade-in" style="transition-delay: 0.4s;">
             <div class="pub-year" style="margin-bottom: 0.5rem;">2013.08 - 2015.03</div>
             <h3 class="en" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">Construction of Planetesimal Formation Theory Considering Co-evolution of Solids and MHD Turbulence</h3>
             <h3 class="ja" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">固体と磁気流体乱流の共進化を考慮した微惑星形成理論の構築</h3>
@@ -576,17 +783,96 @@
             </a>
           </div>
 
-        </div>
+        </div><!-- /research-grid grants -->
 
-        <!-- Teaching Subsection -->
-        <h2 class="fade-in" style="margin-top: 4rem;">
-          <span class="en">Teaching</span>
-          <span class="ja">授業経験</span>
+        <!-- Awards & Honors Subsection -->
+        <h2 class="fade-in" style="margin-top: 2.5rem;">
+          <span class="en">Awards &amp; Honors</span>
+          <span class="ja">受賞歴</span>
         </h2>
 
         <div class="research-grid">
-          
           <div class="glass-card fade-in">
+            <div class="pub-year">2025</div>
+            <h3 class="en" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">Selected Participant, KITP Program "Planet Formation and Migration near the Inner Edge of Disks"</h3>
+            <h3 class="ja" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">KITP滞在型プログラム「Planet Formation and Migration near the Inner Edge of Disks」採択</h3>
+            <p class="en" style="color:var(--text-muted); font-size: 0.9rem; margin-bottom: 0.3rem;">Kavli Institute for Theoretical Physics (KITP), UC Santa Barbara</p>
+            <p class="ja" style="color:var(--text-muted); font-size: 0.9rem; margin-bottom: 0.3rem;">カブリ理論物理学研究所（KITP）, カリフォルニア大学サンタバーバラ校</p>
+            <p class="en" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.8rem;">Apr 15, 2025 - May 23, 2025</p>
+            <p class="ja" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.8rem;">2025年4月15日 - 5月23日</p>
+            <a href="https://www.kitp.ucsb.edu/activities/edgeplanets25" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+              <span style="font-size: 1rem;">↗</span> Program
+            </a>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.1s;">
+            <div class="pub-year">2023</div>
+            <h3 class="en" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">Shuimu Tsinghua Scholar (Overseas)</h3>
+            <h3 class="ja" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">水木学者（Shuimu Tsinghua Scholar）</h3>
+            <p class="en" style="color:var(--text-muted); font-size: 0.9rem;">Tsinghua University</p>
+            <p class="ja" style="color:var(--text-muted); font-size: 0.9rem;">清華大学</p>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.2s;">
+            <div class="pub-year">2017</div>
+            <h3 class="en" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">Poster Presentation Award</h3>
+            <h3 class="ja" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">ポスター賞</h3>
+            <p class="en" style="color:var(--text-muted); font-size: 0.9rem;">Summer School for Young Astronomers</p>
+            <p class="ja" style="color:var(--text-muted); font-size: 0.9rem;">天文・天体物理若手夏の学校</p>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.3s;">
+            <div class="pub-year">2016</div>
+            <h3 class="en" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">Poster Presentation Award</h3>
+            <h3 class="ja" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">ポスター賞</h3>
+            <p class="en" style="color:var(--text-muted); font-size: 0.9rem;">Summer School for Young Astronomers</p>
+            <p class="ja" style="color:var(--text-muted); font-size: 0.9rem;">天文・天体物理若手夏の学校</p>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.4s;">
+            <div class="pub-year">2015</div>
+            <h3 class="en" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">Poster Presentation Award</h3>
+            <h3 class="ja" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">ポスター賞</h3>
+            <p class="en" style="color:var(--text-muted); font-size: 0.9rem;">Summer School for Young Astronomers</p>
+            <p class="ja" style="color:var(--text-muted); font-size: 0.9rem;">天文・天体物理若手夏の学校</p>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.5s;">
+            <div class="pub-year">2015</div>
+            <h3 class="en" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">Best Poster Award</h3>
+            <h3 class="ja" style="font-size:1.1rem; color:var(--text-primary); margin-bottom: 0.5rem;">最優秀ポスター賞</h3>
+            <p class="en" style="color:var(--text-muted); font-size: 0.9rem;">The 7th Meeting on Cosmic Dust</p>
+            <p class="ja" style="color:var(--text-muted); font-size: 0.9rem;">The 7th Meeting on Cosmic Dust</p>
+          </div>
+        </div><!-- /research-grid awards -->
+
+
+
+        <!-- Teaching Subsection -->
+        <h2 class="fade-in" style="margin-top: 2.5rem;">
+          <span class="en">Teaching &amp; Workshops</span>
+          <span class="ja">教育・講習会</span>
+        </h2>
+
+        <div class="research-grid">
+
+          <div class="glass-card fade-in">
+            <div class="pub-year" style="margin-bottom: 0.5rem;">2022.03</div>
+            <h3 class="en" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">Instructor (CfCA Hydrodynamics School 2021)</h3>
+            <h3 class="ja" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">講師（CfCA 2021年度流体学校）</h3>
+            <p class="en" style="color:var(--text-muted); font-size: 0.9rem; margin-bottom:0.3rem;">Center for Computational Astrophysics (CfCA), National Astronomical Observatory of Japan</p>
+            <p class="ja" style="color:var(--text-muted); font-size: 0.9rem; margin-bottom:0.3rem;">国立天文台 天文シミュレーションプロジェクト（CfCA）</p>
+            <p class="en" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom:0.8rem;">Online workshop held in March 2022 as part of the FY2021 program.</p>
+            <p class="ja" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom:0.8rem;">2021年度企画として、2022年3月にオンライン開催。</p>
+            <a href="https://www.cfca.nao.ac.jp/content/2021%E4%BB%A4%E5%92%8C3%E5%B9%B4%E5%BA%A6%E6%B5%81%E4%BD%93%E5%AD%A6%E6%A0%A1" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+              <span style="font-size: 1rem;">↗</span> Program
+            </a>
+            <a href="files/slides/slide-20220309-cfca-hydrodynamics-school.pdf" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 0.6rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+              <span style="font-size: 1rem;">📄</span> Slides
+            </a>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.1s;">
             <div class="pub-year" style="margin-bottom: 0.5rem;">2023.04 - 2023.09</div>
             <h3 class="en" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">Part-time Lecturer (Physics)</h3>
             <h3 class="ja" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">非常勤講師（物理学）</h3>
@@ -594,7 +880,7 @@
             <p class="ja" style="color:var(--text-muted); font-size: 0.9rem; margin-bottom:0;">一関工業高等専門学校</p>
           </div>
 
-          <div class="glass-card fade-in" style="transition-delay: 0.1s;">
+          <div class="glass-card fade-in" style="transition-delay: 0.2s;">
             <div class="pub-year" style="margin-bottom: 0.5rem;">2016</div>
             <h3 class="en" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">Teaching Assistant (Computational Planetary Science)</h3>
             <h3 class="ja" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">ティーチングアシスタント（計算惑星科学）</h3>
@@ -602,7 +888,7 @@
             <p class="ja" style="color:var(--text-muted); font-size: 0.9rem; margin-bottom:0;">東京工業大学</p>
           </div>
 
-          <div class="glass-card fade-in" style="transition-delay: 0.2s;">
+          <div class="glass-card fade-in" style="transition-delay: 0.3s;">
             <div class="pub-year" style="margin-bottom: 0.5rem;">2014</div>
             <h3 class="en" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">Teaching Assistant (Computational Planetary Science)</h3>
             <h3 class="ja" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">ティーチングアシスタント（計算惑星科学）</h3>
@@ -612,8 +898,324 @@
 
         </div>
 
+        <!-- External Seminars Subsection -->
+        <h2 class="fade-in" style="margin-top: 2.5rem;">
+          <span class="en">External Seminars &amp; Colloquia</span>
+          <span class="ja">外部セミナー・談話会</span>
+        </h2>
+
+        <p class="fade-in en" style="color: var(--text-muted); margin-bottom: 1rem;">Selected external seminars and colloquia only.</p>
+        <p class="fade-in ja" style="color: var(--text-muted); margin-bottom: 1rem;">外部セミナー・談話会のみ掲載しています。</p>
+
+        <div class="glass-card fade-in">
+          <div class="pub-list compact-seminar-list">
+            <div class="pub-item">
+              <div class="pub-year">2024.11.12</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Irradiation-Dominated Magnetized Protoplanetary Disks: Disk Structures and Planet Formation</h4>
+                <h4 class="ja" lang="ja">Irradiation-Dominated Magnetized Protoplanetary Disks: Disk Structures and Planet Formation</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">KIAA-DoA Seminar · Peking University</span>
+                  <span class="ja" lang="ja">KIAA-DoA セミナー · 北京大学</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2024.10.10</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Temperature Structure and Its Evolution of Magnetized Protoplanetary Disks</h4>
+                <h4 class="ja" lang="ja">Temperature Structure and Its Evolution of Magnetized Protoplanetary Disks</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">WP/CSH Special Seminar · University of Bern</span>
+                  <span class="ja" lang="ja">WP/CSH 特別セミナー · ベルン大学</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2023.05.24</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Thermal structure and snowline migration of laminar magnetic protoplanetary disks</h4>
+                <h4 class="ja" lang="ja">層流磁化原始惑星系円盤の熱構造とスノーライン移動</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Online Seminar</span>
+                  <span class="ja" lang="ja">オンラインセミナー</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2023.04.24</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Temperature Structure of Protoplanetary Disks Explored through Magnetohydrodynamic Simulations</h4>
+                <h4 class="ja" lang="ja">磁気流体力学シミュレーションから探る原始惑星系円盤の温度構造</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">CPS Seminar · Center for Planetary Science, Kobe University</span>
+                  <span class="ja" lang="ja">CPS セミナー · 神戸大学 惑星科学研究センター</span>
+                </p>
+                <p class="pub-meta pub-link">
+                  <span class="en" lang="en"><a href="files/slides/slide-20230424-cps-seminar.pdf" target="_blank" rel="noopener">Slides</a> / <a href="https://www.cps-jp.org/modules/mosir/player.php?v=20230424_01_mori" target="_blank" rel="noopener">Video</a></span>
+                  <span class="ja" lang="ja"><a href="files/slides/slide-20230424-cps-seminar.pdf" target="_blank" rel="noopener">スライド</a> / <a href="https://www.cps-jp.org/modules/mosir/player.php?v=20230424_01_mori" target="_blank" rel="noopener">動画</a></span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2018.03.06</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Temperature Structure in Weakly Ionized Protoplanetary Disks</h4>
+                <h4 class="ja" lang="ja">Temperature Structure in Weakly Ionized Protoplanetary Disks</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Informal Talk · Tsinghua University</span>
+                  <span class="ja" lang="ja">インフォーマルトーク · 清華大学</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2017.12.18</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Effects of Electron Heating on Magnetic Turbulence in Protoplanetary Disks</h4>
+                <h4 class="ja" lang="ja">原始惑星系円盤において電子加熱が磁気乱流に与える影響</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Colloquium · Tohoku University</span>
+                  <span class="ja" lang="ja">談話会 · 東北大学</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2017.10.18</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">The Effect of Electron Heating in MRI on Protoplanetary Disks</h4>
+                <h4 class="ja" lang="ja">The Effect of Electron Heating in MRI on Protoplanetary Disks</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Seminar · Osaka University</span>
+                  <span class="ja" lang="ja">セミナー · 大阪大学</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2017.07.13</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Gas Heating in Protoplanetary Disks Based on Magnetohydrodynamic Simulations</h4>
+                <h4 class="ja" lang="ja">磁気流体力学計算に基づいた原始惑星系円盤でのガスの加熱</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Seminar · Kyoto University</span>
+                  <span class="ja" lang="ja">セミナー · 京都大学</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2016.04.26</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks</h4>
+                <h4 class="ja" lang="ja">Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Seminar · StarPlan, Niels Bohr Institute</span>
+                  <span class="ja" lang="ja">セミナー · StarPlan, Niels Bohr Institute</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2016.04</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks</h4>
+                <h4 class="ja" lang="ja">Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Seminar · Heidelberg University</span>
+                  <span class="ja" lang="ja">セミナー · ハイデルベルク大学</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2016.04</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks</h4>
+                <h4 class="ja" lang="ja">Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Seminar · Max Planck Institute for Astronomy</span>
+                  <span class="ja" lang="ja">セミナー · マックス・プランク天文学研究所</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2015.12.14</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">The Effects of Electron Heating on the Magnetorotational Instability in Protoplanetary Disks</h4>
+                <h4 class="ja" lang="ja">The Effects of Electron Heating on the Magnetorotational Instability in Protoplanetary Disks</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Seminar · Jet Propulsion Laboratory</span>
+                  <span class="ja" lang="ja">セミナー · Jet Propulsion Laboratory</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2015.08.25</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Effects of Electron Heating on Magnetic Turbulence in Protoplanetary Disks</h4>
+                <h4 class="ja" lang="ja">原始惑星系円盤中の電子加熱が磁気乱流に及ぼす影響</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Seminar · Star and Planet Formation Seminar</span>
+                  <span class="ja" lang="ja">セミナー · 星惑星形成セミナー</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2014.07.13</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Stabilization of Magnetic Disk Turbulence by Electric Field Heating of Electrons</h4>
+                <h4 class="ja" lang="ja">Stabilization of Magnetic Disk Turbulence by Electric Field Heating of Electrons</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Seminar · Nagoya</span>
+                  <span class="ja" lang="ja">セミナー · 名古屋</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mentoring & Supervision Subsection -->
+        <h2 class="fade-in" style="margin-top: 2.5rem;">
+          <span class="en">Mentoring &amp; Supervision</span>
+          <span class="ja">学生指導・メンター</span>
+        </h2>
+
+        <div class="research-grid">
+          <div class="glass-card fade-in">
+            <div class="pub-year" style="margin-bottom: 0.5rem;">2024 - Present</div>
+            <h3 class="en" style="font-size:1.16rem; color:var(--text-primary); margin-bottom: 0.5rem;">Yu Wang</h3>
+            <h3 class="ja" style="font-size:1.16rem; color:var(--text-primary); margin-bottom: 0.5rem;">Yu Wang</h3>
+            <p class="en" style="color:var(--accent-purple); font-weight:500; font-size: 0.9rem; margin-bottom:0.3rem;">Ph.D. Student @ Tsinghua University</p>
+            <p class="ja" style="color:var(--accent-purple); font-weight:500; font-size: 0.9rem; margin-bottom:0.3rem;">博士課程学生 @ 清華大学</p>
+            <p class="en" style="font-size: 0.85rem; color: var(--text-muted);">Topic: Two-dimensional structure of snow lines</p>
+            <p class="ja" style="font-size: 0.85rem; color: var(--text-muted);">研究テーマ: スノーラインの２次元的構造</p>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.1s;">
+            <div class="pub-year" style="margin-bottom: 0.5rem;">2024 - Present</div>
+            <h3 class="en" style="font-size:1.16rem; color:var(--text-primary); margin-bottom: 0.5rem;">Dawei Dai</h3>
+            <h3 class="ja" style="font-size:1.16rem; color:var(--text-primary); margin-bottom: 0.5rem;">Dawei Dai</h3>
+            <p class="en" style="color:var(--accent-purple); font-weight:500; font-size: 0.9rem; margin-bottom:0.3rem;">Ph.D. Student @ Tsinghua University</p>
+            <p class="ja" style="color:var(--accent-purple); font-weight:500; font-size: 0.9rem; margin-bottom:0.3rem;">博士課程学生 @ 清華大学</p>
+            <p class="en" style="font-size: 0.85rem; color: var(--text-muted);">Topic: Dispersal processes in protoplanetary disks</p>
+            <p class="ja" style="font-size: 0.85rem; color: var(--text-muted);">研究テーマ: 原始惑星系円盤の散逸過程</p>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.2s;">
+            <div class="pub-year" style="margin-bottom: 0.5rem;">2021 - Present</div>
+            <h3 class="en" style="font-size:1.16rem; color:var(--text-primary); margin-bottom: 0.5rem;">Katsushi Kondo</h3>
+            <h3 class="ja" style="font-size:1.16rem; color:var(--text-primary); margin-bottom: 0.5rem;">近藤 克</h3>
+            <p class="en" style="color:var(--accent-purple); font-weight:500; font-size: 0.9rem; margin-bottom:0.3rem;">Ph.D. Student @ Institute of Science Tokyo</p>
+            <p class="ja" style="color:var(--accent-purple); font-weight:500; font-size: 0.9rem; margin-bottom:0.3rem;">博士課程学生 @ 東京科学大学</p>
+            <p class="en" style="font-size: 0.85rem; color: var(--text-muted);">Topic: Snow line evolution in magnetized protoplanetary disks</p>
+            <p class="ja" style="font-size: 0.85rem; color: var(--text-muted);">研究テーマ: 磁気的原始惑星系円盤のスノーライン進化</p>
+          </div>
+
+          <div class="glass-card fade-in" style="transition-delay: 0.3s;">
+            <div class="pub-year" style="margin-bottom: 0.5rem;">2021 - Present</div>
+            <h3 class="en" style="font-size:1.16rem; color:var(--text-primary); margin-bottom: 0.5rem;">Haruhi Enomoto</h3>
+            <h3 class="ja" style="font-size:1.16rem; color:var(--text-primary); margin-bottom: 0.5rem;">榎本 晴日</h3>
+            <p class="en" style="color:var(--accent-purple); font-weight:500; font-size: 0.9rem; margin-bottom:0.3rem;">Ph.D. Student @ Institute of Science Tokyo</p>
+            <p class="ja" style="color:var(--accent-purple); font-weight:500; font-size: 0.9rem; margin-bottom:0.3rem;">博士課程学生 @ 東京科学大学</p>
+            <p class="en" style="font-size: 0.85rem; color: var(--text-muted);">Topic: Development of local MHD simulations toward global magnetic flux evolution</p>
+            <p class="ja" style="font-size: 0.85rem; color: var(--text-muted);">研究テーマ: 大局的磁束進化にむけた局所MHD計算の開発</p>
+          </div>
+        </div>
+
+        <!-- Academic Service Subsection -->
+        <h2 class="fade-in" style="margin-top: 2.5rem;">
+          <span class="en">Academic Service &amp; Community</span>
+          <span class="ja">学会・コミュニティ運営</span>
+        </h2>
+
+        <div class="glass-card fade-in">
+          <div class="pub-list compact-seminar-list">
+            <div class="pub-item">
+              <div class="pub-year">2022.04 - 2023.03</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Public Relations Staff (JpGU)</h4>
+                <h4 class="ja" lang="ja">広報担当（JpGU）</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Japan Geoscience Union (JpGU)</span>
+                  <span class="ja" lang="ja">日本地球惑星科学連合（JpGU）</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2022</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Session Timekeeper (ASJ Spring Meeting 2022)</h4>
+                <h4 class="ja" lang="ja">タイムキーパー（日本天文学会2022年春季年会）</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">The Astronomical Society of Japan</span>
+                  <span class="ja" lang="ja">日本天文学会</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2022.01</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Session Chair (CfCA Users Meeting FY2021)</h4>
+                <h4 class="ja" lang="ja">座長（2022.01 CfCAユーザーズミーティング）</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Center for Computational Astrophysics (CfCA), National Astronomical Observatory of Japan</span>
+                  <span class="ja" lang="ja">国立天文台 天文シミュレーションプロジェクト（CfCA）</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2021.02.23-24</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Founder, Organizer, and Chair (Young Workshop on Planetary System Formation)</h4>
+                <h4 class="ja" lang="ja">立ち上げ・世話人・座長（惑星系形成若手研究会）</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Young Workshop on Planetary System Formation</span>
+                  <span class="ja" lang="ja">惑星系形成若手研究会</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2020</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Session Chair (The Japanese Society for Planetary Sciences Fall Meeting 2020)</h4>
+                <h4 class="ja" lang="ja">座長（日本惑星科学会2020年秋季講演会）</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">The Japanese Society for Planetary Sciences</span>
+                  <span class="ja" lang="ja">日本惑星科学会</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="pub-item">
+              <div class="pub-year">2015.9 - 2016.8</div>
+              <div class="pub-details">
+                <h4 class="en" lang="en">Session Chair (Summer School for Young Astronomers 2016)</h4>
+                <h4 class="ja" lang="ja">座長（2016年天文・天体物理若手夏の学校）</h4>
+                <p class="pub-journal">
+                  <span class="en" lang="en">Summer School for Young Astronomers</span>
+                  <span class="ja" lang="ja">天文・天体物理若手夏の学校</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
         <!-- Review Experience Subsection -->
-        <h2 class="fade-in" style="margin-top: 4rem;">
+        <h2 class="fade-in" style="margin-top: 2.5rem;">
           <span class="en">Review Experience</span>
           <span class="ja">査読実績</span>
         </h2>
@@ -692,7 +1294,8 @@
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
   </div>
 
-  <script src="presentations_data.js?v=5"></script>
-  <script src="script.js?v=10"></script>
+  <script src="publications_data.js?v=3"></script>
+  <script src="presentations_data.js?v=9"></script>
+  <script src="script.js?v=18"></script>
 </body>
 </html>

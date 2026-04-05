@@ -3,18 +3,18 @@
   --bg-dark: #070913;
   --bg-surface: rgba(18, 22, 38, 0.6);
   --bg-surface-hover: rgba(28, 35, 60, 0.8);
-  
+
   --accent-cyan: #00f0ff;
   --accent-blue: #3a86ff;
   --accent-purple: #8338ec;
   --accent-pink: #ff006e;
-  
+
   --text-primary: #f8f9fa;
   --text-secondary: #adb5bd;
   --text-muted: #6c757d;
 
   --border-light: rgba(255, 255, 255, 0.08);
-  
+
   /* Typography */
   --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -22,7 +22,7 @@
   /* Sizing & Spacing */
   --section-pd: 6rem 2rem;
   --max-width: 1200px;
-  
+
   /* Glassmorphism */
   --glass-bg: rgba(255, 255, 255, 0.03);
   --glass-blur: blur(12px);
@@ -357,13 +357,13 @@ body.lang-ja .en { display: none; }
 body.lang-ja .ja { display: inline; }
 
 /* Overriding display for block elements when in JA mode */
-body.lang-ja div.ja, 
-body.lang-ja p.ja, 
-body.lang-ja h1.ja, 
-body.lang-ja h2.ja, 
-body.lang-ja h3.ja, 
-body.lang-ja h4.ja { 
-  display: block; 
+body.lang-ja div.ja,
+body.lang-ja p.ja,
+body.lang-ja h1.ja,
+body.lang-ja h2.ja,
+body.lang-ja h3.ja,
+body.lang-ja h4.ja {
+  display: block;
 }
 
 /* Hide block elements by default if they are .ja */
@@ -398,11 +398,6 @@ div.ja, p.ja, h1.ja, h2.ja, h3.ja, h4.ja { display: none; }
   background: rgba(0, 240, 255, 0.1);
   border-radius: 20px;
   border: 1px solid rgba(0, 240, 255, 0.2);
-}
-
-.hero-text p.bio {
-  font-size: 1.2rem;
-  max-width: 600px;
 }
 
 .hero-copy {
@@ -559,7 +554,7 @@ div.ja, p.ja, h1.ja, h2.ja, h3.ja, h4.ja { display: none; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 2rem;
-  margin-top: 3rem;
+  margin-top: 2rem;
 }
 
 .research-card {
@@ -573,41 +568,44 @@ div.ja, p.ja, h1.ja, h2.ja, h3.ja, h4.ja { display: none; }
   height: 180px;
   border-radius: 12px;
   margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   position: relative;
   overflow: hidden;
-  background: var(--bg-surface);
+  background: #060a14;
   border: 1px solid var(--border-light);
-}
-
-.research-visual svg {
-  width: 60px;
-  height: 60px;
-  color: var(--accent-cyan);
-  opacity: 0.8;
-  z-index: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .research-visual::after {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.2;
+  inset: 0;
+  background:
+    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.1), transparent 22%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 35%, rgba(255, 255, 255, 0.03));
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 2;
 }
 
-.v-mhd { background: linear-gradient(135deg, #0f172a, #1e3a8a); }
-.v-mhd::after { background-image: radial-gradient(circle at 50% 50%, var(--accent-blue) 0%, transparent 70%); }
+.research-plot {
+  width: 100%;
+  height: 100%;
+  display: block;
+  position: relative;
+  z-index: 1;
+}
 
-.v-temp { background: linear-gradient(135deg, #450a0a, #7f1d1d); }
-.v-temp::after { background-image: radial-gradient(circle at 50% 50%, var(--accent-pink) 0%, transparent 70%); }
+.v-mhd {
+  background: linear-gradient(135deg, #07111f, #15355f);
+}
 
-.v-obs { background: linear-gradient(135deg, #064e3b, #065f46); }
-.v-obs::after { background-image: radial-gradient(circle at 50% 50%, var(--accent-cyan) 0%, transparent 70%); }
+.v-temp {
+  background: linear-gradient(135deg, #1d0508, #5a1413);
+}
+
+.v-obs {
+  background: linear-gradient(135deg, #041917, #0b3e39);
+}
 
 .research-card h3 {
   color: var(--accent-blue);
@@ -618,7 +616,7 @@ div.ja, p.ja, h1.ja, h2.ja, h3.ja, h4.ja { display: none; }
 .timeline {
   position: relative;
   max-width: 800px;
-  margin: 3rem auto;
+  margin: 2rem auto;
 }
 
 .timeline::before {
@@ -634,7 +632,7 @@ div.ja, p.ja, h1.ja, h2.ja, h3.ja, h4.ja { display: none; }
 .timeline-item {
   position: relative;
   padding-left: 60px;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 }
 
 .timeline-item::before {
@@ -678,18 +676,98 @@ div.ja, p.ja, h1.ja, h2.ja, h3.ja, h4.ja { display: none; }
 
 .pub-details h4 {
   font-size: 1.1rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.15rem;
 }
 
 .pub-authors {
   color: var(--text-secondary);
   font-size: 0.9rem;
+  margin: 0 0 0.15rem 0;
 }
 
 .pub-journal {
   color: var(--text-muted);
   font-style: italic;
   font-size: 0.9rem;
+  margin: 0 0 0.15rem 0;
+}
+
+/* Subheadings for the 4-category grouping */
+.presentations-subheading {
+  font-size: 1.15rem;
+  font-family: var(--font-main);
+  color: var(--accent-cyan);
+  margin: 2rem 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
+  display: block;
+}
+
+.presentations-subheading:first-child {
+  margin-top: 0;
+}
+
+.pub-meta {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+  margin: 0;
+  opacity: 0.75;
+}
+
+.pub-link {
+  margin-top: 0.35rem;
+}
+
+.pub-link a {
+  color: var(--accent-cyan);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.compact-seminar-list {
+  gap: 0;
+}
+
+.compact-seminar-list .pub-item {
+  padding: 0.9rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.compact-seminar-list .pub-item:first-child {
+  padding-top: 0;
+}
+
+.compact-seminar-list .pub-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.compact-seminar-list .pub-year {
+  min-width: 88px;
+  font-size: 0.82rem;
+}
+
+.compact-seminar-list .pub-details h4 {
+  font-size: 1rem;
+  line-height: 1.45;
+  margin-bottom: 0.2rem;
+}
+
+.compact-seminar-list .pub-journal {
+  font-style: normal;
+  margin-bottom: 0.15rem;
+}
+
+.compact-seminar-list .pub-meta {
+  margin-top: 0.15rem;
+}
+
+.compact-seminar-list .pub-meta a {
+  color: var(--accent-cyan);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 
 /* Badge tags */
@@ -815,12 +893,12 @@ div.ja, p.ja, h1.ja, h2.ja, h3.ja, h4.ja { display: none; }
     grid-template-columns: 1fr;
     text-align: center;
   }
-  
+
   h2::after {
     left: 50%;
     transform: translateX(-50%);
   }
-  
+
   .timeline::before {
     left: 10px;
   }
@@ -1159,7 +1237,7 @@ div.ja, p.ja, h1.ja, h2.ja, h3.ja, h4.ja { display: none; }
     gap: 2rem;
     padding-top: 2rem;
   }
-  
+
   .hero-image {
     width: 250px;
     height: 250px;
@@ -1173,15 +1251,15 @@ div.ja, p.ja, h1.ja, h2.ja, h3.ja, h4.ja { display: none; }
   .research-topic p {
     font-size: 0.98rem;
   }
-  
+
   .tags {
     justify-content: center;
   }
-  
+
   .research-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .back-to-top {
     bottom: 1rem;
     right: 1rem;
@@ -1213,5 +1291,229 @@ div.ja, p.ja, h1.ja, h2.ja, h3.ja, h4.ja { display: none; }
 
   .glass-scroll-box {
     padding: 1.5rem 1rem;
+  }
+}
+
+/* Print Specific Styles */
+@media print {
+  /* Isolate Presentations for PDF */
+  body.print-presentations-only {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Unify font for the entire printed page */
+  body.print-presentations-only,
+  /* --- PDF Export Styles (Academic CV Style) --- */
+  body.print-presentations-only *,
+  body.print-publications-only * {
+    font-family: "Times New Roman", Times, "Yu Mincho", "MS Mincho", serif !important;
+    color: #000000 !important;
+    opacity: 1 !important;
+  }
+
+  body.print-presentations-only header, body.print-publications-only header,
+  body.print-presentations-only footer, body.print-publications-only footer,
+  body.print-presentations-only .background-mesh, body.print-publications-only .background-mesh,
+  body.print-presentations-only .noise-overlay, body.print-publications-only .noise-overlay,
+  body.print-presentations-only .back-to-top, body.print-publications-only .back-to-top,
+  body.print-presentations-only .scroll-indicator, body.print-publications-only .scroll-indicator,
+  body.print-presentations-only section:not(#presentations),
+  body.print-publications-only section:not(#publications),
+  body.print-presentations-only .filter-tabs-wrapper,
+  body.print-publications-only .pdf-export-controls,
+  body.print-presentations-only .pdf-export-controls,
+  body.print-publications-only .pub-links {
+    display: none !important;
+  }
+
+  body.print-presentations-only #presentations,
+  body.print-publications-only #publications {
+    padding: 0 !important;
+    min-height: auto !important;
+  }
+
+  body.print-presentations-only #presentations-container,
+  body.print-publications-only #publications-container {
+    counter-reset: pub-counter;
+  }
+
+  body.print-presentations-only h2,
+  body.print-publications-only h2 {
+    color: #000 !important;
+    border-bottom: 2px solid #ccc;
+    padding-bottom: 0.5rem;
+    margin-bottom: 2rem;
+  }
+
+  /* Presentation Heading Logic */
+  body.print-presentations-only #presentations-heading .en,
+  body.print-presentations-only #presentations-heading .ja {
+    display: none !important;
+  }
+  body.print-presentations-only.lang-ja #presentations-heading .print-title-ja {
+    display: block !important;
+  }
+  body.print-presentations-only:not(.lang-ja) #presentations-heading .print-title-en {
+    display: block !important;
+  }
+
+  /* Publications Heading Logic */
+  body.print-publications-only #publications-heading .en,
+  body.print-publications-only #publications-heading .ja {
+    display: none !important;
+  }
+  body.print-publications-only.lang-ja #publications-heading .print-title-ja {
+    display: block !important;
+  }
+  body.print-publications-only:not(.lang-ja) #publications-heading .print-title-en {
+    display: block !important;
+  }
+
+  body.print-presentations-only .glass-scroll-box,
+  body.print-publications-only .glass-scroll-box {
+    max-height: none !important;
+    overflow: visible !important;
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  body.print-presentations-only .glass-card,
+  body.print-presentations-only .pub-item,
+  body.print-publications-only .glass-card,
+  body.print-publications-only .pub-item {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    display: block !important;
+    font-size: 0.72rem !important;
+    line-height: 1.15 !important;
+    color: #000 !important;
+  }
+
+  body.print-presentations-only .pub-item *,
+  body.print-publications-only .pub-item * {
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #000 !important;
+    display: inline;
+  }
+
+  body.print-presentations-only .pub-item::before,
+  body.print-publications-only .pub-item::before {
+    counter-increment: pub-counter;
+    content: counter(pub-counter) ". ";
+    font-weight: bold;
+    margin-right: 0.3rem;
+    display: inline !important;
+    color: #000 !important;
+  }
+
+  body.print-presentations-only a,
+  body.print-publications-only a {
+    color: #000 !important;
+    text-decoration: none !important;
+  }
+
+  body.print-presentations-only .pub-year,
+  body.print-publications-only .pub-year {
+    display: none !important;
+  }
+
+  body.print-presentations-only .pub-details,
+  body.print-publications-only .pub-details {
+    display: inline !important;
+  }
+
+  body.print-presentations-only .pub-details h4,
+  body.print-presentations-only .pub-authors,
+  body.print-presentations-only .pub-journal,
+  body.print-presentations-only .pub-meta,
+  body.print-publications-only .pub-details h4,
+  body.print-publications-only .pub-authors,
+  body.print-publications-only .pub-journal,
+  body.print-publications-only .pub-meta {
+    display: inline !important;
+    color: #000 !important;
+    font-size: 0.75rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-weight: normal !important;
+  }
+
+  body.print-presentations-only .pub-details h4::after,
+  body.print-publications-only .pub-details h4::after {
+    content: ", ";
+    font-weight: normal !important;
+  }
+
+  body.print-presentations-only .pub-authors::after,
+  body.print-presentations-only .pub-journal::after,
+  body.print-publications-only .pub-authors::after,
+  body.print-publications-only .pub-journal::after {
+    content: ", ";
+  }
+
+  body.print-presentations-only .presentations-subheading {
+    font-size: 0.85rem !important;
+    color: #000 !important;
+    border-bottom: 1px solid #ccc !important;
+    margin: 1.2rem 0 0.4rem 0 !important;
+    padding-bottom: 0.2rem !important;
+    font-weight: bold !important;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  body.print-presentations-only .abstract-toggle,
+  body.print-publications-only .abstract-toggle,
+  body.print-presentations-only .pub-note:not(.is-invited),
+  body.print-publications-only .abstract-content {
+    display: none !important;
+  }
+
+  body.print-presentations-only .pub-note.is-invited {
+    display: inline !important;
+    margin-left: 0.5rem !important;
+  }
+
+  /* Language visibility overrides */
+  [class*="print-"] .pub-details h4.en,
+  [class*="print-"] .pub-authors .en,
+  [class*="print-"] .pub-journal .en,
+  [class*="print-"] .pub-meta .en,
+  [class*="print-"] .pub-details h4.ja,
+  [class*="print-"] .pub-authors .ja,
+  [class*="print-"] .pub-journal .ja,
+  [class*="print-"] .pub-meta .ja,
+  [class*="print-"] .en,
+  [class*="print-"] .ja {
+    display: none !important;
+  }
+
+  [class*="print-"]:not(.lang-ja) .en,
+  [class*="print-"]:not(.lang-ja) .pub-details h4.en,
+  [class*="print-"]:not(.lang-ja) .pub-authors .en,
+  [class*="print-"]:not(.lang-ja) .pub-journal .en,
+  [class*="print-"]:not(.lang-ja) .pub-meta .en {
+    display: inline !important;
+  }
+
+  [class*="print-"].lang-ja .ja,
+  [class*="print-"].lang-ja .pub-details h4.ja,
+  [class*="print-"].lang-ja .pub-authors .ja,
+  [class*="print-"].lang-ja .pub-journal .ja,
+  [class*="print-"].lang-ja .pub-meta .ja {
+    display: inline !important;
   }
 }
