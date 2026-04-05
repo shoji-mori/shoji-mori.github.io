@@ -1,0 +1,30 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "shoji-website-admin",
+	"main": ".open-next/worker.js",
+	"compatibility_date": "2026-04-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"enabled": true
+	},
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"d1_databases": [
+		{
+			"binding": "ADMIN_DB",
+			"database_name": "shoji-website-admin",
+			"database_id": "db6c52aa-7d92-4260-b8fe-e5d2d73a6329",
+			"remote": true
+		}
+	],
+	"vars": {
+		"CLOUDFLARE_ACCESS_TEAM_DOMAIN": "https://shoji-mori.cloudflareaccess.com",
+		"CLOUDFLARE_ACCESS_AUD": "9d0b8c5a969fd6fa2892e4b800655f697ef2defa6d71fdbc3ae855bc12fcfc51",
+		"ADMIN_ALLOWED_EMAILS": "shoji9m@gmail.com",
+		"ADMIN_DEV_EMAIL": "local@example.com"
+	}
+}

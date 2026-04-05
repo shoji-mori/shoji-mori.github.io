@@ -1,0 +1,7 @@
+.next
+.open-next
+.wrangler
+node_modules
+.dev.vars
+cloudflare-env.d.ts
+tmp
