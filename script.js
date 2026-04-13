@@ -4,6 +4,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const langToggleBtn = document.getElementById('lang-toggle');
   const researchmapLink = document.getElementById('researchmap-link');
   const formStatus = document.getElementById('form-status');
+  const contactSection = document.getElementById('contact');
+  const contactForm = document.getElementById('contact-form');
+  const publicationsSection = document.getElementById('publications');
+  const presentationsSection = document.getElementById('presentations');
+  const turnstileContainer = document.getElementById('turnstile-widget');
+  const turnstileSiteKey = turnstileContainer ? turnstileContainer.dataset.sitekey : '';
+  const supportsIntersectionObserver = 'IntersectionObserver' in window;
+  let turnstileLoadPromise = null;
+  let turnstileWidgetId = null;
+  let publicationsLoadPromise = null;
+  let presentationsLoadPromise = null;
+  let currentPresentationFilter = 'all';
 
   function isJapanese() {
     return document.body.classList.contains('lang-ja');
@@ -16,36 +28,186 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // --- Scroll-triggered Fade-in Animations ---
-  const fadeElements = document.querySelectorAll('.fade-in');
+  function setContainerMessage(container, enText, jaText, state = 'idle') {
+    if (!container) return;
+    container.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
+    container.innerHTML = `
+      <p class="deferred-status deferred-status-${state}">
+        <span class="en" lang="en">${enText}</span>
+        <span class="ja" lang="ja">${jaText}</span>
+      </p>
+    `;
+  }
 
-  const fadeObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      // Add 'visible' class when element comes into view
-      if (entry.isIntersecting) {
-        entry.target.classList.add('visible');
-        fadeObserver.unobserve(entry.target);
+  function revealElements(elements) {
+    elements.forEach(el => {
+      if (supportsIntersectionObserver && fadeObserver) {
+        fadeObserver.observe(el);
+      } else {
+        el.classList.add('visible');
       }
     });
-  }, {
-    root: null,
-    threshold: 0.1, // Trigger when 10% is visible
-    rootMargin: "0px 0px -50px 0px" // Slight offset
-  });
+  }
 
-  fadeElements.forEach(el => fadeObserver.observe(el));
+  function loadWindowAssignmentScript(src, globalName) {
+    if (window[globalName]) {
+      return Promise.resolve(window[globalName]);
+    }
+
+    const currentPromise = globalName === 'publicationsData' ? publicationsLoadPromise : presentationsLoadPromise;
+    if (currentPromise) {
+      return currentPromise;
+    }
+
+    const loadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.dataset.datasetScript = globalName;
+      script.addEventListener('load', () => {
+        if (window[globalName]) {
+          resolve(window[globalName]);
+          return;
+        }
+        reject(new Error(`Loaded ${src} but ${globalName} is missing.`));
+      }, { once: true });
+      script.addEventListener('error', () => {
+        reject(new Error(`Failed to load ${src}.`));
+      }, { once: true });
+      document.body.appendChild(script);
+    }).catch((error) => {
+      if (globalName === 'publicationsData') {
+        publicationsLoadPromise = null;
+      } else {
+        presentationsLoadPromise = null;
+      }
+      throw error;
+    });
+
+    if (globalName === 'publicationsData') {
+      publicationsLoadPromise = loadPromise;
+    } else {
+      presentationsLoadPromise = loadPromise;
+    }
+
+    return loadPromise;
+  }
+
+  function observeSectionLoad(section, loadFn) {
+    if (!section) return;
+
+    if (!supportsIntersectionObserver) {
+      loadFn().catch(() => {});
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries, currentObserver) => {
+      const isVisible = entries.some(entry => entry.isIntersecting);
+      if (!isVisible) return;
+      loadFn().catch(() => {});
+      currentObserver.disconnect();
+    }, {
+      root: null,
+      threshold: 0,
+      rootMargin: '300px 0px'
+    });
+
+    observer.observe(section);
+  }
+
+  function setTurnstileState(state) {
+    if (turnstileContainer) {
+      turnstileContainer.dataset.state = state;
+    }
+  }
+
+  function renderTurnstile() {
+    if (!turnstileContainer || !turnstileSiteKey || !window.turnstile || turnstileWidgetId !== null) {
+      return;
+    }
+
+    turnstileContainer.innerHTML = '';
+    turnstileWidgetId = window.turnstile.render(turnstileContainer, {
+      sitekey: turnstileSiteKey,
+      theme: 'dark'
+    });
+    setTurnstileState('ready');
+  }
+
+  function ensureTurnstileLoaded() {
+    if (!turnstileContainer || !turnstileSiteKey) {
+      return Promise.resolve();
+    }
+
+    if (turnstileWidgetId !== null) {
+      return Promise.resolve();
+    }
+
+    if (window.turnstile) {
+      renderTurnstile();
+      return Promise.resolve();
+    }
+
+    if (turnstileLoadPromise) {
+      return turnstileLoadPromise;
+    }
+
+    setTurnstileState('loading');
+    turnstileLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+      script.dataset.turnstileScript = 'true';
+      script.addEventListener('load', () => {
+        renderTurnstile();
+        resolve();
+      }, { once: true });
+      script.addEventListener('error', () => {
+        turnstileLoadPromise = null;
+        setTurnstileState('error');
+        reject(new Error('Failed to load Turnstile.'));
+      }, { once: true });
+      document.head.appendChild(script);
+    });
+
+    return turnstileLoadPromise;
+  }
+
+  function resetTurnstileWidget() {
+    if (window.turnstile && turnstileWidgetId !== null) {
+      window.turnstile.reset(turnstileWidgetId);
+    }
+  }
+
+  // --- Scroll-triggered Fade-in Animations ---
+  const fadeElements = document.querySelectorAll('.fade-in');
+  const fadeObserver = supportsIntersectionObserver
+    ? new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            fadeObserver.unobserve(entry.target);
+          }
+        });
+      }, {
+        root: null,
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+      })
+    : null;
+
+  revealElements(fadeElements);
 
   // --- Header Background on Scroll ---
   const header = document.querySelector('header');
-  window.addEventListener('scroll', () => {
-    if (window.scrollY > 50) {
-      header.style.background = 'rgba(7, 9, 19, 0.9)';
-      header.style.boxShadow = '0 4px 30px rgba(0, 0, 0, 0.5)';
-    } else {
-      header.style.background = 'rgba(7, 9, 19, 0.8)';
-      header.style.boxShadow = 'none';
-    }
-  });
+  function updateHeaderState() {
+    if (!header) return;
+    header.classList.toggle('is-scrolled', window.scrollY > 50);
+  }
+
+  updateHeaderState();
+  window.addEventListener('scroll', updateHeaderState, { passive: true });
 
   // --- Language Toggle Logic ---
   function updateResearchmapLink() {
@@ -113,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderPublications() {
     if (!publicationsContainer || !window.publicationsData) return;
+    publicationsContainer.setAttribute('aria-busy', 'false');
     publicationsContainer.innerHTML = '';
 
     const selectedPublications = window.publicationsData.filter(p => p.selected);
@@ -175,9 +338,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initializeAbstractToggles();
 
-    // Trigger intersection observer for new elements
     const newFades = publicationsContainer.querySelectorAll('.fade-in');
-    newFades.forEach(el => fadeObserver.observe(el));
+    revealElements(newFades);
+  }
+
+  function ensurePublicationsLoaded() {
+    if (!publicationsContainer) {
+      return Promise.resolve();
+    }
+
+    if (window.publicationsData) {
+      renderPublications();
+      return Promise.resolve(window.publicationsData);
+    }
+
+    setContainerMessage(
+      publicationsContainer,
+      'Loading publications...',
+      '論文データを読み込み中...',
+      'loading'
+    );
+
+    return loadWindowAssignmentScript('publications_data.js?v=3', 'publicationsData')
+      .then((data) => {
+        renderPublications();
+        return data;
+      })
+      .catch((error) => {
+        setContainerMessage(
+          publicationsContainer,
+          'Unable to load publications right now.',
+          '論文データを読み込めませんでした。',
+          'error'
+        );
+        throw error;
+      });
   }
 
   function initializeAbstractToggles() {
@@ -224,6 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderPresentations(filterScope) {
     if (!presentationsContainer || !window.presentationsData) return;
+    presentationsContainer.setAttribute('aria-busy', 'false');
     presentationsContainer.innerHTML = ''; // clear
 
     // Categories definition
@@ -345,19 +541,55 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // initial render
-  renderPresentations('all');
-  renderPublications();
+  function ensurePresentationsLoaded() {
+    if (!presentationsContainer) {
+      return Promise.resolve();
+    }
+
+    if (window.presentationsData) {
+      renderPresentations(currentPresentationFilter);
+      return Promise.resolve(window.presentationsData);
+    }
+
+    setContainerMessage(
+      presentationsContainer,
+      'Loading presentations...',
+      '発表データを読み込み中...',
+      'loading'
+    );
+
+    return loadWindowAssignmentScript('presentations_data.js?v=9', 'presentationsData')
+      .then((data) => {
+        renderPresentations(currentPresentationFilter);
+        return data;
+      })
+      .catch((error) => {
+        setContainerMessage(
+          presentationsContainer,
+          'Unable to load presentations right now.',
+          '発表データを読み込めませんでした。',
+          'error'
+        );
+        throw error;
+      });
+  }
+
+  observeSectionLoad(publicationsSection, ensurePublicationsLoaded);
+  observeSectionLoad(presentationsSection, ensurePresentationsLoaded);
 
   filterBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
-      // Button state update
       filterBtns.forEach(b => b.classList.remove('active'));
-      e.target.closest('.filter-btn').classList.add('active');
+      const targetButton = e.target.closest('.filter-btn');
+      targetButton.classList.add('active');
+      currentPresentationFilter = targetButton.getAttribute('data-filter') || 'all';
 
-      // Filter logic
-      const scope = e.target.closest('.filter-btn').getAttribute('data-filter');
-      renderPresentations(scope);
+      if (window.presentationsData) {
+        renderPresentations(currentPresentationFilter);
+        return;
+      }
+
+      ensurePresentationsLoaded().catch(() => {});
     });
   });
 
@@ -367,7 +599,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const pubPdfBtnEn = document.getElementById('pub-pdf-btn-en');
   let originalLangForPrint = '';
 
-  function triggerPrint(lang, type = 'presentations') {
+  async function triggerPrint(lang, type = 'presentations') {
+    try {
+      if (type === 'publications') {
+        await ensurePublicationsLoaded();
+      } else {
+        await ensurePresentationsLoaded();
+      }
+    } catch (error) {
+      return;
+    }
+
     // Save current language
     originalLangForPrint = isJapanese() ? 'ja' : 'en';
 
@@ -431,11 +673,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  window.addEventListener('scroll', () => {
+  function updateActiveNavLink() {
     let current = '';
     sections.forEach(section => {
       const sectionTop = section.offsetTop;
-      const sectionHeight = section.clientHeight;
       if (pageYOffset >= (sectionTop - 150)) {
         current = section.getAttribute('id');
       }
@@ -447,7 +688,10 @@ document.addEventListener('DOMContentLoaded', () => {
         link.classList.add('active');
       }
     });
-  });
+  }
+
+  updateActiveNavLink();
+  window.addEventListener('scroll', updateActiveNavLink, { passive: true });
 
   window.addEventListener('resize', () => {
     if (window.innerWidth > 768) {
@@ -455,23 +699,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- Scroll Indicator hiding ---
-  const scrollIndicator = document.querySelector('.scroll-indicator');
-  window.addEventListener('scroll', () => {
-    if (window.scrollY > 100) {
-      if (scrollIndicator) scrollIndicator.style.opacity = '0';
-      if (scrollIndicator) scrollIndicator.style.pointerEvents = 'none';
+  if (contactSection && turnstileContainer) {
+    if (supportsIntersectionObserver) {
+      const contactObserver = new IntersectionObserver((entries, observer) => {
+        const isVisible = entries.some(entry => entry.isIntersecting);
+        if (!isVisible) return;
+        ensureTurnstileLoaded().catch(() => {});
+        observer.disconnect();
+      }, {
+        root: null,
+        threshold: 0,
+        rootMargin: '200px 0px'
+      });
+      contactObserver.observe(contactSection);
     } else {
-      if (scrollIndicator) scrollIndicator.style.opacity = '0.6';
-      if (scrollIndicator) scrollIndicator.style.pointerEvents = 'auto';
+      ensureTurnstileLoaded().catch(() => {});
     }
-  });
+  }
 
-
-  // --- Contact Form Submission ---
-  const contactForm = document.getElementById('contact-form');
   if (contactForm) {
     const submitBtn = contactForm.querySelector('.submit-btn');
+
+    contactForm.addEventListener('focusin', () => {
+      ensureTurnstileLoaded().catch(() => {});
+    }, { once: true });
 
     contactForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -484,11 +735,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const turnstileToken = formData.get('cf-turnstile-response');
 
       if (!turnstileToken) {
+        ensureTurnstileLoaded().catch(() => {
+          setStatusMessage(
+            isJapanese()
+              ? 'Turnstile の読み込みに失敗しました。時間をおいて再度お試しください。'
+              : 'Failed to load Turnstile. Please try again in a moment.',
+            'is-error'
+          );
+        });
         setStatusMessage(
           isJapanese()
-            ? 'Turnstile の確認が完了していません。しばらく待ってから再度お試しください。'
-            : 'Turnstile verification has not completed yet. Please wait a moment and try again.',
-          'is-error'
+            ? 'スパム対策を読み込み中です。表示された確認を完了してから再度送信してください。'
+            : 'Spam protection is loading. Complete the verification widget, then submit again.',
+          'is-pending'
         );
         return;
       }
@@ -522,6 +781,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         contactForm.reset();
+        resetTurnstileWidget();
         setStatusMessage(
           isJapanese()
             ? '送信が完了しました。ありがとうございます。'
@@ -555,13 +815,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Back to Top Button ---
   const backToTopBtn = document.getElementById('back-to-top');
-  window.addEventListener('scroll', () => {
+  function updateBackToTopButton() {
     if (window.scrollY > 500) {
       if (backToTopBtn) backToTopBtn.classList.add('visible');
     } else {
       if (backToTopBtn) backToTopBtn.classList.remove('visible');
     }
-  });
+  }
+
+  updateBackToTopButton();
+  window.addEventListener('scroll', updateBackToTopButton, { passive: true });
 
   if (backToTopBtn) {
     backToTopBtn.addEventListener('click', () => {

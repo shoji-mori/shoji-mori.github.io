@@ -116,12 +116,11 @@
   }
   </script>
 
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Outfit:wght@300;400;500;700&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Outfit:wght@400;500;700&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
   <a href="#home" class="skip-link">Skip to main content</a>
@@ -192,7 +191,10 @@
         </div>
 
         <div class="hero-image fade-in" style="transition-delay: 0.15s;">
-          <img src="me.jpg" alt="Shoji Mori Portrait" id="profile-img">
+          <picture>
+            <source srcset="me.webp" type="image/webp">
+            <img src="me.jpg" alt="Shoji Mori Portrait" id="profile-img" width="800" height="884" fetchpriority="high" decoding="async">
+          </picture>
         </div>
       </div>
     </section>
@@ -1268,7 +1270,7 @@
               <textarea id="message" name="message" rows="5" placeholder="Your Message / メッセージ" required></textarea>
             </div>
             <div class="turnstile-wrap">
-              <div class="cf-turnstile" data-sitekey="0x4AAAAAACvUFMAbNpb0ja_Y"></div>
+              <div id="turnstile-widget" class="turnstile-widget" data-sitekey="0x4AAAAAACvUFMAbNpb0ja_Y" data-state="idle"></div>
             </div>
             <button type="submit" class="submit-btn" aria-label="Send Message">
               <span class="en" lang="en">Send Message</span>
@@ -1295,8 +1297,6 @@
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
   </div>
 
-  <script src="publications_data.js?v=3"></script>
-  <script src="presentations_data.js?v=9"></script>
-  <script src="script.js?v=18"></script>
+  <script src="script.js?v=21"></script>
 </body>
 </html>
