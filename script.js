@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const contactForm = document.getElementById('contact-form');
   const publicationsSection = document.getElementById('publications');
   const presentationsSection = document.getElementById('presentations');
+  const publicationsPrintContainer = document.getElementById('publications-print-container');
   const turnstileContainer = document.getElementById('turnstile-widget');
   const turnstileSiteKey = turnstileContainer ? turnstileContainer.dataset.sitekey : '';
   const supportsIntersectionObserver = 'IntersectionObserver' in window;
@@ -180,6 +181,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function waitForNextFrame() {
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  }
+
+  async function waitForPrintLayout() {
+    await waitForNextFrame();
+    await waitForNextFrame();
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+  }
+
   // --- Scroll-triggered Fade-in Animations ---
   const fadeElements = document.querySelectorAll('.fade-in');
   const fadeObserver = supportsIntersectionObserver
@@ -273,18 +286,36 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Publications rendering ---
   const publicationsContainer = document.getElementById('publications-container');
 
+  function isJapaneseLanguagePublication(publicationVenueEn, publicationVenueJa) {
+    return /\[in Japanese\]/i.test(publicationVenueEn) || /[\u3040-\u30ff\u3400-\u9fff]/.test(publicationVenueJa);
+  }
+
+  function getJapaneseModePublicationText(publication) {
+    const publicationVenueEn = publication.journalEn || publication.journal || '';
+    const publicationVenueJa = publication.journalJa || publication.journal || publicationVenueEn;
+    const isJapaneseLanguage = isJapaneseLanguagePublication(publicationVenueEn, publicationVenueJa);
+
+    return {
+      title: isJapaneseLanguage ? (publication.titleJa || publication.titleEn) : publication.titleEn,
+      authors: isJapaneseLanguage ? (publication.authorsJa || publication.authorsEn) : publication.authorsEn,
+      venue: isJapaneseLanguage ? publicationVenueJa : publicationVenueEn,
+      usesJapanesePunctuation: isJapaneseLanguage
+    };
+  }
+
   function renderPublications() {
     if (!publicationsContainer || !window.publicationsData) return;
     publicationsContainer.setAttribute('aria-busy', 'false');
     publicationsContainer.innerHTML = '';
 
-    const selectedPublications = window.publicationsData.filter(p => p.selected);
+    const publications = window.publicationsData.filter(p => p.selected);
 
-    selectedPublications.forEach((p, idx) => {
+    publications.forEach((p, idx) => {
       const item = document.createElement('div');
       item.className = 'glass-card pub-item fade-in';
       const publicationVenueEn = p.journalEn || p.journal || '';
       const publicationVenueJa = p.journalJa || p.journal || publicationVenueEn;
+      const japaneseModeText = getJapaneseModePublicationText(p);
       const publicationUrl = p.publicationUrl || p.url || '';
       const linkItemsEn = [];
       const linkItemsJa = [];
@@ -320,14 +351,14 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="pub-year">${p.year}</div>
         <div class="pub-details">
           <h4 class="en" lang="en">${p.titleEn}</h4>
-          <h4 class="ja" lang="ja">${p.titleJa || p.titleEn}</h4>
+          <h4 class="ja" lang="ja">${japaneseModeText.title}</h4>
           <p class="pub-authors">
             <span class="en" lang="en">${p.authorsEn}</span>
-            <span class="ja" lang="ja">${p.authorsJa}</span>
+            <span class="ja" lang="ja">${japaneseModeText.authors}</span>
           </p>
           <p class="pub-journal">
             <span class="en" lang="en">${publicationVenueEn}</span>
-            <span class="ja" lang="ja">${publicationVenueJa}</span>
+            <span class="ja" lang="ja">${japaneseModeText.venue}</span>
           </p>
           ${linksHtml}
           ${abstractHtml}
@@ -340,6 +371,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const newFades = publicationsContainer.querySelectorAll('.fade-in');
     revealElements(newFades);
+  }
+
+  function renderPublicationsPrintList() {
+    if (!publicationsPrintContainer || !window.publicationsData) return;
+    publicationsPrintContainer.innerHTML = '';
+
+    window.publicationsData.forEach((p, idx) => {
+      const item = document.createElement('p');
+      item.className = 'print-publication-item';
+      const publicationVenueEn = p.journalEn || p.journal || '';
+      const japaneseModeText = getJapaneseModePublicationText(p);
+      const jaDelimiter = japaneseModeText.usesJapanesePunctuation ? '、' : ', ';
+
+      item.innerHTML = `
+        <span class="print-publication-index">${idx + 1}.</span>
+        <span class="en" lang="en">${p.titleEn}, ${p.authorsEn}, ${publicationVenueEn}</span>
+        <span class="ja" lang="ja">${japaneseModeText.title}${jaDelimiter}${japaneseModeText.authors}${jaDelimiter}${japaneseModeText.venue}</span>
+      `;
+      publicationsPrintContainer.appendChild(item);
+    });
   }
 
   function ensurePublicationsLoaded() {
@@ -362,6 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return loadWindowAssignmentScript('publications_data.js?v=3', 'publicationsData')
       .then((data) => {
         renderPublications();
+        renderPublicationsPrintList();
         return data;
       })
       .catch((error) => {
@@ -603,6 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       if (type === 'publications') {
         await ensurePublicationsLoaded();
+        renderPublicationsPrintList();
       } else {
         await ensurePresentationsLoaded();
       }
@@ -635,10 +688,8 @@ document.addEventListener('DOMContentLoaded', () => {
        }
     }
 
-    // Briefly wait for rendering to finish then open print dialog
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    await waitForPrintLayout();
+    window.print();
   }
 
   if (pdfBtnJa) pdfBtnJa.addEventListener('click', () => triggerPrint('ja', 'presentations'));
