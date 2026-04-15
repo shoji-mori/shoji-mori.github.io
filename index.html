@@ -120,7 +120,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Outfit:wght@400;500;700&amp;display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="style.css?v=28">
+  <link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
   <a href="#home" class="skip-link">Skip to main content</a>
@@ -179,7 +179,7 @@
           </div>
 
           <div class="hero-cta">
-            <a href="#research-overview" class="hero-btn hero-btn-primary">
+            <a href="#research-overview" class="hero-btn hero-btn-secondary">
               <span class="en" lang="en">Research Overview</span>
               <span class="ja" lang="ja">研究内容</span>
             </a>
@@ -187,11 +187,16 @@
               <span class="en" lang="en">Publications</span>
               <span class="ja" lang="ja">論文・解説</span>
             </a>
+            <a href="cv_mori_shoji_v3.3.pdf" target="_blank" rel="noopener" class="hero-btn hero-btn-secondary">
+              <span class="en" lang="en">CV (PDF)</span>
+              <span class="ja" lang="ja">CV (PDF)</span>
+            </a>
           </div>
         </div>
 
-        <div class="hero-image fade-in" style="transition-delay: 0.15s;">
-          <picture>
+        <div class="hero-image">
+          <div class="hero-image-glow" aria-hidden="true"></div>
+          <picture class="fade-in" style="transition-delay: 0.15s;">
             <source srcset="me.webp" type="image/webp">
             <img src="me.jpg" alt="Shoji Mori Portrait" id="profile-img" width="800" height="884" fetchpriority="high" decoding="async">
           </picture>
@@ -321,19 +326,19 @@
 
         <!-- Full Publications Links -->
         <div class="pub-links fade-in" style="margin-top: 3rem; display: flex; gap: 1rem; flex-wrap: wrap; justify-content: flex-start;">
-          <a href="https://scholar.google.com/citations?user=XUF28swAAAAJ" target="_blank" class="filter-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+          <a href="https://scholar.google.com/citations?user=XUF28swAAAAJ" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
             <span style="font-size: 1.2rem;">🎓</span> Google Scholar
           </a>
-          <a href="https://ui.adsabs.harvard.edu/search/filter_author_facet_hier_fq_author=AND&amp;filter_author_facet_hier_fq_author=author_facet_hier%3A%221%2FMori%2C%20S%2FMori%2C%20Shoji%22&amp;filter_database_fq_database=AND&amp;filter_database_fq_database=database%3A%22astronomy%22&amp;fq=%7B!type%3Daqp%20v%3D%24fq_database%7D&amp;fq=%7B!type%3Daqp%20v%3D%24fq_author%7D&amp;fq_author=(author_facet_hier%3A%221%2FMori%2C%20S%2FMori%2C%20Shoji%22)&amp;fq_database=(database%3A%22astronomy%22)&amp;p_=0&amp;q=author%3A%22Mori%2C%20Shoji%22&amp;sort=date%20desc%2C%20bibcode%20desc" target="_blank" class="filter-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+          <a href="https://ui.adsabs.harvard.edu/search/filter_author_facet_hier_fq_author=AND&amp;filter_author_facet_hier_fq_author=author_facet_hier%3A%221%2FMori%2C%20S%2FMori%2C%20Shoji%22&amp;filter_database_fq_database=AND&amp;filter_database_fq_database=database%3A%22astronomy%22&amp;fq=%7B!type%3Daqp%20v%3D%24fq_database%7D&amp;fq=%7B!type%3Daqp%20v%3D%24fq_author%7D&amp;fq_author=(author_facet_hier%3A%221%2FMori%2C%20S%2FMori%2C%20Shoji%22)&amp;fq_database=(database%3A%22astronomy%22)&amp;p_=0&amp;q=author%3A%22Mori%2C%20Shoji%22&amp;sort=date%20desc%2C%20bibcode%20desc" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
             <span style="font-size: 1.2rem;">🔭</span> NASA ADS
           </a>
-          <a href="https://orcid.org/0000-0002-7002-939X" target="_blank" class="filter-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+          <a href="https://orcid.org/0000-0002-7002-939X" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
             <span style="font-size: 1.2rem; font-weight: bold; color: #A6CE39;">iD</span> ORCID
           </a>
-          <a href="https://researchmap.jp/mori_shoji" target="_blank" class="filter-btn" id="researchmap-link" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+          <a href="https://researchmap.jp/mori_shoji" target="_blank" rel="noopener" class="filter-btn" id="researchmap-link" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
             <span style="font-size: 1.2rem;">🗺️</span> Researchmap
           </a>
-          <a href="https://github.com/shoji-mori" target="_blank" class="filter-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+          <a href="https://github.com/shoji-mori" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
             <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor" style="display:inline-block; vertical-align:middle;">
               <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
             </svg> GitHub
@@ -349,7 +354,7 @@
           <span class="en">Presentations</span>
           <span class="ja">学会発表</span>
           <span class="print-title-ja" style="display: none;">発表リスト</span>
-          <span class="print-title-en" style="display: none;">Publication list</span>
+          <span class="print-title-en" style="display: none;">Presentation list</span>
         </h2>
 
         <!-- Filter Tabs -->
@@ -656,7 +661,7 @@
               <p class="ja" style="color:var(--accent-cyan); font-weight:500; font-size: 0.9rem; margin-top:0.4rem; margin-bottom:0.4rem;">日本学術振興会 特別研究員 (DC2) (2017–2019)</p>
               <p class="en"><em>Thesis: "Understanding the turbulent and thermal structure of protoplanetary disks with magnetohydrodynamic simulations"</em></p>
               <p class="ja"><em>博士論文: 「原始惑星系円盤の乱流と熱構造の理解 ― 磁気流体力学シミュレーションによる研究」</em></p>
-              <a href="files/thesis/thesis-201903-phd-thesis.pdf" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <a href="files/thesis/thesis-201903-phd-thesis.pdf" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
                 <span style="font-size: 1rem;">📄</span> Thesis (PDF)
               </a>
             </div>
@@ -673,7 +678,7 @@
               <p class="ja" style="color:var(--text-muted); font-size: 0.9rem; margin-top:0.4rem; margin-bottom:0.4rem;">学位取得: 2016.03.28</p>
               <p class="en"><em>Thesis: "The Effects of Electron Heating on the Magnetorotational Instability in Protoplanetary Disks"</em></p>
               <p class="ja"><em>修士論文: 「原始惑星系円盤における電子加熱が磁気回転不安定に与える影響」</em></p>
-              <a href="files/thesis/thesis-201603-master-thesis.pdf" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+              <a href="files/thesis/thesis-201603-master-thesis.pdf" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
                 <span style="font-size: 1rem;">📄</span> Thesis (PDF)
               </a>
             </div>
@@ -688,7 +693,7 @@
               <p class="ja"><strong>東京工業大学</strong></p>
               <p class="en"><em>Thesis: "The Dead Zones in Considering the Nonlinear Ohm's Law in Protoplanetary Disks"</em></p>
               <p class="ja"><em>卒業論文: 「原始惑星系円盤における非線形オームを考慮したデッドゾーン」</em></p>
-              <a href="files/thesis/thesis-201403-undergraduate-thesis.pdf" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+              <a href="files/thesis/thesis-201403-undergraduate-thesis.pdf" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
                 <span style="font-size: 1rem;">📄</span> Thesis (PDF)
               </a>
             </div>
@@ -712,7 +717,7 @@
             <p class="ja" style="color:var(--accent-purple); font-weight:500; font-size: 0.9rem; margin-bottom:0.5rem;">日本学術振興会 若手研究 (代表)</p>
             <p class="en" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Amount: 4,030,000 JPY (Direct: 3,100,000 JPY)</p>
             <p class="ja" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">総額: 4,030,000円 (直接経費: 3,100,000円)</p>
-            <a href="https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-22K14081/" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <a href="https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-22K14081/" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
               <span style="font-size: 1rem;">🔍</span> KAKEN
             </a>
           </div>
@@ -725,7 +730,7 @@
             <p class="ja" style="color:var(--accent-purple); font-weight:500; font-size: 0.9rem; margin-bottom:0.5rem;">日本学術振興会 特別研究員奨励費 (代表)</p>
             <p class="en" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Amount: 5,200,000 JPY (Direct: 4,000,000 JPY)</p>
             <p class="ja" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">総額: 5,200,000円 (直接経費: 4,000,000円)</p>
-            <a href="https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-22KJ0155/" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <a href="https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-22KJ0155/" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
               <span style="font-size: 1rem;">🔍</span> KAKEN
             </a>
           </div>
@@ -738,7 +743,7 @@
             <p class="ja" style="color:var(--accent-purple); font-weight:500; font-size: 0.9rem; margin-bottom:0.5rem;">日本学術振興会 特別研究員奨励費 (代表)</p>
             <p class="en" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Amount: 1,900,000 JPY (Direct: 1,900,000 JPY)</p>
             <p class="ja" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">総額: 1,900,000円 (直接経費: 1,900,000円)</p>
-            <a href="https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-17J10129/" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <a href="https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-17J10129/" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
               <span style="font-size: 1rem;">🔍</span> KAKEN
             </a>
           </div>
@@ -771,7 +776,7 @@
             <h3 class="ja" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">原始惑星系円盤のダストと氷昇華線の統合進化モデル</h3>
             <p class="en" style="color:var(--accent-pink); font-weight:500; font-size: 0.9rem; margin-bottom:0.5rem;">JSPS Grant-in-Aid for Young Scientists (B) (Co-I)</p>
             <p class="ja" style="color:var(--accent-pink); font-weight:500; font-size: 0.9rem; margin-bottom:0.5rem;">日本学術振興会 若手研究(B) (分担)</p>
-            <a href="https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-16K17661/" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <a href="https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-16K17661/" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
               <span style="font-size: 1rem;">🔍</span> KAKEN
             </a>
           </div>
@@ -782,7 +787,7 @@
             <h3 class="ja" style="font-size:1.1rem; line-height:1.4; color:var(--text-primary); margin-bottom: 0.5rem;">固体と磁気流体乱流の共進化を考慮した微惑星形成理論の構築</h3>
             <p class="en" style="color:var(--accent-pink); font-weight:500; font-size: 0.9rem; margin-bottom:0.5rem;">JSPS Grant for Research Activity Start-up (Co-I)</p>
             <p class="ja" style="color:var(--accent-pink); font-weight:500; font-size: 0.9rem; margin-bottom:0.5rem;">日本学術振興会 研究活動スタート支援 (分担)</p>
-            <a href="https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-25887023/" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <a href="https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-25887023/" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.3rem;">
               <span style="font-size: 1rem;">🔍</span> KAKEN
             </a>
           </div>
@@ -804,7 +809,7 @@
             <p class="ja" style="color:var(--text-muted); font-size: 0.9rem; margin-bottom: 0.3rem;">カブリ理論物理学研究所（KITP）, カリフォルニア大学サンタバーバラ校</p>
             <p class="en" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.8rem;">Apr 15, 2025 - May 23, 2025</p>
             <p class="ja" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.8rem;">2025年4月15日 - 5月23日</p>
-            <a href="https://www.kitp.ucsb.edu/activities/edgeplanets25" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <a href="https://www.kitp.ucsb.edu/activities/edgeplanets25" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.3rem;">
               <span style="font-size: 1rem;">↗</span> Program
             </a>
           </div>
@@ -868,10 +873,10 @@
             <p class="ja" style="color:var(--text-muted); font-size: 0.9rem; margin-bottom:0.3rem;">国立天文台 天文シミュレーションプロジェクト（CfCA）</p>
             <p class="en" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom:0.8rem;">Online workshop held in March 2022 as part of the FY2021 program.</p>
             <p class="ja" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom:0.8rem;">2021年度企画として、2022年3月にオンライン開催。</p>
-            <a href="https://www.cfca.nao.ac.jp/content/2021%E4%BB%A4%E5%92%8C3%E5%B9%B4%E5%BA%A6%E6%B5%81%E4%BD%93%E5%AD%A6%E6%A0%A1" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <a href="https://www.cfca.nao.ac.jp/content/2021%E4%BB%A4%E5%92%8C3%E5%B9%B4%E5%BA%A6%E6%B5%81%E4%BD%93%E5%AD%A6%E6%A0%A1" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.3rem;">
               <span style="font-size: 1rem;">↗</span> Program
             </a>
-            <a href="files/slides/slide-20220309-cfca-hydrodynamics-school.pdf" target="_blank" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 0.6rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <a href="files/slides/slide-20220309-cfca-hydrodynamics-school.pdf" target="_blank" rel="noopener" class="filter-btn" style="text-decoration: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin-top: 0.6rem; display: inline-flex; align-items: center; gap: 0.3rem;">
               <span style="font-size: 1rem;">📄</span> Slides
             </a>
           </div>
@@ -1299,6 +1304,6 @@
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
   </div>
 
-  <script src="script.js?v=24"></script>
+  <script src="script.js?v=26"></script>
 </body>
 </html>

@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const formStatus = document.getElementById('form-status');
   const contactSection = document.getElementById('contact');
   const contactForm = document.getElementById('contact-form');
+  const profileImage = document.getElementById('profile-img');
+  const heroImageGlow = document.querySelector('.hero-image-glow');
   const publicationsSection = document.getElementById('publications');
   const presentationsSection = document.getElementById('presentations');
   const publicationsPrintContainer = document.getElementById('publications-print-container');
@@ -22,6 +24,31 @@ document.addEventListener('DOMContentLoaded', () => {
     return document.body.classList.contains('lang-ja');
   }
 
+  function getSavedLanguage() {
+    try {
+      return window.localStorage.getItem('lang');
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function saveLanguagePreference(lang) {
+    try {
+      window.localStorage.setItem('lang', lang);
+    } catch (error) {
+      // Ignore storage failures and keep the current in-memory language state.
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function setStatusMessage(message, state = '') {
     if (formStatus) {
       formStatus.textContent = message;
@@ -34,8 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
     container.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
     container.innerHTML = `
       <p class="deferred-status deferred-status-${state}">
-        <span class="en" lang="en">${enText}</span>
-        <span class="ja" lang="ja">${jaText}</span>
+        <span class="en" lang="en">${escapeHtml(enText)}</span>
+        <span class="ja" lang="ja">${escapeHtml(jaText)}</span>
       </p>
     `;
   }
@@ -50,17 +77,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function loadWindowAssignmentScript(src, globalName) {
-    if (window[globalName]) {
-      return Promise.resolve(window[globalName]);
-    }
-
-    const currentPromise = globalName === 'publicationsData' ? publicationsLoadPromise : presentationsLoadPromise;
-    if (currentPromise) {
-      return currentPromise;
-    }
-
-    const loadPromise = new Promise((resolve, reject) => {
+  function loadWindowAssignmentScriptWithTag(src, globalName) {
+    return new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = src;
       script.async = true;
@@ -76,7 +94,47 @@ document.addEventListener('DOMContentLoaded', () => {
         reject(new Error(`Failed to load ${src}.`));
       }, { once: true });
       document.body.appendChild(script);
-    }).catch((error) => {
+    });
+  }
+
+  function evaluateWindowAssignmentScript(code, src, globalName) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.textContent = `${code}\n//# sourceURL=${src}`;
+      document.body.appendChild(script);
+      script.remove();
+
+      if (window[globalName]) {
+        resolve(window[globalName]);
+        return;
+      }
+
+      reject(new Error(`Loaded ${src} but ${globalName} is missing.`));
+    });
+  }
+
+  function loadWindowAssignmentScript(src, globalName) {
+    if (window[globalName]) {
+      return Promise.resolve(window[globalName]);
+    }
+
+    const currentPromise = globalName === 'publicationsData' ? publicationsLoadPromise : presentationsLoadPromise;
+    if (currentPromise) {
+      return currentPromise;
+    }
+
+    const loadPromise = (typeof window.fetch === 'function'
+      ? window.fetch(src, { cache: 'no-cache', credentials: 'same-origin' })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`Failed to fetch ${src}: ${response.status}`);
+            }
+            return response.text();
+          })
+          .then((code) => evaluateWindowAssignmentScript(code, src, globalName))
+          .catch(() => loadWindowAssignmentScriptWithTag(src, globalName))
+      : loadWindowAssignmentScriptWithTag(src, globalName)
+    ).catch((error) => {
       if (globalName === 'publicationsData') {
         publicationsLoadPromise = null;
       } else {
@@ -193,6 +251,21 @@ document.addEventListener('DOMContentLoaded', () => {
     await new Promise((resolve) => window.setTimeout(resolve, 250));
   }
 
+  function forceHeroGlowRepaint() {
+    if (!heroImageGlow) return;
+    heroImageGlow.style.opacity = '0.2199';
+    void heroImageGlow.offsetHeight;
+    window.requestAnimationFrame(() => {
+      heroImageGlow.style.opacity = '';
+    });
+  }
+
+  async function scheduleHeroGlowRepaint() {
+    await waitForNextFrame();
+    await waitForNextFrame();
+    forceHeroGlowRepaint();
+  }
+
   // --- Scroll-triggered Fade-in Animations ---
   const fadeElements = document.querySelectorAll('.fade-in');
   const fadeObserver = supportsIntersectionObserver
@@ -233,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Check if saved preference exists
-  if (localStorage.getItem('lang') === 'ja') {
+  if (getSavedLanguage() === 'ja') {
     document.body.classList.add('lang-ja');
   }
   updateResearchmapLink(); // initial call
@@ -246,9 +319,9 @@ document.addEventListener('DOMContentLoaded', () => {
       setStatusMessage('');
 
       if (isJapanese()) {
-        localStorage.setItem('lang', 'ja');
+        saveLanguagePreference('ja');
       } else {
-        localStorage.setItem('lang', 'en');
+        saveLanguagePreference('en');
       }
     });
   }
@@ -265,6 +338,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   updateLangToggleText(); // initial call
+
+  if (profileImage) {
+    if (profileImage.complete) {
+      scheduleHeroGlowRepaint().catch(() => {});
+    } else {
+      profileImage.addEventListener('load', () => {
+        scheduleHeroGlowRepaint().catch(() => {});
+      }, { once: true });
+    }
+  }
+
+  window.addEventListener('load', () => {
+    scheduleHeroGlowRepaint().catch(() => {});
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => {
+        scheduleHeroGlowRepaint().catch(() => {});
+      }).catch(() => {});
+    }
+  }, { once: true });
 
   // --- Mobile Navigation ---
   function closeMobileMenu() {
@@ -317,20 +409,29 @@ document.addEventListener('DOMContentLoaded', () => {
       const publicationVenueJa = p.journalJa || p.journal || publicationVenueEn;
       const japaneseModeText = getJapaneseModePublicationText(p);
       const publicationUrl = p.publicationUrl || p.url || '';
+      const safePublicationUrl = escapeHtml(publicationUrl);
       const linkItemsEn = [];
       const linkItemsJa = [];
+      const safeTitleEn = escapeHtml(p.titleEn);
+      const safeTitleJa = escapeHtml(japaneseModeText.title);
+      const safeVenueEn = escapeHtml(publicationVenueEn);
+      const safeVenueJa = escapeHtml(japaneseModeText.venue);
+      const safeAbstractEn = escapeHtml(p.abstractEn || '');
+      const safeAbstractJa = escapeHtml(p.abstractJa || '');
 
       if (publicationUrl) {
-        linkItemsEn.push(`<a href="${publicationUrl}" target="_blank" rel="noopener">Published</a>`);
-        linkItemsJa.push(`<a href="${publicationUrl}" target="_blank" rel="noopener">出版版</a>`);
+        linkItemsEn.push(`<a href="${safePublicationUrl}" target="_blank" rel="noopener">Published</a>`);
+        linkItemsJa.push(`<a href="${safePublicationUrl}" target="_blank" rel="noopener">出版版</a>`);
       }
       if (p.arxivUrl) {
-        linkItemsEn.push(`<a href="${p.arxivUrl}" target="_blank" rel="noopener">arXiv</a>`);
-        linkItemsJa.push(`<a href="${p.arxivUrl}" target="_blank" rel="noopener">arXiv</a>`);
+        const safeArxivUrl = escapeHtml(p.arxivUrl);
+        linkItemsEn.push(`<a href="${safeArxivUrl}" target="_blank" rel="noopener">arXiv</a>`);
+        linkItemsJa.push(`<a href="${safeArxivUrl}" target="_blank" rel="noopener">arXiv</a>`);
       }
       if (p.adsUrl) {
-        linkItemsEn.push(`<a href="${p.adsUrl}" target="_blank" rel="noopener">ADS</a>`);
-        linkItemsJa.push(`<a href="${p.adsUrl}" target="_blank" rel="noopener">ADS</a>`);
+        const safeAdsUrl = escapeHtml(p.adsUrl);
+        linkItemsEn.push(`<a href="${safeAdsUrl}" target="_blank" rel="noopener">ADS</a>`);
+        linkItemsJa.push(`<a href="${safeAdsUrl}" target="_blank" rel="noopener">ADS</a>`);
       }
 
       const linksHtml = linkItemsEn.length ? `
@@ -343,22 +444,22 @@ document.addEventListener('DOMContentLoaded', () => {
         <button class="abstract-toggle en" type="button" lang="en" aria-expanded="false" aria-controls="pub-abstract-${idx}">View Abstract</button>
         <button class="abstract-toggle ja" type="button" lang="ja" aria-expanded="false" aria-controls="pub-abstract-${idx}">要旨を表示</button>
         <div class="abstract-content" id="pub-abstract-${idx}" aria-hidden="true">
-          <p class="en" lang="en">${p.abstractEn}</p>
-          <p class="ja" lang="ja">${p.abstractJa}</p>
+          <p class="en" lang="en">${safeAbstractEn}</p>
+          <p class="ja" lang="ja">${safeAbstractJa}</p>
         </div>` : '';
 
       item.innerHTML = `
         <div class="pub-year">${p.year}</div>
         <div class="pub-details">
-          <h4 class="en" lang="en">${p.titleEn}</h4>
-          <h4 class="ja" lang="ja">${japaneseModeText.title}</h4>
+          <h4 class="en" lang="en">${safeTitleEn}</h4>
+          <h4 class="ja" lang="ja">${safeTitleJa}</h4>
           <p class="pub-authors">
             <span class="en" lang="en">${p.authorsEn}</span>
             <span class="ja" lang="ja">${japaneseModeText.authors}</span>
           </p>
           <p class="pub-journal">
-            <span class="en" lang="en">${publicationVenueEn}</span>
-            <span class="ja" lang="ja">${japaneseModeText.venue}</span>
+            <span class="en" lang="en">${safeVenueEn}</span>
+            <span class="ja" lang="ja">${safeVenueJa}</span>
           </p>
           ${linksHtml}
           ${abstractHtml}
@@ -383,11 +484,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const publicationVenueEn = p.journalEn || p.journal || '';
       const japaneseModeText = getJapaneseModePublicationText(p);
       const jaDelimiter = japaneseModeText.usesJapanesePunctuation ? '、' : ', ';
+      const safeTitleEn = escapeHtml(p.titleEn);
+      const safeTitleJa = escapeHtml(japaneseModeText.title);
+      const safeVenueEn = escapeHtml(publicationVenueEn);
+      const safeVenueJa = escapeHtml(japaneseModeText.venue);
 
       item.innerHTML = `
         <span class="print-publication-index">${idx + 1}.</span>
-        <span class="en" lang="en">${p.titleEn}, ${p.authorsEn}, ${publicationVenueEn}</span>
-        <span class="ja" lang="ja">${japaneseModeText.title}${jaDelimiter}${japaneseModeText.authors}${jaDelimiter}${japaneseModeText.venue}</span>
+        <span class="en" lang="en">${safeTitleEn}, ${p.authorsEn}, ${safeVenueEn}</span>
+        <span class="ja" lang="ja">${safeTitleJa}${jaDelimiter}${japaneseModeText.authors}${jaDelimiter}${safeVenueJa}</span>
       `;
       publicationsPrintContainer.appendChild(item);
     });
@@ -410,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
       'loading'
     );
 
-    return loadWindowAssignmentScript('publications_data.js?v=3', 'publicationsData')
+    return loadWindowAssignmentScript('publications_data.js', 'publicationsData')
       .then((data) => {
         renderPublications();
         renderPublicationsPrintList();
@@ -513,7 +618,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Group Subheading
       const heading = document.createElement('h3');
       heading.className = 'presentations-subheading';
-      heading.innerHTML = `<span class="en">${cat.nameEn}</span><span class="ja">${cat.nameJa}</span>`;
+      heading.innerHTML = `<span class="en">${escapeHtml(cat.nameEn)}</span><span class="ja">${escapeHtml(cat.nameJa)}</span>`;
       presentationsContainer.appendChild(heading);
 
       items.forEach(p => {
@@ -528,15 +633,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const confLinkStyle = 'color:inherit; text-decoration: underline; text-underline-offset:3px; opacity:0.9;';
         const hasUrl = typeof p.url === 'string' && p.url.trim() !== '';
-        const confEnHtml = hasUrl ? `<a href="${p.url}" target="_blank" rel="noopener" style="${confLinkStyle}">${p.confEn}</a>` : p.confEn;
-        const confJaHtml = hasUrl ? `<a href="${p.url}" target="_blank" rel="noopener" style="${confLinkStyle}">${p.confJa}</a>` : p.confJa;
+        const safeUrl = escapeHtml(p.url || '');
+        const safeConfEn = escapeHtml(p.confEn);
+        const safeConfJa = escapeHtml(p.confJa || p.confEn);
+        const confEnHtml = hasUrl ? `<a href="${safeUrl}" target="_blank" rel="noopener" style="${confLinkStyle}">${safeConfEn}</a>` : safeConfEn;
+        const confJaHtml = hasUrl ? `<a href="${safeUrl}" target="_blank" rel="noopener" style="${confLinkStyle}">${safeConfJa}</a>` : safeConfJa;
 
         const metaPartsEn = [];
         const metaPartsJa = [];
-        if (p.date) { metaPartsEn.push(p.date); metaPartsJa.push(p.date); }
-        if (p.placeEn) metaPartsEn.push(p.placeEn);
-        if (p.placeJa) metaPartsJa.push(p.placeJa);
-        else if (p.placeEn) metaPartsJa.push(p.placeEn);
+        if (p.date) { metaPartsEn.push(escapeHtml(p.date)); metaPartsJa.push(escapeHtml(p.date)); }
+        if (p.placeEn) metaPartsEn.push(escapeHtml(p.placeEn));
+        if (p.placeJa) metaPartsJa.push(escapeHtml(p.placeJa));
+        else if (p.placeEn) metaPartsJa.push(escapeHtml(p.placeEn));
 
         const metaHtml = (metaPartsEn.length > 0) ? `
           <p class="pub-meta">
@@ -547,16 +655,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const resourceLinksEn = [];
         const resourceLinksJa = [];
         if (p.posterUrl) {
-          resourceLinksEn.push(`<a href="${p.posterUrl}" target="_blank" rel="noopener">Poster</a>`);
-          resourceLinksJa.push(`<a href="${p.posterUrl}" target="_blank" rel="noopener">ポスター</a>`);
+          const safePosterUrl = escapeHtml(p.posterUrl);
+          resourceLinksEn.push(`<a href="${safePosterUrl}" target="_blank" rel="noopener">Poster</a>`);
+          resourceLinksJa.push(`<a href="${safePosterUrl}" target="_blank" rel="noopener">ポスター</a>`);
         }
         if (p.slideUrl) {
-          resourceLinksEn.push(`<a href="${p.slideUrl}" target="_blank" rel="noopener">Slides</a>`);
-          resourceLinksJa.push(`<a href="${p.slideUrl}" target="_blank" rel="noopener">スライド</a>`);
+          const safeSlideUrl = escapeHtml(p.slideUrl);
+          resourceLinksEn.push(`<a href="${safeSlideUrl}" target="_blank" rel="noopener">Slides</a>`);
+          resourceLinksJa.push(`<a href="${safeSlideUrl}" target="_blank" rel="noopener">スライド</a>`);
         }
         if (p.videoUrl) {
-          resourceLinksEn.push(`<a href="${p.videoUrl}" target="_blank" rel="noopener">Video</a>`);
-          resourceLinksJa.push(`<a href="${p.videoUrl}" target="_blank" rel="noopener">動画</a>`);
+          const safeVideoUrl = escapeHtml(p.videoUrl);
+          resourceLinksEn.push(`<a href="${safeVideoUrl}" target="_blank" rel="noopener">Video</a>`);
+          resourceLinksJa.push(`<a href="${safeVideoUrl}" target="_blank" rel="noopener">動画</a>`);
         }
         const resourceHtml = resourceLinksEn.length ? `
           <p class="pub-meta pub-link">
@@ -564,16 +675,20 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="ja" lang="ja">${resourceLinksJa.join(' / ')}</span>
           </p>` : '';
 
-        const noteHtml = p.noteEn ? `<p class="pub-note ${isInvited ? 'is-invited' : ''}" style="margin-top:0.3rem;"><span class="en" lang="en" style="color:var(--accent-pink); font-family:var(--font-mono); font-size:0.8rem;">&#9733; ${p.noteEn}</span><span class="ja" lang="ja" style="color:var(--accent-pink); font-family:var(--font-mono); font-size:0.8rem;">&#9733; ${p.noteJa}</span></p>` : '';
+        const safeNoteEn = escapeHtml(p.noteEn || '');
+        const safeNoteJa = escapeHtml(p.noteJa || p.noteEn || '');
+        const noteHtml = p.noteEn ? `<p class="pub-note ${isInvited ? 'is-invited' : ''}" style="margin-top:0.3rem;"><span class="en" lang="en" style="color:var(--accent-pink); font-family:var(--font-mono); font-size:0.8rem;">&#9733; ${safeNoteEn}</span><span class="ja" lang="ja" style="color:var(--accent-pink); font-family:var(--font-mono); font-size:0.8rem;">&#9733; ${safeNoteJa}</span></p>` : '';
 
         const dispTitleEn = p.titleEn;
         const dispTitleJa = p.titleJa || p.titleEn;
+        const safeDispTitleEn = escapeHtml(dispTitleEn);
+        const safeDispTitleJa = escapeHtml(dispTitleJa);
 
         item.innerHTML = `
           <div class="pub-year">${p.year}</div>
           <div class="pub-details">
-            <h4 class="en" lang="en">${dispTitleEn}</h4>
-            <h4 class="ja" lang="ja">${dispTitleJa}</h4>
+            <h4 class="en" lang="en">${safeDispTitleEn}</h4>
+            <h4 class="ja" lang="ja">${safeDispTitleJa}</h4>
             <p class="pub-authors">
               <span class="en" lang="en">${p.authorsEn}</span>
               <span class="ja" lang="ja">${p.authorsJa}</span>
@@ -610,7 +725,7 @@ document.addEventListener('DOMContentLoaded', () => {
       'loading'
     );
 
-    return loadWindowAssignmentScript('presentations_data.js?v=9', 'presentationsData')
+    return loadWindowAssignmentScript('presentations_data.js', 'presentationsData')
       .then((data) => {
         renderPresentations(currentPresentationFilter);
         return data;
