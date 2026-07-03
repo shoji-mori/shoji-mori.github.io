@@ -66,7 +66,7 @@
 ### 論文データ
 
 - **ADS 同期**: ADS API をORCID(0000-0002-7002-939X)で検索し、書誌メタデータ(タイトル・著者・誌名・巻号頁・DOI・arXiv ID・bibcode・被引用数・査読フラグ)を取得して `src/data/publications.generated.json` に書き出す
-- **ローカルオーバーレイ**: ADS が持たない情報は `src/data/publications.overrides.yaml` に bibcode キーで保持 — `selected` フラグ、日英の平易な要約(現行データから移行)、著者名の日本語表記、ハイライト図版の指定。同期処理はこのファイルに**絶対に書き込まない**(手書き部分が上書きされない保証)
+- **ローカルオーバーレイ**: ADS が持たない情報は `src/data/publications.overrides.yaml` に bibcode キーで保持 — `selected` フラグ(/publications の「Selected」表示、トップの Selected Publications 5本に使用)、`highlight` フラグ+表示順(トップの研究ハイライト3件の選定に使用。図版パスもここで指定)、日英の平易な要約(現行データから移行)、著者名の日本語表記。同期処理はこのファイルに**絶対に書き込まない**(手書き部分が上書きされない保証)
 - **マージ**: ビルド時に generated + overrides を bibcode で結合して表示用データを構成
 - **同期の実行**: `npm run sync` (ローカル)+ **GitHub Actions の週次 cron が自動実行し、変更があれば自動コミット→自動デプロイ**(ユーザー決定)。ADS API トークンは GitHub Secrets に保存
 - **移行**: 既存 `publications_data.js` から一度だけ変換スクリプトで移行。DOI/arXiv ID で ADS レコードと突合し、要約・selected 等を overrides に振り分ける
@@ -83,7 +83,7 @@
 
 ### 数字サマリ(自動計算)
 
-- 査読論文数・筆頭著者論文数・総被引用数・h-index をビルド時に同期データから計算。手動更新は不要
+- 査読論文数・筆頭著者論文数・総被引用数・h-index は ADS 同期データからビルド時に計算。グラント件数など ADS にない指標は `cv.yaml` から集計。いずれも手動でのカウント更新は不要
 
 ### データの出口
 
@@ -101,7 +101,7 @@
 - クライアントJS は最小限: 言語トグル、論文フィルタ、BibTeX コピー、旧アンカーのリダイレクト程度
 - **デプロイ**: GitHub Actions でビルド → GitHub Pages(Actions 方式に切替。初回のみリポジトリ設定変更が必要)。以後の公開は `git push` のみ
 - **SEO**: ページ別 title/description、OGP、canonical、JSON-LD、自動 sitemap。現行のメタデータ資産を引き継いで強化
-- リポジトリ構成: サイト本体をリポジトリルートの Astro プロジェクトに再構成。`admin/` は**今回のスコープ外**(触らない)。旧 `index.html` / `style.css` / `script.js` / `*_data.js` は移行完了後に削除
+- リポジトリ構成: **開発はリポジトリ内の `ver2/` ディレクトリに Astro プロジェクトを新設して行い、既存サイト(ルートの `index.html` 等)は開発中も現状のまま公開を維持する。ユーザー確認後に切替**(ビルド出力をルート公開に切り替え、旧 `index.html` / `style.css` / `script.js` / `*_data.js` を削除)。`admin/` は**今回のスコープ外**(触らない)
 
 ## 6. 必要な素材(ユーザー提供)
 
