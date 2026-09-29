@@ -11,6 +11,7 @@ export function build() {
   const cv = data('cv');
   const materials = data('materials');
   const projects = data('projects');
+  const mentoring = data('mentoring');
   validateData(publications,presentations);
   for (const section of [...research,...cv]) if (!section.id || !section.titleEn || !section.titleJa) throw new Error('Invalid bilingual section');
   const dist = path.join(root,'dist');
@@ -26,6 +27,7 @@ export function build() {
     ['research','research/','Research','研究'],
     ['publications','publications/','Publications','論文'],
     ['talks','talks/','Talks & materials','発表・資料'],
+    ['mentoring','mentoring/','Mentoring','指導・教育'],
     ['cv','cv/','CV','CV']
   ];
   const descriptions = {
@@ -33,6 +35,7 @@ export function build() {
     research:'Research by Shoji Mori on electron heating, disk temperatures and water, satellite formation, and observations of young stars.',
     publications:'Papers by Shoji Mori, with links to journal, arXiv and ADS, and BibTeX.',
     talks:'Conference presentations, slides, posters, and theses by Shoji Mori.',
+    mentoring:'Student supervision and teaching by Shoji Mori: approach, students and their papers, and courses.',
     cv:'Shoji Mori: academic experience, education, grants, awards, teaching, mentoring, and professional service.'
   };
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -78,6 +81,14 @@ export function build() {
     }).join(''),
     homeLinks:profiles.filter(([label])=>site.homeProfileLinks.includes(label)).map(([label,url])=>external(url,escape(label))).join(''),
     publicationTotal:String(publications.length),
+    // Mentoring page and home summary come from src/data/mentoring.json.
+    mentoringApproach:mentoring.approachEn.map((t,i)=>'<p>'+bi(t,mentoring.approachJa[i])+'</p>').join(''),
+    mentoringTeaching:mentoring.teachingEn.map((t,i)=>'<p>'+bi(t,mentoring.teachingJa[i])+'</p>').join(''),
+    mentoringStudents:mentoring.students.map(st=>{
+      const papers=st.papers.map(id=>{const p=publicationById.get(id);if(!p)throw new Error('Unknown mentoring paper: '+id);return '<a href="/publications/#'+p.id+'">'+escape(p.authorsEn.replace(/<[^>]*>/g,'').split(',')[0].split(' ').pop()+' et al. ('+p.year+')')+'</a>';}).join(', ');
+      return listRow(escape(st.period),'<p class="list-title">'+bi(st.nameEn,st.nameJa)+'</p><p class="list-finding">'+bi(st.topicEn,st.topicJa)+'</p><p class="list-meta">'+bi(st.roleEn+' · '+st.withEn,st.roleJa+' · '+st.withJa)+(papers?'</p><p class="list-meta" lang="en">'+bi('Paper: ','論文：')+papers:'')+'</p>');
+    }).join(''),
+    homeMentoring:mentoring.students.map(st=>listRow(escape(st.period),'<p class="list-title">'+bi(st.nameEn,st.nameJa)+' <span class="list-meta">'+bi(st.roleEn.replace(/ \(.*\)$/,''),st.roleJa.replace(/（.*）$/,''))+'</span></p><p class="list-meta">'+bi(st.topicEn,st.topicJa)+'</p>')).join(''),
     siteEmail:escape(site.email),
     siteCv:escape(site.cvPdf),
     siteRole:bi(site.roleEn.join('\n'),site.roleJa.join('\n')).replace(/\n/g,'<br>'),
@@ -164,7 +175,7 @@ export function build() {
   // The former Activity page duplicated the talk archive; keep its URL working.
   mkdirSync(path.join(dist,'news'),{recursive:true});
   writeFileSync(path.join(dist,'news','index.html'),'<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=/talks/"><link rel="canonical" href="https://shoji-mori.github.io/talks/"><title>Talks | Shoji Mori</title></head><body><p><a href="/talks/">Talks and materials</a></p></body></html>\n');
-  return {pages:5,printPages:2,publications:publications.length,presentations:presentations.length,materials:materials.length};
+  return {pages:pages.length,printPages:2,publications:publications.length,presentations:presentations.length,materials:materials.length};
 }
 
 if (process.argv[1] === new URL(import.meta.url).pathname) console.log('Built',build());

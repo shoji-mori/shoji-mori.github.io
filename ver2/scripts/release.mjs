@@ -9,7 +9,7 @@ import { build } from './build.mjs';
 const dist = path.join(root, 'dist');
 const site = path.join(root, '..');
 // Only generated routes and assets are replaced; files/, admin/, PDFs and other root files are left alone.
-const directories = ['research', 'publications', 'talks', 'cv', 'news', 'images', 'fonts'];
+const directories = ['research', 'publications', 'talks', 'mentoring', 'cv', 'news', 'images', 'fonts'];
 const files = ['index.html', '404.html', 'styles.css', 'site.js', 'publications.bib', 'sitemap.xml'];
 
 console.log('Built', build());

@@ -1,5 +1,21 @@
 [
   {
+    "year": "2026",
+    "selected": false,
+    "titleEn": "Beyond the α Model: Scaling the Wind-driven Accretion Rate in Protoplanetary Disks Using Systematic Nonideal Magnetohydrodynamical Simulations",
+    "titleJa": "Beyond the α Model: Scaling the Wind-driven Accretion Rate in Protoplanetary Disks Using Systematic Nonideal Magnetohydrodynamical Simulations",
+    "authorsEn": "Haruhi Enomoto, <strong>Shoji Mori</strong>, Satoshi Okuzumi",
+    "authorsJa": "榎本 晴日, <strong>森 昇志</strong>, 奥住 聡",
+    "journalEn": "Publications of the Astronomical Society of Japan, psag100",
+    "journalJa": "Publications of the Astronomical Society of Japan, psag100",
+    "publicationUrl": "https://doi.org/10.1093/pasj/psag100",
+    "arxivUrl": "https://arxiv.org/abs/2605.04456",
+    "adsUrl": "https://ui.adsabs.harvard.edu/search/q=doi:%2210.1093%2Fpasj%2Fpsag100%22/sort=date%20desc%2C%20bibcode%20desc",
+    "abstractEn": "",
+    "abstractJa": "",
+    "id": "publication-25"
+  },
+  {
     "year": "2025",
     "selected": true,
     "titleEn": "Radiative Nonideal Magnetohydrodynamic Simulations of Inner Protoplanetary Disks: Temperature Structures, Asymmetric Winds, and Episodic Surface Accretion",

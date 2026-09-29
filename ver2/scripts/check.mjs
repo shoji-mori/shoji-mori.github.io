@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { root, data } from './content.mjs';
 
 const dist=path.join(root,'dist');
-const pages=['index.html','research/index.html','publications/index.html','talks/index.html','cv/index.html','publications/print/index.html','talks/print/index.html','404.html'];
+const pages=['index.html','research/index.html','publications/index.html','talks/index.html','cv/index.html','mentoring/index.html','publications/print/index.html','talks/print/index.html','404.html'];
 const documents=new Map(pages.map(p=>[p,readFileSync(path.join(dist,p),'utf8')]));
 const decode=(text)=>text.replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
 let localReferences=0;

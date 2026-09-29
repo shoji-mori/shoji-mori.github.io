@@ -575,44 +575,18 @@
     "titleJa": "学生指導・メンター",
     "items": [
       {
-        "date": "2024 - Present",
-        "titleEn": "Yu Wang",
-        "titleJa": "Yu Wang",
-        "paragraphsEn": [
-          "Ph.D. Student @ Tsinghua University",
-          "Topic: Two-dimensional structure of snow lines"
-        ],
-        "paragraphsJa": [
-          "博士課程学生 @ 清華大学",
-          "研究テーマ: スノーラインの２次元的構造"
-        ],
-        "links": []
-      },
-      {
-        "date": "2024 - Present",
-        "titleEn": "Dawei Dai",
-        "titleJa": "Dawei Dai",
-        "paragraphsEn": [
-          "Ph.D. Student @ Tsinghua University",
-          "Topic: Dispersal processes in protoplanetary disks"
-        ],
-        "paragraphsJa": [
-          "博士課程学生 @ 清華大学",
-          "研究テーマ: 原始惑星系円盤の散逸過程"
-        ],
-        "links": []
-      },
-      {
         "date": "2021 - Present",
         "titleEn": "Katsushi Kondo",
-        "titleJa": "近藤 克",
+        "titleJa": "近藤 克志",
         "paragraphsEn": [
-          "Ph.D. Student @ Institute of Science Tokyo",
-          "Topic: Snow line evolution in magnetized protoplanetary disks"
+          "Ph.D. student, Institute of Science Tokyo",
+          "Co-supervised with Prof. Satoshi Okuzumi",
+          "Topic: Snow-line evolution in magnetized protoplanetary disks"
         ],
         "paragraphsJa": [
-          "博士課程学生 @ 東京科学大学",
-          "研究テーマ: 磁気的原始惑星系円盤のスノーライン進化"
+          "博士課程、東京科学大学",
+          "奥住 聡 教授と共同指導",
+          "研究テーマ: 磁場を持つ原始惑星系円盤のスノーライン進化"
         ],
         "links": []
       },
@@ -621,12 +595,46 @@
         "titleEn": "Haruhi Enomoto",
         "titleJa": "榎本 晴日",
         "paragraphsEn": [
-          "Ph.D. Student @ Institute of Science Tokyo",
-          "Topic: Development of local MHD simulations toward global magnetic flux evolution"
+          "Ph.D. student, Institute of Science Tokyo",
+          "Co-supervised with Prof. Satoshi Okuzumi",
+          "Topic: Local MHD simulations toward global magnetic-flux evolution; accretion-rate scaling without a viscosity parameter"
         ],
         "paragraphsJa": [
-          "博士課程学生 @ 東京科学大学",
-          "研究テーマ: 大局的磁束進化にむけた局所MHD計算の開発"
+          "博士課程、東京科学大学",
+          "奥住 聡 教授と共同指導",
+          "研究テーマ: 大局的な磁束進化に向けた局所MHD計算、粘性係数に頼らない降着率のスケーリング"
+        ],
+        "links": []
+      },
+      {
+        "date": "2024 - Present",
+        "titleEn": "Yu Wang",
+        "titleJa": "Yu Wang",
+        "paragraphsEn": [
+          "Ph.D. student, Tsinghua University",
+          "Mentored with Prof. Chris Ormel",
+          "Topic: Two-dimensional structure of the water snow line"
+        ],
+        "paragraphsJa": [
+          "博士課程、清華大学",
+          "Chris Ormel 教授と指導",
+          "研究テーマ: 水のスノーラインの二次元構造"
+        ],
+        "links": []
+      },
+      {
+        "date": "2024 - 2025",
+        "titleEn": "Dawei Dai",
+        "titleJa": "Dawei Dai",
+        "paragraphsEn": [
+          "Undergraduate student, Tsinghua University (now M.S. student, Dartmouth College)",
+          "Co-supervised with Assoc. Prof. Masahiro Ogihara (Tsung-Dao Lee Institute)",
+          "Topic: Dispersal of disks around low-mass stars"
+        ],
+        "paragraphsJa": [
+          "学部生、清華大学（現 Dartmouth College 修士課程）",
+          "荻原 正博 准教授（Tsung-Dao Lee Institute）と共同指導",
+          "研究テーマ: 低質量星の円盤の散逸"
         ],
         "links": []
       }
