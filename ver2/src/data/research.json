@@ -165,12 +165,12 @@
     "paragraphsEn": [
       "A young star's mass is usually measured from the rotation of its disk, but in protostars the disk is hidden inside an infalling envelope. I make synthetic observations to see what the envelope's motion can tell us instead.",
       "In our 2024 study of L1527, two infall models matched the observations about equally well, and the stellar masses estimated by every method were lower than the value from the disk's Keplerian rotation. This may indicate that the infall is slowed, for example by magnetic fields. We also showed analytically that, in the standard infall model, the velocity increase toward the center in position–velocity diagrams comes from infall rather than rotation. The analysis pipeline, envos, is public.",
-      "I also take part in the FAUST and eDisk collaborations on the theory side (see Observational projects below)."
+      "I also take part in the FAUST and eDisk collaborations on the theory side (see Projects and collaborations below)."
     ],
     "paragraphsJa": [
       "中心星の質量はふつう円盤の回転から求めますが、原始星では円盤が落下するエンベロープに覆われていて、回転を取り出しにくくなります。そこで、エンベロープのガスを望遠鏡で見たときの姿を計算で作り、その動きから何が読み取れるかを調べています。",
       "2024年のL1527の研究では、二つの落下モデルが観測を同じくらいよく再現し、どの方法で求めた中心星の質量も、円盤のケプラー回転から求めた値より小さくなりました。落下が磁場などで減速されている可能性があります。また、標準的な落下モデルでは、位置速度図で中心ほど速度が増す特徴が回転ではなく落下の速度から生じることを解析的に示しました。解析パイプライン envos は公開しています。",
-      "若い原始星と形成途中の円盤を観測するFAUSTとeDiskの共同研究にも、理論の立場から参加しています（下の「観測プロジェクト」を参照）。"
+      "若い原始星と形成途中の円盤を観測するFAUSTとeDiskの共同研究にも、理論の立場から参加しています（下の「観測プロジェクトと共同研究」を参照）。"
     ],
     "papers": [
       {

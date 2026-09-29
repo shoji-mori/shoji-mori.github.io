@@ -100,11 +100,11 @@ export function build() {
       const group = materials.filter(m=>m.categoryEn===category);
       return '<section class="material-group"><h3>'+bi(category,group[0].categoryJa)+'</h3><div class="materials-grid">'+group.map(m=>'<article class="material-card"><div class="material-meta"><span>'+m.year+'</span><span>PDF</span></div><h4>'+bi(m.titleEn,m.titleJa)+'</h4><p>'+bi(m.venueEn,m.venueJa)+'</p><div class="paper-links">'+links(m.links)+'</div></article>').join('')+'</div></section>';
     }).join(''),
-    researchIndex:research.map(r=>'<a href="#'+r.id+'">'+bi(r.titleEn,r.titleJa)+'</a>').join('')+'<a href="#projects">'+bi('Observational projects','観測プロジェクト')+'</a><a href="#vision">'+bi('Research vision','研究の展望')+'</a>',
+    researchIndex:research.map(r=>'<a href="#'+r.id+'">'+bi(r.titleEn,r.titleJa)+'</a>').join('')+'<a href="#projects">'+bi('Projects and collaborations','観測プロジェクトと共同研究')+'</a><a href="#vision">'+bi('Research vision','研究の展望')+'</a>',
     // Observational projects come from src/data/projects.json; papers are linked to the publication list.
     researchProjects:projects.map(pr=>{
       const papers = pr.papers.map(id=>{const p=publicationById.get(id);if(!p)throw new Error('Unknown project paper: '+id);return '<li><a href="/publications/#'+p.id+'">'+escape(p.titleEn.replace(/^Early Planet Formation in Embedded Disks \(eDisk\)\.\s*/,'eDisk ').replace(/\s+/g,' '))+'</a> <span>('+p.year+')</span></li>';}).join('');
-      return '<article class="project" id="project-'+pr.id+'"><div class="project-head"><h3>'+external(pr.url,escape(pr.name))+'</h3><p class="project-meta">'+escape(pr.fullName)+' · '+bi(pr.facilityEn,pr.facilityJa)+'</p></div><p class="project-role">'+bi(pr.roleEn,pr.roleJa)+'</p>'+(papers?'<details class="project-papers"><summary>'+bi('Papers ('+pr.papers.length+')','関連論文（'+pr.papers.length+'本）')+'</summary><ul>'+papers+'</ul></details>':'')+'</article>';
+      return '<article class="project" id="project-'+pr.id+'"><div class="project-head"><h3>'+external(pr.url,pr.nameJa?bi(pr.name,pr.nameJa):escape(pr.name))+'</h3><p class="project-meta">'+escape(pr.fullName)+' · '+bi(pr.facilityEn,pr.facilityJa)+'</p></div><p class="project-role">'+bi(pr.roleEn,pr.roleJa)+'</p>'+(papers?'<details class="project-papers"><summary>'+bi('Papers ('+pr.papers.length+')','関連論文（'+pr.papers.length+'本）')+'</summary><ul>'+papers+'</ul></details>':'')+'</article>';
     }).join(''),
     researchChapters:research.map(r=>{
       const figures = (r.figures||[]).map(({file,after})=>{

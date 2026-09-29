@@ -44,5 +44,19 @@
     "roleJa": "円盤分野の理論メンバー。水の輝線の観測から原始惑星系円盤の温度構造と力学構造をどう読み取れるかを予測しました。計画は2020年にESAの中型ミッション選定の候補から外れました。",
     "url": "https://sci.esa.int/web/cosmic-vision/-/spica-no-longer-candidate-for-esa-s-m5-mission-selection",
     "papers": []
+  },
+  {
+    "id": "sun-birth-environment",
+    "name": "Birth environment of the Sun",
+    "nameJa": "太陽が生まれた環境",
+    "fullName": "Arzoumanian et al. (2023), The Astrophysical Journal Letters, 947, L29",
+    "facilityEn": "Collaborative study",
+    "facilityJa": "共同研究",
+    "roleEn": "Co-author of an interdisciplinary study of where the Sun may have formed, in the context of star cluster formation in hub-filament systems.",
+    "roleJa": "ハブ・フィラメント構造での星団形成の観点から、太陽が生まれた環境を探る分野横断の共同研究に参加しました。",
+    "url": "https://doi.org/10.3847/2041-8213/acc849",
+    "papers": [
+      "publication-7"
+    ]
   }
 ]
