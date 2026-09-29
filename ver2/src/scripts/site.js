@@ -166,6 +166,27 @@ function initializeSite() {
   openLinkedSummary();
   window.addEventListener('hashchange',openLinkedSummary);
 
+  // Highlight the section currently being read in the side index.
+  const indexLinks=[...document.querySelectorAll('.page-index a[href^="#"]')];
+  if(indexLinks.length && 'IntersectionObserver' in window) {
+    const visible=new Set();
+    const spy=new IntersectionObserver(entries=>{
+      for(const entry of entries) entry.isIntersecting?visible.add(entry.target.id):visible.delete(entry.target.id);
+      const current=indexLinks.find(link=>visible.has(link.hash.slice(1)));
+      if(current) indexLinks.forEach(link=>link.classList.toggle('is-current',link===current));
+    },{rootMargin:'-20% 0px -60% 0px'});
+    indexLinks.forEach(link=>{const target=document.getElementById(link.hash.slice(1));if(target)spy.observe(target);});
+  }
+
+  // Content is visible by default; the fade-in only applies once this script runs.
+  const reveal=[...document.querySelectorAll('.research-note,.research-figure,.selected-list .paper-row,.news-item,.material-card')];
+  if(reveal.length && 'IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const observer=new IntersectionObserver(entries=>{
+      for(const entry of entries) if(entry.isIntersecting){entry.target.classList.add('is-visible');observer.unobserve(entry.target);}
+    },{rootMargin:'0px 0px -8% 0px'});
+    reveal.forEach(element=>{element.classList.add('reveal');observer.observe(element);});
+  }
+
   // Preserve inbound links from the former single-page site.
   if(location.pathname==='/' || location.pathname==='/index.html') {
     const redirects={

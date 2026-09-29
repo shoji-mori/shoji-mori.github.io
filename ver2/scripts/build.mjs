@@ -45,7 +45,8 @@ export function build() {
   const publicationById = new Map(publications.map(p=>[p.id,p]));
   const homePapers = ['publication-22','publication-15','publication-6','publication-5','publication-2'];
   const components = {
-    researchNotes:research.map(r=>'<article class="research-note"><p class="research-period">'+escape(r.period)+'</p><h3><a href="/research/#'+r.id+'">'+bi(r.titleEn,r.titleJa)+'</a></h3><p>'+bi(r.summaryEn,r.summaryJa)+'</p></article>').join(''),
+    // Cover images are cropped details of figures shown in full, with credits, on the research page.
+    researchNotes:research.map((r,i)=>'<article class="research-note"><div class="research-note-media'+(r.cover?'':' research-note-media-empty')+'" aria-hidden="true">'+(r.cover?'<img src="/images/'+r.cover+'" alt="" width="960" height="600" loading="lazy" decoding="async">':'')+'<span class="research-note-number">0'+(i+1)+'</span></div><div class="research-note-body"><p class="research-period">'+escape(r.period)+'</p><h3><a href="/research/#'+r.id+'">'+bi(r.titleEn,r.titleJa)+'</a></h3><p>'+bi(r.summaryEn,r.summaryJa)+'</p></div></article>').join(''),
     selectedPublications:homePapers.map(id=>paper(publicationById.get(id),true)).join(''),
     allPublications:publications.map(p=>paper(p)).join(''),
     publicationCount:'',
@@ -59,15 +60,20 @@ export function build() {
       const group = materials.filter(m=>m.categoryEn===category);
       return '<section class="material-group"><h3>'+bi(category,group[0].categoryJa)+'</h3><div class="materials-grid">'+group.map(m=>'<article class="material-card"><div class="material-meta"><span>'+m.year+'</span><span>PDF</span></div><h4>'+bi(m.titleEn,m.titleJa)+'</h4><p>'+bi(m.venueEn,m.venueJa)+'</p><div class="paper-links">'+links(m.links)+'</div></article>').join('')+'</div></section>';
     }).join(''),
-    researchIndex:research.map(r=>'<a href="#'+r.id+'">'+bi(r.titleEn,r.titleJa)+'</a>').join(''),
+    researchIndex:research.map((r,i)=>'<a href="#'+r.id+'"><span>0'+(i+1)+'</span><span>'+bi(r.titleEn,r.titleJa)+'</span></a>').join(''),
     researchChapters:research.map(r=>{
-      const f = researchFigures.find(f=>f.file===r.figure);
+      const figures = (r.figures||[]).map(({file,after})=>{
+        const f = researchFigures.find(f=>f.file===file);
+        if(!f)throw new Error('Unknown research figure: '+file);
+        return {after,html:figure(f)};
+      });
       const references = r.papers.map(ref=>{
         const p = publicationById.get(ref.id);
         if(!p)throw new Error('Unknown research reference: '+ref.id);
         return '<li><a href="/publications/#'+p.id+'" title="'+escape(p.titleEn)+'">'+escape(ref.label)+'</a></li>';
       }).join('');
-      return '<section class="research-chapter" id="'+r.id+'"><p class="research-period">'+escape(r.period)+'</p><h2>'+bi(r.titleEn,r.titleJa)+'</h2>'+paragraphs(r)+(f?figure(f):'')+'<div class="related-work"><span>'+bi('Papers','関連論文')+'</span><ul>'+references+'</ul></div></section>';
+      const body = r.paragraphsEn.map((text,i)=>'<p>'+bi(text,r.paragraphsJa[i])+'</p>'+figures.filter(f=>f.after===i+1).map(f=>f.html).join('')).join('');
+      return '<section class="research-chapter" id="'+r.id+'"><p class="research-period"><span class="chapter-number">0'+(research.indexOf(r)+1)+'</span>'+escape(r.period)+'</p><h2>'+bi(r.titleEn,r.titleJa)+'</h2>'+body+'<div class="related-work"><span>'+bi('Papers','関連論文')+'</span><ul>'+references+'</ul></div></section>';
     }).join(''),
     cvIndex:cv.map((s,i)=>'<a href="#'+s.id+'"><span>0'+(i+1)+'</span><span>'+bi(s.titleEn,s.titleJa)+'</span></a>').join(''),
     cvSections:cv.map(s=>'<section class="cv-section" id="'+s.id+'"><h2>'+bi(s.titleEn,s.titleJa)+'</h2>'+s.items.map(item=>'<article class="cv-entry"><div class="cv-date">'+escape(item.date)+'</div><div>'+(item.titleEn?'<h3>'+bi(item.titleEn,item.titleJa)+'</h3>':'')+paragraphs(item)+(item.links.length?'<div class="paper-links">'+links(item.links)+'</div>':'')+'</div></article>').join('')+'</section>').join('')

@@ -14,6 +14,10 @@
       "磁場は、円盤のガスに乱れを起こします。その強さによって、惑星の材料となる塵がどれだけかき混ぜられ、どんな速さで衝突するかが変わります。初期の研究では、加熱された電子が塵に取り込まれることでガスに電流が流れにくくなり、磁場による乱れが弱まるという働きに注目しました。",
       "2016年にはこの働きが円盤のどこで重要になるかを調べ、2017年には数値計算で乱れが弱まることを確かめました。調べた条件では、乱流が抑えられても、整った磁場によってガスは星へ流れ込めます。2019年には、磁場の影響も含めて電流の流れ方を記述する理論へ広げました。電子や塵の小さなスケールの動きが、円盤全体の流れを考えるうえでも無視できないことを示した研究です。"
     ],
+    "cover": "cards/electron-heating.webp",
+    "figures": [
+      { "file": "electron-heating-mri-snapshots.png", "after": 2 }
+    ],
     "papers": [
       {
         "id": "publication-22",
@@ -70,7 +74,11 @@
         "label": "Mori, Bai & Tomida (2025)"
       }
     ],
-    "figure": "mhd-alignment-thermal-structure.png"
+    "cover": "cards/temperature-water.webp",
+    "figures": [
+      { "file": "mhd-alignment-thermal-structure.png", "after": 2 },
+      { "file": "planet-growth-migration-tracks.png", "after": 4 }
+    ]
   },
   {
     "id": "satellite-formation",
@@ -86,6 +94,10 @@
     "paragraphsJa": [
       "木星のような巨大惑星のまわりにも、衛星の材料となるガスと塵の円盤ができます。ただし、小さな塵は成長する途中で惑星へ落ちてしまい、衛星のもとになる天体まで育てないことが問題になります。芝池諭人さんとの研究では、磁場による風がガスを運ぶ円盤で、この問題を解決できるかを調べました。",
       "磁場とガスの計算に塵の成長・移動の計算を組み合わせると、乱れの弱い円盤では塵が薄い層に沈み、互いに衝突して育ちやすくなりました。塵が十分に供給される条件では、惑星に落ちる前に大きな天体へ成長できます。比較した乱流の強いモデルより少ない塵の供給で成長できるため、衛星の材料を作る一つの道筋になります。"
+    ],
+    "cover": "cards/satellite-formation.webp",
+    "figures": [
+      { "file": "cpd-wind-accretion-schematic.png", "after": 1 }
     ],
     "papers": [
       {

@@ -103,4 +103,25 @@ export const researchFigures = [{
   credit:'Mori, Bai & Tomida (2025)',
   source:'/files/posters/poster-20251208-epf-thermal-structure-magnetized-ppds.pdf',
   alt:'Vertical slices of simulated disks: density on the left and temperature on the right, comparing aligned and anti-aligned magnetic fields.'
+},{
+  file:'planet-growth-migration-tracks.png', width:2028, height:787,
+  captionEn:'Model growth and migration tracks of planets in a turbulent disk (left) and a magnetically driven disk (right). Track colors show the water fraction of each planet.',
+  captionJa:'乱流円盤（左）と磁場駆動の円盤（右）のモデルで計算した、惑星の成長と軌道移動の道筋。線の色は惑星に含まれる水の割合を表します。',
+  credit:'Mori, Kunitomo & Ogihara (2025)',
+  source:'/files/posters/poster-20251208-epf-thermal-structure-magnetized-ppds.pdf',
+  alt:'Planet mass versus orbital radius for turbulent and MHD disk models, with growth tracks colored by water fraction.'
+},{
+  file:'electron-heating-mri-snapshots.png', width:1876, height:814,
+  captionEn:'Magnetic-field strength in local magnetohydrodynamic simulations after 60 orbits, with electron heating (left) and without it (right). With electron heating, the small-scale turbulence seen on the right is suppressed. Field strength is shown in normalized units.',
+  captionJa:'局所的な磁気流体シミュレーションで、60公転後の磁場の強さを比べた図。左が電子加熱あり、右が電子加熱なし。電子加熱があると、右に見られる細かな乱流が抑えられます。磁場の強さは規格化した値です。',
+  credit:'Mori et al. (2017)',
+  source:'/files/thesis/thesis-201903-phd-thesis.pdf',
+  alt:'Two simulation boxes colored by magnetic-field strength: a nearly uniform, layered box with electron heating and a box full of small turbulent structures without it.'
+},{
+  file:'cpd-wind-accretion-schematic.png', width:2000, height:1335,
+  captionEn:'Schematic of a disk around a young giant planet (CPD) inside the planet-forming disk (PPD). Gas falls onto the CPD from the PPD, a magnetically driven wind leaves the disk surface, and gas flows both toward and away from the planet within the CPD.',
+  captionJa:'原始惑星系円盤（PPD）の中で、若い巨大惑星を取り巻く周惑星円盤（CPD）の模式図。PPDからガスが降り積もり、円盤の表面から磁場が駆動する風が吹き出し、CPDの中では惑星へ向かう流れと外へ向かう流れが生じます。',
+  credit:'Mori (2025 talk); see Shibaike & Mori (2023)',
+  source:'/files/slides/slide-20250128-cpdsf3-magnetic-circumplanetary-disks.pdf',
+  alt:'Schematic: a planet surrounded by a circumplanetary disk, with arrows for infall from the protoplanetary disk, a wind from the disk surface, and inward and outward flows in the disk.'
 }];

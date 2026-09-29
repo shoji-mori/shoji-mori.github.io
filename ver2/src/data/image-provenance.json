@@ -88,6 +88,42 @@
       "sha256": "449d8c6294dd0a8e8d215c5c4c851dd3f8de5787e9c290d1aca17b91934d0403",
       "source_sha256": "ed30b3b18e725b9da446c14d073eb20a1dcff5a78c6edb31d66bd7f595eba553",
       "reuse_note": "Cropped from user-provided research material; no additional public reuse license is stated in the inspected PDF. Retain the author/source credit. Only extraction and cropping were applied; no data, axes, labels, or scientific annotations were changed."
+    },
+    {
+      "file": "electron-heating-mri-snapshots.png",
+      "type": "simulation_figure",
+      "source_pdf": "files/thesis/thesis-201903-phd-thesis.pdf",
+      "source_page": 48,
+      "source_section": "Figure 2.3 (chapter based on Mori et al. 2017)",
+      "credit": "Mori et al. (2017), reproduced from S. Mori, PhD thesis (2019), Fig. 2.3.",
+      "caption": "Magnetic-field strength |B|/Bu at 60 orbits in shearing-box MHD simulations, with electron heating (J_EH/J_u = 0.03, left) and without (right).",
+      "extraction": "pdftoppm -f 48 -singlefile -cropbox -r 300 -x 646 -y 479 -W 958 -H 1604 -png SOURCE raw48; the two stacked panels were split at y=788 and placed side by side (lower panel padded 19 px on top), trimmed, 24 px white border. Pixels within panels are unchanged.",
+      "scientific_note": "Model snapshots. The colorbar unit Bu is a normalization defined in the thesis, not in the figure.",
+      "path": "public/images/electron-heating-mri-snapshots.png",
+      "dimensions": [
+        1876,
+        814
+      ],
+      "bytes": 360232,
+      "sha256": "18f469c83662d0975bb5d34daf9d0aa5dfff35a863fa8b7342c2cef7e2dd6385"
+    },
+    {
+      "file": "cpd-wind-accretion-schematic.png",
+      "type": "schematic",
+      "source_pdf": "files/slides/slide-20250128-cpdsf3-magnetic-circumplanetary-disks.pdf",
+      "source_page": 20,
+      "source_section": "Take Aways (figure only)",
+      "credit": "S. Mori, CPDSF3 talk (2025, with Y. Shibaike); the talk builds on Shibaike & Mori (2023, MNRAS 518, 5444).",
+      "caption": "Schematic of a circumplanetary disk with infall from the PPD, a magnetically driven wind, and accretion/decretion flows.",
+      "extraction": "pdftoppm -f 20 -singlefile -cropbox -r 432 -x 2970 -y 762 -W 2610 -H 1853 -png SOURCE raw20; magick raw20.png -fuzz 1% -trim +repage -bordercolor white -border 48 -resize '2000x>' -strip DEST",
+      "scientific_note": "Conceptual schematic, not a simulation result. The talk includes work beyond the 2023 paper; the caption does not claim results.",
+      "path": "public/images/cpd-wind-accretion-schematic.png",
+      "dimensions": [
+        2000,
+        1335
+      ],
+      "bytes": 260582,
+      "sha256": "1533cd13edc14046724eff76a1e18d21e868723bb87eeaa6bd87bac5e22061a0"
     }
   ]
 }
