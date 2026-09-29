@@ -46,6 +46,8 @@ function initializeSite() {
       if(matches) count++;
     }
     section.querySelectorAll('[data-year-group]').forEach(group=>{group.hidden=!group.querySelector('[data-record]:not([hidden])');});
+    const older=section.querySelector('[data-older]');
+    if(older){const active=Object.entries(filters).some(([key,value])=>key==='q'?value.trim():value!=='all');if(active)older.open=true;older.hidden=!older.querySelector('[data-record]:not([hidden])');}
     const filtered = Object.entries(filters).some(([key,value])=>key==='q'?value.trim():value!=='all');
     section.querySelector('.results-count').textContent = filtered ? localize(count+(count===1?' result':' results'),'検索結果：'+count+'件') : '';
     section.querySelector('.empty-state').hidden = count > 0;
@@ -149,6 +151,8 @@ function initializeSite() {
       form.reset();applyFilters(section);form.querySelector('input').focus();
     });
   }
+  // Collapsed talk years are opened for printing so the printed list is complete.
+  window.addEventListener('beforeprint',()=>document.querySelectorAll('[data-older]').forEach(d=>{d.open=true;}));
   document.querySelectorAll('[data-print]').forEach(button=>button.addEventListener('click',()=>window.print()));
   document.querySelectorAll('[data-bibtex]').forEach(button=>button.addEventListener('click',async()=>{
     try {
@@ -161,6 +165,8 @@ function initializeSite() {
 
   function openLinkedSummary() {
     const target=document.getElementById(location.hash.slice(1));
+    const olderGroup=target?.closest('[data-older]');
+    if(olderGroup&&!olderGroup.open){olderGroup.open=true;target.scrollIntoView();}
     const summary=target?.querySelector('.paper-summary');
     if(summary)summary.open=true;
   }

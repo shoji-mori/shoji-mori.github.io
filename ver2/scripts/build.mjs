@@ -81,7 +81,14 @@ export function build() {
     publicationYears:'<option value="all" data-en="All years" data-ja="すべての年">All years</option>'+years.map(y=>'<option value="'+y+'">'+y+'</option>').join(''),
     publicationProfiles:profiles.slice(0,3).map(([label,url])=>external(url,escape(label))).join(''),
     talkCount:'',
-    talkRows:byYear(presentations,t=>talk(t,upcoming(t))),
+    // Talks from the most recent years are listed openly; earlier years sit in a closed group that
+    // searching or filtering opens automatically (site.js).
+    talkRows:(()=>{
+      const years=[...new Set(presentations.map(t=>t.year))];
+      const openYears=new Set(years.slice(0,3));
+      const recent=presentations.filter(t=>openYears.has(t.year)), older=presentations.filter(t=>!openYears.has(t.year));
+      return byYear(recent,t=>talk(t,upcoming(t)))+(older.length?'<details class="older-talks" data-older><summary>'+bi('Earlier talks ('+older[older.length-1].year+'–'+older[0].year+', '+older.length+')','それ以前の発表（'+older[older.length-1].year+'–'+older[0].year+'年、'+older.length+'件）')+'</summary>'+byYear(older,t=>talk(t,upcoming(t)))+'</details>':'');
+    })(),
     materials:[...new Set(materials.map(m=>m.categoryEn))].map(category=>{
       const group = materials.filter(m=>m.categoryEn===category);
       return '<section class="material-group"><h3>'+bi(category,group[0].categoryJa)+'</h3><div class="materials-grid">'+group.map(m=>'<article class="material-card"><div class="material-meta"><span>'+m.year+'</span><span>PDF</span></div><h4>'+bi(m.titleEn,m.titleJa)+'</h4><p>'+bi(m.venueEn,m.venueJa)+'</p><div class="paper-links">'+links(m.links)+'</div></article>').join('')+'</div></section>';

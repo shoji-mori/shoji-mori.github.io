@@ -35,7 +35,7 @@ for(const [file,html] of documents) {
   }
 }
 assert.equal((documents.get('publications/index.html').match(/class="paper-row"/g)||[]).length,data('publications.seed').length);
-assert.equal((documents.get('talks/index.html').match(/class="talk-row"/g)||[]).length,data('presentations').length);
+assert.equal((documents.get('talks/index.html').match(/class="talk-row[ "]/g)||[]).length,data('presentations').length);
 assert.equal((documents.get('talks/index.html').match(/class="material-card"/g)||[]).length,data('materials').length);
 assert.equal((documents.get('research/index.html').match(/class="research-chapter"/g)||[]).length,data('research').length);
 assert(!documents.get('index.html').includes('stats-band'));
@@ -45,7 +45,7 @@ assert(readFileSync(path.join(dist,'news/index.html'),'utf8').includes('url=/tal
 const home=documents.get('index.html');
 assert(!home.slice(home.indexOf('id="home-recent"'),home.indexOf('id="home-research"')).includes('doi.org'));
 assert.equal((documents.get('publications/print/index.html').match(/class="paper-row"/g)||[]).length,data('publications.seed').length);
-assert.equal((documents.get('talks/print/index.html').match(/class="talk-row"/g)||[]).length,data('presentations').length);
+assert.equal((documents.get('talks/print/index.html').match(/class="talk-row[ "]/g)||[]).length,data('presentations').length);
 assert(!documents.get('talks/print/index.html').includes('material-card'));
 assert.equal((documents.get('cv/index.html').match(/class="cv-entry"/g)||[]).length,data('cv').reduce((total,section)=>total+section.items.length,0));
 assert.equal((readFileSync(path.join(dist,'publications.bib'),'utf8').match(/@article{/g)||[]).length,data('publications.seed').length);

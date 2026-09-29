@@ -119,6 +119,19 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .talk-date{font-variant-numeric:tabular-nums}
 .format-label{display:inline-block;font-size:11px;line-height:1.7;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:#b8532a14;padding:2px 9px;border-radius:999px}
 .talk-date>.format-label{display:table;margin-top:9px}
+.talk-compact{grid-template-columns:155px 1fr;padding-block:14px}
+.talk-compact h3{font-size:15.5px;font-weight:500;line-height:1.45}
+.talk-meta{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.6}
+.talk-meta .format-label{font-size:13px;font-weight:400}
+.talk-compact .paper-links{margin-top:4px}
+.talk-highlight{padding-block:30px}
+.talk-highlight h3{font-size:20px}
+.talk-summary{font-size:15px;line-height:1.75;color:#33383d;margin-top:10px;max-width:760px}
+.older-talks{margin-top:28px;border-top:1px solid var(--ink)}
+.older-talks>summary{cursor:pointer;list-style:none;padding-block:18px;font-size:15px;font-weight:600;display:flex;justify-content:space-between}
+.older-talks>summary::-webkit-details-marker{display:none}
+.older-talks>summary:after{content:'+';font-weight:400;color:var(--muted)}
+.older-talks[open]>summary:after{content:'−'}
 .upcoming-label{display:table;margin-top:4px;font-size:12px;font-weight:600;color:var(--accent)}
 /* Archive lists are grouped under a year heading that stays in view while its records scroll. */
 .archive-section .paper-list{border-top:0}
@@ -455,5 +468,5 @@ a{color:inherit!important}
 }
 
 @media(max-width:900px){.home{grid-template-columns:1fr;gap:36px;padding-block:40px 64px}.home-main{max-width:none}.lead{margin-bottom:40px}.profile{display:grid;grid-template-columns:132px 1fr;gap:20px;align-items:start}.profile-photo{aspect-ratio:1}.profile h1{margin-top:0;font-size:26px}.profile-links{grid-column:1/-1}.contact-grid{grid-template-columns:1fr;gap:36px}}
-@media(max-width:560px){.lead{font-size:20px}.list li{grid-template-columns:1fr;gap:4px}.list-with-thumbs li{grid-template-columns:1fr 96px;gap:6px 14px}.list-with-thumbs li>.list-date{grid-column:1/-1}.list-thumb{width:96px;height:60px}.list-links{display:block;margin:4px 0 0}.footer-row{flex-direction:column}}
-@media print{.profile{position:static}.list-thumb{display:none}.site-footer{display:none}.cv-date,.research-period,.page-index a{color:#000}.home-section-head a{display:none}}
+@media(max-width:560px){.lead{font-size:20px}.talk-compact{grid-template-columns:1fr;gap:2px}.list li{grid-template-columns:1fr;gap:4px}.list-with-thumbs li{grid-template-columns:1fr 96px;gap:6px 14px}.list-with-thumbs li>.list-date{grid-column:1/-1}.list-thumb{width:96px;height:60px}.list-links{display:block;margin:4px 0 0}.footer-row{flex-direction:column}}
+@media print{.profile{position:static}.list-thumb{display:none}.site-footer{display:none}.older-talks>summary{display:none}.cv-date,.research-period,.page-index a{color:#000}.home-section-head a{display:none}}
