@@ -9,16 +9,19 @@
     "findingEn": "Electron heating can hold back MRI turbulence far outside the classical dead zone, leaving the outer disk less turbulent.",
     "findingJa": "電子加熱があると、従来のデッドゾーンよりずっと外側でもMRI乱流が弱まりうる。",
     "paragraphsEn": [
-      "Magnetic fields can stir up gas in a planet-forming disk. The strength of this turbulence matters because it mixes dust grains and affects their collisions. My early work examined a feedback that can limit this stirring: electric fields heat electrons, and the heated electrons are captured by dust grains, reducing the gas's electrical conductivity.",
-      "In 2016 I studied where this effect could become important; in 2017 we tested it in magnetohydrodynamic simulations. Under the modeled conditions, turbulence can weaken substantially and gas can still accrete through an ordered magnetic field. We extended the theory in 2019 to include how magnetic fields affect the electrical response. These studies show why the behavior of electrons and dust needs to be considered when predicting disk turbulence."
+      "My early work asked whether electrons can weaken the magnetic turbulence that mixes dust in a disk. Once heated by electric fields and captured by dust grains, they leave the gas a poorer conductor.",
+      "In 2016 we predicted that this can happen far beyond the classical dead zone. In our 2017 simulations, the turbulence weakened substantially under the modeled conditions, yet gas still accreted along an ordered magnetic field. In 2019 we added magnetic-field effects to the theory."
     ],
     "paragraphsJa": [
-      "磁場は、円盤のガスに乱れを起こします。その強さによって、惑星の材料となる塵がどれだけかき混ぜられ、どんな速さで衝突するかが変わります。初期の研究では、加熱された電子が塵に取り込まれることでガスに電流が流れにくくなり、磁場による乱れが弱まるという働きに注目しました。",
-      "2016年にはこの働きが円盤のどこで重要になるかを調べ、2017年には数値計算で乱れが弱まることを確かめました。調べた条件では、乱流が抑えられても、整った磁場によってガスは星へ流れ込めます。2019年には、磁場の影響も含めて電流の流れ方を記述する理論へ広げました。電子や塵の小さなスケールの動きが、円盤全体の流れを考えるうえでも無視できないことを示した研究です。"
+      "初期の研究では、円盤の塵をかき混ぜる磁場の乱れが、電子のふるまいによって弱まるかどうかを調べました。電場で加熱された電子が塵に取り込まれると、ガスに電流が流れにくくなるからです。",
+      "2016年には、この効果が従来のデッドゾーンよりずっと外側まで及びうると予測しました。2017年の数値計算では、調べた条件で乱流が大きく弱まる一方、ガスは整った磁場に沿って星へ流れ込みました。2019年には磁場の影響も理論に取り入れています。"
     ],
     "cover": "cards/electron-heating.webp",
     "figures": [
-      { "file": "electron-heating-mri-snapshots.png", "after": 2 }
+      {
+        "file": "electron-heating-mri-snapshots.png",
+        "after": 2
+      }
     ],
     "papers": [
       {
@@ -45,16 +48,14 @@
     "findingEn": "Magnetically driven accretion releases its heat near the disk surface, so the midplane stays cooler than viscous models predict; in such disks the water snow line can pass inside 1 au within about a million years.",
     "findingJa": "磁場駆動の降着では熱が円盤表面近くで出るため、中心面は粘性モデルより低温になる。このような円盤では、スノーラインが約100万年で1 auの内側まで移動しうる。",
     "paragraphsEn": [
-      "Water can remain as ice only in sufficiently cold parts of a disk. To predict how much water a planet acquires, we need to know how the disk's temperature changes as planetary material grows and moves through it.",
-      "In 2019 we found that magnetic accretion releases much of its heat above the dense midplane, where radiation escapes more easily. The modeled midplane stays cooler than in a conventional viscous disk. In 2025, global simulations including radiation transport also showed weak accretion heating of the disk, alongside episodic surface flows and asymmetric winds.",
-      "Our 2021 model predicted that the water snow line—the boundary inside which water ice evaporates—could move inside Earth's present orbit within one million years. This restricts the time and place available to form dry rocky material. A 2023 collaboration showed that grain growth can delay this migration, so the timing depends on the dust as well as the gas.",
-      "In 2025 we followed disk evolution and the growth and migration of planets together. In this model, the revised disk temperatures produce planets with two distinct ranges of water content. This provides a possible explanation for differences in planetary composition; it does not yet establish that observed planets formed this way."
+      "Water stays frozen only where a disk is cold, so the water a planet collects depends on the disk's temperature. I study what sets that temperature when magnetic fields drive the accretion.",
+      "Our simulations in 2019, and global ones with radiation transport in 2025, show that such accretion releases much of its heat above the dense midplane, where it escapes easily. The modeled midplane therefore stays cooler than in a viscous disk.",
+      "In such a disk the water snow line, inside which ice evaporates, could move inside Earth's orbit within a million years (2021), restricting when and where dry rocky material can form, though grain growth can delay the shift (2023). With planet growth and migration added (2025), the model yields planets in two distinct ranges of water content, a possible but still untested explanation for differences in planetary composition."
     ],
     "paragraphsJa": [
-      "水が氷として残れるのは、円盤の中でも十分に冷たい場所です。惑星がどれだけ水を取り込むかを考えるには、その材料が育ち、移動する間に、円盤の温度がどう変わるかを知る必要があります。",
-      "2019年の研究では、磁場でガスが流れ込む円盤の加熱を調べました。熱の多くは、円盤の厚さ方向の中央にある密な層より上で生まれ、光として逃げやすくなります。そのため、中央の層は従来の粘性による加熱モデルより低温に保たれます。2025年には光の輸送を含む円盤全体の計算でも、ガスの流入による加熱が弱いことを確かめ、表面を断続的に流れ込むガスや非対称な風を調べました。",
-      "この温度の違いを使った2021年の計算では、水が氷として残る内側の境界「スノーライン」が、約100万年以内に現在の地球軌道より内側へ移りました。水の少ない岩石惑星を作るには、材料を集める時期や場所に制約が生じます。一方、2023年の共同研究では、塵の成長によってこの移動が遅くなることも分かりました。",
-      "2025年には円盤の進化と惑星の成長・移動を合わせて計算し、円盤の温度の違いから、水の少ない惑星と多い惑星が分かれて生まれるモデルを示しました。観測される惑星の組成の違いを説明する可能性がありますが、実際の惑星がこの過程で生まれたかは、さらに確かめる必要があります。"
+      "水が氷のまま残れるのは円盤の冷たい場所だけなので、惑星が取り込む水の量は円盤の温度で変わります。磁場によってガスが流れ込む円盤で、その温度が何で決まるかを調べています。",
+      "2019年の計算と、光の輸送を含めた2025年の円盤全体の計算では、熱の多くは厚さ方向の中央にある密な層より上で生まれ、そこから逃げやすいことが分かりました。そのため中央の層は、粘性加熱のモデルより低温に保たれます。",
+      "2021年には、このような円盤でスノーライン（これより内側では氷が蒸発する境界）が約100万年で地球軌道の内側まで移りうると予測しました。水の少ない岩石の材料を作れる時期と場所が限られることになりますが、2023年の共同研究では、塵が育つとこの移動が遅れることも分かりました。2025年には惑星の成長と移動も合わせて計算し、水の少ない惑星と多い惑星に分かれて生まれるモデルを示しました。組成の違いを説明できる可能性はありますが、検証はこれからです。"
     ],
     "papers": [
       {
@@ -80,8 +81,14 @@
     ],
     "cover": "cards/temperature-water.webp",
     "figures": [
-      { "file": "mhd-alignment-thermal-structure.png", "after": 2 },
-      { "file": "planet-growth-migration-tracks.png", "after": 4 }
+      {
+        "file": "mhd-alignment-thermal-structure.png",
+        "after": 2
+      },
+      {
+        "file": "planet-growth-migration-tracks.png",
+        "after": 3
+      }
     ]
   },
   {
@@ -94,16 +101,19 @@
     "findingEn": "In a laminar, wind-driven circumplanetary disk, dust settles and can grow into satellitesimals with a smaller dust supply than a turbulent disk needs.",
     "findingJa": "磁気風で降着する乱れの弱い周惑星円盤では、塵が中心面に沈んで育ちやすく、乱流円盤より少ない塵の供給で衛星の材料になりうる。",
     "paragraphsEn": [
-      "Large moons are thought to form in disks around growing giant planets. But their building blocks face a problem: small dust grains drift into the planet, sometimes faster than they can grow. In work with Yuhito Shibaike, we studied whether a disk driven by a magnetic wind could avoid this difficulty.",
-      "We combined local magnetic simulations with calculations of dust growth and drift. In the modeled disk, weak turbulence lets dust settle into a thin layer and collide efficiently. With a sufficient supply of dust, it can grow into larger bodies before being lost. The required dust supply is smaller than in the turbulent disk model used for comparison, offering a route to forming the building blocks of moons."
+      "Large moons are thought to form in disks around young giant planets, but small dust grains there can drift into the planet faster than they grow. With Yuhito Shibaike, I asked whether a disk accreting through a magnetic wind avoids this problem.",
+      "In our models the turbulence is weak, so dust settles into a thin layer and collides efficiently. Given enough supply, it can grow into satellitesimals before being lost, and the supply needed is smaller than in a turbulent disk."
     ],
     "paragraphsJa": [
-      "木星のような巨大惑星のまわりにも、衛星の材料となるガスと塵の円盤ができます。ただし、小さな塵は成長する途中で惑星へ落ちてしまい、衛星のもとになる天体まで育てないことが問題になります。芝池諭人さんとの研究では、磁場による風がガスを運ぶ円盤で、この問題を解決できるかを調べました。",
-      "磁場とガスの計算に塵の成長・移動の計算を組み合わせると、乱れの弱い円盤では塵が薄い層に沈み、互いに衝突して育ちやすくなりました。塵が十分に供給される条件では、惑星に落ちる前に大きな天体へ成長できます。比較した乱流の強いモデルより少ない塵の供給で成長できるため、衛星の材料を作る一つの道筋になります。"
+      "巨大惑星をめぐる円盤では大きな衛星が生まれると考えられていますが、小さな塵は育つ前に惑星へ落ちてしまうことがあります。芝池諭人さんと、磁場による風がガスを運ぶ円盤ならこの問題を避けられるかを調べました。",
+      "計算した円盤では乱れが弱く、塵は薄い層に沈んで効率よく衝突します。供給が十分なら惑星に落ちる前に衛星の材料となる天体まで育ち、必要な塵の量も乱流の強い円盤より少なく済みます。"
     ],
     "cover": "cards/satellite-formation.webp",
     "figures": [
-      { "file": "cpd-wind-accretion-schematic.png", "after": 1 }
+      {
+        "file": "cpd-wind-accretion-schematic.png",
+        "after": 1
+      }
     ],
     "papers": [
       {
@@ -122,14 +132,14 @@
     "findingEn": "Different infall models reproduce the broad features of the L1527 data; the envelope gas may be falling in more slowly than simple models assume.",
     "findingJa": "L1527の観測の大まかな特徴は、複数の落下モデルで再現できる。実際の落下は、単純なモデルの仮定より遅いのかもしれない。",
     "paragraphsEn": [
-      "Gas falls and rotates around a forming star. A telescope records a projected view of those motions, so a pattern in the data does not always have a unique physical explanation. I calculate synthetic observations and compare them with real data to examine this uncertainty.",
-      "In our 2024 study of L1527, two different infall models both reproduced broad features of the observations, but estimates of the central star's mass depended on the model and comparison method. The results suggest that infall could be slower than simple models predict. This matters when using gas motions to measure stellar masses and reconstruct how a disk is supplied with material.",
-      "I have also participated in the FAUST and eDisk observational collaborations, which examine the chemistry, gas motions, and structures of young protostellar systems. These collaborations connect theoretical models with observations of disks while they are still forming."
+      "A telescope sees the gas falling and rotating around a young star only in projection, so similar data can come from different motions. I make synthetic observations to test what the data can tell us.",
+      "In our 2024 study of L1527, two different infall models both reproduced the broad features of the observations, but the inferred stellar mass depended on the model and the comparison method. The results suggest slower infall than simple models predict, which affects stellar masses measured from gas motions.",
+      "I also take part in the FAUST and eDisk collaborations observing young protostars and their forming disks."
     ],
     "paragraphsJa": [
-      "生まれたばかりの星のまわりでは、ガスが回転しながら落ち込んでいます。望遠鏡で見えるのは、その動きをある方向から見た姿です。観測に現れる模様が、どの動きから生じたものかを確かめるため、モデルを望遠鏡で見た場合のデータを作り、実際の観測と比べています。",
-      "2024年のL1527の研究では、異なる落下モデルがどちらも観測の大まかな特徴を再現する一方、星の質量の見積もりはモデルや比較方法に左右されました。結果は、実際のガスが単純なモデルよりゆっくり落ち込んでいる可能性を示しています。ガスの動きから星の質量を測ったり、円盤への物質の供給を調べたりするときに、この不確かさを考慮する必要があります。",
-      "また、若い星の化学組成やガスの動き、円盤構造を調べるFAUST・eDiskの観測共同研究にも参加してきました。理論で考える円盤の姿を、形成途中の天体の観測と照らし合わせる取り組みです。"
+      "若い星のまわりで回転しながら落ち込むガスは、望遠鏡では一方向から見た姿しかとらえられません。そのため、似た観測データが異なる動きから生じることがあります。模擬観測のデータを計算で作り、観測から何が読み取れるかを確かめています。",
+      "2024年のL1527の研究では、異なる二つの落下モデルがどちらも観測の大まかな特徴を再現しましたが、星の質量の見積もりはモデルや比較の方法で変わりました。実際の落下は単純なモデルの仮定より遅いのかもしれず、ガスの動きから星の質量を求めるときに影響します。",
+      "若い原始星と形成途中の円盤を観測するFAUSTとeDiskの共同研究にも参加しています。"
     ],
     "papers": [
       {
