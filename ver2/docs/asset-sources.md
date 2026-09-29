@@ -42,7 +42,7 @@ The observations theme has no cover: no figure from Mori et al. (2024) or the FA
 
 ## Fonts
 
-Inter (latin and latin-ext subsets, woff2) is self-hosted in public/fonts/, copied from @fontsource/inter 5.2.8 under the SIL Open Font License 1.1 (public/fonts/OFL-Inter.txt). Japanese text uses the reader's system Gothic faces. The Newsreader files in the same folder are no longer referenced by the stylesheet.
+Inter (latin and latin-ext subsets, woff2) is self-hosted in public/fonts/, copied from @fontsource/inter 5.2.8 under the SIL Open Font License 1.1 (public/fonts/OFL-Inter.txt). Japanese text uses a site-specific subset of Noto Sans JP (public/fonts/noto-sans-jp-site-{400,600}.woff, about 190 kB each, SIL OFL 1.1, public/fonts/OFL-NotoSansJP.txt), cut from @fontsource/noto-sans-jp 5.2.9 by tools/subset-jp-font.py to the characters used on the site plus all kana. Run `python3 tools/subset-jp-font.py --check` after adding Japanese text; characters missing from the subset render in the reader's system Gothic font until the subset is rebuilt. The Newsreader files in the same folder are no longer referenced by the stylesheet.
 
 ## Web renditions
 
