@@ -202,7 +202,7 @@ function initializeSite() {
       function render() {
         try {
           widgetId=window.turnstile.render(widget,{
-            sitekey:widget.dataset.sitekey,theme:'auto',language:html.lang,
+            sitekey:widget.dataset.sitekey,theme:'light',language:html.lang,
             'error-callback':()=>{setStatus('Verification is unavailable. Please contact me by email.','認証を利用できません。メールでご連絡ください。');},
             'expired-callback':()=>{setStatus('Verification expired. Please complete it again.','認証の有効期限が切れました。再度認証してください。');}
           });

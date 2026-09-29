@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, cpSync } from 'node:fs';
 import path from 'node:path';
-import { root, data, escape, plain, bi, profiles, primaryUrl, external, links, validateData, bibtex, paper, talk, news, researchFigures, publicationText, authorMarkup, shortVenue, talkFormat } from './content.mjs';
+import { root, data, escape, plain, bi, profiles, primaryUrl, external, links, validateData, bibtex, paper, talk, researchFigures, publicationText, authorMarkup, shortVenue, talkFormat } from './content.mjs';
 
 export function build() {
   const publications = data('publications.seed');
@@ -25,20 +25,23 @@ export function build() {
     ['research','research/','Research','研究'],
     ['publications','publications/','Publications','論文'],
     ['talks','talks/','Talks & materials','発表・資料'],
-    ['cv','cv/','About','プロフィール'],
-    ['news','news/','Activity','活動']
+    ['cv','cv/','CV','CV']
   ];
   const descriptions = {
-    index:'Shoji Mori, theoretical astrophysicist at Tsinghua University. Exploring the physics of protoplanetary disks and the origins of planets.',
+    index:'Shoji Mori, theoretical astrophysicist at Tsinghua IAS: MHD simulations of protoplanetary disks, disk temperature, and the water snow line.',
     research:'Research by Shoji Mori on electron heating, disk temperatures and water, satellite formation, and observations of young stars.',
-    publications:'Publications and reviews by Shoji Mori. Search papers, read accessible summaries, and download citations.',
+    publications:'Papers by Shoji Mori, with links to journal, arXiv and ADS, and BibTeX.',
     talks:'Conference presentations, slides, posters, and theses by Shoji Mori.',
-    cv:'Shoji Mori: academic experience, education, grants, awards, teaching, mentoring, and professional service.',
-    news:'Recent conference contributions and publicly shared research materials by Shoji Mori.'
+    cv:'Shoji Mori: academic experience, education, grants, awards, teaching, mentoring, and professional service.'
   };
-  // The footer shows the build month, which is when the published pages were last regenerated.
-  const now = new Date();
-  const updated = bi(now.toLocaleString('en-US',{month:'long',year:'numeric'}), now.getFullYear()+'年'+(now.getMonth()+1)+'月');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthsLong = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  // "Last updated" follows the newest dated record, so it reflects the content rather than the build.
+  const newest = String(presentations[0].date).match(/^(\d{4})\/\s*(\d{1,2})/);
+  const newestPaperYear = Math.max(...publications.map(p=>+p.year));
+  const updated = newest && +newest[1] >= newestPaperYear ? bi(monthsLong[+newest[2]-1]+' '+newest[1], newest[1]+'年'+(+newest[2])+'月') : bi(String(newestPaperYear), newestPaperYear+'年');
+  // CV ranges such as "2023.12 - Present" are shown with an en dash and a translated open end.
+  const cvDate = (value) => { const [start,end] = String(value).split(/\s+-\s+/); return end === undefined ? escape(value) : end === 'Present' ? bi(start+'–present', start+'–現在') : escape(start+'–'+end); };
   const template = readFileSync(path.join(root,'src/layouts/base.html'),'utf8');
   const fill = (source,vars) => source.replace(/\{\{(\w+)\}\}/g,(_,key)=>{
     if (!(key in vars)) throw new Error('Missing template value: ' + key);
@@ -53,16 +56,13 @@ export function build() {
   const byYear = (records,render) => [...new Set(records.map(r=>r.year))].map(year=>'<section class="year-group" data-year-group aria-labelledby="year-'+year+'"><h2 class="year-heading" id="year-'+year+'">'+year+'</h2><div class="year-records">'+records.filter(r=>r.year===year).map(render).join('')+'</div></section>').join('');
   const homePapers = ['publication-2','publication-1','publication-5','publication-6','publication-15','publication-22'];
   const listRow = (date,body,aside='') => '<li><span class="list-date">'+date+'</span><div>'+body+'</div>'+aside+'</li>';
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const monthLabel = (t) => { const m = String(t.date).match(/^(\d{4})\/\s*(\d{1,2})/); return m ? bi(months[+m[2]-1]+' '+m[1], m[1]+'年'+(+m[2])+'月') : escape(t.year); };
   const components = {
-    // Home: recent work, research themes and selected papers as dated lists.
-    homeRecent:[
-      ...publications.slice(0,2).map(p=>listRow(bi(p.year,p.year+'年'),'<a class="list-title" href="'+escape(primaryUrl(p))+'" lang="'+publicationText(p).language+'">'+escape(publicationText(p).title)+'</a><p class="list-meta">'+bi('Paper','論文')+' · '+escape(shortVenue(p))+'</p>')),
-      ...presentations.slice(0,2).map(t=>listRow(monthLabel(t),'<a class="list-title" href="/talks/#'+t.id+'">'+bi(t.titleEn,t.titleJa)+'</a><p class="list-meta">'+talkFormat(t)+' · '+bi(t.confEn,t.confJa)+'</p>'))
-    ].join(''),
-    // Cover images are cropped details of figures shown in full, with credits, on the research page.
-    homeResearch:research.map(r=>listRow(escape(r.period),'<a class="list-title" href="/research/#'+r.id+'">'+bi(r.titleEn,r.titleJa)+'</a><p class="list-finding">'+bi(r.findingEn,r.findingJa)+'</p><p class="list-meta">'+r.papers.slice(0,3).map(ref=>'<a href="/publications/#'+ref.id+'">'+escape(ref.label)+'</a>').join(', ')+'</p>',r.cover?'<img class="list-thumb" src="/images/'+r.cover+'" alt="" width="960" height="600" loading="lazy" decoding="async">':'')).join(''),
+    // Home: recent talks, research themes and representative papers as dated lists.
+    // Papers appear only under representative papers, so nothing is listed twice.
+    homeRecent:presentations.slice(0,4).map(t=>listRow(monthLabel(t),'<a class="list-title" href="/talks/#'+t.id+'">'+bi(t.titleEn,t.titleJa)+'</a><p class="list-meta">'+talkFormat(t)+' · '+bi(t.confEn,t.confJa)+'</p>')).join(''),
+    // Each theme cites its three most recent papers. Cover images are cropped details of figures shown in full, with credits, on the research page.
+    homeResearch:research.map(r=>listRow(escape(r.period),'<a class="list-title" href="/research/#'+r.id+'">'+bi(r.titleEn,r.titleJa)+'</a><p class="list-finding">'+bi(r.findingEn,r.findingJa)+'</p><p class="list-meta" lang="en">'+[...r.papers].sort((a,b)=>+publicationById.get(b.id).year - +publicationById.get(a.id).year).slice(0,3).map(ref=>'<a href="/publications/#'+ref.id+'">'+escape(ref.label)+'</a>').join(', ')+'</p>',r.cover?'<img class="list-thumb" src="/images/'+r.cover+'" alt="" width="960" height="600" loading="lazy" decoding="async">':'')).join(''),
     homeSelected:homePapers.map(id=>{
       const p = publicationById.get(id);
       const t = publicationText(p);
@@ -76,14 +76,13 @@ export function build() {
     publicationCount:'',
     publicationYears:'<option value="all" data-en="All years" data-ja="すべての年">All years</option>'+years.map(y=>'<option value="'+y+'">'+y+'</option>').join(''),
     publicationProfiles:profiles.slice(0,3).map(([label,url])=>external(url,escape(label))).join(''),
-    allNews:presentations.filter(p=>p.year==='2025').map(news).join(''),
     talkCount:'',
     talkRows:byYear(presentations,talk),
     materials:[...new Set(materials.map(m=>m.categoryEn))].map(category=>{
       const group = materials.filter(m=>m.categoryEn===category);
       return '<section class="material-group"><h3>'+bi(category,group[0].categoryJa)+'</h3><div class="materials-grid">'+group.map(m=>'<article class="material-card"><div class="material-meta"><span>'+m.year+'</span><span>PDF</span></div><h4>'+bi(m.titleEn,m.titleJa)+'</h4><p>'+bi(m.venueEn,m.venueJa)+'</p><div class="paper-links">'+links(m.links)+'</div></article>').join('')+'</div></section>';
     }).join(''),
-    researchIndex:research.map((r,i)=>'<a href="#'+r.id+'"><span>0'+(i+1)+'</span><span>'+bi(r.titleEn,r.titleJa)+'</span></a>').join(''),
+    researchIndex:research.map(r=>'<a href="#'+r.id+'">'+bi(r.titleEn,r.titleJa)+'</a>').join(''),
     researchChapters:research.map(r=>{
       const figures = (r.figures||[]).map(({file,after})=>{
         const f = researchFigures.find(f=>f.file===file);
@@ -98,10 +97,11 @@ export function build() {
       const body = r.paragraphsEn.map((text,i)=>'<p>'+bi(text,r.paragraphsJa[i])+'</p>'+figures.filter(f=>f.after===i+1).map(f=>f.html).join('')).join('');
       return '<section class="research-chapter" id="'+r.id+'"><p class="research-period">'+escape(r.period)+'</p><h2>'+bi(r.titleEn,r.titleJa)+'</h2>'+body+'<div class="related-work"><span>'+bi('Papers','関連論文')+'</span><ul>'+references+'</ul></div></section>';
     }).join(''),
-    cvIndex:cv.map((s,i)=>'<a href="#'+s.id+'"><span>0'+(i+1)+'</span><span>'+bi(s.titleEn,s.titleJa)+'</span></a>').join(''),
-    cvSections:cv.map(s=>'<section class="cv-section" id="'+s.id+'"><h2>'+bi(s.titleEn,s.titleJa)+'</h2>'+s.items.map(item=>'<article class="cv-entry"><div class="cv-date">'+escape(item.date)+'</div><div>'+(item.titleEn?'<h3>'+bi(item.titleEn,item.titleJa)+'</h3>':'')+paragraphs(item)+(item.links.length?'<div class="paper-links">'+links(item.links)+'</div>':'')+'</div></article>').join('')+'</section>').join('')
+    cvIndex:cv.map(s=>'<a href="#'+s.id+'">'+bi(s.titleEn,s.titleJa)+'</a>').join(''),
+    cvSections:cv.map(s=>'<section class="cv-section" id="'+s.id+'"><h2>'+bi(s.titleEn,s.titleJa)+'</h2>'+s.items.map(item=>'<article class="cv-entry"><div class="cv-date">'+cvDate(item.date)+'</div><div>'+(item.titleEn?'<h3>'+bi(item.titleEn,item.titleJa)+'</h3>':'')+paragraphs(item)+(item.links.length?'<div class="paper-links">'+links(item.links)+'</div>':'')+'</div></article>').join('')+'</section>').join('')
   };
 
+  const navigation = (current) => pages.slice(1).map(([page,href,label,labelJa])=>'<a href="/'+href+'"'+(page===current?' aria-current="page"':'')+'>'+bi(label,labelJa)+'</a>').join('');
   for (const [file,url,en] of pages) {
     const pageSource = readFileSync(path.join(root,'src/pages',file+'.html'),'utf8');
     const canonical = 'https://shoji-mori.github.io/'+url;
@@ -111,13 +111,13 @@ export function build() {
     ]};
     if(file==='publications') for(const p of publications) schema['@graph'].push({'@type':'ScholarlyArticle',headline:p.titleEn,datePublished:p.year,url:primaryUrl(p),author:{'@id':'https://shoji-mori.github.io/#person'},isPartOf:{'@type':'Periodical',name:p.journalEn.split(', ')[0]}});
     const vars = {
-      pageTitle:escape(file==='index'?'Shoji Mori | The origins of planets':en+' | Shoji Mori'),
+      pageTitle:escape(file==='index'?'Shoji Mori | Theoretical astrophysicist, Tsinghua IAS':en+' | Shoji Mori'),
       description:escape(descriptions[file]),
       canonical,
       structuredData:JSON.stringify(schema).replace(/</g,'\\u003c'),
       pageClass:file+'-page',
       content:fill(pageSource,components),
-      navigation:pages.slice(1).map(([page,href,label,labelJa])=>'<a href="/'+href+'"'+(page===file?' aria-current="page"':'')+'>'+bi(label,labelJa)+'</a>').join(''),
+      navigation:navigation(file),
       year:new Date().getFullYear(),
       updated
     };
@@ -135,9 +135,12 @@ export function build() {
     writeFileSync(path.join(target,'index.html'),fill(exportTemplate,{kind,title:bi(en,ja),pageTitle:en+' | Shoji Mori',rows}));
   }
   writeFileSync(path.join(dist,'sitemap.xml'),'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+pages.map(([,url])=>'<url><loc>https://shoji-mori.github.io/'+url+'</loc></url>').join('')+'</urlset>\n');
-  const notFound = '<section class="container page-heading"><h1>'+bi('Page not found.','ページが見つかりません。')+'</h1><p class="page-lead">'+bi('The page may have moved. Browse the research or publications below.','ページが移動した可能性があります。以下から研究内容や論文をご覧ください。')+'</p><div class="page-actions" style="margin-top:28px"><a class="button button-ink" href="/">Home</a><a class="text-link" href="/research/">'+bi('Research','研究内容')+'</a><a class="text-link" href="/publications/">'+bi('Publications','論文一覧')+'</a></div></section>';
-  writeFileSync(path.join(dist,'404.html'),fill(template,{pageTitle:'Page not found | Shoji Mori',description:'The requested page could not be found.',canonical:'https://shoji-mori.github.io/404.html',structuredData:'{}',pageClass:'not-found-page',content:notFound,navigation:'',profileLinks:'',year:new Date().getFullYear(),updated}));
-  return {pages:6,printPages:2,publications:publications.length,presentations:presentations.length,materials:materials.length};
+  const notFound = '<section class="container page-heading"><h1>'+bi('Page not found.','ページが見つかりません。')+'</h1><p class="page-lead">'+bi('The page may have moved. Browse the research or publications below.','ページが移動した可能性があります。以下から研究内容や論文をご覧ください。')+'</p><div class="page-actions" style="margin-top:28px"><a class="text-link" href="/">'+bi('Home','ホーム')+'</a><a class="text-link" href="/research/">'+bi('Research','研究内容')+'</a><a class="text-link" href="/publications/">'+bi('Publications','論文一覧')+'</a></div></section>';
+  writeFileSync(path.join(dist,'404.html'),fill(template,{pageTitle:'Page not found | Shoji Mori',description:'The requested page could not be found.',canonical:'https://shoji-mori.github.io/404.html',structuredData:'{}',pageClass:'not-found-page',content:notFound,navigation:navigation(''),year:new Date().getFullYear(),updated}));
+  // The former Activity page duplicated the talk archive; keep its URL working.
+  mkdirSync(path.join(dist,'news'),{recursive:true});
+  writeFileSync(path.join(dist,'news','index.html'),'<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=/talks/"><link rel="canonical" href="https://shoji-mori.github.io/talks/"><title>Talks | Shoji Mori</title></head><body><p><a href="/talks/">Talks and materials</a></p></body></html>\n');
+  return {pages:5,printPages:2,publications:publications.length,presentations:presentations.length,materials:materials.length};
 }
 
 if (process.argv[1] === new URL(import.meta.url).pathname) console.log('Built',build());

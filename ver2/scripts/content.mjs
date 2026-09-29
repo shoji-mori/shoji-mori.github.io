@@ -19,7 +19,9 @@ export function publicationText(p) {
 export const shortVenue = (p) => p.journalEn.replace(/^The Astrophysical Journal Letters/, 'ApJL').replace(/^The Astrophysical Journal/, 'ApJ').replace(/^Astronomy & Astrophysics/, 'A&A').replace(/^Monthly Notices of the Royal Astronomical Society/, 'MNRAS').replace(/,\s*/, ' ');
 export const primaryUrl = (p) => p.publicationUrl || p.url || p.adsUrl || p.arxivUrl;
 export const external = (url, label) => '<a href="' + escape(url) + '" target="_blank" rel="noopener">' + label + '</a>';
-export const links = (items) => items.map((item) => external(item.url, escape(item.label))).join('');
+// Generic link labels in the CV and materials data have Japanese equivalents; names such as journals stay as written.
+const linkLabelsJa = {'Thesis (PDF)':'学位論文（PDF）','Slides':'スライド','Program':'プログラム','Video':'動画'};
+export const links = (items) => items.map((item) => external(item.url, linkLabelsJa[item.label] ? bi(item.label, linkLabelsJa[item.label]) : escape(item.label))).join('');
 export const profiles = [
   ['Google Scholar', 'https://scholar.google.com/citations?user=XUF28swAAAAJ'],
   ['NASA ADS', 'https://ui.adsabs.harvard.edu/search/q=orcid%3A0000-0002-7002-939X&sort=date%20desc'],
@@ -88,15 +90,10 @@ export const talkFormat = (p) => p.type === 'poster' ? bi('Poster','ポスター
 export function talk(p) {
   const actions = [[p.slideUrl,bi('Slides (PDF)','スライド（PDF）')],[p.posterUrl,bi('Poster (PDF)','ポスター（PDF）')],[p.videoUrl,bi('Video','動画')],[p.url,bi('Conference','学会ページ')]].filter(([url])=>url).map(([url,label])=>external(url,label)).join('');
   return '<article class="talk-row" id="' + p.id + '" data-record data-scope="' + (p.scope || 'unspecified') + '" data-type="' + p.type + '" data-search="' + escape([p.titleEn,p.titleJa,p.confEn,p.confJa,p.authorsEn,p.authorsJa,p.year].join(' ').toLowerCase()) + '">' +
-    '<div class="talk-date">' + escape(p.date) + '<span class="format-label">' + talkFormat(p) + '</span></div><div><h3>' + bi(p.titleEn,p.titleJa) + '</h3>' +
+    '<div class="talk-date">' + escape(String(p.date).replace(/\/\s+/g, '/')) + '<span class="format-label">' + talkFormat(p) + '</span></div><div><h3>' + bi(p.titleEn,p.titleJa) + '</h3>' +
     '<p class="talk-conference">' + bi(p.confEn,p.confJa) + '</p><p class="talk-location">' + bi(p.placeEn,p.placeJa) + '</p><p class="talk-authors">' + bi(p.authorsEn,p.authorsJa) + '</p>' +
     (p.noteEn || p.noteJa ? '<p class="talk-note">' + bi(p.noteEn,p.noteJa) + '</p>' : '') +
     (actions ? '<div class="paper-links">' + actions + '</div>' : '') + '</div></article>';
-}
-
-export function news(p) {
-  return '<article class="news-item"><span class="news-date">' + escape(p.date) + '</span><div><div class="news-category"><span class="format-label">' + talkFormat(p) + '</span></div>' +
-    '<h3><a href="/talks/#' + p.id + '">' + bi(p.confEn,p.confJa) + '</a></h3><p>' + bi(p.titleEn,p.titleJa) + '</p></div></article>';
 }
 
 export const researchFigures = [{

@@ -1,6 +1,6 @@
 # Shoji Mori — website refresh
 
-Six static pages, built in ver2/ so the existing GitHub Pages site stays intact during review. The redesign makes the research question, publications, and CV immediately accessible, with an editorial layout and credited research imagery.
+Five static pages, built in ver2/ so the existing GitHub Pages site stays intact during review. The redesign makes the research question, publications, and CV immediately accessible, with an editorial layout and credited research imagery.
 
 ## Preview and validation
 
@@ -15,7 +15,7 @@ Open http://127.0.0.1:4321/. The server binds only to the local machine, watches
     npm run build
     npm run check
 
-The build produces dist/ with six main routes, two print-preview routes, a 404 page, a sitemap, a bibliography download, and copies of the existing public PDFs. dist/ is ignored. The checker validates document structure, internal links and fragments, local assets, citation exports, and record counts.
+The build produces dist/ with five main routes, two print-preview routes, a 404 page, a redirect from the former /news/ page to /talks/, a sitemap, a bibliography download, and copies of the existing public PDFs. dist/ is ignored. The checker validates document structure, internal links and fragments, local assets, citation exports, and record counts.
 
 ## Content
 
