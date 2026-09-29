@@ -9,7 +9,9 @@ import { build } from './build.mjs';
 const dist = path.join(root, 'dist');
 const site = path.join(root, '..');
 // Only generated routes and assets are replaced; files/, admin/, PDFs and other root files are left alone.
-const directories = ['research', 'publications', 'talks', 'mentoring', 'cv', 'news', 'images', 'fonts'];
+const directories = ['research', 'publications', 'talks', 'cv', 'news', 'images', 'fonts'];
+// Routes that were published earlier and have since been removed from the site.
+const removed = ['mentoring'];
 const files = ['index.html', '404.html', 'styles.css', 'site.js', 'publications.bib', 'sitemap.xml'];
 
 console.log('Built', build());
@@ -22,6 +24,7 @@ for (const dir of directories) {
   rmSync(target, { recursive: true, force: true });
   cpSync(path.join(dist, dir), target, { recursive: true });
 }
+for (const dir of removed) rmSync(path.join(site, dir), { recursive: true, force: true });
 for (const file of files) cpSync(path.join(dist, file), path.join(site, file));
 if (existsSync(path.join(site, '_proto'))) throw new Error('Unexpected _proto directory in the repository root');
 console.log('Copied the built site to ' + site + '. Review the changes, then commit and push.');

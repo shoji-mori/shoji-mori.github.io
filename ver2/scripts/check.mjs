@@ -41,7 +41,6 @@ assert.equal((documents.get('research/index.html').match(/class="research-chapte
 assert(!documents.get('index.html').includes('stats-band'));
 // The former Activity page redirects to the talk archive.
 assert(readFileSync(path.join(dist,'news/index.html'),'utf8').includes('url=/talks/'));
-assert(readFileSync(path.join(dist,'mentoring/index.html'),'utf8').includes('url=/research/'));
 // Home lists each paper once: talks under Recent, papers under Representative papers.
 const home=documents.get('index.html');
 assert(!home.slice(home.indexOf('id="home-recent"'),home.indexOf('id="home-research"')).includes('doi.org'));

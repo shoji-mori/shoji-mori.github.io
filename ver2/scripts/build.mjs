@@ -164,7 +164,7 @@ export function build() {
   const notFound = '<section class="container page-heading"><h1>'+bi('Page not found.','ページが見つかりません。')+'</h1><p class="page-lead">'+bi('The page may have moved. Browse the research or publications below.','ページが移動した可能性があります。以下から研究内容や論文をご覧ください。')+'</p><div class="page-actions" style="margin-top:28px"><a class="text-link" href="/">'+bi('Home','ホーム')+'</a><a class="text-link" href="/research/">'+bi('Research','研究内容')+'</a><a class="text-link" href="/publications/">'+bi('Publications','論文一覧')+'</a></div></section>';
   writeFileSync(path.join(dist,'404.html'),fill(template,{pageTitle:'Page not found | Shoji Mori',description:'The requested page could not be found.',canonical:'https://shoji-mori.github.io/404.html',structuredData:'{}',pageClass:'not-found-page',content:notFound,navigation:navigation(''),year:new Date().getFullYear(),updated,siteEmail:escape(site.email)}));
   // Former pages redirect to where their content now lives.
-  for (const [dir,target,title] of [['news','/talks/','Talks'],['mentoring','/research/','Research']]) {
+  for (const [dir,target,title] of [['news','/talks/','Talks']]) {
     mkdirSync(path.join(dist,dir),{recursive:true});
     writeFileSync(path.join(dist,dir,'index.html'),'<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url='+target+'"><link rel="canonical" href="https://shoji-mori.github.io'+target+'"><title>'+title+' | Shoji Mori</title></head><body><p><a href="'+target+'">'+title+'</a></p></body></html>\n');
   }
