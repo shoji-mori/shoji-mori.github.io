@@ -1,4 +1,7 @@
-/* Self-hosted Inter (SIL OFL, see /fonts/OFL-Inter.txt). Japanese text uses the system Gothic faces. */
+/* Self-hosted Inter and a site-specific subset of Noto Sans JP (SIL OFL, see /fonts/OFL-*.txt).
+   The Japanese subset is regenerated with tools/subset-jp-font.py; characters it lacks fall back to system Gothic faces. */
+@font-face{font-family:'Noto Sans JP Site';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/noto-sans-jp-site-400.woff) format('woff')}
+@font-face{font-family:'Noto Sans JP Site';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/noto-sans-jp-site-600.woff) format('woff')}
 @font-face{font-family:Inter;font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/inter-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:Inter;font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/inter-latin-ext-400-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
 @font-face{font-family:Inter;font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/inter-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
@@ -6,7 +9,7 @@
 @font-face{font-family:Inter;font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/inter-latin-600-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:Inter;font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/inter-latin-ext-600-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
 
-:root{--paper:#fafaf8;--white:#fff;--ink:#15171a;--muted:#6a6f75;--line:#e7e6e1;--tint:#f2f1ec;--navy:#15171a;--accent:#b8532a;--orange:#e0915a;--sans:Inter,'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif;--width:1180px;--gutter:clamp(20px,5vw,72px)}
+:root{--paper:#fafaf8;--white:#fff;--ink:#15171a;--muted:#6a6f75;--line:#e7e6e1;--tint:#f2f1ec;--navy:#15171a;--accent:#b8532a;--orange:#e0915a;--sans:Inter,'Noto Sans JP Site','Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif;--jp-system:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif;--width:1180px;--gutter:clamp(20px,5vw,72px)}
 
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:105px}
@@ -119,6 +122,19 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .talk-date{font-variant-numeric:tabular-nums}
 .format-label{display:inline-block;font-size:11px;line-height:1.7;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:#b8532a14;padding:2px 9px;border-radius:999px}
 .talk-date>.format-label{display:table;margin-top:9px}
+.talk-compact{grid-template-columns:155px 1fr;padding-block:14px}
+.talk-compact h3{font-size:15.5px;font-weight:500;line-height:1.45}
+.talk-meta{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.6}
+.talk-meta .format-label{font-size:13px;font-weight:400}
+.talk-compact .paper-links{margin-top:4px}
+.talk-highlight{padding-block:30px}
+.talk-highlight h3{font-size:20px}
+.talk-summary{font-size:15px;line-height:1.75;color:#33383d;margin-top:10px;max-width:760px}
+.older-talks{margin-top:28px;border-top:1px solid var(--ink)}
+.older-talks>summary{cursor:pointer;list-style:none;padding-block:18px;font-size:15px;font-weight:600;display:flex;justify-content:space-between}
+.older-talks>summary::-webkit-details-marker{display:none}
+.older-talks>summary:after{content:'+';font-weight:400;color:var(--muted)}
+.older-talks[open]>summary:after{content:'−'}
 .upcoming-label{display:table;margin-top:4px;font-size:12px;font-weight:600;color:var(--accent)}
 /* Archive lists are grouped under a year heading that stays in view while its records scroll. */
 .archive-section .paper-list{border-top:0}
@@ -160,6 +176,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .related-work a{display:inline-block;padding:3px 11px;border:1px solid var(--line);border-radius:999px;background:var(--white);font-weight:500}
 .related-work a:hover{border-color:var(--accent)}
 .related-work ul{list-style:none;display:flex;flex-wrap:wrap;gap:10px 20px;padding:0;margin:0}
+.research-vision{border-top:1px solid var(--ink);padding-block:40px 64px;scroll-margin-top:100px}
+.research-vision h2{font-size:clamp(26px,2.6vw,34px);margin-bottom:18px}
+.vision-lead{font-size:18px;line-height:1.75;max-width:820px;color:var(--ink)}
+.lang-ja .vision-lead{font-size:17px;line-height:1.9}
+.vision-themes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:36px 56px;margin-top:40px}
+.vision-theme h3{font-size:17px;line-height:1.45;margin-bottom:10px}
+.vision-theme p{font-size:15px;line-height:1.8;color:#33383d}
+@media(max-width:900px){.vision-themes{grid-template-columns:1fr;gap:28px}}
 .research-collaboration{border-top:1px solid var(--line);padding-block:32px 76px}
 .research-collaboration h2{font-size:27px;margin-bottom:18px}
 .research-collaboration p{font-size:16px;line-height:1.9;max-width:850px;color:var(--muted)}
@@ -179,6 +203,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .toast.visible{transform:translateX(-50%)}
 
 /* Type: one sans family throughout. */
+/* On English pages the few Japanese names use system fonts, so the Japanese web font is only downloaded in Japanese mode. */
+html:not(.lang-ja) .wordmark-ja,html:not(.lang-ja) .profile-alt,html:not(.lang-ja) .name-japanese,html:not(.lang-ja) .language-switch [lang=ja]{font-family:var(--jp-system)}
 h1,h2,h3{font-family:var(--sans);font-weight:600;line-height:1.15;text-wrap:balance}
 h1{font-size:clamp(40px,4.6vw,62px);letter-spacing:-.035em}
 h2{font-size:clamp(28px,2.8vw,38px);letter-spacing:-.025em}
@@ -455,5 +481,5 @@ a{color:inherit!important}
 }
 
 @media(max-width:900px){.home{grid-template-columns:1fr;gap:36px;padding-block:40px 64px}.home-main{max-width:none}.lead{margin-bottom:40px}.profile{display:grid;grid-template-columns:132px 1fr;gap:20px;align-items:start}.profile-photo{aspect-ratio:1}.profile h1{margin-top:0;font-size:26px}.profile-links{grid-column:1/-1}.contact-grid{grid-template-columns:1fr;gap:36px}}
-@media(max-width:560px){.lead{font-size:20px}.list li{grid-template-columns:1fr;gap:4px}.list-with-thumbs li{grid-template-columns:1fr 96px;gap:6px 14px}.list-with-thumbs li>.list-date{grid-column:1/-1}.list-thumb{width:96px;height:60px}.list-links{display:block;margin:4px 0 0}.footer-row{flex-direction:column}}
-@media print{.profile{position:static}.list-thumb{display:none}.site-footer{display:none}.cv-date,.research-period,.page-index a{color:#000}.home-section-head a{display:none}}
+@media(max-width:560px){.lead{font-size:20px}.talk-compact{grid-template-columns:1fr;gap:2px}.list li{grid-template-columns:1fr;gap:4px}.list-with-thumbs li{grid-template-columns:1fr 96px;gap:6px 14px}.list-with-thumbs li>.list-date{grid-column:1/-1}.list-thumb{width:96px;height:60px}.list-links{display:block;margin:4px 0 0}.footer-row{flex-direction:column}}
+@media print{.profile{position:static}.list-thumb{display:none}.site-footer{display:none}.older-talks>summary{display:none}.cv-date,.research-period,.page-index a{color:#000}.home-section-head a{display:none}}
