@@ -1,0 +1,48 @@
+[
+  {
+    "id": "faust",
+    "name": "FAUST",
+    "fullName": "Fifty AU STudy of the chemistry in the disk/envelope system of Solar-like protostars",
+    "facilityEn": "ALMA Large Program",
+    "facilityJa": "ALMA 大型観測計画",
+    "roleEn": "Theory member. FAUST maps the chemistry of the envelope and disk around Sun-like protostars on 50 au scales; I contribute theoretical interpretation, working with the observers on analysis and modeling.",
+    "roleJa": "理論メンバー。太陽型原始星のエンベロープと円盤の化学組成を50 auの分解能で調べる計画で、観測チームと連携して解析やモデルの検討を担っています。",
+    "url": "https://arxiv.org/abs/2111.14121",
+    "papers": [
+      "publication-23",
+      "publication-24",
+      "publication-13",
+      "publication-14",
+      "publication-16",
+      "publication-18"
+    ]
+  },
+  {
+    "id": "edisk",
+    "name": "eDisk",
+    "fullName": "Early Planet Formation in Embedded Disks",
+    "facilityEn": "ALMA Large Program",
+    "facilityJa": "ALMA 大型観測計画",
+    "roleEn": "Theory member. eDisk observes disks still embedded in their envelopes at high resolution to look for early signs of planet formation. I helped build a viscously heated disk model for the rapidly accreting protostar R CrA IRS 7B-a, whose bright continuum passive heating alone could not explain (Takakuwa et al. 2024).",
+    "roleJa": "理論メンバー。エンベロープに埋もれた若い円盤を高解像度で観測し、惑星形成の初期の兆候を探る計画です。降着の速い原始星 R CrA IRS 7B-a では、受動的な加熱だけでは説明できない明るい連続光を、粘性加熱を含む円盤モデルで説明する解析に加わりました（Takakuwa et al. 2024）。",
+    "url": "https://doi.org/10.3847/1538-4357/acd384",
+    "papers": [
+      "publication-4",
+      "publication-9",
+      "publication-10",
+      "publication-11",
+      "publication-12"
+    ]
+  },
+  {
+    "id": "spica",
+    "name": "SPICA",
+    "fullName": "SPace Infrared telescope for Cosmology and Astrophysics",
+    "facilityEn": "Infrared space telescope (ESA/JAXA)",
+    "facilityJa": "赤外線宇宙望遠鏡（ESA・JAXA）",
+    "roleEn": "Theory member for disk science. I predicted how observations of water emission could reveal the thermal and dynamical structure of protoplanetary disks. The mission was withdrawn from ESA's M5 selection in 2020.",
+    "roleJa": "円盤分野の理論メンバー。水の輝線の観測から原始惑星系円盤の温度構造と力学構造をどう読み取れるかを予測しました。計画は2020年にESAの中型ミッション選定の候補から外れました。",
+    "url": "https://sci.esa.int/web/cosmic-vision/-/spica-no-longer-candidate-for-esa-s-m5-mission-selection",
+    "papers": []
+  }
+]

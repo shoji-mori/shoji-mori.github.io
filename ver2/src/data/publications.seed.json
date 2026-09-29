@@ -48,6 +48,22 @@
     "id": "publication-3"
   },
   {
+    "year": "2025",
+    "selected": false,
+    "titleEn": "Evidence for Jet/Outflow Shocks Heating the Environment around the Class I Protostellar Source Elias 29: FAUST XXI",
+    "titleJa": "Evidence for Jet/Outflow Shocks Heating the Environment around the Class I Protostellar Source Elias 29: FAUST XXI",
+    "authorsEn": "Yoko Oya, Eri Saiga, Anna Miotello, ..., <strong>Shoji Mori</strong>, et al.",
+    "authorsJa": "Yoko Oya, Eri Saiga, Anna Miotello, ..., <strong>森 昇志</strong>, ほか",
+    "journalEn": "The Astrophysical Journal, 980:263",
+    "journalJa": "The Astrophysical Journal, 980:263",
+    "publicationUrl": "https://doi.org/10.3847/1538-4357/adabe7",
+    "arxivUrl": "https://arxiv.org/abs/2501.10634",
+    "adsUrl": "https://ui.adsabs.harvard.edu/search/q=doi:%2210.3847%2F1538-4357%2Fadabe7%22/sort=date%20desc%2C%20bibcode%20desc",
+    "abstractEn": "",
+    "abstractJa": "",
+    "id": "publication-23"
+  },
+  {
     "year": "2024",
     "selected": false,
     "titleEn": "Early Planet Formation in Embedded Disks (eDisk). XIV. Flared Dust Distribution and Viscous Accretion Heating of the Disk around R CrA IRS 7B-a",
@@ -222,6 +238,22 @@
     "abstractEn": "",
     "abstractJa": "",
     "id": "publication-14"
+  },
+  {
+    "year": "2022",
+    "selected": false,
+    "titleEn": "FAUST V. Hot Methanol in the [BHB2007] 11 Protobinary System; Hot Corino versus Shock Origin",
+    "titleJa": "FAUST V. Hot Methanol in the [BHB2007] 11 Protobinary System; Hot Corino versus Shock Origin",
+    "authorsEn": "C. Vastel, F. Alves, C. Ceccarelli, ..., <strong>Shoji Mori</strong>, et al.",
+    "authorsJa": "C. Vastel, F. Alves, C. Ceccarelli, ..., <strong>森 昇志</strong>, ほか",
+    "journalEn": "Astronomy & Astrophysics, 664:A171",
+    "journalJa": "Astronomy & Astrophysics, 664:A171",
+    "publicationUrl": "https://doi.org/10.1051/0004-6361/202243414",
+    "arxivUrl": "https://arxiv.org/abs/2206.10176",
+    "adsUrl": "https://ui.adsabs.harvard.edu/search/q=doi:%2210.1051%2F0004-6361%2F202243414%22/sort=date%20desc%2C%20bibcode%20desc",
+    "abstractEn": "",
+    "abstractJa": "",
+    "id": "publication-24"
   },
   {
     "year": "2021",
