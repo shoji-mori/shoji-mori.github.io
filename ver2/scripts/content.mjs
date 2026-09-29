@@ -69,30 +69,31 @@ export function bibtex(p) {
   return '@article{Mori' + p.year + '_' + p.id.replace('publication-', '') + ',\n' + fields.map(([k,v]) => '  ' + k + ' = {' + v + '}').join(',\n') + '\n}';
 }
 
-export function paper(p, compact = false) {
+export function paper(p, compact = false, note = '') {
   const native = publicationText(p);
   const search = [p.titleEn,p.titleJa,plain(p.authorsEn),plain(p.authorsJa),p.journalEn,p.abstractEn,p.abstractJa].join(' ').toLowerCase();
   const actions = [[p.publicationUrl || p.url, 'Journal ↗'],[p.arxivUrl, 'arXiv ↗'],[p.adsUrl, 'ADS ↗']].filter(([url]) => url).map(([url,label]) => external(url, label)).join('');
   return '<article class="paper-row" id="' + p.id + '" data-record data-year="' + p.year + '" data-first="' + firstAuthor(p) + '" data-selected="' + !!p.selected + '" data-search="' + escape(search) + '">' +
     '<div class="paper-year">' + p.year + '</div><div class="paper-body"><h3 lang="'+native.language+'">' + external(primaryUrl(p), escape(native.title)) + '</h3>' +
-    '<p class="paper-authors" lang="'+native.language+'">' + authorMarkup(native.authors) + '</p><p class="paper-venue" lang="'+native.language+'">' + escape(native.journal) + '</p>' +
+    '<p class="paper-authors" lang="'+native.language+'">' + authorMarkup(native.authors) + '</p><p class="paper-venue" lang="'+native.language+'">' + escape(native.journal) + '</p>' + (note ? '<p class="paper-note">' + note + '</p>' : '') +
     '<div class="paper-links">' + actions + (compact ? '' : '<button type="button" data-bibtex="' + escape(bibtex(p)) + '">' + bi('Copy BibTeX','BibTeXをコピー') + '</button>') +
     (p.selected && !compact ? '<span class="selected-label">' + bi('Selected','主要論文') + '</span>' : '') + '</div>' +
     (!compact && (p.abstractEn || p.abstractJa) ? '<details class="paper-summary"><summary>' + bi('In plain language','研究の内容を読む') + '</summary><p>' + bi(p.abstractEn,p.abstractJa) + '</p></details>' : '') + '</div></article>';
 }
 
+export const talkFormat = (p) => p.type === 'poster' ? bi('Poster','ポスター') : p.type === 'invited' ? bi('Invited talk','招待講演') : bi('Oral presentation','口頭発表');
+
 export function talk(p) {
   const actions = [[p.slideUrl,bi('Slides ↓','スライド ↓')],[p.posterUrl,bi('Poster ↓','ポスター ↓')],[p.videoUrl,bi('Video ↗','動画 ↗')],[p.url,bi('Conference ↗','学会・資料 ↗')]].filter(([url])=>url).map(([url,label])=>external(url,label)).join('');
-  const format = p.type === 'poster' ? bi('Poster','ポスター') : p.type === 'invited' ? bi('Invited talk','招待講演') : bi('Oral presentation','口頭発表');
   return '<article class="talk-row" id="' + p.id + '" data-record data-scope="' + (p.scope || 'unspecified') + '" data-type="' + p.type + '" data-search="' + escape([p.titleEn,p.titleJa,p.confEn,p.confJa,p.authorsEn,p.authorsJa,p.year].join(' ').toLowerCase()) + '">' +
-    '<div class="talk-date">' + escape(p.date) + '<span>' + format + '</span></div><div><h3>' + bi(p.titleEn,p.titleJa) + '</h3>' +
+    '<div class="talk-date">' + escape(p.date) + '<span class="format-label">' + talkFormat(p) + '</span></div><div><h3>' + bi(p.titleEn,p.titleJa) + '</h3>' +
     '<p class="talk-conference">' + bi(p.confEn,p.confJa) + '</p><p class="talk-location">' + bi(p.placeEn,p.placeJa) + '</p><p class="talk-authors">' + bi(p.authorsEn,p.authorsJa) + '</p>' +
     (p.noteEn || p.noteJa ? '<p class="talk-note">' + bi(p.noteEn,p.noteJa) + '</p>' : '') +
     (actions ? '<div class="paper-links">' + actions + '</div>' : '') + '</div></article>';
 }
 
 export function news(p) {
-  return '<article class="news-item"><span class="news-date">' + escape(p.date) + '</span><div><div class="news-category">' + (p.type === 'poster' ? bi('POSTER','ポスター発表') : bi('PRESENTATION','口頭発表')) + '</div>' +
+  return '<article class="news-item"><span class="news-date">' + escape(p.date) + '</span><div><div class="news-category"><span class="format-label">' + talkFormat(p) + '</span></div>' +
     '<h3><a href="/talks/#' + p.id + '">' + bi(p.confEn,p.confJa) + '</a></h3><p>' + bi(p.titleEn,p.titleJa) + '</p></div><a class="news-arrow" href="/talks/#' + p.id + '" aria-label="' + escape('View presentation: ' + p.titleEn) + '">↗</a></article>';
 }
 

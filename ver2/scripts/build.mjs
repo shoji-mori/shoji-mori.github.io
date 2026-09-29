@@ -4,7 +4,9 @@ import { root, data, escape, plain, bi, profiles, primaryUrl, external, links, v
 
 export function build() {
   const publications = data('publications.seed');
-  const presentations = data('presentations');
+  // Newest first by the recorded date; one legacy record sits out of order in the source array.
+  const dateKey = (p) => { const m = String(p.date).match(/^(\d{4})\/\s*(\d{1,2})(?:\/\s*(\d{1,2}))?/); return m ? +m[1]*10000 + +m[2]*100 + +(m[3]||0) : +p.year*10000; };
+  const presentations = data('presentations').map((p,i)=>({p,i})).sort((a,b)=>dateKey(b.p)-dateKey(a.p)||a.i-b.i).map(({p})=>p);
   const research = data('research');
   const cv = data('cv');
   const materials = data('materials');
@@ -41,21 +43,30 @@ export function build() {
   });
   const paragraphs = (p) => p.paragraphsEn.map((text,i)=>'<p>'+bi(text,p.paragraphsJa[i])+'</p>').join('');
   const years = [...new Set(publications.map(p=>p.year))].sort().reverse();
-  const figure = (f) => '<figure class="research-figure"><a href="/images/'+f.file+'" target="_blank" rel="noopener"><img src="/images/'+f.file+'" alt="'+escape(f.alt)+'" width="'+f.width+'" height="'+f.height+'" loading="lazy" decoding="async"></a><figcaption>'+bi(f.captionEn,f.captionJa)+' '+external(f.source,escape(f.credit))+'</figcaption></figure>';
+  // Pages show WebP renditions (see docs/asset-sources.md); the link opens the original full-resolution file.
+  const webp = (file,w) => '/images/web/'+file.replace(/\.\w+$/,'')+'-'+w+'.webp';
+  const figure = (f) => '<figure class="research-figure"><a href="/images/'+f.file+'" target="_blank" rel="noopener"><img src="'+webp(f.file,1000)+'" srcset="'+webp(f.file,1000)+' 1000w, '+webp(f.file,1800)+' '+Math.min(f.width,1800)+'w" sizes="(min-width: 1150px) 900px, (min-width: 920px) 70vw, 92vw" alt="'+escape(f.alt)+'" width="'+f.width+'" height="'+f.height+'" loading="lazy" decoding="async"></a><figcaption>'+bi(f.captionEn,f.captionJa)+' '+external(f.source,escape(f.credit))+'</figcaption></figure>';
   const publicationById = new Map(publications.map(p=>[p.id,p]));
+  const byYear = (records,render) => [...new Set(records.map(r=>r.year))].map(year=>'<section class="year-group" data-year-group aria-labelledby="year-'+year+'"><h2 class="year-heading" id="year-'+year+'">'+year+'</h2><div class="year-records">'+records.filter(r=>r.year===year).map(render).join('')+'</div></section>').join('');
   const homePapers = ['publication-22','publication-15','publication-6','publication-5','publication-2'];
   const components = {
     // Cover images are cropped details of figures shown in full, with credits, on the research page.
     researchNotes:research.map((r,i)=>'<article class="research-note"><div class="research-note-media'+(r.cover?'':' research-note-media-empty')+'" aria-hidden="true">'+(r.cover?'<img src="/images/'+r.cover+'" alt="" width="960" height="600" loading="lazy" decoding="async">':'')+'<span class="research-note-number">0'+(i+1)+'</span></div><div class="research-note-body"><p class="research-period">'+escape(r.period)+'</p><h3><a href="/research/#'+r.id+'">'+bi(r.titleEn,r.titleJa)+'</a></h3><p>'+bi(r.summaryEn,r.summaryJa)+'</p></div></article>').join(''),
-    selectedPublications:homePapers.map(id=>paper(publicationById.get(id),true)).join(''),
-    allPublications:publications.map(p=>paper(p)).join(''),
+    // The plain-language summary, or for a paper without one, the owner's summary of the research theme it alone supports.
+    selectedPublications:homePapers.map(id=>{
+      const p = publicationById.get(id);
+      const theme = research.find(r=>r.papers.length===1 && r.papers[0].id===id);
+      const note = p.abstractEn ? bi(p.abstractEn,p.abstractJa) : theme ? bi(theme.summaryEn,theme.summaryJa) : '';
+      return paper(p,true,note);
+    }).join(''),
+    allPublications:byYear(publications,p=>paper(p)),
     publicationCount:'',
     publicationYears:'<option value="all" data-en="All years" data-ja="すべての年">All years</option>'+years.map(y=>'<option value="'+y+'">'+y+'</option>').join(''),
     publicationProfiles:profiles.slice(0,3).map(([label,url])=>external(url,escape(label)+' ↗')).join(''),
     newsItems:presentations.slice(0,4).map(news).join(''),
     allNews:presentations.filter(p=>p.year==='2025').map(news).join(''),
     talkCount:'',
-    talkRows:presentations.map(talk).join(''),
+    talkRows:byYear(presentations,talk),
     materials:[...new Set(materials.map(m=>m.categoryEn))].map(category=>{
       const group = materials.filter(m=>m.categoryEn===category);
       return '<section class="material-group"><h3>'+bi(category,group[0].categoryJa)+'</h3><div class="materials-grid">'+group.map(m=>'<article class="material-card"><div class="material-meta"><span>'+m.year+'</span><span>PDF</span></div><h4>'+bi(m.titleEn,m.titleJa)+'</h4><p>'+bi(m.venueEn,m.venueJa)+'</p><div class="paper-links">'+links(m.links)+'</div></article>').join('')+'</div></section>';

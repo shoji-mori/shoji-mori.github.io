@@ -156,7 +156,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .selected-list .paper-summary{display:none}
 .news-item{display:grid;grid-template-columns:135px 1fr 24px;gap:25px;padding:28px 0;border-top:1px solid var(--line);align-items:start}
 .news-date{font-size:13px;color:var(--muted);padding-top:3px}
-.news-category{font-size:12px;letter-spacing:.12em;color:var(--accent);margin-bottom:7px}
+.news-category{margin-bottom:9px}
 .news-item h3{font:500 24px/1.35 var(--serif);letter-spacing:-.01em;max-width:870px}
 .news-item p{font-size:13px;color:var(--muted);margin-top:8px}
 .news-arrow{font-size:24px}
@@ -217,8 +217,20 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .talk-row:last-child{border-bottom:1px solid var(--line)}
 .talk-date{font-size:12px;color:var(--muted)}
 .talk-date{font-variant-numeric:tabular-nums}
-.talk-date>span{display:table;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-top:9px;color:var(--accent);background:#b8532a14;padding:2px 9px;border-radius:999px}
-.talk-row h3{font:500 21px/1.38 var(--serif);letter-spacing:-.005em}
+.format-label{display:inline-block;font-size:11px;line-height:1.7;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:#b8532a14;padding:2px 9px;border-radius:999px}
+.talk-date>.format-label{display:table;margin-top:9px}
+/* Archive lists are grouped under a year heading that stays in view while its records scroll. */
+.archive-section .paper-list{border-top:0}
+.year-group{display:grid;grid-template-columns:120px minmax(0,1fr);gap:28px;border-top:1px solid var(--ink)}
+.year-group+.year-group{margin-top:10px}
+.year-heading{position:sticky;top:190px;align-self:start;padding-top:22px;font:400 38px/1 var(--serif);letter-spacing:-.02em;color:var(--ink);font-variant-numeric:lining-nums}
+.lang-ja .year-heading{line-height:1;letter-spacing:-.02em}
+.year-records .paper-row{grid-template-columns:minmax(0,1fr)}
+.year-records .paper-year{display:none}
+.year-records>:last-child{border-bottom:0}
+.year-records>.talk-row:first-child{border-top:0}
+.paper-note{font-size:14.5px;line-height:1.75;color:#4e5552;margin-top:12px;max-width:820px}
+.talk-row h3{font:500 21px/1.38 var(--serif);letter-spacing:-.005em;text-wrap:pretty}
 .talk-conference{font-size:14px;margin-top:9px}
 .talk-location,.talk-authors,.talk-note{font-size:12px;color:var(--muted);margin-top:5px}
 .materials-section{background:var(--tint);border-top:1px solid var(--line)}
@@ -367,7 +379,6 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .news-item{grid-template-columns:1fr 20px;gap:9px 15px;padding-block:23px}
 .news-date{grid-column:1/-1;font-size:12px}
 .news-item h3{font-size:22px}
-.news-category{font-size:12px}
 .news-item p{font-size:12px}
 .site-footer{padding-top:48px}
 .footer-top{grid-template-columns:1fr;gap:44px;padding-bottom:38px}
@@ -395,7 +406,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .archive-external{font-size:12px;gap:20px}
 .talk-row{grid-template-columns:1fr;gap:12px;padding-block:23px}
 .talk-date{display:flex;gap:15px;align-items:center;font-size:12px}
-.talk-date>span{display:inline;margin:0;font-size:12px}
+.talk-date>.format-label{display:inline-block;margin:0}
+.year-group{grid-template-columns:1fr;gap:0}
+.year-heading{position:static;padding-top:20px;font-size:30px}
+.paper-links a,.paper-links button{padding:6px 13px}
+.paper-note{font-size:14px}
 .talk-row h3{font-size:16px}
 .talk-conference{font-size:13px}
 .talk-location,.talk-authors,.talk-note{font-size:12px}
@@ -493,6 +508,9 @@ a{color:inherit!important}
 .paper-summary{display:none}
 .archive-section{padding:0}
 .talk-row{grid-template-columns:95px 1fr;padding:12pt 0;gap:15pt;break-inside:avoid}
+.year-group{display:block;border-top:1px solid #000}
+.year-heading{position:static;font-size:16pt;padding:10pt 0 4pt}
+.format-label{background:none;padding:0}
 .talk-row h3{font-size:11pt}
 .talk-row p{font-size:9pt}
 .talk-date{font-size:8pt}

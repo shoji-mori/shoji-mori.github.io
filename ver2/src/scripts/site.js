@@ -45,6 +45,7 @@ function initializeSite() {
       record.hidden = !matches;
       if(matches) count++;
     }
+    section.querySelectorAll('[data-year-group]').forEach(group=>{group.hidden=!group.querySelector('[data-record]:not([hidden])');});
     const filtered = Object.entries(filters).some(([key,value])=>key==='q'?value.trim():value!=='all');
     section.querySelector('.results-count').textContent = filtered ? localize(count+(count===1?' result':' results'),'検索結果：'+count+'件') : '';
     section.querySelector('.empty-state').hidden = count > 0;

@@ -43,3 +43,7 @@ The observations theme has no cover: no figure from Mori et al. (2024) or the FA
 ## Fonts
 
 Newsreader and Inter (latin and latin-ext subsets, woff2) are self-hosted in public/fonts/, copied from @fontsource/newsreader 5.2.10 and @fontsource/inter 5.2.8. Both are licensed under the SIL Open Font License 1.1; the license texts are in public/fonts/OFL-*.txt. Japanese text uses the reader's system Mincho/Gothic faces.
+
+## Web renditions
+
+Pages display WebP renditions in public/images/web/ (1000 px and up to 1800 px wide; 1100/1800 px for HL Tauri), selected by the browser through srcset. They were produced with ImageMagick (`magick SOURCE -resize "Wx>" -quality 86 -define webp:method=6 DEST`; quality 85 for HL Tauri) and checked side by side against the originals at display size. Research figures link to the original full-resolution files, which remain unchanged.
