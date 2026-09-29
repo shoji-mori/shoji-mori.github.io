@@ -15,7 +15,7 @@ export function build() {
   const dist = path.join(root,'dist');
   mkdirSync(dist,{recursive:true});
   cpSync(path.join(root,'public'),dist,{recursive:true});
-  for (const file of ['files','me.webp','me.jpg','cv_mori_shoji_v3.3.pdf','google382eb4ad681ea1fc.html','robots.txt','.nojekyll']) cpSync(path.join(root,'..',file),path.join(dist,file),{recursive:true});
+  for (const file of ['files','me.webp','me.jpg',data('site').cvPdf.replace(/^\//,''),'google382eb4ad681ea1fc.html','robots.txt','.nojekyll']) cpSync(path.join(root,'..',file),path.join(dist,file),{recursive:true});
   cpSync(path.join(root,'src/styles/styles.css'),path.join(dist,'styles.css'));
   cpSync(path.join(root,'src/scripts/site.js'),path.join(dist,'site.js'));
   writeFileSync(path.join(dist,'publications.bib'),publications.map(bibtex).join('\n\n') + '\n');
@@ -58,7 +58,9 @@ export function build() {
   const figure = (f) => '<figure class="research-figure"><a href="/images/'+f.file+'" target="_blank" rel="noopener"><img src="'+webp(f.file,1000)+'" srcset="'+webp(f.file,1000)+' 1000w, '+webp(f.file,1800)+' '+Math.min(f.width,1800)+'w" sizes="(min-width: 1150px) 900px, (min-width: 920px) 70vw, 92vw" alt="'+escape(f.alt)+'" width="'+f.width+'" height="'+f.height+'" loading="lazy" decoding="async"></a><figcaption>'+bi(f.captionEn,f.captionJa)+' '+external(f.source,escape(f.credit))+'</figcaption></figure>';
   const publicationById = new Map(publications.map(p=>[p.id,p]));
   const byYear = (records,render) => [...new Set(records.map(r=>r.year))].map(year=>'<section class="year-group" data-year-group aria-labelledby="year-'+year+'"><h2 class="year-heading" id="year-'+year+'">'+year+'</h2><div class="year-records">'+records.filter(r=>r.year===year).map(render).join('')+'</div></section>').join('');
-  const homePapers = ['publication-2','publication-1','publication-5','publication-6','publication-15','publication-22'];
+  const site = data('site');
+  const homePapers = site.representativePapers;
+  for (const id of homePapers) if (!publications.some(p=>p.id===id)) throw new Error('Unknown representative paper in site.json: '+id);
   const listRow = (date,body,aside='') => '<li><span class="list-date">'+date+'</span><div>'+body+'</div>'+aside+'</li>';
   const monthLabel = (t) => { const m = String(t.date).match(/^(\d{4})\/\s*(\d{1,2})/); return m ? bi(months[+m[2]-1]+' '+m[1], m[1]+'年'+(+m[2])+'月') : escape(t.year); };
   const components = {
@@ -73,8 +75,12 @@ export function build() {
       const actions = [[p.publicationUrl||p.url,'Journal'],[p.arxivUrl,'arXiv'],[p.adsUrl,'ADS']].filter(([url])=>url).map(([url,label])=>external(url,label)).join('');
       return listRow(p.year,'<a class="list-title" href="'+escape(primaryUrl(p))+'" lang="'+t.language+'">'+escape(t.title)+'</a><p class="list-meta" lang="'+t.language+'">'+authorMarkup(t.authors)+'</p><p class="list-meta">'+escape(shortVenue(p))+'<span class="list-links">'+actions+'</span></p>');
     }).join(''),
-    homeLinks:profiles.filter(([label])=>['NASA ADS','Google Scholar','ORCID','GitHub'].includes(label)).map(([label,url])=>external(url,escape(label))).join(''),
+    homeLinks:profiles.filter(([label])=>site.homeProfileLinks.includes(label)).map(([label,url])=>external(url,escape(label))).join(''),
     publicationTotal:String(publications.length),
+    siteEmail:escape(site.email),
+    siteCv:escape(site.cvPdf),
+    siteRole:bi(site.roleEn.join('\n'),site.roleJa.join('\n')).replace(/\n/g,'<br>'),
+    siteStatement:bi(site.statementEn,site.statementJa),
     profileList:profiles.map(([label,url])=>external(url,escape(label))).join(''),
     allPublications:byYear(publications,p=>paper(p)),
     publicationCount:'',
@@ -130,7 +136,8 @@ export function build() {
       content:fill(pageSource,components),
       navigation:navigation(file),
       year:new Date().getFullYear(),
-      updated
+      updated,
+      siteEmail:escape(site.email)
     };
     const target = path.join(dist,url);
     mkdirSync(target,{recursive:true});
@@ -147,7 +154,7 @@ export function build() {
   }
   writeFileSync(path.join(dist,'sitemap.xml'),'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+pages.map(([,url])=>'<url><loc>https://shoji-mori.github.io/'+url+'</loc></url>').join('')+'</urlset>\n');
   const notFound = '<section class="container page-heading"><h1>'+bi('Page not found.','ページが見つかりません。')+'</h1><p class="page-lead">'+bi('The page may have moved. Browse the research or publications below.','ページが移動した可能性があります。以下から研究内容や論文をご覧ください。')+'</p><div class="page-actions" style="margin-top:28px"><a class="text-link" href="/">'+bi('Home','ホーム')+'</a><a class="text-link" href="/research/">'+bi('Research','研究内容')+'</a><a class="text-link" href="/publications/">'+bi('Publications','論文一覧')+'</a></div></section>';
-  writeFileSync(path.join(dist,'404.html'),fill(template,{pageTitle:'Page not found | Shoji Mori',description:'The requested page could not be found.',canonical:'https://shoji-mori.github.io/404.html',structuredData:'{}',pageClass:'not-found-page',content:notFound,navigation:navigation(''),year:new Date().getFullYear(),updated}));
+  writeFileSync(path.join(dist,'404.html'),fill(template,{pageTitle:'Page not found | Shoji Mori',description:'The requested page could not be found.',canonical:'https://shoji-mori.github.io/404.html',structuredData:'{}',pageClass:'not-found-page',content:notFound,navigation:navigation(''),year:new Date().getFullYear(),updated,siteEmail:escape(site.email)}));
   // The former Activity page duplicated the talk archive; keep its URL working.
   mkdirSync(path.join(dist,'news'),{recursive:true});
   writeFileSync(path.join(dist,'news','index.html'),'<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=/talks/"><link rel="canonical" href="https://shoji-mori.github.io/talks/"><title>Talks | Shoji Mori</title></head><body><p><a href="/talks/">Talks and materials</a></p></body></html>\n');

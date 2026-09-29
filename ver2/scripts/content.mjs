@@ -22,16 +22,8 @@ export const external = (url, label) => '<a href="' + escape(url) + '" target="_
 // Generic link labels in the CV and materials data have Japanese equivalents; names such as journals stay as written.
 const linkLabelsJa = {'Thesis (PDF)':'学位論文（PDF）','Slides':'スライド','Program':'プログラム','Video':'動画'};
 export const links = (items) => items.map((item) => external(item.url, linkLabelsJa[item.label] ? bi(item.label, linkLabelsJa[item.label]) : escape(item.label))).join('');
-export const profiles = [
-  ['Google Scholar', 'https://scholar.google.com/citations?user=XUF28swAAAAJ'],
-  ['NASA ADS', 'https://ui.adsabs.harvard.edu/search/q=orcid%3A0000-0002-7002-939X&sort=date%20desc'],
-  ['ORCID', 'https://orcid.org/0000-0002-7002-939X'],
-  ['researchmap', 'https://researchmap.jp/mori_shoji'],
-  ['GitHub', 'https://github.com/shoji-mori'],
-  ['ResearchGate', 'https://www.researchgate.net/profile/Shoji-Mori-3'],
-  ['Scopus', 'https://www.scopus.com/authid/detail.uri?authorId=57075536200'],
-  ['Web of Science', 'https://www.webofscience.com/wos/author/record/CAG-1288-2022']
-];
+// Profile links come from src/data/site.json.
+export const profiles = data('site').profiles.map(({label,url})=>[label,url]);
 
 export function validateData(publications, presentations) {
   for (const [records, required] of [[publications, ['id','year','titleEn','authorsEn','journalEn']], [presentations, ['id','year','titleEn','date','confEn','type']]]) {

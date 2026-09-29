@@ -4,12 +4,12 @@
     <div>
       <h1><span class="en" lang="en">Shoji Mori</span><span class="ja" lang="ja">森 昇志</span></h1>
       <p class="profile-alt"><span class="en" lang="ja">森 昇志</span><span class="ja" lang="en">Shoji Mori</span></p>
-      <p class="profile-role"><span class="en" lang="en">Theoretical astrophysicist<br>Shuimu Fellow, Institute for Advanced Study, Tsinghua University, Beijing</span><span class="ja" lang="ja">理論天体物理学<br>清華大学 高等研究院（北京）<br>Shuimu フェロー</span></p>
+      <p class="profile-role">{{siteRole}}</p>
     </div>
-    <div class="profile-links"><a class="profile-email" href="mailto:shoji9m@mail.tsinghua.edu.cn">shoji9m@mail.tsinghua.edu.cn</a><a href="/cv_mori_shoji_v3.3.pdf" target="_blank" rel="noopener">CV (PDF)</a>{{homeLinks}}</div>
+    <div class="profile-links"><a class="profile-email" href="mailto:{{siteEmail}}">{{siteEmail}}</a><a href="{{siteCv}}" target="_blank" rel="noopener">CV (PDF)</a>{{homeLinks}}</div>
   </div>
   <div class="home-main">
-    <p class="lead"><span class="en" lang="en">I run multiphysics simulations that include magnetic fields and radiation, to understand the structure of protoplanetary disks and how planets are born in them.</span><span class="ja" lang="ja">原始惑星系円盤の構造と、そこで起きる惑星の誕生を解き明かすために、磁場と放射を考慮した統合物理シミュレーションを行っています。</span></p>
+    <p class="lead">{{siteStatement}}</p>
     <section class="home-section" aria-labelledby="home-recent"><div class="home-section-head"><h2 id="home-recent"><span class="en" lang="en">Recent talks</span><span class="ja" lang="ja">最近の発表</span></h2><a href="/talks/"><span class="en" lang="en">All talks</span><span class="ja" lang="ja">発表一覧</span></a></div><ul class="list">{{homeRecent}}</ul></section>
     <section class="home-section" aria-labelledby="home-research"><div class="home-section-head"><h2 id="home-research"><span class="en" lang="en">Research</span><span class="ja" lang="ja">研究テーマ</span></h2><a href="/research/"><span class="en" lang="en">Research in detail</span><span class="ja" lang="ja">研究内容へ</span></a></div><ul class="list list-with-thumbs">{{homeResearch}}</ul></section>
     <section class="home-section" aria-labelledby="home-papers"><div class="home-section-head"><h2 id="home-papers"><span class="en" lang="en">Representative papers</span><span class="ja" lang="ja">代表的な論文</span></h2><a href="/publications/"><span class="en" lang="en">All {{publicationTotal}} papers</span><span class="ja" lang="ja">論文一覧（{{publicationTotal}}本）</span></a></div><ul class="list">{{homeSelected}}</ul></section>
