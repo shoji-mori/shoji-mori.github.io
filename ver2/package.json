@@ -8,7 +8,8 @@
     "preview": "node scripts/serve.mjs",
     "check": "node scripts/check.mjs",
     "test": "node --test tests/*.test.mjs",
-    "release": "node scripts/release.mjs"
+    "release": "node scripts/release.mjs",
+    "sync:ads": "node scripts/sync-ads.mjs"
   },
   "engines": {
     "node": ">=22"

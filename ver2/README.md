@@ -17,6 +17,26 @@ Open http://127.0.0.1:4321/. The server binds only to the local machine, watches
 
 The build produces dist/ with five main routes, two print-preview routes, a 404 page, a redirect from the former /news/ page to /talks/, a sitemap, a bibliography download, and copies of the existing public PDFs. dist/ is ignored. The checker validates document structure, internal links and fragments, local assets, citation exports, and record counts.
 
+## Updating the site
+
+All content is in src/data/*.json (site.json: profile, contact, home statement and representative papers; publications.seed.json; presentations.json; research.json; cv.json; materials.json). To publish a change:
+
+    cd ver2
+    npm run release        # build, check, test, and copy the generated site into the repository root
+    cd ..
+    git status             # review the changes
+    git add -A && git commit -m "..." && git push
+
+GitHub Pages serves the repository root from main, so the push publishes the site.
+
+New papers can be pulled from NASA ADS by ORCID:
+
+    ADS_API_TOKEN=... npm run sync:ads
+
+This adds refereed papers that are not yet listed to publications.seed.json, in the existing format. Add a plain-language summary or "selected": true if wanted, then release. The token is created at https://ui.adsabs.harvard.edu/user/settings/token and is not stored in the repository.
+
+A talk with "highlight": true (invited talks by default) is shown in full and may carry summaryEn/summaryJa. After adding Japanese text, run `python3 tools/subset-jp-font.py --check`; see docs/asset-sources.md for rebuilding the font subset.
+
 ## Content
 
 - src/pages/: page structure and bilingual editorial text.
