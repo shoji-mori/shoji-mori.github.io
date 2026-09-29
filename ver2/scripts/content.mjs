@@ -120,6 +120,13 @@ export const researchFigures = [{
   source:'/files/posters/poster-20251208-epf-thermal-structure-magnetized-ppds.pdf',
   alt:'Planet mass versus orbital radius for turbulent and MHD disk models, with growth tracks colored by water fraction.'
 },{
+  file:'episodic-surface-accretion.png', width:1851, height:795,
+  captionEn:'Ratio of the surface accretion rate to the accretion rate inside the disk, as a function of radius and time, in a 2D radiation nonideal MHD simulation. Episodes of stronger surface accretion recur.',
+  captionJa:'二次元輻射非理想MHD計算で、表層の降着率と円盤内部の降着率の比を、半径と時間の関数として示した図。表層の降着が強まる時期が繰り返し現れます。',
+  credit:'Mori, Bai & Tomida (2025)',
+  source:'/files/slides/slide-20250911-asj-autumn-global-nonideal-mhd.pdf',
+  alt:'A radius-time map of the surface-to-disk accretion-rate ratio, showing repeated episodes of stronger surface accretion.'
+},{
   file:'electron-heating-mri-snapshots.png', width:1876, height:814,
   captionEn:'Magnetic-field strength in local magnetohydrodynamic simulations after 60 orbits, with electron heating (left) and without it (right). With electron heating, the small-scale turbulence seen on the right is suppressed. Field strength is shown in normalized units.',
   captionJa:'局所的な磁気流体シミュレーションで、60公転後の磁場の強さを比べた図。左が電子加熱あり、右が電子加熱なし。電子加熱があると、右に見られる細かな乱流が抑えられます。磁場の強さは規格化した値です。',
