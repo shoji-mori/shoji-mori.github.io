@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { root, data } from './content.mjs';
 
 const dist=path.join(root,'dist');
-const pages=['index.html','research/index.html','publications/index.html','talks/index.html','cv/index.html','mentoring/index.html','publications/print/index.html','talks/print/index.html','404.html'];
+const pages=['index.html','research/index.html','publications/index.html','talks/index.html','cv/index.html','publications/print/index.html','talks/print/index.html','404.html'];
 const documents=new Map(pages.map(p=>[p,readFileSync(path.join(dist,p),'utf8')]));
 const decode=(text)=>text.replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
 let localReferences=0;
@@ -41,6 +41,7 @@ assert.equal((documents.get('research/index.html').match(/class="research-chapte
 assert(!documents.get('index.html').includes('stats-band'));
 // The former Activity page redirects to the talk archive.
 assert(readFileSync(path.join(dist,'news/index.html'),'utf8').includes('url=/talks/'));
+assert(readFileSync(path.join(dist,'mentoring/index.html'),'utf8').includes('url=/research/'));
 // Home lists each paper once: talks under Recent, papers under Representative papers.
 const home=documents.get('index.html');
 assert(!home.slice(home.indexOf('id="home-recent"'),home.indexOf('id="home-research"')).includes('doi.org'));

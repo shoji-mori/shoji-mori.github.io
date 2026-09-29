@@ -50,12 +50,14 @@
     "paragraphsEn": [
       "Rocky planets like Earth contain little water, so they are thought to have formed inside the water snow line, where ice evaporates. Knowing where the snow line was, and when, narrows down where and when dry planets could form.",
       "Our 2019 simulations showed that when magnetic fields drive accretion, the heat is released in the ionized surface layers and radiated away, so the midplane stays cold and is heated mainly by starlight. Global simulations with radiation transport in 2025 gave the same result.",
-      "In our 2021 model the snow line in such a disk moved inside Earth's present orbit within 1 million years, much earlier than in a conventional turbulent disk. This suggests that either the rocky protoplanets formed early, or they formed closer to the Sun and later moved outward. Grain growth can delay this shift (2023). With planet growth and migration added (2025), close-in planets of 1 to 10 Earth masses split into lighter rocky planets and heavier water-rich ones, a trend that appears consistent with exoplanet observations."
+      "In our 2021 model the snow line in such a disk moved inside Earth's present orbit within 1 million years, much earlier than in a conventional turbulent disk. This suggests that either the rocky protoplanets formed early, or they formed closer to the Sun and later moved outward. Grain growth can delay this shift, as shown in work led by Katsushi Kondo, a Ph.D. student I co-supervise (Kondo et al. 2023). With planet growth and migration added (2025), close-in planets of 1 to 10 Earth masses split into lighter rocky planets and heavier water-rich ones, a trend that appears consistent with exoplanet observations.",
+      "With Yu Wang, a Ph.D. student at Tsinghua University, we showed in two-dimensional hydrodynamic simulations that water evaporating near the snow line is carried outward with the gas and condenses again, forming a cycle (Wang et al. 2025)."
     ],
     "paragraphsJa": [
       "地球のような岩石惑星は水をほとんど含まないため、スノーライン（これより内側では氷が蒸発する境界）の内側で作られたと考えられています。スノーラインがいつどこにあったかが分かれば、水の少ない惑星が作られた時期と場所を絞り込めます。",
       "2019年の計算で、磁場が降着を駆動する円盤では、熱が赤道面ではなく電離した表層で出て宇宙へ逃げることを示しました。そのため赤道面の温度は、ほぼ中心星の光で決まります。2025年の輻射を含めた大局計算でも、同じ結果が得られました。",
-      "2021年のモデルでは、このような円盤のスノーラインは100万年以内に現在の地球軌道の内側まで移動し、従来の乱流円盤よりずっと早くなりました。地球の材料は円盤進化の早い時期に集まったか、太陽の近くで育ってから外へ移動したと考えられます。2023年の共同研究では、ダストの成長がこの移動を遅らせることも示しました。2025年には惑星の成長と移動も合わせて計算し、1〜10地球質量の短周期惑星が、軽い岩石惑星と重い水に富む惑星に分かれることを示しました。系外惑星の観測とも整合しているように見えます。"
+      "2021年のモデルでは、このような円盤のスノーラインは100万年以内に現在の地球軌道の内側まで移動し、従来の乱流円盤よりずっと早くなりました。地球の材料は円盤進化の早い時期に集まったか、太陽の近くで育ってから外へ移動したと考えられます。共同指導している博士課程学生の近藤 克さんの研究では、ダストの成長がこの移動を遅らせることを示しました（Kondo et al. 2023）。2025年には惑星の成長と移動も合わせて計算し、1〜10地球質量の短周期惑星が、軽い岩石惑星と重い水に富む惑星に分かれることを示しました。系外惑星の観測とも整合しているように見えます。",
+      "清華大学の博士課程学生 Yu Wang さんとは、スノーライン付近で蒸発した水がガスとともに外へ流れ、再び凝縮する循環を、二次元の流体計算で示しました（Wang et al. 2025）。"
     ],
     "papers": [
       {
@@ -68,7 +70,8 @@
       },
       {
         "id": "publication-8",
-        "label": "Kondo, Okuzumi & Mori (2023)"
+        "label": "Kondo, Okuzumi & Mori (2023)",
+        "student": true
       },
       {
         "id": "publication-2",
@@ -77,6 +80,11 @@
       {
         "id": "publication-1",
         "label": "Mori, Bai & Tomida (2025)"
+      },
+      {
+        "id": "publication-3",
+        "label": "Wang, Ormel, Mori & Bai (2025)",
+        "student": true
       }
     ],
     "cover": "cards/snow-line.webp",
@@ -109,16 +117,23 @@
     ],
     "paragraphsEn": [
       "The cold midplane above was derived from local simulations and simple models. To test it, I extended the public code Athena++ with modules for radiation transport, opacity and ionization, so that one calculation connects the optically thick midplane to the transparent surface.",
-      "In 2025 these global simulations confirmed that accretion heating does not raise the midplane temperature. They also showed that disk winds lift the irradiated surface and strengthen stellar heating, and that when the magnetic field is aligned with the disk rotation, fast accretion runs along one surface only, where clumps form and fall in repeatedly and the winds become asymmetric. The simulations are two-dimensional; whether these structures persist in three dimensions is still open."
+      "In 2025 these global simulations confirmed that accretion heating does not raise the midplane temperature. They also showed that disk winds lift the irradiated surface and strengthen stellar heating, and that when the magnetic field is aligned with the disk rotation, fast accretion runs along one surface only, where clumps form and fall in repeatedly and the winds become asymmetric. The simulations are two-dimensional; whether these structures persist in three dimensions is still open.",
+      "On the local side, Haruhi Enomoto, a Ph.D. student I co-supervise, derived scaling relations for the wind-driven accretion rate from systematic nonideal MHD simulations, without relying on a viscosity parameter (Enomoto et al. 2026). They allow magnetically driven accretion to be built into long-term models of disk evolution."
     ],
     "paragraphsJa": [
       "上の低温な赤道面は、局所計算と簡単なモデルから導いたものでした。これを確かめるため、光をほとんど通さない赤道面から光が素通りする表層までを一つの計算でつなぐ輻射輸送法を開発し、電離度の計算とともに公開コード Athena++ に組み込みました。",
-      "2025年の大局計算では、どの計算でも降着による加熱が赤道面の温度を上げないことを確かめました。一方で、円盤風が照射面を持ち上げ、中心星の光による加熱をかえって強めることが分かりました。磁場が回転軸と同じ向きのときは、速い降着流が片面の表層にだけ現れ、そこで密度の塊が繰り返し生まれては落ちていき、円盤風も上下で非対称になります。計算は二次元で、同じ構造が三次元でも保たれるかはまだ分かっていません。"
+      "2025年の大局計算では、どの計算でも降着による加熱が赤道面の温度を上げないことを確かめました。一方で、円盤風が照射面を持ち上げ、中心星の光による加熱をかえって強めることが分かりました。磁場が回転軸と同じ向きのときは、速い降着流が片面の表層にだけ現れ、そこで密度の塊が繰り返し生まれては落ちていき、円盤風も上下で非対称になります。計算は二次元で、同じ構造が三次元でも保たれるかはまだ分かっていません。",
+      "局所計算の側では、共同指導している博士課程学生の榎本 晴日さんが、系統的な非理想MHD計算から、粘性係数に頼らずに円盤風による降着率を見積もるスケーリング則を導きました（Enomoto et al. 2026）。これにより、磁場による降着を円盤の長期進化モデルに組み込めます。"
     ],
     "papers": [
       {
         "id": "publication-1",
         "label": "Mori, Bai & Tomida (2025)"
+      },
+      {
+        "id": "publication-25",
+        "label": "Enomoto, Mori & Okuzumi (2026)",
+        "student": true
       }
     ]
   },
