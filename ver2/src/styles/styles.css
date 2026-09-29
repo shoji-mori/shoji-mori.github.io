@@ -119,6 +119,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .talk-date{font-variant-numeric:tabular-nums}
 .format-label{display:inline-block;font-size:11px;line-height:1.7;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:#b8532a14;padding:2px 9px;border-radius:999px}
 .talk-date>.format-label{display:table;margin-top:9px}
+.upcoming-label{display:table;margin-top:4px;font-size:12px;font-weight:600;color:var(--accent)}
 /* Archive lists are grouped under a year heading that stays in view while its records scroll. */
 .archive-section .paper-list{border-top:0}
 .year-group{display:grid;grid-template-columns:120px minmax(0,1fr);gap:28px;border-top:1px solid var(--ink)}

@@ -87,10 +87,10 @@ export function paper(p, compact = false, note = '') {
 
 export const talkFormat = (p) => p.type === 'poster' ? bi('Poster','ポスター') : p.type === 'invited' ? bi('Invited talk','招待講演') : bi('Oral presentation','口頭発表');
 
-export function talk(p) {
+export function talk(p, upcoming = false) {
   const actions = [[p.slideUrl,bi('Slides (PDF)','スライド（PDF）')],[p.posterUrl,bi('Poster (PDF)','ポスター（PDF）')],[p.videoUrl,bi('Video','動画')],[p.url,bi('Conference','学会ページ')]].filter(([url])=>url).map(([url,label])=>external(url,label)).join('');
   return '<article class="talk-row" id="' + p.id + '" data-record data-scope="' + (p.scope || 'unspecified') + '" data-type="' + p.type + '" data-search="' + escape([p.titleEn,p.titleJa,p.confEn,p.confJa,p.authorsEn,p.authorsJa,p.year].join(' ').toLowerCase()) + '">' +
-    '<div class="talk-date">' + escape(String(p.date).replace(/\/\s+/g, '/')) + '<span class="format-label">' + talkFormat(p) + '</span></div><div><h3>' + bi(p.titleEn,p.titleJa) + '</h3>' +
+    '<div class="talk-date">' + escape(String(p.date).replace(/\/\s+/g, '/')) + '<span class="format-label">' + talkFormat(p) + '</span>' + (upcoming ? '<span class="upcoming-label">' + bi('Upcoming','予定') + '</span>' : '') + '</div><div><h3>' + bi(p.titleEn,p.titleJa) + '</h3>' +
     '<p class="talk-conference">' + bi(p.confEn,p.confJa) + '</p><p class="talk-location">' + bi(p.placeEn,p.placeJa) + '</p><p class="talk-authors">' + bi(p.authorsEn,p.authorsJa) + '</p>' +
     (p.noteEn || p.noteJa ? '<p class="talk-note">' + bi(p.noteEn,p.noteJa) + '</p>' : '') +
     (actions ? '<div class="paper-links">' + actions + '</div>' : '') + '</div></article>';

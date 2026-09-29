@@ -36,8 +36,12 @@ export function build() {
   };
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const monthsLong = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  // "Last updated" follows the newest dated record, so it reflects the content rather than the build.
-  const newest = String(presentations[0].date).match(/^(\d{4})\/\s*(\d{1,2})/);
+  // Talks dated after the build day are announced as upcoming.
+  const today = new Date();
+  const todayKey = today.getFullYear()*10000 + (today.getMonth()+1)*100 + today.getDate();
+  const upcoming = (t) => dateKey(t) > todayKey;
+  // "Last updated" follows the newest past record, so it reflects the content rather than the build.
+  const newest = String((presentations.find(t=>!upcoming(t)) || presentations[0]).date).match(/^(\d{4})\/\s*(\d{1,2})/);
   const newestPaperYear = Math.max(...publications.map(p=>+p.year));
   const updated = newest && +newest[1] >= newestPaperYear ? bi(monthsLong[+newest[2]-1]+' '+newest[1], newest[1]+'年'+(+newest[2])+'月') : bi(String(newestPaperYear), newestPaperYear+'年');
   // CV ranges such as "2023.12 - Present" are shown with an en dash and a translated open end.
@@ -60,7 +64,7 @@ export function build() {
   const components = {
     // Home: recent talks, research themes and representative papers as dated lists.
     // Papers appear only under representative papers, so nothing is listed twice.
-    homeRecent:presentations.slice(0,4).map(t=>listRow(monthLabel(t),'<a class="list-title" href="/talks/#'+t.id+'">'+bi(t.titleEn,t.titleJa)+'</a><p class="list-meta">'+talkFormat(t)+' · '+bi(t.confEn,t.confJa)+'</p>')).join(''),
+    homeRecent:presentations.slice(0,4).map(t=>listRow(monthLabel(t)+(upcoming(t)?'<span class="upcoming-label">'+bi('Upcoming','予定')+'</span>':''),'<a class="list-title" href="/talks/#'+t.id+'">'+bi(t.titleEn,t.titleJa)+'</a><p class="list-meta">'+talkFormat(t)+' · '+bi(t.confEn,t.confJa)+'</p>')).join(''),
     // Each theme cites its three most recent papers. Cover images are cropped details of figures shown in full, with credits, on the research page.
     homeResearch:research.map(r=>listRow(escape(r.period),'<a class="list-title" href="/research/#'+r.id+'">'+bi(r.titleEn,r.titleJa)+'</a><p class="list-finding">'+bi(r.findingEn,r.findingJa)+'</p><p class="list-meta" lang="en">'+[...r.papers].sort((a,b)=>+publicationById.get(b.id).year - +publicationById.get(a.id).year).slice(0,3).map(ref=>'<a href="/publications/#'+ref.id+'">'+escape(ref.label)+'</a>').join(', ')+'</p>',r.cover?'<img class="list-thumb" src="/images/'+r.cover+'" alt="" width="960" height="600" loading="lazy" decoding="async">':'')).join(''),
     homeSelected:homePapers.map(id=>{
@@ -77,7 +81,7 @@ export function build() {
     publicationYears:'<option value="all" data-en="All years" data-ja="すべての年">All years</option>'+years.map(y=>'<option value="'+y+'">'+y+'</option>').join(''),
     publicationProfiles:profiles.slice(0,3).map(([label,url])=>external(url,escape(label))).join(''),
     talkCount:'',
-    talkRows:byYear(presentations,talk),
+    talkRows:byYear(presentations,t=>talk(t,upcoming(t))),
     materials:[...new Set(materials.map(m=>m.categoryEn))].map(category=>{
       const group = materials.filter(m=>m.categoryEn===category);
       return '<section class="material-group"><h3>'+bi(category,group[0].categoryJa)+'</h3><div class="materials-grid">'+group.map(m=>'<article class="material-card"><div class="material-meta"><span>'+m.year+'</span><span>PDF</span></div><h4>'+bi(m.titleEn,m.titleJa)+'</h4><p>'+bi(m.venueEn,m.venueJa)+'</p><div class="paper-links">'+links(m.links)+'</div></article>').join('')+'</div></section>';
