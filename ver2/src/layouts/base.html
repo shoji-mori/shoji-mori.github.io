@@ -35,43 +35,15 @@
           <span aria-hidden="true">/</span>
           <button type="button" data-lang="ja" aria-pressed="false" lang="ja">日本語</button>
         </div>
-        <a class="header-cv" href="/cv_mori_shoji_v3.3.pdf" target="_blank" rel="noopener">CV <span aria-hidden="true">↗</span><span class="sr-only"> (PDF)</span></a>
+        <a class="header-cv" href="/cv_mori_shoji_v3.3.pdf" target="_blank" rel="noopener">CV<span class="sr-only"> (PDF)</span></a>
         <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Navigation menu"><span></span><span></span></button>
       </div>
     </div>
     <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation" hidden>{{navigation}}</nav>
   </header>
   <main id="main" tabindex="-1">{{content}}</main>
-  <footer class="site-footer" id="contact">
-    <div class="container">
-      <div class="footer-top">
-        <div class="footer-intro">
-          <h2><span class="en" lang="en">Contact</span><span class="ja" lang="ja">連絡先</span></h2>
-          <a class="email-link" href="mailto:shoji9m@mail.tsinghua.edu.cn">shoji9m@mail.tsinghua.edu.cn <span aria-hidden="true">↗</span></a>
-          <p class="footer-affiliation"><span class="en" lang="en">Institute for Advanced Study<br>Tsinghua University · Beijing, China</span><span class="ja" lang="ja">清華大学 高等研究所<br>中国・北京</span></p>
-        </div>
-        <div class="footer-right">
-          <p class="eyebrow"><span class="en" lang="en">PROFILES</span><span class="ja" lang="ja">研究者プロフィール</span></p>
-          <div class="profile-links">{{profileLinks}}</div>
-          <details class="contact-disclosure" id="contact-details">
-            <summary><span class="en" lang="en">Or send a message here</span><span class="ja" lang="ja">フォームから連絡する</span><span class="details-plus" aria-hidden="true">+</span></summary>
-            <form id="contact-form" action="https://submit-form.com/p3OcmXTQj" method="post">
-              <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" name="_honeypot" tabindex="-1" autocomplete="off"></div>
-              <label for="name"><span class="en" lang="en">Name</span><span class="ja" lang="ja">お名前</span></label>
-              <input id="name" name="name" autocomplete="name" required>
-              <label for="email"><span class="en" lang="en">Email</span><span class="ja" lang="ja">メールアドレス</span></label>
-              <input id="email" name="email" type="email" autocomplete="email" required>
-              <label for="message"><span class="en" lang="en">Message</span><span class="ja" lang="ja">メッセージ</span></label>
-              <textarea id="message" name="message" rows="4" required></textarea>
-              <div id="turnstile-widget" data-sitekey="0x4AAAAAACvUFMAbNpb0ja_Y"></div>
-              <button class="button button-light" type="submit"><span class="en" lang="en">Send message</span><span class="ja" lang="ja">送信する</span><span aria-hidden="true">↗</span></button>
-              <p id="form-status" role="status" aria-live="polite"></p>
-            </form>
-          </details>
-        </div>
-      </div>
-      <div class="footer-bottom"><a class="footer-name" href="/">Shoji Mori</a><span>© {{year}} Shoji Mori</span><a href="#main"><span class="en" lang="en">Back to top</span><span class="ja" lang="ja">ページ上部へ</span> ↑</a></div>
-    </div>
+  <footer class="site-footer">
+    <div class="container footer-row"><span>© {{year}} Shoji Mori</span><a href="mailto:shoji9m@mail.tsinghua.edu.cn">shoji9m@mail.tsinghua.edu.cn</a><span><span class="en" lang="en">Last updated</span><span class="ja" lang="ja">最終更新</span> {{updated}}</span><a href="#main"><span class="en" lang="en">Back to top</span><span class="ja" lang="ja">ページ上部へ</span></a></div>
   </footer>
   <p id="copy-status" class="toast" role="status" aria-live="polite"></p>
 </body>

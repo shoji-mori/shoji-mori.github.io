@@ -2,10 +2,12 @@
   {
     "id": "electron-heating",
     "period": "2016–2019",
-    "titleEn": "Electron heating and disk turbulence",
-    "titleJa": "電子の加熱と円盤の乱れ",
+    "titleEn": "Electron heating and MRI turbulence",
+    "titleJa": "電子加熱と磁気回転不安定性による乱流",
     "summaryEn": "Heated electrons can weaken the gas turbulence driven by magnetic fields. I studied this feedback to understand how the electrical properties of gas and dust change the conditions for planet formation.",
     "summaryJa": "電子が熱くなると、磁場が起こすガスの乱れが弱まることがあります。電子と塵のやりとりを調べ、惑星の材料をかき混ぜる流れがどう変わるかを考えました。",
+    "findingEn": "Electron heating can hold back MRI turbulence far outside the classical dead zone, leaving the outer disk less turbulent.",
+    "findingJa": "電子加熱は、従来のデッドゾーンよりずっと外側まで MRI 乱流を抑えうることを示した。",
     "paragraphsEn": [
       "Magnetic fields can stir up gas in a planet-forming disk. The strength of this turbulence matters because it mixes dust grains and affects their collisions. My early work examined a feedback that can limit this stirring: electric fields heat electrons, and the heated electrons are captured by dust grains, reducing the gas's electrical conductivity.",
       "In 2016 I studied where this effect could become important; in 2017 we tested it in magnetohydrodynamic simulations. Under the modeled conditions, turbulence can weaken substantially and gas can still accrete through an ordered magnetic field. We extended the theory in 2019 to include how magnetic fields affect the electrical response. These studies show why the behavior of electrons and dust needs to be considered when predicting disk turbulence."
@@ -36,10 +38,12 @@
   {
     "id": "temperature-water",
     "period": "2019–2025",
-    "titleEn": "Disk temperatures and water in planets",
-    "titleJa": "円盤の温度と惑星に入る水",
+    "titleEn": "Thermal structure of magnetized disks and the snow line",
+    "titleJa": "磁場を持つ円盤の温度構造とスノーライン",
     "summaryEn": "Where a disk releases heat determines where water can freeze. My work on magnetic accretion changed the predicted thermal history of disks, with consequences for when and where rocky planets can form.",
     "summaryJa": "円盤のどこで熱が生まれるかによって、水が氷として残れる場所は変わります。磁場でガスが流れる円盤の温度を調べ、岩石惑星ができる時期や、惑星に入る水の量を考えてきました。",
+    "findingEn": "Magnetically driven accretion releases its heat near the disk surface, so the midplane stays cool and the snow line can move inside 1 au within about a million years.",
+    "findingJa": "磁場駆動の降着では熱が表面近くで出るため中心面は冷たく保たれ、スノーラインは約100万年で 1 au の内側に入りうる。",
     "paragraphsEn": [
       "Water can remain as ice only in sufficiently cold parts of a disk. To predict how much water a planet acquires, we need to know how the disk's temperature changes as planetary material grows and moves through it.",
       "In 2019 we found that magnetic accretion releases much of its heat above the dense midplane, where radiation escapes more easily. The modeled midplane stays cooler than in a conventional viscous disk. In 2025, global simulations including radiation transport also showed weak accretion heating of the disk, alongside episodic surface flows and asymmetric winds.",
@@ -83,10 +87,12 @@
   {
     "id": "satellite-formation",
     "period": "2023",
-    "titleEn": "Growing the building blocks of moons",
-    "titleJa": "衛星の材料が育つ条件",
+    "titleEn": "Circumplanetary disks and satellitesimal formation",
+    "titleJa": "周惑星円盤と衛星の材料の形成",
     "summaryEn": "Dust orbiting a giant planet can fall into it before growing large enough to build moons. We investigated whether a disk with weak turbulence and a magnetic wind makes growth possible.",
     "summaryJa": "巨大惑星を囲む塵は、大きく育つ前に惑星へ落ちてしまうことがあります。磁場による風が吹き、乱れの弱い円盤なら、衛星の材料を作れるかを調べました。",
+    "findingEn": "In a laminar, wind-driven circumplanetary disk, dust settles and can grow into satellitesimals with a smaller dust supply than a turbulent disk needs.",
+    "findingJa": "風で降着する乱れの弱い周惑星円盤では塵が沈殿し、乱流円盤より少ない塵の供給で衛星の材料まで育ちうる。",
     "paragraphsEn": [
       "Large moons are thought to form in disks around growing giant planets. But their building blocks face a problem: small dust grains drift into the planet, sometimes faster than they can grow. In work with Yuhito Shibaike, we studied whether a disk driven by a magnetic wind could avoid this difficulty.",
       "We combined local magnetic simulations with calculations of dust growth and drift. In the modeled disk, weak turbulence lets dust settle into a thin layer and collide efficiently. With a sufficient supply of dust, it can grow into larger bodies before being lost. The required dust supply is smaller than in the turbulent disk model used for comparison, offering a route to forming the building blocks of moons."
@@ -109,10 +115,12 @@
   {
     "id": "observations",
     "period": "2020–2024",
-    "titleEn": "Reading gas motions in observations",
-    "titleJa": "観測からガスの流れを読み解く",
+    "titleEn": "Synthetic observations of infalling envelopes",
+    "titleJa": "落下するエンベロープの模擬観測",
     "summaryEn": "Similar telescope images can arise from different gas motions. I make synthetic observations to test how reliably we can infer a young star's mass and the flow of material feeding its disk.",
     "summaryJa": "よく似た観測画像でも、背後にあるガスの動きは同じとは限りません。計算したガスを望遠鏡で見たときの姿を再現し、星の質量や円盤へ流れ込むガスをどこまで読み取れるか調べています。",
+    "findingEn": "Different infall models reproduce the same L1527 data; the envelope gas may fall in more slowly than simple models assume.",
+    "findingJa": "L1527 の観測は複数の落下モデルで再現でき、実際の落下は単純なモデルより遅い可能性がある。",
     "paragraphsEn": [
       "Gas falls and rotates around a forming star. A telescope records a projected view of those motions, so a pattern in the data does not always have a unique physical explanation. I calculate synthetic observations and compare them with real data to examine this uncertainty.",
       "In our 2024 study of L1527, two different infall models both reproduced broad features of the observations, but estimates of the central star's mass depended on the model and comparison method. The results suggest that infall could be slower than simple models predict. This matters when using gas motions to measure stellar masses and reconstruct how a disk is supplied with material.",

@@ -7,7 +7,7 @@ export const data = (name) => JSON.parse(readFileSync(path.join(root, 'src/data'
 export const escape = (value = '') => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const plain = (value = '') => String(value).replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').trim();
 export const bi = (en, ja) => '<span class="en" lang="en">' + escape(en) + '</span><span class="ja" lang="ja">' + escape(ja || en) + '</span>';
-const authorMarkup = (value) => escape(value).replace(/&lt;(\/?)strong&gt;/g, '<$1strong>');
+export const authorMarkup = (value) => escape(value).replace(/&lt;(\/?)strong&gt;/g, '<$1strong>');
 export const authors = (en, ja) => '<span class="en" lang="en">' + authorMarkup(en) + '</span><span class="ja" lang="ja">' + authorMarkup(ja || en) + '</span>';
 export const firstAuthor = (p) => /^(?:Shoji Mori|S\.\s*Mori)(?:,|$)/i.test(plain(p.authorsEn));
 export function publicationText(p) {
@@ -15,6 +15,8 @@ export function publicationText(p) {
   const language = /\[in Japanese\]/i.test(p.journalEn) ? 'ja' : 'en';
   return {language, title:p[language === 'ja' ? 'titleJa' : 'titleEn'], authors:p[language === 'ja' ? 'authorsJa' : 'authorsEn'], journal:p[language === 'ja' ? 'journalJa' : 'journalEn']};
 }
+// Standard journal abbreviations for compact lists; the full name stays in the archive and citations.
+export const shortVenue = (p) => p.journalEn.replace(/^The Astrophysical Journal Letters/, 'ApJL').replace(/^The Astrophysical Journal/, 'ApJ').replace(/^Astronomy & Astrophysics/, 'A&A').replace(/^Monthly Notices of the Royal Astronomical Society/, 'MNRAS').replace(/,\s*/, ' ');
 export const primaryUrl = (p) => p.publicationUrl || p.url || p.adsUrl || p.arxivUrl;
 export const external = (url, label) => '<a href="' + escape(url) + '" target="_blank" rel="noopener">' + label + '</a>';
 export const links = (items) => items.map((item) => external(item.url, escape(item.label))).join('');
@@ -72,7 +74,7 @@ export function bibtex(p) {
 export function paper(p, compact = false, note = '') {
   const native = publicationText(p);
   const search = [p.titleEn,p.titleJa,plain(p.authorsEn),plain(p.authorsJa),p.journalEn,p.abstractEn,p.abstractJa].join(' ').toLowerCase();
-  const actions = [[p.publicationUrl || p.url, 'Journal ↗'],[p.arxivUrl, 'arXiv ↗'],[p.adsUrl, 'ADS ↗']].filter(([url]) => url).map(([url,label]) => external(url, label)).join('');
+  const actions = [[p.publicationUrl || p.url, 'Journal'],[p.arxivUrl, 'arXiv'],[p.adsUrl, 'ADS']].filter(([url]) => url).map(([url,label]) => external(url, label)).join('');
   return '<article class="paper-row" id="' + p.id + '" data-record data-year="' + p.year + '" data-first="' + firstAuthor(p) + '" data-selected="' + !!p.selected + '" data-search="' + escape(search) + '">' +
     '<div class="paper-year">' + p.year + '</div><div class="paper-body"><h3 lang="'+native.language+'">' + external(primaryUrl(p), escape(native.title)) + '</h3>' +
     '<p class="paper-authors" lang="'+native.language+'">' + authorMarkup(native.authors) + '</p><p class="paper-venue" lang="'+native.language+'">' + escape(native.journal) + '</p>' + (note ? '<p class="paper-note">' + note + '</p>' : '') +
@@ -84,7 +86,7 @@ export function paper(p, compact = false, note = '') {
 export const talkFormat = (p) => p.type === 'poster' ? bi('Poster','ポスター') : p.type === 'invited' ? bi('Invited talk','招待講演') : bi('Oral presentation','口頭発表');
 
 export function talk(p) {
-  const actions = [[p.slideUrl,bi('Slides ↓','スライド ↓')],[p.posterUrl,bi('Poster ↓','ポスター ↓')],[p.videoUrl,bi('Video ↗','動画 ↗')],[p.url,bi('Conference ↗','学会・資料 ↗')]].filter(([url])=>url).map(([url,label])=>external(url,label)).join('');
+  const actions = [[p.slideUrl,bi('Slides (PDF)','スライド（PDF）')],[p.posterUrl,bi('Poster (PDF)','ポスター（PDF）')],[p.videoUrl,bi('Video','動画')],[p.url,bi('Conference','学会ページ')]].filter(([url])=>url).map(([url,label])=>external(url,label)).join('');
   return '<article class="talk-row" id="' + p.id + '" data-record data-scope="' + (p.scope || 'unspecified') + '" data-type="' + p.type + '" data-search="' + escape([p.titleEn,p.titleJa,p.confEn,p.confJa,p.authorsEn,p.authorsJa,p.year].join(' ').toLowerCase()) + '">' +
     '<div class="talk-date">' + escape(p.date) + '<span class="format-label">' + talkFormat(p) + '</span></div><div><h3>' + bi(p.titleEn,p.titleJa) + '</h3>' +
     '<p class="talk-conference">' + bi(p.confEn,p.confJa) + '</p><p class="talk-location">' + bi(p.placeEn,p.placeJa) + '</p><p class="talk-authors">' + bi(p.authorsEn,p.authorsJa) + '</p>' +
@@ -94,7 +96,7 @@ export function talk(p) {
 
 export function news(p) {
   return '<article class="news-item"><span class="news-date">' + escape(p.date) + '</span><div><div class="news-category"><span class="format-label">' + talkFormat(p) + '</span></div>' +
-    '<h3><a href="/talks/#' + p.id + '">' + bi(p.confEn,p.confJa) + '</a></h3><p>' + bi(p.titleEn,p.titleJa) + '</p></div><a class="news-arrow" href="/talks/#' + p.id + '" aria-label="' + escape('View presentation: ' + p.titleEn) + '">↗</a></article>';
+    '<h3><a href="/talks/#' + p.id + '">' + bi(p.confEn,p.confJa) + '</a></h3><p>' + bi(p.titleEn,p.titleJa) + '</p></div></article>';
 }
 
 export const researchFigures = [{

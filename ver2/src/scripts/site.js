@@ -179,14 +179,6 @@ function initializeSite() {
     indexLinks.forEach(link=>{const target=document.getElementById(link.hash.slice(1));if(target)spy.observe(target);});
   }
 
-  // Content is visible by default; the fade-in only applies once this script runs.
-  const reveal=[...document.querySelectorAll('.research-note,.research-figure,.selected-list .paper-row,.news-item,.material-card')];
-  if(reveal.length && 'IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const observer=new IntersectionObserver(entries=>{
-      for(const entry of entries) if(entry.isIntersecting){entry.target.classList.add('is-visible');observer.unobserve(entry.target);}
-    },{rootMargin:'0px 0px -8% 0px'});
-    reveal.forEach(element=>{element.classList.add('reveal');observer.observe(element);});
-  }
 
   // Preserve inbound links from the former single-page site.
   if(location.pathname==='/' || location.pathname==='/index.html') {
@@ -210,7 +202,7 @@ function initializeSite() {
       function render() {
         try {
           widgetId=window.turnstile.render(widget,{
-            sitekey:widget.dataset.sitekey,theme:'dark',language:html.lang,
+            sitekey:widget.dataset.sitekey,theme:'auto',language:html.lang,
             'error-callback':()=>{setStatus('Verification is unavailable. Please contact me by email.','認証を利用できません。メールでご連絡ください。');},
             'expired-callback':()=>{setStatus('Verification expired. Please complete it again.','認証の有効期限が切れました。再度認証してください。');}
           });

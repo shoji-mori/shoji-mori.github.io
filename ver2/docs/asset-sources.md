@@ -42,7 +42,7 @@ The observations theme has no cover: no figure from Mori et al. (2024) or the FA
 
 ## Fonts
 
-Newsreader and Inter (latin and latin-ext subsets, woff2) are self-hosted in public/fonts/, copied from @fontsource/newsreader 5.2.10 and @fontsource/inter 5.2.8. Both are licensed under the SIL Open Font License 1.1; the license texts are in public/fonts/OFL-*.txt. Japanese text uses the reader's system Mincho/Gothic faces.
+Inter (latin and latin-ext subsets, woff2) is self-hosted in public/fonts/, copied from @fontsource/inter 5.2.8 under the SIL Open Font License 1.1 (public/fonts/OFL-Inter.txt). Japanese text uses the reader's system Gothic faces. The Newsreader files in the same folder are no longer referenced by the stylesheet.
 
 ## Web renditions
 
