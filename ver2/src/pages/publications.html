@@ -1,0 +1,15 @@
+<section class="container page-heading">
+  <h1><span class="en" lang="en">Publications</span><span class="ja" lang="ja">論文・解説</span></h1>
+  <div class="heading-bottom"><p class="page-lead"><span class="en" lang="en">Journal articles, collaborations, and reviews. Titles and author names are shown in the publication's original language; summaries are available in English and Japanese.</span><span class="ja" lang="ja">原著論文、共同研究、解説をまとめています。タイトルと著者名は掲載時の言語で記載し、主な論文には日本語の説明を添えています。</span></p><div class="page-actions"><a class="text-link" href="/publications.bib" download>BibTeX ↓</a><a class="text-link" data-export="publications" href="/publications/print/"><span class="en" lang="en">Create PDF</span><span class="ja" lang="ja">PDFを作成</span><span class="sr-only"><span class="en" lang="en"> (opens a print preview)</span><span class="ja" lang="ja">（印刷用ページを開く）</span></span> ↗</a></div></div>
+</section>
+<section class="container archive-section" data-filter-list="publications">
+  <form class="filters" role="search">
+    <label class="search-field"><span class="sr-only"><span class="en" lang="en">Search publications</span><span class="ja" lang="ja">論文を検索</span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 5 5"></path></svg><input type="search" name="q" placeholder="Search title, author, or topic" data-placeholder-en="Search title, author, or topic" data-placeholder-ja="タイトル・著者・テーマで検索" autocomplete="off"></label>
+    <label><span class="filter-label"><span class="en" lang="en">Year</span><span class="ja" lang="ja">年</span></span><select name="year">{{publicationYears}}</select></label>
+    <label><span class="filter-label"><span class="en" lang="en">Show</span><span class="ja" lang="ja">表示</span></span><select name="selection"><option value="all" data-en="All publications" data-ja="すべての論文">All publications</option><option value="selected" data-en="Selected works" data-ja="主要論文">Selected works</option><option value="first" data-en="First author" data-ja="筆頭著者">First author</option></select></label>
+  </form>
+  <div class="results-bar"><p class="results-count" aria-live="polite">{{publicationCount}}</p><button type="button" class="clear-filters text-link"><span class="en" lang="en">Reset filters</span><span class="ja" lang="ja">絞り込みを解除</span> ↺</button></div>
+  <div class="paper-list">{{allPublications}}</div>
+  <div class="empty-state" hidden><h2><span class="en" lang="en">No matching publications.</span><span class="ja" lang="ja">該当する論文はありません。</span></h2><p><span class="en" lang="en">Try another keyword or reset the filters.</span><span class="ja" lang="ja">検索語を変えるか、絞り込みを解除してください。</span></p></div>
+  <div class="archive-external">{{publicationProfiles}}</div>
+</section>

@@ -1,0 +1,93 @@
+{
+  "verified_date": "2026-09-12",
+  "assets": [
+    {
+      "file": "hl-tau.jpg",
+      "type": "observation",
+      "source_url": "https://www.eso.org/public/images/eso1436a/",
+      "download_url": "https://cdn.eso.org/images/large/eso1436a.jpg",
+      "credit": "ALMA (ESO/NAOJ/NRAO)",
+      "caption": "ALMA observation of the protoplanetary disk around HL Tauri at 1.28 mm.",
+      "caption_ja": "ALMAが波長1.28 mmで観測した、HL Tauriを取り巻く原始惑星系円盤。",
+      "alt": "Orange concentric rings and gaps in the protoplanetary disk around HL Tauri, observed by ALMA.",
+      "license": "CC BY 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "reuse_terms_url": "https://www.eso.org/public/outreach/copyright/",
+      "reuse_note": "Present the exact full credit clearly and visibly with an active source link. Do not imply ESO endorsement. Image is unmodified. If cropped in layout, disclose cropping when appropriate.",
+      "scientific_note": "Observation, not a Mori simulation. Orange is the published visualization of millimeter emission, not an optical true-color photograph; gaps alone are not confirmed planets.",
+      "path": "public/images/hl-tau.jpg",
+      "dimensions": [
+        1800,
+        1800
+      ],
+      "bytes": 247756,
+      "sha256": "e6e6b4c6eaa787b296d6f0256af7b75e3a9a348174a869fffb871a13d5069696"
+    },
+    {
+      "file": "mhd-alignment-thermal-structure.png",
+      "type": "simulation_figure",
+      "source_pdf": "files/posters/poster-20251208-epf-thermal-structure-magnetized-ppds.pdf",
+      "source_page": 1,
+      "source_section": "3 Simulation Results",
+      "credit": "Shoji Mori, Xuening Bai and Kengo Tomida; EPF 2025 poster (Mori, Bai and Tomida 2025b).",
+      "caption": "Density (left) and temperature (right) in 2D radiative nonideal-MHD disk simulations, comparing aligned and anti-aligned poloidal magnetic fields.",
+      "caption_ja": "2次元輻射非理想MHDシミュレーションで得た密度（左）と温度（右）。磁場が回転軸と同方向の場合（上）と逆方向の場合（下）を比較。",
+      "alt": "Two simulation panels compare aligned and anti-aligned magnetic fields, with disk density on the left and temperature on the right.",
+      "extraction": "pdftoppm -f 1 -singlefile -cropbox -r 432 -x 117 -y 2287 -W 1749 -H 1278 -png SOURCE DEST",
+      "scientific_note": "Both halves of each panel are complementary quantities from a model. Preserve the labels and color scales; do not describe this as a telescope image.",
+      "path": "public/images/mhd-alignment-thermal-structure.png",
+      "dimensions": [
+        1749,
+        1278
+      ],
+      "bytes": 1519527,
+      "sha256": "7bd824e996f0a05c01677860c6d94fbdc2e7b5b589baeb3efe2bcb68bed432a6",
+      "source_sha256": "53a195c038a447bdf1015d0473a4ed25f494cf981abb7984b7eebd8cb78bb08b",
+      "reuse_note": "Cropped from user-provided research material; no additional public reuse license is stated in the inspected PDF. Retain the author/source credit. Only extraction and cropping were applied; no data, axes, labels, or scientific annotations were changed."
+    },
+    {
+      "file": "planet-growth-migration-tracks.png",
+      "type": "model_figure",
+      "source_pdf": "files/posters/poster-20251208-epf-thermal-structure-magnetized-ppds.pdf",
+      "source_page": 1,
+      "source_section": "4 Impact of Inefficient accretion heating on planet formation",
+      "credit": "Shoji Mori, Masanobu Kunitomo and Masahiro Ogihara; EPF 2025 poster (Mori, Kunitomo and Ogihara 2025a).",
+      "caption": "Model planetary growth and migration tracks in turbulent and MHD disks. Track colors indicate water fraction.",
+      "caption_ja": "乱流円盤モデルとMHD円盤モデルにおける惑星の成長・軌道移動。曲線の色は水の割合を表す。",
+      "alt": "Planet mass versus orbital radius for turbulent and MHD disk models, with growth tracks colored by water fraction.",
+      "extraction": "pdftoppm -f 1 -singlefile -cropbox -r 432 -x 1338 -y 3766 -W 2028 -H 787 -png SOURCE DEST",
+      "scientific_note": "Model calculations, not measured exoplanet tracks. The plot compares two disk models and includes model thresholds and a snowline marker.",
+      "path": "public/images/planet-growth-migration-tracks.png",
+      "dimensions": [
+        2028,
+        787
+      ],
+      "bytes": 422722,
+      "sha256": "8caff47aac5b5a6fdc8e8aa9ff266a9c7f230500b00b607a245487a0c0a6d4a9",
+      "source_sha256": "53a195c038a447bdf1015d0473a4ed25f494cf981abb7984b7eebd8cb78bb08b",
+      "reuse_note": "Cropped from user-provided research material; no additional public reuse license is stated in the inspected PDF. Retain the author/source credit. Only extraction and cropping were applied; no data, axes, labels, or scientific annotations were changed."
+    },
+    {
+      "file": "episodic-surface-accretion.png",
+      "type": "simulation_figure",
+      "source_pdf": "files/slides/slide-20250911-asj-autumn-global-nonideal-mhd.pdf",
+      "source_page": 13,
+      "source_section": "降着率 時空図",
+      "credit": "Shoji Mori, Xue-Ning Bai and Kengo Tomida; ASJ Autumn 2025 slides, page 13 (Mori, Bai and Tomida 2025b).",
+      "caption": "Surface-to-disk accretion-rate ratio as a function of radius and time in a 2D radiative nonideal-MHD disk simulation.",
+      "caption_ja": "2次元輻射非理想MHDシミュレーションにおける、表層降着率と円盤内部の降着率の比。半径と時間による変動を示す。",
+      "alt": "A radius-time map of the surface-to-disk accretion-rate ratio, showing repeated episodes of stronger surface accretion.",
+      "extraction": "pdftoppm -f 13 -l 13 -singlefile -scale-to 2400 -x 282 -y 177 -W 1851 -H 795 -png SOURCE DEST",
+      "scientific_note": "The slide defines disk accretion as the time-averaged rate inside |z| < 4H. Surface accretion is smoothed on H and orbital scales. Original arrows and contour annotations are retained.",
+      "path": "public/images/episodic-surface-accretion.png",
+      "dimensions": [
+        1851,
+        795
+      ],
+      "bytes": 357865,
+      "sha256": "449d8c6294dd0a8e8d215c5c4c851dd3f8de5787e9c290d1aca17b91934d0403",
+      "source_sha256": "ed30b3b18e725b9da446c14d073eb20a1dcff5a78c6edb31d66bd7f595eba553",
+      "reuse_note": "Cropped from user-provided research material; no additional public reuse license is stated in the inspected PDF. Retain the author/source credit. Only extraction and cropping were applied; no data, axes, labels, or scientific annotations were changed."
+    }
+  ]
+}

@@ -1,0 +1,186 @@
+[
+  {
+    "categoryEn": "Slides",
+    "categoryJa": "スライド",
+    "year": "2025",
+    "titleEn": "Global Nonideal MHD Simulations of Protoplanetary Disks: Episodic Surface Accretion",
+    "titleJa": "原始惑星系円盤の大局的非理想磁気流体力学シミュレーション：間欠的な表層降着",
+    "venueEn": "The Astronomical Society of Japan Autumn Meeting 2025",
+    "venueJa": "日本天文学会2025年秋季年会",
+    "links": [
+      {
+        "url": "/files/slides/slide-20250911-asj-autumn-global-nonideal-mhd.pdf",
+        "label": "PDF"
+      }
+    ]
+  },
+  {
+    "categoryEn": "Slides",
+    "categoryJa": "スライド",
+    "year": "2025",
+    "titleEn": "Magnetic Circumplanetary Disks",
+    "titleJa": "Magnetic Circumplanetary Disks",
+    "venueEn": "Circumplanetary Disks and Satellite Formation III",
+    "venueJa": "Circumplanetary Disks and Satellite Formation III",
+    "links": [
+      {
+        "url": "/files/slides/slide-20250128-cpdsf3-magnetic-circumplanetary-disks.pdf",
+        "label": "PDF"
+      }
+    ]
+  },
+  {
+    "categoryEn": "Slides",
+    "categoryJa": "スライド",
+    "year": "2023",
+    "titleEn": "Temperature Structure of Protoplanetary Disks Explored through Magnetohydrodynamic Simulations",
+    "titleJa": "磁気流体力学シミュレーションから探る原始惑星系円盤の温度構造",
+    "venueEn": "CPS Seminar · Center for Planetary Science, Kobe University",
+    "venueJa": "CPS セミナー · 神戸大学 惑星科学研究センター",
+    "links": [
+      {
+        "url": "/files/slides/slide-20230424-cps-seminar.pdf",
+        "label": "Slides"
+      },
+      {
+        "url": "https://www.cps-jp.org/modules/mosir/player.php?v=20230424_01_mori",
+        "label": "Video"
+      }
+    ]
+  },
+  {
+    "categoryEn": "Slides",
+    "categoryJa": "スライド",
+    "year": "2022",
+    "titleEn": "Practical Example of Hydrodynamics Simulations 1: Nonideal MHD Simulations of Protoplanetary Disks",
+    "titleJa": "流体力学シミュレーションの実用例 1: 原始惑星系円盤の非理想MHDシミュレーション",
+    "venueEn": "CfCA Hydrodynamics School 2021",
+    "venueJa": "CfCA 2021年度流体学校",
+    "links": [
+      {
+        "url": "/files/slides/slide-20220309-cfca-hydrodynamics-school.pdf",
+        "label": "PDF"
+      }
+    ]
+  },
+  {
+    "categoryEn": "Posters",
+    "categoryJa": "ポスター",
+    "year": "2025",
+    "titleEn": "Thermal Structure of Magnetized Protoplanetary Disks and Its Implications for Planet Formation",
+    "titleJa": "Thermal Structure of Magnetized Protoplanetary Disks and Its Implications for Planet Formation",
+    "venueEn": "International Conference on Exoplanets and Planet Formation",
+    "venueJa": "International Conference on Exoplanets and Planet Formation",
+    "links": [
+      {
+        "url": "/files/posters/poster-20251208-epf-thermal-structure-magnetized-ppds.pdf",
+        "label": "PDF"
+      }
+    ]
+  },
+  {
+    "categoryEn": "Posters",
+    "categoryJa": "ポスター",
+    "year": "2023",
+    "titleEn": "Temperature Structure of Magnetized Protoplanetary Disks",
+    "titleJa": "Temperature Structure of Magnetized Protoplanetary Disks",
+    "venueEn": "Exoplanets & Planet Formation Workshop 2023",
+    "venueJa": "Exoplanets & Planet Formation Workshop 2023",
+    "links": [
+      {
+        "url": "/files/posters/poster-20231216-epf-temperature-structure-magnetized-ppds.pdf",
+        "label": "PDF"
+      }
+    ]
+  },
+  {
+    "categoryEn": "Posters",
+    "categoryJa": "ポスター",
+    "year": "2017",
+    "titleEn": "Snowline depending on MHD structure in Protoplanetary Disks",
+    "titleJa": "原始惑星系円盤において磁気流体構造に依存するスノーライン",
+    "venueEn": "47th Summer School on Astronomy and Astrophysics for Young Astronomers",
+    "venueJa": "2017年度 第47回 天文・天体物理若手夏の学校",
+    "links": [
+      {
+        "url": "/files/posters/poster-20170725-summer-school-snowline-mhd-structure.pdf",
+        "label": "PDF"
+      }
+    ]
+  },
+  {
+    "categoryEn": "Posters",
+    "categoryJa": "ポスター",
+    "year": "2016",
+    "titleEn": "Supression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks",
+    "titleJa": "電子加熱による原始惑星系円盤中の磁気乱流の抑制",
+    "venueEn": "2016 46th Summer School on Astronomy and Astrophysics for Young Astronomers",
+    "venueJa": "2016年度 第46回 天文・天体物理若手夏の学校",
+    "links": [
+      {
+        "url": "/files/posters/poster-20160726-summer-school-electron-heating-magnetic-turbulence.pdf",
+        "label": "PDF"
+      }
+    ]
+  },
+  {
+    "categoryEn": "Posters",
+    "categoryJa": "ポスター",
+    "year": "2015",
+    "titleEn": "Effects of Electron Heating on Protoplanetary Disks",
+    "titleJa": "電子加熱が原始惑星系円盤に与える影響",
+    "venueEn": "2015 45th Summer School on Astronomy and Astrophysics for Young Astronomers",
+    "venueJa": "2015年度 第45回 天文・天体物理若手夏の学校",
+    "links": [
+      {
+        "url": "/files/posters/poster-20150727-summer-school-effects-of-electron-heating.pdf",
+        "label": "PDF"
+      }
+    ]
+  },
+  {
+    "categoryEn": "Theses",
+    "categoryJa": "学位論文",
+    "year": "2019",
+    "titleEn": "Understanding the Turbulent and Thermal Structure of Protoplanetary Disks with Magnetohydrodynamic Simulations",
+    "titleJa": "原始惑星系円盤の乱流と熱構造の理解 ― 磁気流体力学シミュレーションによる研究",
+    "venueEn": "Ph.D. Thesis · Tokyo Institute of Technology",
+    "venueJa": "博士論文 · 東京工業大学",
+    "links": [
+      {
+        "url": "/files/thesis/thesis-201903-phd-thesis.pdf",
+        "label": "PDF"
+      }
+    ]
+  },
+  {
+    "categoryEn": "Theses",
+    "categoryJa": "学位論文",
+    "year": "2016",
+    "titleEn": "The Effects of Electron Heating on the Magnetorotational Instability in Protoplanetary Disks",
+    "titleJa": "原始惑星系円盤における電子加熱が磁気回転不安定に与える影響",
+    "venueEn": "M.S. Thesis · Tokyo Institute of Technology",
+    "venueJa": "修士論文 · 東京工業大学",
+    "links": [
+      {
+        "url": "/files/thesis/thesis-201603-master-thesis.pdf",
+        "label": "PDF"
+      }
+    ]
+  },
+  {
+    "categoryEn": "Theses",
+    "categoryJa": "学位論文",
+    "year": "2014",
+    "titleEn": "The Dead Zones in Considering the Nonlinear Ohm's Law in Protoplanetary Disks",
+    "titleJa": "原始惑星系円盤における非線形オームを考慮したデッドゾーン",
+    "venueEn": "B.S. Thesis · Tokyo Institute of Technology",
+    "venueJa": "卒業論文 · 東京工業大学",
+    "links": [
+      {
+        "url": "/files/thesis/thesis-201403-undergraduate-thesis.pdf",
+        "label": "PDF"
+      }
+    ]
+  }
+]

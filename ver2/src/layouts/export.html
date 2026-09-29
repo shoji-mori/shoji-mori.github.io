@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>{{pageTitle}}</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/site.js" type="module"></script>
+  <noscript><style>.export-controls{display:none!important}</style></noscript>
+</head>
+<body class="export-page">
+  <div class="export-toolbar">
+    <a class="text-link" href="/{{kind}}/"><span class="en" lang="en">← Return to list</span><span class="ja" lang="ja">← 一覧に戻る</span></a>
+    <div class="export-controls">
+      <label for="export-language"><span class="en" lang="en">Language</span><span class="ja" lang="ja">言語</span><select id="export-language"><option value="ja">日本語</option><option value="en">English</option></select></label>
+      <label for="export-range"><span class="en" lang="en">Include</span><span class="ja" lang="ja">出力範囲</span><select id="export-range"><option value="all" data-en="Complete list" data-ja="すべて">Complete list</option><option value="filtered" data-en="Current search results" data-ja="絞り込んだ結果">Current search results</option></select></label>
+      <button class="button button-ink" type="button" id="export-print"><span class="en" lang="en">Print / save PDF</span><span class="ja" lang="ja">印刷・PDFに保存</span></button>
+    </div>
+    <p class="export-help"><span class="en" lang="en">Check the list below, then choose “Save as PDF” in your browser's print dialog.</span><span class="ja" lang="ja">以下の一覧を確認し、印刷画面で「PDFに保存」を選んでください。</span></p>
+    <noscript><p>With JavaScript disabled, use your browser's Print command to save this complete English list.</p></noscript>
+  </div>
+  <main class="export-sheet" data-print-document="{{kind}}">
+    <header class="export-heading"><p><span class="en" lang="en">Shoji Mori</span><span class="ja" lang="ja">森 昇志</span></p><h1>{{title}}</h1><p class="export-context" aria-live="polite"><span class="en" lang="en">Complete list</span><span class="ja" lang="ja">すべての記録</span></p></header>
+    <div class="export-list">{{rows}}</div>
+    <p class="export-empty" hidden><span class="en" lang="en">No matching records. Change the range or return to the website list to adjust your search.</span><span class="ja" lang="ja">該当する記録はありません。出力範囲を変えるか、ウェブ版の一覧で検索条件を変更してください。</span></p>
+  </main>
+</body>
+</html>

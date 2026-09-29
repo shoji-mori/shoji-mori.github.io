@@ -1,0 +1,750 @@
+[
+  {
+    "id": "experience",
+    "titleEn": "Experience & Education",
+    "titleJa": "経歴",
+    "items": [
+      {
+        "date": "2023.12 - Present",
+        "titleEn": "Shuimu Fellow",
+        "titleJa": "Shuimuフェロー",
+        "paragraphsEn": [
+          "Tsinghua University , Institute for Advanced Study, Beijing"
+        ],
+        "paragraphsJa": [
+          "清華大学 , 高等研究所, 中国 北京"
+        ],
+        "links": []
+      },
+      {
+        "date": "2021.04 - 2023.11",
+        "titleEn": "JSPS Research Fellow (PD)",
+        "titleJa": "日本学術振興会 特別研究員 (PD)",
+        "paragraphsEn": [
+          "Tohoku University , Astronomical Institute, Sendai"
+        ],
+        "paragraphsJa": [
+          "東北大学 , 天文学専攻 天体理論グループ, 日本 仙台"
+        ],
+        "links": []
+      },
+      {
+        "date": "2019.04 - 2021.03",
+        "titleEn": "Postdoctoral Researcher",
+        "titleJa": "ポスドク研究員",
+        "paragraphsEn": [
+          "University of Tokyo , Department of Astronomy, Tokyo"
+        ],
+        "paragraphsJa": [
+          "東京大学 , 天文学専攻, 日本 東京"
+        ],
+        "links": []
+      },
+      {
+        "date": "2016.04 - 2019.03",
+        "titleEn": "Ph.D. in Earth and Planetary Sciences",
+        "titleJa": "博士（理学）地球惑星科学専攻",
+        "paragraphsEn": [
+          "Tokyo Institute of Technology",
+          "Degree conferred: 2019.03.26",
+          "JSPS Research Fellow (DC2) (2017–2019)",
+          "Thesis: \"Understanding the turbulent and thermal structure of protoplanetary disks with magnetohydrodynamic simulations\""
+        ],
+        "paragraphsJa": [
+          "東京工業大学",
+          "学位取得: 2019.03.26",
+          "日本学術振興会 特別研究員 (DC2) (2017–2019)",
+          "博士論文: 「原始惑星系円盤の乱流と熱構造の理解 ― 磁気流体力学シミュレーションによる研究」"
+        ],
+        "links": [
+          {
+            "url": "/files/thesis/thesis-201903-phd-thesis.pdf",
+            "label": "Thesis (PDF)"
+          }
+        ]
+      },
+      {
+        "date": "2014.04 - 2016.03",
+        "titleEn": "M.S. in Earth and Planetary Sciences",
+        "titleJa": "修士（理学）地球惑星科学専攻",
+        "paragraphsEn": [
+          "Tokyo Institute of Technology",
+          "Degree conferred: 2016.03.28",
+          "Thesis: \"The Effects of Electron Heating on the Magnetorotational Instability in Protoplanetary Disks\""
+        ],
+        "paragraphsJa": [
+          "東京工業大学",
+          "学位取得: 2016.03.28",
+          "修士論文: 「原始惑星系円盤における電子加熱が磁気回転不安定に与える影響」"
+        ],
+        "links": [
+          {
+            "url": "/files/thesis/thesis-201603-master-thesis.pdf",
+            "label": "Thesis (PDF)"
+          }
+        ]
+      },
+      {
+        "date": "2010.04 - 2014.03",
+        "titleEn": "B.S. in Earth and Planetary Sciences",
+        "titleJa": "学士（理学）地球惑星科学科",
+        "paragraphsEn": [
+          "Tokyo Institute of Technology",
+          "Thesis: \"The Dead Zones in Considering the Nonlinear Ohm's Law in Protoplanetary Disks\""
+        ],
+        "paragraphsJa": [
+          "東京工業大学",
+          "卒業論文: 「原始惑星系円盤における非線形オームを考慮したデッドゾーン」"
+        ],
+        "links": [
+          {
+            "url": "/files/thesis/thesis-201403-undergraduate-thesis.pdf",
+            "label": "Thesis (PDF)"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "grants",
+    "titleEn": "Grants & Competitive Funds",
+    "titleJa": "競争的資金等の研究課題",
+    "items": [
+      {
+        "date": "2022.04 - 2025.03",
+        "titleEn": "Dust dynamics in protoplanetary disks explored through magnetohydrodynamic simulations",
+        "titleJa": "磁気流体力学数値シミュレーションから探る原始惑星系円盤内のダスト運動",
+        "paragraphsEn": [
+          "JSPS Grant-in-Aid for Early-Career Scientists (PI)",
+          "Amount: 4,030,000 JPY (Direct: 3,100,000 JPY)"
+        ],
+        "paragraphsJa": [
+          "日本学術振興会 若手研究 (代表)",
+          "総額: 4,030,000円 (直接経費: 3,100,000円)"
+        ],
+        "links": [
+          {
+            "url": "https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-22K14081/",
+            "label": "KAKEN"
+          }
+        ]
+      },
+      {
+        "date": "2021.04 - 2024.03",
+        "titleEn": "Formation process of Earth-like planets revealed by magnetohydrodynamic simulations of protoplanetary disks",
+        "titleJa": "原始惑星系円盤の磁気流体力学シミュレーションから解明する地球型惑星の形成過程",
+        "paragraphsEn": [
+          "JSPS Research Fellowship for Young Scientists (PD) (PI)",
+          "Amount: 5,200,000 JPY (Direct: 4,000,000 JPY)"
+        ],
+        "paragraphsJa": [
+          "日本学術振興会 特別研究員奨励費 (代表)",
+          "総額: 5,200,000円 (直接経費: 4,000,000円)"
+        ],
+        "links": [
+          {
+            "url": "https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-22KJ0155/",
+            "label": "KAKEN"
+          }
+        ]
+      },
+      {
+        "date": "2017.04 - 2020.03",
+        "titleEn": "A new model of magnetohydrodynamic turbulence and dust evolution in protoplanetary disks considering electron heating",
+        "titleJa": "電子加熱を考慮した原始惑星系円盤の新しい磁気乱流・ダスト進化モデル",
+        "paragraphsEn": [
+          "JSPS Research Fellowship for Young Scientists (DC2) (PI)",
+          "Amount: 1,900,000 JPY (Direct: 1,900,000 JPY)"
+        ],
+        "paragraphsJa": [
+          "日本学術振興会 特別研究員奨励費 (代表)",
+          "総額: 1,900,000円 (直接経費: 1,900,000円)"
+        ],
+        "links": [
+          {
+            "url": "https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-17J10129/",
+            "label": "KAKEN"
+          }
+        ]
+      },
+      {
+        "date": "2021.04 - 2023.03",
+        "titleEn": "Protoplanetary disks and formation of terrestrial planets",
+        "titleJa": "Protoplanetary disks and formation of terrestrial planets",
+        "paragraphsEn": [
+          "Tohoku Univ. – Tsinghua Univ. Collaborative Research Fund (Co-I)",
+          "Amount: 4,000,000 JPY"
+        ],
+        "paragraphsJa": [
+          "東北大学・清華大学 合同研究資金 (分担)",
+          "総額: 4,000,000円"
+        ],
+        "links": []
+      },
+      {
+        "date": "2019.06",
+        "titleEn": "From Stars to Planets II: Connecting Our Understanding of Star and Planet Formation",
+        "titleJa": "From Stars to Planets II: Connecting Our Understanding of Star and Planet Formation",
+        "paragraphsEn": [
+          "Astronomical Society of Japan Hayakawa Fund (Travel Grant Recipient)",
+          "Date: 2019.06.15-23",
+          "Destination: Gothenburg, Sweden / Support: Full"
+        ],
+        "paragraphsJa": [
+          "日本天文学会 早川幸男基金（渡航助成）",
+          "期間: 2019.06.15-23",
+          "渡航先: スウェーデン・ヨーテボリ / 助成: 全額"
+        ],
+        "links": []
+      },
+      {
+        "date": "2016.04 - 2020.03",
+        "titleEn": "Integrated Evolution Model of Dust and Ice Snowlines in Protoplanetary Disks",
+        "titleJa": "原始惑星系円盤のダストと氷昇華線の統合進化モデル",
+        "paragraphsEn": [
+          "JSPS Grant-in-Aid for Young Scientists (B) (Co-I)"
+        ],
+        "paragraphsJa": [
+          "日本学術振興会 若手研究(B) (分担)"
+        ],
+        "links": [
+          {
+            "url": "https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-16K17661/",
+            "label": "KAKEN"
+          }
+        ]
+      },
+      {
+        "date": "2013.08 - 2015.03",
+        "titleEn": "Construction of Planetesimal Formation Theory Considering Co-evolution of Solids and MHD Turbulence",
+        "titleJa": "固体と磁気流体乱流の共進化を考慮した微惑星形成理論の構築",
+        "paragraphsEn": [
+          "JSPS Grant for Research Activity Start-up (Co-I)"
+        ],
+        "paragraphsJa": [
+          "日本学術振興会 研究活動スタート支援 (分担)"
+        ],
+        "links": [
+          {
+            "url": "https://kaken.nii.ac.jp/ja/grant/KAKENHI-PROJECT-25887023/",
+            "label": "KAKEN"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "awards",
+    "titleEn": "Awards & Honors",
+    "titleJa": "受賞歴",
+    "items": [
+      {
+        "date": "2025",
+        "titleEn": "Selected Participant, KITP Program \"Planet Formation and Migration near the Inner Edge of Disks\"",
+        "titleJa": "KITP滞在型プログラム「Planet Formation and Migration near the Inner Edge of Disks」採択",
+        "paragraphsEn": [
+          "Kavli Institute for Theoretical Physics (KITP), UC Santa Barbara",
+          "Apr 15, 2025 - May 23, 2025"
+        ],
+        "paragraphsJa": [
+          "カブリ理論物理学研究所（KITP）, カリフォルニア大学サンタバーバラ校",
+          "2025年4月15日 - 5月23日"
+        ],
+        "links": [
+          {
+            "url": "https://www.kitp.ucsb.edu/activities/edgeplanets25",
+            "label": "Program"
+          }
+        ]
+      },
+      {
+        "date": "2023",
+        "titleEn": "Shuimu Tsinghua Scholar (Overseas)",
+        "titleJa": "水木学者（Shuimu Tsinghua Scholar）",
+        "paragraphsEn": [
+          "Tsinghua University"
+        ],
+        "paragraphsJa": [
+          "清華大学"
+        ],
+        "links": []
+      },
+      {
+        "date": "2017",
+        "titleEn": "Poster Presentation Award",
+        "titleJa": "ポスター賞",
+        "paragraphsEn": [
+          "Summer School for Young Astronomers"
+        ],
+        "paragraphsJa": [
+          "天文・天体物理若手夏の学校"
+        ],
+        "links": []
+      },
+      {
+        "date": "2016",
+        "titleEn": "Poster Presentation Award",
+        "titleJa": "ポスター賞",
+        "paragraphsEn": [
+          "Summer School for Young Astronomers"
+        ],
+        "paragraphsJa": [
+          "天文・天体物理若手夏の学校"
+        ],
+        "links": []
+      },
+      {
+        "date": "2015",
+        "titleEn": "Poster Presentation Award",
+        "titleJa": "ポスター賞",
+        "paragraphsEn": [
+          "Summer School for Young Astronomers"
+        ],
+        "paragraphsJa": [
+          "天文・天体物理若手夏の学校"
+        ],
+        "links": []
+      },
+      {
+        "date": "2015",
+        "titleEn": "Best Poster Award",
+        "titleJa": "最優秀ポスター賞",
+        "paragraphsEn": [
+          "The 7th Meeting on Cosmic Dust"
+        ],
+        "paragraphsJa": [
+          "The 7th Meeting on Cosmic Dust"
+        ],
+        "links": []
+      }
+    ]
+  },
+  {
+    "id": "teaching",
+    "titleEn": "Teaching & Workshops",
+    "titleJa": "教育・講習会",
+    "items": [
+      {
+        "date": "2022.03",
+        "titleEn": "Instructor (CfCA Hydrodynamics School 2021)",
+        "titleJa": "講師（CfCA 2021年度流体学校）",
+        "paragraphsEn": [
+          "Center for Computational Astrophysics (CfCA), National Astronomical Observatory of Japan",
+          "Online workshop held in March 2022 as part of the FY2021 program."
+        ],
+        "paragraphsJa": [
+          "国立天文台 天文シミュレーションプロジェクト（CfCA）",
+          "2021年度企画として、2022年3月にオンライン開催。"
+        ],
+        "links": [
+          {
+            "url": "https://www.cfca.nao.ac.jp/content/2021%E4%BB%A4%E5%92%8C3%E5%B9%B4%E5%BA%A6%E6%B5%81%E4%BD%93%E5%AD%A6%E6%A0%A1",
+            "label": "Program"
+          },
+          {
+            "url": "/files/slides/slide-20220309-cfca-hydrodynamics-school.pdf",
+            "label": "Slides"
+          }
+        ]
+      },
+      {
+        "date": "2023.04 - 2023.09",
+        "titleEn": "Part-time Lecturer (Physics)",
+        "titleJa": "非常勤講師（物理学）",
+        "paragraphsEn": [
+          "National Institute of Technology, Ichinoseki College"
+        ],
+        "paragraphsJa": [
+          "一関工業高等専門学校"
+        ],
+        "links": []
+      },
+      {
+        "date": "2016",
+        "titleEn": "Teaching Assistant (Computational Planetary Science)",
+        "titleJa": "ティーチングアシスタント（計算惑星科学）",
+        "paragraphsEn": [
+          "Tokyo Institute of Technology"
+        ],
+        "paragraphsJa": [
+          "東京工業大学"
+        ],
+        "links": []
+      },
+      {
+        "date": "2014",
+        "titleEn": "Teaching Assistant (Computational Planetary Science)",
+        "titleJa": "ティーチングアシスタント（計算惑星科学）",
+        "paragraphsEn": [
+          "Tokyo Institute of Technology"
+        ],
+        "paragraphsJa": [
+          "東京工業大学"
+        ],
+        "links": []
+      }
+    ]
+  },
+  {
+    "id": "seminars",
+    "titleEn": "External Seminars & Colloquia",
+    "titleJa": "外部セミナー・談話会",
+    "items": [
+      {
+        "date": "2024.11.12",
+        "titleEn": "Irradiation-Dominated Magnetized Protoplanetary Disks: Disk Structures and Planet Formation",
+        "titleJa": "Irradiation-Dominated Magnetized Protoplanetary Disks: Disk Structures and Planet Formation",
+        "paragraphsEn": [
+          "KIAA-DoA Seminar · Peking University"
+        ],
+        "paragraphsJa": [
+          "KIAA-DoA セミナー · 北京大学"
+        ],
+        "links": []
+      },
+      {
+        "date": "2024.10.10",
+        "titleEn": "Temperature Structure and Its Evolution of Magnetized Protoplanetary Disks",
+        "titleJa": "Temperature Structure and Its Evolution of Magnetized Protoplanetary Disks",
+        "paragraphsEn": [
+          "WP/CSH Special Seminar · University of Bern"
+        ],
+        "paragraphsJa": [
+          "WP/CSH 特別セミナー · ベルン大学"
+        ],
+        "links": []
+      },
+      {
+        "date": "2023.05.24",
+        "titleEn": "Thermal structure and snowline migration of laminar magnetic protoplanetary disks",
+        "titleJa": "層流磁化原始惑星系円盤の熱構造とスノーライン移動",
+        "paragraphsEn": [
+          "Online Seminar"
+        ],
+        "paragraphsJa": [
+          "オンラインセミナー"
+        ],
+        "links": []
+      },
+      {
+        "date": "2023.04.24",
+        "titleEn": "Temperature Structure of Protoplanetary Disks Explored through Magnetohydrodynamic Simulations",
+        "titleJa": "磁気流体力学シミュレーションから探る原始惑星系円盤の温度構造",
+        "paragraphsEn": [
+          "CPS Seminar · Center for Planetary Science, Kobe University"
+        ],
+        "paragraphsJa": [
+          "CPS セミナー · 神戸大学 惑星科学研究センター"
+        ],
+        "links": [
+          {
+            "url": "/files/slides/slide-20230424-cps-seminar.pdf",
+            "label": "Slides"
+          },
+          {
+            "url": "https://www.cps-jp.org/modules/mosir/player.php?v=20230424_01_mori",
+            "label": "Video"
+          }
+        ]
+      },
+      {
+        "date": "2018.03.06",
+        "titleEn": "Temperature Structure in Weakly Ionized Protoplanetary Disks",
+        "titleJa": "Temperature Structure in Weakly Ionized Protoplanetary Disks",
+        "paragraphsEn": [
+          "Informal Talk · Tsinghua University"
+        ],
+        "paragraphsJa": [
+          "インフォーマルトーク · 清華大学"
+        ],
+        "links": []
+      },
+      {
+        "date": "2017.12.18",
+        "titleEn": "Effects of Electron Heating on Magnetic Turbulence in Protoplanetary Disks",
+        "titleJa": "原始惑星系円盤において電子加熱が磁気乱流に与える影響",
+        "paragraphsEn": [
+          "Colloquium · Tohoku University"
+        ],
+        "paragraphsJa": [
+          "談話会 · 東北大学"
+        ],
+        "links": []
+      },
+      {
+        "date": "2017.10.18",
+        "titleEn": "The Effect of Electron Heating in MRI on Protoplanetary Disks",
+        "titleJa": "The Effect of Electron Heating in MRI on Protoplanetary Disks",
+        "paragraphsEn": [
+          "Seminar · Osaka University"
+        ],
+        "paragraphsJa": [
+          "セミナー · 大阪大学"
+        ],
+        "links": []
+      },
+      {
+        "date": "2017.07.13",
+        "titleEn": "Gas Heating in Protoplanetary Disks Based on Magnetohydrodynamic Simulations",
+        "titleJa": "磁気流体力学計算に基づいた原始惑星系円盤でのガスの加熱",
+        "paragraphsEn": [
+          "Seminar · Kyoto University"
+        ],
+        "paragraphsJa": [
+          "セミナー · 京都大学"
+        ],
+        "links": []
+      },
+      {
+        "date": "2016.04.26",
+        "titleEn": "Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks",
+        "titleJa": "Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks",
+        "paragraphsEn": [
+          "Seminar · StarPlan, Niels Bohr Institute"
+        ],
+        "paragraphsJa": [
+          "セミナー · StarPlan, Niels Bohr Institute"
+        ],
+        "links": []
+      },
+      {
+        "date": "2016.04",
+        "titleEn": "Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks",
+        "titleJa": "Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks",
+        "paragraphsEn": [
+          "Seminar · Heidelberg University"
+        ],
+        "paragraphsJa": [
+          "セミナー · ハイデルベルク大学"
+        ],
+        "links": []
+      },
+      {
+        "date": "2016.04",
+        "titleEn": "Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks",
+        "titleJa": "Suppression of Magnetic Turbulence by Electron Heating in Protoplanetary Disks",
+        "paragraphsEn": [
+          "Seminar · Max Planck Institute for Astronomy"
+        ],
+        "paragraphsJa": [
+          "セミナー · マックス・プランク天文学研究所"
+        ],
+        "links": []
+      },
+      {
+        "date": "2015.12.14",
+        "titleEn": "The Effects of Electron Heating on the Magnetorotational Instability in Protoplanetary Disks",
+        "titleJa": "The Effects of Electron Heating on the Magnetorotational Instability in Protoplanetary Disks",
+        "paragraphsEn": [
+          "Seminar · Jet Propulsion Laboratory"
+        ],
+        "paragraphsJa": [
+          "セミナー · Jet Propulsion Laboratory"
+        ],
+        "links": []
+      },
+      {
+        "date": "2015.08.25",
+        "titleEn": "Effects of Electron Heating on Magnetic Turbulence in Protoplanetary Disks",
+        "titleJa": "原始惑星系円盤中の電子加熱が磁気乱流に及ぼす影響",
+        "paragraphsEn": [
+          "Seminar · Star and Planet Formation Seminar"
+        ],
+        "paragraphsJa": [
+          "セミナー · 星惑星形成セミナー"
+        ],
+        "links": []
+      },
+      {
+        "date": "2014.07.13",
+        "titleEn": "Stabilization of Magnetic Disk Turbulence by Electric Field Heating of Electrons",
+        "titleJa": "Stabilization of Magnetic Disk Turbulence by Electric Field Heating of Electrons",
+        "paragraphsEn": [
+          "Seminar · Nagoya"
+        ],
+        "paragraphsJa": [
+          "セミナー · 名古屋"
+        ],
+        "links": []
+      }
+    ]
+  },
+  {
+    "id": "mentoring",
+    "titleEn": "Mentoring & Supervision",
+    "titleJa": "学生指導・メンター",
+    "items": [
+      {
+        "date": "2024 - Present",
+        "titleEn": "Yu Wang",
+        "titleJa": "Yu Wang",
+        "paragraphsEn": [
+          "Ph.D. Student @ Tsinghua University",
+          "Topic: Two-dimensional structure of snow lines"
+        ],
+        "paragraphsJa": [
+          "博士課程学生 @ 清華大学",
+          "研究テーマ: スノーラインの２次元的構造"
+        ],
+        "links": []
+      },
+      {
+        "date": "2024 - Present",
+        "titleEn": "Dawei Dai",
+        "titleJa": "Dawei Dai",
+        "paragraphsEn": [
+          "Ph.D. Student @ Tsinghua University",
+          "Topic: Dispersal processes in protoplanetary disks"
+        ],
+        "paragraphsJa": [
+          "博士課程学生 @ 清華大学",
+          "研究テーマ: 原始惑星系円盤の散逸過程"
+        ],
+        "links": []
+      },
+      {
+        "date": "2021 - Present",
+        "titleEn": "Katsushi Kondo",
+        "titleJa": "近藤 克",
+        "paragraphsEn": [
+          "Ph.D. Student @ Institute of Science Tokyo",
+          "Topic: Snow line evolution in magnetized protoplanetary disks"
+        ],
+        "paragraphsJa": [
+          "博士課程学生 @ 東京科学大学",
+          "研究テーマ: 磁気的原始惑星系円盤のスノーライン進化"
+        ],
+        "links": []
+      },
+      {
+        "date": "2021 - Present",
+        "titleEn": "Haruhi Enomoto",
+        "titleJa": "榎本 晴日",
+        "paragraphsEn": [
+          "Ph.D. Student @ Institute of Science Tokyo",
+          "Topic: Development of local MHD simulations toward global magnetic flux evolution"
+        ],
+        "paragraphsJa": [
+          "博士課程学生 @ 東京科学大学",
+          "研究テーマ: 大局的磁束進化にむけた局所MHD計算の開発"
+        ],
+        "links": []
+      }
+    ]
+  },
+  {
+    "id": "service",
+    "titleEn": "Academic Service & Community",
+    "titleJa": "学会・コミュニティ運営",
+    "items": [
+      {
+        "date": "2022.04 - 2023.03",
+        "titleEn": "Public Relations Staff (JpGU)",
+        "titleJa": "広報担当（JpGU）",
+        "paragraphsEn": [
+          "Japan Geoscience Union (JpGU)"
+        ],
+        "paragraphsJa": [
+          "日本地球惑星科学連合（JpGU）"
+        ],
+        "links": []
+      },
+      {
+        "date": "2022",
+        "titleEn": "Session Timekeeper (ASJ Spring Meeting 2022)",
+        "titleJa": "タイムキーパー（日本天文学会2022年春季年会）",
+        "paragraphsEn": [
+          "The Astronomical Society of Japan"
+        ],
+        "paragraphsJa": [
+          "日本天文学会"
+        ],
+        "links": []
+      },
+      {
+        "date": "2022.01",
+        "titleEn": "Session Chair (CfCA Users Meeting FY2021)",
+        "titleJa": "座長（2022.01 CfCAユーザーズミーティング）",
+        "paragraphsEn": [
+          "Center for Computational Astrophysics (CfCA), National Astronomical Observatory of Japan"
+        ],
+        "paragraphsJa": [
+          "国立天文台 天文シミュレーションプロジェクト（CfCA）"
+        ],
+        "links": []
+      },
+      {
+        "date": "2021.02.23-24",
+        "titleEn": "Founder, Organizer, and Chair (Young Workshop on Planetary System Formation)",
+        "titleJa": "立ち上げ・世話人・座長（惑星系形成若手研究会）",
+        "paragraphsEn": [
+          "Young Workshop on Planetary System Formation"
+        ],
+        "paragraphsJa": [
+          "惑星系形成若手研究会"
+        ],
+        "links": []
+      },
+      {
+        "date": "2020",
+        "titleEn": "Session Chair (The Japanese Society for Planetary Sciences Fall Meeting 2020)",
+        "titleJa": "座長（日本惑星科学会2020年秋季講演会）",
+        "paragraphsEn": [
+          "The Japanese Society for Planetary Sciences"
+        ],
+        "paragraphsJa": [
+          "日本惑星科学会"
+        ],
+        "links": []
+      },
+      {
+        "date": "2015.9 - 2016.8",
+        "titleEn": "Session Chair (Summer School for Young Astronomers 2016)",
+        "titleJa": "座長（2016年天文・天体物理若手夏の学校）",
+        "paragraphsEn": [
+          "Summer School for Young Astronomers"
+        ],
+        "paragraphsJa": [
+          "天文・天体物理若手夏の学校"
+        ],
+        "links": []
+      }
+    ]
+  },
+  {
+    "id": "refereeing",
+    "titleEn": "Review Experience",
+    "titleJa": "査読実績",
+    "items": [
+      {
+        "date": "",
+        "titleEn": "",
+        "titleJa": "",
+        "paragraphsEn": [],
+        "paragraphsJa": [],
+        "links": [
+          {
+            "url": "https://www.nature.com/natastron/",
+            "label": "Nature Astronomy"
+          },
+          {
+            "url": "https://journals.aas.org/astrophysical-journal-letters/",
+            "label": "ApJL"
+          },
+          {
+            "url": "https://journals.aas.org/astronomical-journal/",
+            "label": "AJ"
+          },
+          {
+            "url": "https://academic.oup.com/mnras",
+            "label": "MNRAS"
+          },
+          {
+            "url": "https://www.raa-journal.org/",
+            "label": "RAA"
+          }
+        ]
+      }
+    ]
+  }
+]

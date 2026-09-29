@@ -1,0 +1,18 @@
+{
+  "source": "Existing public website and repository",
+  "sourceUrl": "https://shoji-mori.github.io/",
+  "migratedAt": "2026-09-12",
+  "files": {
+    "index.html": "84a0be39e6053403b300284f269488f62a19fc070985a81762000c430e2ead51",
+    "publications_data.js": "c5c9d136a7732c9637d202f9b035539644e9b09389d085cf4a7e74c451c463e9",
+    "presentations_data.js": "51f7a1e35dce5a3593714dce4963858efcae2de465434509561a9dd5214965cb"
+  },
+  "counts": {
+    "publications": 22,
+    "presentations": 61,
+    "researchThemes": 6,
+    "materials": 12,
+    "cvSections": 8
+  },
+  "note": "A preserved snapshot, not a fresh ADS synchronization. No citation metrics are inferred."
+}

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101927">
+  <meta name="google-site-verification" content="google382eb4ad681ea1fc">
+  <title>{{pageTitle}}</title>
+  <meta name="description" content="{{description}}">
+  <link rel="canonical" href="{{canonical}}">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{{pageTitle}}">
+  <meta property="og:description" content="{{description}}">
+  <meta property="og:url" content="{{canonical}}">
+  <meta property="og:image" content="https://shoji-mori.github.io/me.jpg">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+  <link rel="stylesheet" href="/styles.css">
+  <script>
+    try { if (localStorage.getItem('lang') === 'ja') { document.documentElement.classList.add('lang-ja'); document.documentElement.lang = 'ja'; } } catch {}
+  </script>
+  <script type="application/ld+json">{{structuredData}}</script>
+  <script src="/site.js" type="module"></script>
+  <noscript><style>.filters,.clear-filters,[data-bibtex],[data-print],.language-switch,.contact-disclosure,.menu-toggle{display:none!important}.mobile-nav[hidden]{display:flex!important;flex-wrap:wrap;gap:0 20px}</style></noscript>
+</head>
+<body class="{{pageClass}}">
+  <a class="skip-link" href="#main"><span class="en" lang="en">Skip to content</span><span class="ja" lang="ja">本文へ</span></a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="wordmark" href="/" aria-label="Shoji Mori — Home">Shoji Mori<span class="wordmark-ja" lang="ja">森 昇志</span></a>
+      <nav class="desktop-nav" aria-label="Main navigation">{{navigation}}</nav>
+      <div class="header-controls">
+        <div class="language-switch" role="group" aria-label="Language">
+          <button type="button" data-lang="en" aria-pressed="true" lang="en">EN</button>
+          <span aria-hidden="true">/</span>
+          <button type="button" data-lang="ja" aria-pressed="false" lang="ja">日本語</button>
+        </div>
+        <a class="header-cv" href="/cv_mori_shoji_v3.3.pdf" target="_blank" rel="noopener">CV <span aria-hidden="true">↗</span><span class="sr-only"> (PDF)</span></a>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Navigation menu"><span></span><span></span></button>
+      </div>
+    </div>
+    <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation" hidden>{{navigation}}</nav>
+  </header>
+  <main id="main" tabindex="-1">{{content}}</main>
+  <footer class="site-footer" id="contact">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-intro">
+          <h2><span class="en" lang="en">Contact</span><span class="ja" lang="ja">連絡先</span></h2>
+          <a class="email-link" href="mailto:shoji9m@mail.tsinghua.edu.cn">shoji9m@mail.tsinghua.edu.cn <span aria-hidden="true">↗</span></a>
+          <p class="footer-affiliation"><span class="en" lang="en">Institute for Advanced Study<br>Tsinghua University · Beijing, China</span><span class="ja" lang="ja">清華大学 高等研究所<br>中国・北京</span></p>
+        </div>
+        <div class="footer-right">
+          <p class="eyebrow"><span class="en" lang="en">PROFILES</span><span class="ja" lang="ja">研究者プロフィール</span></p>
+          <div class="profile-links">{{profileLinks}}</div>
+          <details class="contact-disclosure" id="contact-details">
+            <summary><span class="en" lang="en">Or send a message here</span><span class="ja" lang="ja">フォームから連絡する</span><span class="details-plus" aria-hidden="true">+</span></summary>
+            <form id="contact-form" action="https://submit-form.com/p3OcmXTQj" method="post">
+              <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" name="_honeypot" tabindex="-1" autocomplete="off"></div>
+              <label for="name"><span class="en" lang="en">Name</span><span class="ja" lang="ja">お名前</span></label>
+              <input id="name" name="name" autocomplete="name" required>
+              <label for="email"><span class="en" lang="en">Email</span><span class="ja" lang="ja">メールアドレス</span></label>
+              <input id="email" name="email" type="email" autocomplete="email" required>
+              <label for="message"><span class="en" lang="en">Message</span><span class="ja" lang="ja">メッセージ</span></label>
+              <textarea id="message" name="message" rows="4" required></textarea>
+              <div id="turnstile-widget" data-sitekey="0x4AAAAAACvUFMAbNpb0ja_Y"></div>
+              <button class="button button-light" type="submit"><span class="en" lang="en">Send message</span><span class="ja" lang="ja">送信する</span><span aria-hidden="true">↗</span></button>
+              <p id="form-status" role="status" aria-live="polite"></p>
+            </form>
+          </details>
+        </div>
+      </div>
+      <div class="footer-bottom"><a class="footer-name" href="/">Shoji Mori</a><span>© {{year}} Shoji Mori</span><a href="#main"><span class="en" lang="en">Back to top</span><span class="ja" lang="ja">ページ上部へ</span> ↑</a></div>
+    </div>
+  </footer>
+  <p id="copy-status" class="toast" role="status" aria-live="polite"></p>
+</body>
+</html>
