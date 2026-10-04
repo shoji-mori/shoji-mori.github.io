@@ -24,6 +24,36 @@
 // the snow line; the vapor spreads outward and freezes again.
 // This is a schematic model for the website, not simulation output.
 (function () {
+  // Magnetic field-line model shared by the volume (wind glow) and the line pass. A symmetric hourglass
+  // threading the disk, labelled by its foot radius Rf at the midplane; below the midplane it is mirrored.
+  //   poloidal: nearly vertical through the disk body, bending outward in the surface layers to about
+  //     39 deg from the axis at the wind base (above the 30 deg a cold magnetocentrifugal wind needs;
+  //     Blandford & Payne 1982) and up to ~45 deg just above it. Higher up, beyond the Alfven surface,
+  //     the toroidal field dominates and its hoop stress collimates the flow: the line turns upward,
+  //     reaches its largest radius (~1.7 Rf) about 1.7 Rf above the base, then bends gently back
+  //     toward the axis. dR/dh = T0 [ c(x) - exp(-(h/zc)^2) ], c(x) = (1 - BETA x^2)/(1 + x^2)^2,
+  //     x = (h - z_base)/zk, zc = 0.79 z_base, zk = KAPPA Rf.
+  //   toroidal: the line co-rotates with its foot point (Ferraro's isorotation) and is swept back
+  //     (B_phi opposite to B_R above the disk) with |B_phi/B_p| ~ K_B R/Rf, i.e. dphi/dl = -K_B/Rf along
+  //     the poloidal length l (approximated by the chord from the foot point). Away from the disk the
+  //     line always lags the rotation, on both sides.
+  const FIELD_GLSL = `
+const float T0 = 1.0, KAPPA = 1.2, BETA = 0.5, K_B = 0.8;
+float zBase(float Rf){ float H = H0 * pow(Rf, 1.25); return H * sqrt(2.0 * max(8.5 - 1.25 * log(Rf), 1.0)); }
+float erfA(float x){ float t = 1.0 / (1.0 + 0.3275911 * x); return 1.0 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * exp(-x * x); }
+float collI(float x){ return (1.0 + BETA) * x / (2.0 * (1.0 + x * x)) + 0.5 * (1.0 - BETA) * atan(x); }
+float radialOffset(float Rf, float h){
+  float zb = zBase(Rf), zc = 0.79 * zb, zk = KAPPA * Rf;
+  return T0 * (min(h, zb) + zk * collI(max(h - zb, 0.0) / zk) - 0.8862269 * zc * erfA(h / zc));
+}
+float sweepAngle(float Rf, float h, float off){ return K_B * max(sqrt(h * h + off * off) - 0.6 * zBase(Rf), 0.0) / Rf; }
+// foot radius of the line through (R, h): R(Rf) is monotonic at fixed h (nested lines), so bisect
+float footRadius(float R, float h){
+  float lo = 0.05, hi = R;
+  for (int i = 0; i < 8; i++) { float m = 0.5 * (lo + hi); if (m + radialOffset(m, h) > R) hi = m; else lo = m; }
+  return 0.5 * (lo + hi);
+}
+`;
   const VS = `#version 300 es
 in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
 
@@ -46,6 +76,7 @@ uniform int uMode;      // 0 all, 1 gas body, 2 surface skin, 3 dust sheet, 4 wi
 
 const float PI = 3.14159265, TAU = 6.2831853;
 const float R_IN = 0.08, H0 = 0.025, TICE = 160.0;
+${FIELD_GLSL}
 const float OMEGA0 = 0.5236;            // 2π / 12 s at 1 au (visual time)
 const float RB = 10.0, ZB = 3.0;        // marched cylinder (au); the unlit disk beyond is the sheet alone
 const float LNTAU1 = 8.5;               // ln of the grazing optical depth toward the star at the midplane, 1 au
@@ -215,20 +246,19 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, float wpx, out vec3 em, 
 
   // magnetic wind above the irradiation surface, one side stronger (aligned field)
   if (x < 0.0) {
-    float zs = H * sqrt(2.0 * max(aR, 1.0));
-    float above = max(az - zs, 0.0);
-    // streamline through p, launched at Rf and leaning outward about 37 degrees from the axis
-    // foot radius of the streamline through p, inverting the nested-flare law approximately
-    float Rf = max(R - 0.70 * max(above - 0.3, 0.0), R_IN), lnRf = log(Rf);
-    float s = 1.2 * above;
+    // the field line through p (the same model as the line pass) and the height above its wind base
+    float Rf = footRadius(R, az), lnRf = log(Rf);
+    float above = max(az - zBase(Rf), 0.0);
+    float s = sqrt(above * above + (R - Rf) * (R - Rf));   // ~ poloidal length above the base
     float rw = 2.2 * exp(-s / (0.8 * Rf + 0.4) - Rf / 1.5) * inversesqrt(Rf) * smoothstep(0.0, 0.05 + 0.1 * Rf, above)
              * smoothstep(0.12, 0.4, Rf) * (z > 0.0 ? 1.0 : 0.35);
     // lit by the star (softened falloff, as for the disk); skipped where too faint to see
     float lit = G_WIND * rw / (length(p) + 0.3);
     if (lit > 2e-4) {
-      // field lines turn with their foot points and trail as they rise
-      float pf = atan(p.y, p.x) - OMEGA0 * exp(-1.5 * lnRf) * uTime + 0.35 * s / Rf;
-      float st = streaks(lnRf, pf, s - 0.35 * uTime);
+      // streaks ride the field lines: co-rotating with the foot point, swept back as they rise, and
+      // pulsing outward at about the wind speed (~ local Keplerian speed)
+      float pf = atan(p.y, p.x) - OMEGA0 * exp(-1.5 * lnRf) * uTime + sweepAngle(Rf, az, R - Rf);
+      float st = streaks(lnRf, pf, s - 0.45 * inversesqrt(Rf) * uTime);
       if (uMode == 0 || uMode == 4) em += lit * st * vec3(0.55, 0.80, 1.0);
       ex += K_W * 0.05 * rw * st;
     }
@@ -361,40 +391,38 @@ in vec4 a;
 uniform vec3 uCam; uniform mat3 uBasis; uniform float uTanHalf; uniform vec2 uRes; uniform float uTime; uniform float uPx;
 out float vFade; out float vSide; out float vKind; out float vDepth;
 const float PI = 3.14159265, TAU = 6.2831853, OMEGA0 = 0.5236, H0 = 0.025;
-vec3 fieldPoint(float Rf, float phi0, float s, float side){
-  float H = H0 * pow(Rf, 1.25);
-  float zs = H * sqrt(2.0 * max(8.5 - 1.25 * log(Rf), 1.0));
-  // vertical to the surface, then leaning outward: dR/ds grows to tan(37deg) over about one zs
-  float above = max(s - zs, 0.0);
-  // nested flaring: dR/dz rises from 0 at the surface to tan(35 deg) within about one foot radius
-  float lean = 0.70 * (above - 0.45 * Rf * (1.0 - exp(-above / (0.45 * Rf))));
-  float R = Rf + lean;
-  // toroidal twist: the line rotates with its foot point and trails gently as it rises
-  float Om = OMEGA0 * pow(Rf, -1.5);
-  float phi = phi0 + Om * uTime + 0.18 * above / Rf;
-  return vec3(R * cos(phi), R * sin(phi), side * s);
+${FIELD_GLSL}
+// the point at height h from the midplane on the field line with foot (Rf, phi0), on side +1 or -1
+vec3 fieldPoint(float Rf, float phi0, float h, float side){
+  float off = radialOffset(Rf, h), R = Rf + off;
+  float phi = phi0 + OMEGA0 * pow(Rf, -1.5) * uTime - sweepAngle(Rf, h, off);
+  return vec3(R * cos(phi), R * sin(phi), side * h);
 }
 void main(){
-  float Rf = a.x, phi0 = a.y, s = a.z, kind = a.w;
-  float side = kind >= 2.0 ? -1.0 : 1.0;   // kinds 2/3 are the lower (weaker) side
+  float Rf = a.x, phi0 = a.y, u = a.z, kind = a.w;
+  float side = kind >= 2.0 ? -1.0 : 1.0;   // kinds 2 and 3: lower side, weaker wind for an aligned field
   float k = kind >= 2.0 ? kind - 2.0 : kind;
-  float sp = s;
-  if (k > 0.5) {                          // particle: slides up the line, fading near the top
-    float speed = 0.35 + 0.45 * pow(Rf, -0.5);
-    sp = mod(s + speed * uTime, 1.8) ;
+  float zb = zBase(Rf), zmax = zb + 3.6 * Rf + 0.3;
+  float h, fade;
+  if (k > 0.5) {
+    // wind parcel released at the base at a steady rate and accelerating along the line: it rises about
+    // 2.5 foot radii in 0.4 local orbital periods (wind speed ~ local Keplerian speed)
+    float ph = fract(u + uTime / max(0.6, 4.8 * pow(Rf, 1.5)));
+    h = zb + 2.5 * Rf * pow(ph, 1.7);
+    fade = smoothstep(0.0, 0.06, ph) * pow(1.0 - ph, 0.8);
+  } else {
+    h = u * zmax;
+    // brightest where the line flares out above the base; the collimated helix above fades out
+    fade = mix(0.3, 1.0, smoothstep(0.55 * zb, zb, h)) * exp(-max(h - zb, 0.0) / (1.3 * Rf + 0.3)) * (1.0 - smoothstep(0.75, 1.0, u));
   }
-  vec3 P = fieldPoint(Rf, phi0, sp, side);
+  vec3 P = fieldPoint(Rf, phi0, h, side);
   vec3 v = P - uCam;
   float z = dot(v, uBasis[2]);
   vec2 q = vec2(dot(v, uBasis[0]), dot(v, uBasis[1])) / (z * uTanHalf);
   q.x *= uRes.y / uRes.x;
   gl_Position = vec4(q, 0.0, 1.0);
   gl_PointSize = (k > 0.5 ? 3.0 : 1.0) * uPx;
-  float H = H0 * pow(Rf, 1.25);
-  float zs = H * sqrt(2.0 * max(8.5 - 1.25 * log(Rf), 1.0));
-  // lines: faint inside the disk, brightest just above the surface, fading with height; particles likewise
-  float above = max(sp - zs, 0.0);
-  vFade = (sp < zs ? 0.35 : 1.0) * exp(-above / (1.1 * Rf + 0.5)) * (k > 0.5 ? smoothstep(0.0, 0.15, above) : 1.0);
+  vFade = fade;
   vSide = side > 0.0 ? 1.0 : 0.4;
   vKind = k; vDepth = z;
 }`;
@@ -446,17 +474,18 @@ void main(){
     gl.attachShader(lprog, compile(gl.VERTEX_SHADER, LVS)); gl.attachShader(lprog, compile(gl.FRAGMENT_SHADER, LFS)); gl.linkProgram(lprog);
     if (!gl.getProgramParameter(lprog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(lprog));
     const LU = {}; for (const n of ['uCam', 'uBasis', 'uTanHalf', 'uRes', 'uTime', 'uPx', 'uOccl', 'uGain']) LU[n] = gl.getUniformLocation(lprog, n);
-    // geometry: NL field lines at foot radii 0.25..6 au (denser inside), each a strip of NS points up to
-    // s = 3.2 au; particles ride the same lines. Lower side: fewer lines (weaker wind for an aligned field).
-    const NL = 18, NS = 48, SMAX = 1.8, lineVerts = [], partVerts = [];
+    // geometry: NL field lines with foot radii 0.2..6.5 au (log-spaced) and golden-angle azimuths; each line
+    // is a strip of NS points in u = h / h_max; wind parcels carry a release phase in [0, 1).
+    // Lower side: every other line and fewer parcels (weaker wind for an aligned field).
+    const NL = 22, NS = 72, lineVerts = [], partVerts = [];
     for (let i = 0; i < NL; i++) {
-      const Rf = 0.25 * Math.pow(6 / 0.25, (i + 0.5) / NL), phi0 = (i * 2.399963) % (2 * Math.PI);   // golden-angle spread
+      const Rf = 0.2 * Math.pow(6.5 / 0.2, (i + 0.5) / NL), phi0 = (i * 2.399963) % (2 * Math.PI);
       for (const kind of [0, 2]) {
         if (kind === 2 && i % 2) continue;
-        for (let j = 0; j < NS; j++) { const sarc = SMAX * j / (NS - 1); lineVerts.push(Rf, phi0, sarc, kind); if (j && j < NS - 1) lineVerts.push(Rf, phi0, sarc, kind); }
+        for (let j = 0; j < NS; j++) { const u = j / (NS - 1); lineVerts.push(Rf, phi0, u, kind); if (j && j < NS - 1) lineVerts.push(Rf, phi0, u, kind); }
       }
-      for (let m = 0; m < 10; m++) partVerts.push(Rf, phi0, SMAX * m / 10 + 0.13 * i, 1);
-      if (i % 2 === 0) for (let m = 0; m < 5; m++) partVerts.push(Rf, phi0, SMAX * m / 5 + 0.09 * i, 3);
+      for (let m = 0; m < 8; m++) partVerts.push(Rf, phi0, ((m + 0.37 * i) / 8) % 1, 1);
+      if (i % 2 === 0) for (let m = 0; m < 4; m++) partVerts.push(Rf, phi0, ((m + 0.21 * i) / 4) % 1, 3);
     }
     const lbuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, lbuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(lineVerts), gl.STATIC_DRAW);
     const pbuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pbuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(partVerts), gl.STATIC_DRAW);
