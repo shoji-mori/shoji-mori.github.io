@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>円盤モデル(プレビュー) | Shoji Mori</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+  body{background:#fafaf8}
+  .lab{max-width:1080px;margin:0 auto;padding:28px 16px 64px}
+  .lab h1{font-size:clamp(24px,4vw,34px);margin:0 0 6px}
+  .lab .note{font-size:13px;color:#6a6f75;margin:0 0 20px}
+  .disk-panel{position:relative;background:#0a0d18;border-radius:6px;overflow:hidden}
+  .disk-panel canvas{position:absolute;inset:0;display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+  .disk-panel canvas:active{cursor:grabbing}
+  .disk-static{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .disk-panel canvas~.disk-static{display:none}
+  .disk-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .disk-snowline{stroke:rgba(190,215,240,.55);stroke-width:1;stroke-dasharray:3 5}
+  .disk-label{fill:rgba(190,215,240,.8);font:11px var(--sans);letter-spacing:.04em}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 6px}
+  .controls button{font:inherit;font-size:14px;padding:7px 14px;border:1px solid #d6d4cd;border-radius:999px;background:#fff;color:#15171a;cursor:pointer}
+  .controls button[aria-pressed=true]{background:#15171a;color:#fff;border-color:#15171a}
+  .hint{font-size:13px;color:#6a6f75;margin:4px 0 22px}
+  .legend{font-size:14.5px;line-height:1.8;color:#33383d;padding-left:1.2em;margin:0}
+  .legend li{margin-bottom:6px}
+</style>
+</head>
+<body>
+<main class="lab">
+  <h1>円盤モデル(プレビュー)</h1>
+  <p class="note">確認用のプレビューページです。サイトからはリンクしておらず、検索エンジンにも載りません。</p>
+  <div class="disk-panel" id="disk" data-disk3d data-mobile data-elevation="22" data-azimuth="-65" data-distance="26" data-fov="32" data-scale="0.6" data-steps="150">
+    <img class="disk-static" src="/lab/disk/model-disk-1200.webp" width="1200" height="720" alt="原始惑星系円盤の内側8 auのモデル">
+  </div>
+  <div class="controls" role="group" aria-label="視点">
+    <button type="button" data-view="22,-65,26" aria-pressed="true">通常</button>
+    <button type="button" data-view="10,-80,24" aria-pressed="false">低い角度</button>
+    <button type="button" data-view="4,-80,21" aria-pressed="false">真横</button>
+    <button type="button" data-view="80,-65,30" aria-pressed="false">真上</button>
+    <button type="button" id="field" aria-pressed="true">磁力線</button>
+  </div>
+  <p class="hint">ドラッグで視点を回転、円盤をタップ(クリック)すると小石の塊を置けます。</p>
+  <ul class="legend">
+    <li><b>色は温度</b>です。青は冷たく、スノーライン付近で白、内側と表層は琥珀色から金色。</li>
+    <li>中心星の光は反り返った<b>表層</b>で吸収され、そこだけが熱くなります。<b>赤道面</b>は冷たいままです。</li>
+    <li>大きなダストは赤道面に沈んで薄い層を作り、約1 auの<b>スノーライン</b>(点線)の外側では氷をまとって明るく、内側では暗い岩石になります。</li>
+    <li>青白い線は<b>磁力線</b>です。円盤の中ではほぼ鉛直で、表層の上で外側に反り返ります(回転軸から30°以上傾くと、磁気遠心力で風を吹き出せる)。回転に引きずられて、上空ではゆるい螺旋になります。</li>
+    <li>線に沿って上がる点が<b>円盤風</b>です。磁場が回転と同じ向きのときの非対称性にならい、下側は弱くしています(Mori, Bai &amp; Tomida 2025)。</li>
+    <li>置いた小石の塊は、ケプラー回転で引き伸ばされながら内側へ漂い、スノーラインを越えると氷を失います。</li>
+    <li>模式的なモデルで、シミュレーションの結果ではありません。</li>
+  </ul>
+</main>
+<script>
+  // a taller panel on phones
+  document.getElementById('disk').dataset.aspect = window.matchMedia('(max-width: 699px)').matches ? '0.85' : '0.6';
+</script>
+<script src="/lab/disk/disk3d.js"></script>
+<script>
+  const box = document.getElementById('disk');
+  const views = [...document.querySelectorAll('[data-view]')];
+  views.forEach((b) => b.addEventListener('click', () => {
+    const [el, az, d] = b.dataset.view.split(',').map(Number);
+    if (box.diskView) box.diskView(el, az, d);
+    views.forEach((v) => v.setAttribute('aria-pressed', String(v === b)));
+  }));
+  const field = document.getElementById('field');
+  field.addEventListener('click', () => {
+    const on = field.getAttribute('aria-pressed') !== 'true';
+    field.setAttribute('aria-pressed', String(on));
+    if (box.diskField) box.diskField(on);
+  });
+</script>
+</body>
+</html>
