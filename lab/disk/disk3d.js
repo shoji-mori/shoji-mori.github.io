@@ -27,35 +27,36 @@
   // Magnetic field lines, shared by the volume (wind glow) and the line pass. They come from a numerical
   // solution of steady, axisymmetric, ideal MHD for a cold magnetocentrifugal wind: the self-similar
   // problem of Blandford & Payne (1982), with induction, momentum and mass conservation solved together
-  // and the solution passing smoothly through the Alfven point. Lever arm lambda = 5 with heavy mass
-  // loading kappa = 0.63, closer to the winds of protoplanetary disks than the lambda = 30 example of the
-  // paper; computed by tools/bp-wind and tabulated in BP below.
+  // and the solution passing smoothly through the Alfven point. Lever arm lambda = 3 with heavy mass
+  // loading kappa = 2.0, as for the winds of protoplanetary disks (the paper's example has lambda = 30);
+  // computed by tools/bp-wind and tabulated in BP below.
   // Self-similarity makes every line the same curve scaled by the radius r0 where it leaves the disk
   // surface (at height z_base):
   //   R = r0 xi(chi),  z = z_base + r0 chi,  phi = phi_foot + Omega_K(r0) t + PHI(chi)
-  //   At the surface the line leans 63 deg from the axis (dR/dz = 1.98; a cold wind needs more than 30).
-  //   Gas accelerates along it and passes the Alfven speed at chi = 0.89, R = sqrt(lambda) r0 = 2.2 r0.
-  //   Beyond that the hoop stress of the wound-up field collimates the flow: 48 deg from the axis at the
-  //   Alfven point, 22 deg at chi = 10 and 5 deg at chi = 41. The radius peaks at 15.5 r0 (chi = 84) and
-  //   the line then turns back toward the axis, beyond the picture; the table stops at chi = 60.
+  //   At the surface the line leans 64 deg from the axis (dR/dz = 2.06; a cold wind needs more than 30).
+  //   Gas accelerates along it and passes the Alfven speed at chi = 0.46, R = sqrt(lambda) r0 = 1.7 r0.
+  //   Beyond that the hoop stress of the wound-up field collimates the flow: 53 deg from the axis at the
+  //   Alfven point, 19 deg at chi = 10 and 2.5 deg at chi = 39. The radius peaks at 11.9 r0 (chi = 53)
+  //   and the line then turns back toward the axis, beyond the picture; the table stops at chi = 60
+  //   (the solution goes on to chi = 134).
   //   Each line co-rotates with its foot (Ferraro) and lags behind the rotation as it rises. This is a
   //   steady state: the winding by the rotation is balanced by the wind carrying the toroidal field away,
   //   B_phi = (v_phi - Omega_K(r0) R) B_p / v_p, so the twist does not grow with time.
-  //   B_phi/B_z = -kappa (lambda - 1) = -2.5 at the surface, B_phi/B_p = -1.75 at the Alfven point and -4
-  //   at chi = 10, where the slow wind (1.8 v_K(r0)) has wound the line back by 7.7 rad.
+  //   B_phi/B_z = -kappa (lambda - 1) = -4.0 at the surface, B_phi/B_p = -2.3 at the Alfven point and
+  //   -5.7 at chi = 10, where the slow wind (1.2 v_K(r0)) has wound the line back by 11.5 rad.
   //   TAU is the travel time of a gas parcel from chi = 0.02, in units of 1/Omega_K(r0).
   // Inside the disk the radial and toroidal fields grow linearly with height (uniform currents), so the
   // line bends smoothly into the wind. Lines are labelled by their foot radius Rf at the midplane; below
   // the midplane they are mirrored.
   const BP = {
-    XI: [1, 1.0443, 1.0909, 1.1401, 1.1918, 1.2464, 1.3039, 1.3646, 1.4285, 1.496, 1.5672, 1.6423, 1.7215, 1.8051, 1.8933, 1.9863, 2.0845, 2.188, 2.2972, 2.4124, 2.5339, 2.6619, 2.7969, 2.9391, 3.0889, 3.2465, 3.4125, 3.5871, 3.7707, 3.9637, 4.1663, 4.379, 4.6021, 4.8359, 5.0807, 5.3367, 5.6044, 5.8837, 6.175, 6.4782, 6.7935, 7.1207, 7.4598, 7.8105, 8.1724, 8.5449, 8.9275, 9.3193, 9.7192, 10.126, 10.538, 10.953, 11.37, 11.786, 12.198, 12.604, 12.999, 13.381, 13.745, 14.087, 14.402, 14.687, 14.937, 15.148],
-    PHI: [0.002517, -0.053331, -0.11126, -0.1714, -0.23389, -0.29886, -0.36647, -0.43688, -0.51025, -0.58678, -0.66665, -0.75008, -0.83728, -0.92849, -1.024, -1.124, -1.2288, -1.3388, -1.4542, -1.5755, -1.7029, -1.837, -1.9782, -2.1269, -2.2837, -2.4491, -2.6237, -2.8081, -3.0032, -3.2095, -3.4279, -3.6594, -3.9047, -4.1651, -4.4415, -4.7353, -5.0476, -5.3799, -5.7337, -6.1108, -6.5129, -6.9419, -7.4001, -7.8897, -8.4132, -8.9735, -9.5734, -10.216, -10.906, -11.646, -12.44, -13.294, -14.212, -15.2, -16.264, -17.41, -18.647, -19.98, -21.421, -22.977, -24.659, -26.478, -28.448, -30.581],
-    TAU: [-3.0785, 0.12826, 0.90994, 1.3886, 1.7485, 2.0443, 2.3011, 2.5317, 2.7443, 2.944, 3.1342, 3.3179, 3.4967, 3.6724, 3.8464, 4.0196, 4.1931, 4.3676, 4.5441, 4.7232, 4.9057, 5.0923, 5.2835, 5.4803, 5.6831, 5.8928, 6.11, 6.3357, 6.5705, 6.8153, 7.071, 7.3386, 7.6192, 7.9138, 8.2235, 8.5498, 8.894, 9.2575, 9.6418, 10.049, 10.48, 10.938, 11.425, 11.943, 12.495, 13.083, 13.71, 14.381, 15.097, 15.865, 16.687, 17.568, 18.515, 19.531, 20.624, 21.799, 23.066, 24.43, 25.902, 27.491, 29.208, 31.064, 33.072, 35.245]
+    XI: [1, 1.0459, 1.094, 1.1445, 1.1974, 1.253, 1.3114, 1.3727, 1.4372, 1.5049, 1.5762, 1.6512, 1.73, 1.813, 1.9003, 1.9921, 2.0887, 2.1904, 2.2973, 2.4097, 2.5279, 2.6521, 2.7827, 2.9198, 3.0638, 3.215, 3.3736, 3.5398, 3.714, 3.8963, 4.0871, 4.2865, 4.4948, 4.712, 4.9383, 5.1739, 5.4186, 5.6726, 5.9356, 6.2076, 6.4881, 6.7769, 7.0733, 7.3768, 7.6864, 8.0012, 8.3199, 8.6411, 8.963, 9.2838, 9.601, 9.9122, 10.214, 10.505, 10.779, 11.034, 11.265, 11.469, 11.64, 11.775, 11.869, 11.919, 11.919, 11.868],
+    PHI: [0.0039947, -0.084394, -0.17558, -0.26978, -0.36721, -0.4681, -0.57269, -0.68123, -0.79399, -0.91124, -1.0333, -1.1604, -1.293, -1.4314, -1.576, -1.7271, -1.8852, -2.0508, -2.2244, -2.4065, -2.5976, -2.7984, -3.0095, -3.2316, -3.4656, -3.7122, -3.9722, -4.2468, -4.5368, -4.8434, -5.1677, -5.5112, -5.8752, -6.2612, -6.6709, -7.106, -7.5685, -8.0605, -8.5843, -9.1424, -9.7374, -10.372, -11.05, -11.775, -12.55, -13.38, -14.268, -15.221, -16.242, -17.34, -18.518, -19.786, -21.149, -22.618, -24.2, -25.907, -27.748, -29.737, -31.887, -34.211, -36.727, -39.45, -42.4, -45.597],
+    TAU: [-4.0518, 0.1778, 1.2026, 1.8367, 2.3168, 2.712, 3.0559, 3.3658, 3.6529, 3.923, 4.1815, 4.4316, 4.6761, 4.9172, 5.1565, 5.3957, 5.6359, 5.8785, 6.1245, 6.3749, 6.6307, 6.8929, 7.1625, 7.4404, 7.7276, 8.0253, 8.3344, 8.6561, 8.9916, 9.342, 9.7088, 10.093, 10.497, 10.922, 11.369, 11.841, 12.34, 12.867, 13.425, 14.017, 14.645, 15.313, 16.024, 16.781, 17.588, 18.449, 19.37, 20.354, 21.408, 22.537, 23.749, 25.049, 26.447, 27.95, 29.569, 31.312, 33.193, 35.222, 37.414, 39.784, 42.348, 45.123, 48.13, 51.389]
   };
   const FIELD_GLSL = `
 uniform vec3 uTab[64];                  // (xi, PHI, TAU) at chi_i = C0 (e^(s_i) - 1), s_i = i SMAX / 63
-const float C0 = 0.25, SMAX = 5.484797, CHIMAX = 60.0;   // the solution goes on to chi = 280
-const float A0 = 1.9797, B0 = -2.5191;  // dR/dz and B_phi/B_z where the line leaves the surface
+const float C0 = 0.25, SMAX = 5.484797, CHIMAX = 60.0;   // the solution goes on to chi = 134
+const float A0 = 2.0570, B0 = -3.9977;  // dR/dz and B_phi/B_z where the line leaves the surface
 float zBase(float Rf){ float H = H0 * pow(Rf, 1.25); return H * sqrt(2.0 * max(8.5 - 1.25 * log(Rf), 1.0)); }
 vec3 tabF(float f){ f = clamp(f, 0.0, 62.999); int i = int(f); return mix(uTab[i], uTab[i + 1], f - float(i)); }
 vec3 tabAt(float chi){ return tabF(log(1.0 + chi / C0) * (63.0 / SMAX)); }
@@ -66,7 +67,8 @@ vec2 fieldRP(float Rf, float h){
   if (h > zb) { vec3 t = tabAt((h - zb) / rp.x); rp = vec2(rp.x * t.x, rp.y + t.y); }
   return rp;
 }
-// foot radius of the line through (R, h): R(Rf) is monotonic at fixed h (nested lines), so bisect
+// foot radius of the line through (R, h): R(Rf) is monotonic at fixed h (nested lines, also where they
+// turn back toward the axis), so bisect
 float footRadius(float R, float h){
   float lo = 0.05, hi = R;
   for (int i = 0; i < 9; i++) { float m = 0.5 * (lo + hi); if (fieldRP(m, h).x > R) hi = m; else lo = m; }
