@@ -15,7 +15,10 @@
 //   inner edge dust sublimates inside about 0.08 au
 // Rendering: the irradiated skin, far thinner than a ray step, is integrated analytically through
 // its profile of absorbed starlight (bright where seen at a grazing angle; corrugations that face
-// the star catch more light); the settled dust is a sheet crossed analytically at the midplane. The
+// the star catch more light and cast shadows behind them). The skin, the wind and the field lines are
+// lit as scattered starlight, with a phase function in the angle star -> point -> observer (near-
+// isotropic for the disk, strongly forward for the small grains in the wind); the settled dust is a
+// sheet crossed analytically at the midplane. The
 // gas is drawn translucent (a real disk is opaque at visible wavelengths) so that the dust sheet and
 // the snow line show through. Colour encodes temperature: amber where it is warm (inner disk,
 // irradiated surface), blue where it is cold (outer midplane); icy dust is pale, rocky dust dark.
@@ -75,16 +78,17 @@ float footRadius(float R, float h){
   return 0.5 * (lo + hi);
 }
 `;
-  // The wind carries small grains, so the field lines and the wind glow shine by scattered starlight.
-  // Henyey-Greenstein phase function in the scattering angle star -> point -> observer, strongly forward
-  // (g = 0.6: 25 times brighter straight ahead than at 90 degrees, 0.39 times straight back), given
-  // relative to 90 degrees and softly limited so that the forward peak does not burn out.
+  // Scattered starlight. The wind carries small grains, so the field lines and the wind glow shine by
+  // starlight scattered toward the observer, and so does the irradiated surface of the disk. Henyey-
+  // Greenstein phase functions in the scattering angle star -> point -> observer, with the asymmetry
+  // chosen for the picture: strongly forward for the wind (g = 0.6: 25 times brighter straight ahead
+  // than at 90 degrees, given relative to 90 degrees and softly limited so the peak does not burn out),
+  // near-isotropic for the disk surface (g = 0.3: 2.7 straight ahead, 0.4 straight back, mean 1).
   const SCATTER_GLSL = `
-const float G_HG = 0.6;
-float phaseHG(float mu){
-  float p = pow((1.0 + G_HG * G_HG) / (1.0 + G_HG * G_HG - 2.0 * G_HG * mu), 1.5);
-  return p / (1.0 + p / 8.0);
-}
+const float G_WIND_HG = 0.6, G_DISK_HG = 0.3;
+float hg(float mu, float g){ return (1.0 - g * g) * pow(1.0 + g * g - 2.0 * g * mu, -1.5); }   // mean 1 over all directions
+float phaseHG(float mu){ float p = hg(mu, G_WIND_HG) / hg(0.0, G_WIND_HG); return p / (1.0 + p / 8.0); }
+float phaseDisk(float mu){ return hg(mu, G_DISK_HG); }
 `;
   const VS = `#version 300 es
 in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
@@ -258,7 +262,19 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, float wpx, out vec3 em, 
     if (atSkin && (uMode == 0 || uMode == 2)) {
       float dx = x - xPrev, xm = 0.5 * (x + xPrev);
       float P = abs(dx) > 1e-3 ? (exp(-exp(xPrev)) - exp(-exp(x))) / dx : exp(xm - exp(xm));
-      skin = G_SKIN * E * az / (H * H) * ds * P * max(0.0, 1.0 + 0.5 * n.y + RELIEF * n.z) * tcolor(Ts);
+      // cast shadows: the optical depth toward the star builds up mostly over the last part of the ray
+      // (R' = t R, t from 0.5 to 1, weighted by the smooth profile), where the turbulence raises or lowers
+      // the density. The surface behind a crest is shaded, behind a trough it is lit more strongly.
+      float dtau = 0.0, rPrev = 1.0;
+      for (int k = 1; k <= 5; k++) {
+        float t = 1.0 - 0.1 * float(k), tm = t + 0.05;
+        float r = exp(-1.25 * log(t) - aR * (inversesqrt(t) - 1.0));          // tau*(t) / tau*(1) along the ray
+        float f = exp(1.6 * turb(lnR + log(tm), phi, Om * pow(tm, -1.5), fp, uSeed, false).x - 0.08);
+        dtau += (f - 1.0) * (rPrev - r); rPrev = r;
+      }
+      // seen by scattered starlight (near-isotropic grains); the colour stays that of the temperature
+      float mu = dot(p, -rd) / max(length(p), 1e-3);
+      skin = G_SKIN * E * az / (H * H) * ds * P * max(0.0, 1.0 + 0.5 * n.y + RELIEF * n.z) * exp(-dtau) * phaseDisk(mu) * tcolor(Ts);
     }
     // gas with small grains: dark and translucent, faintly glowing in the colour of its temperature
     // (cold midplane; warm only inside the snow line)
