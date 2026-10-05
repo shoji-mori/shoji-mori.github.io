@@ -75,6 +75,17 @@ float footRadius(float R, float h){
   return 0.5 * (lo + hi);
 }
 `;
+  // The wind carries small grains, so the field lines and the wind glow shine by scattered starlight.
+  // Henyey-Greenstein phase function in the scattering angle star -> point -> observer, strongly forward
+  // (g = 0.6: 25 times brighter straight ahead than at 90 degrees, 0.39 times straight back), given
+  // relative to 90 degrees and softly limited so that the forward peak does not burn out.
+  const SCATTER_GLSL = `
+const float G_HG = 0.6;
+float phaseHG(float mu){
+  float p = pow((1.0 + G_HG * G_HG) / (1.0 + G_HG * G_HG - 2.0 * G_HG * mu), 1.5);
+  return p / (1.0 + p / 8.0);
+}
+`;
   const VS = `#version 300 es
 in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
 
@@ -98,6 +109,7 @@ uniform int uMode;      // 0 all, 1 gas body, 2 surface skin, 3 dust sheet, 4 wi
 const float PI = 3.14159265, TAU = 6.2831853;
 const float R_IN = 0.08, H0 = 0.025, TICE = 160.0;
 ${FIELD_GLSL}
+${SCATTER_GLSL}
 const float OMEGA0 = 0.5236;            // 2π / 12 s at 1 au (visual time)
 const float RB = 10.0, ZB = 3.0;        // marched cylinder (au); the unlit disk beyond is the sheet alone
 const float LNTAU1 = 8.5;               // ln of the grazing optical depth toward the star at the midplane, 1 au
@@ -274,7 +286,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, float wpx, out vec3 em, 
     float rw = 2.2 * exp(-s / (0.8 * r0 + 0.4) - r0 / 1.5) * inversesqrt(r0) * smoothstep(0.0, 0.05 + 0.1 * r0, above)
              * smoothstep(0.12, 0.4, Rf) * (z > 0.0 ? 1.0 : 0.35) * (1.0 - smoothstep(0.6, 1.0, above / (r0 * CHIMAX)));
     // lit by the star (softened falloff, as for the disk); skipped where too faint to see
-    float lit = G_WIND * rw / (length(p) + 0.3);
+    float lit = G_WIND * rw / (length(p) + 0.3) * phaseHG(dot(p, -rd) / max(length(p), 1e-3));
     if (lit > 2e-4) {
       // streaks ride the field lines: co-rotating with the foot, wound back as they rise, and carried
       // outward with the gas (a parcel keeps TAU - Omega t fixed)
@@ -414,7 +426,9 @@ uniform vec3 uCam; uniform mat3 uBasis; uniform float uTanHalf; uniform vec2 uRe
 out float vFade; out float vSide; out float vKind; out float vDepth;
 const float PI = 3.14159265, TAU = 6.2831853, OMEGA0 = 0.5236, H0 = 0.025;
 const float ZTOP = 9.0, U_IN = 0.12;    // top of the drawn lines (au); share of the strip inside the disk
+const float LNTAU1 = 8.5;               // as in the volume: ln of the optical depth toward the star at the midplane, 1 au
 ${FIELD_GLSL}
+${SCATTER_GLSL}
 // height chi reached after a travel time tau (TAU increases monotonically along the table)
 float chiOfTau(float tau){
   float lo = 0.0, hi = 63.0;
@@ -439,13 +453,18 @@ void main(){
   } else {
     // the first part of the strip runs through the disk, the rest is spaced evenly in ln(1 + chi/C0)
     h = u < U_IN ? zb * u / U_IN : zb + r0 * C0 * (exp((u - U_IN) / (1.0 - U_IN) * log(1.0 + chiEnd / C0)) - 1.0);
-    fade = mix(0.3, 1.0, smoothstep(0.55 * zb, zb, h)) * exp(-max(h - zb, 0.0) / (1.5 * r0 + 2.0)) * (1.0 - smoothstep(0.85, 1.0, u))
+    fade = exp(-max(h - zb, 0.0) / (1.5 * r0 + 2.0)) * (1.0 - smoothstep(0.85, 1.0, u))
          * (1.0 - smoothstep(0.6, 1.0, max(h - zb, 0.0) / (r0 * CHIMAX)));   // the table ends at CHIMAX
   }
   vec2 rp = fieldRP(Rf, h);
   fade *= 1.0 - smoothstep(8.0, 11.0, rp.x);   // the model shows the inner ~8 au (as the disk light does)
   float phi = phi0 + Om * uTime + rp.y;
   vec3 P = vec3(rp.x * cos(phi), rp.x * sin(phi), side * h);
+  // lit like the dusty flow the line guides: starlight with a softened falloff, shadowed inside the disk
+  // (optical depth toward the star, as in the volume), scattered toward the observer
+  float rs = max(length(P), 1e-3), Hs = H0 * pow(rp.x, 1.25);
+  float tauStar = exp(clamp(LNTAU1 - 1.25 * log(rp.x) - 0.5 * h * h / (Hs * Hs), -30.0, 30.0));
+  fade *= mix(0.2, 1.0, exp(-tauStar)) * phaseHG(dot(P / rs, normalize(uCam - P))) / (1.0 + rs * rs / 16.0);
   vec3 v = P - uCam;
   float z = dot(v, uBasis[2]);
   vec2 q = vec2(dot(v, uBasis[0]), dot(v, uBasis[1])) / (z * uTanHalf);
