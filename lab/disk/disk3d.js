@@ -1,7 +1,8 @@
-// Volume rendering of a model protoplanetary disk (inner 8 au), drawn on the GPU.
+// Volume rendering of a model protoplanetary disk (out to its edge at 8 au), drawn on the GPU.
 //
 // The structure follows an irradiated, magnetically accreting disk:
-//   gas        Σ ∝ R^-1, vertically Gaussian with H/R = 0.025 (R/au)^1/4 (T_mid ∝ R^-1/2)
+//   gas        Σ ∝ R^-1 out to a density cutoff at 8 au, vertically Gaussian with H/R = 0.03 (R/au)^1/4
+//              (T_mid ∝ R^-1/2); the tapering edge lies in the shadow of the flared disk
 //   rotation   Keplerian, Ω ∝ R^-3/2; turbulent structure is sheared by it into trailing spirals
 //   heating    starlight grazes the flared surface and is absorbed where the optical depth toward
 //              the star reaches unity, a few scale heights up; that thin skin is hot and bright,
@@ -51,16 +52,20 @@
   // Inside the disk the radial and toroidal fields grow linearly with height (uniform currents), so the
   // line bends smoothly into the wind. Lines are labelled by their foot radius Rf at the midplane; below
   // the midplane they are mirrored.
+  const MODEL = { R_IN: 0.08, H0: 0.03, R_OUT: 8.0, P_OUT: 6.0, LNTAU1: 8.5, TICE: 160.0, K_D: 1200.0, SD0: 0.012 };
+  const G = (v) => Number.isInteger(v) ? v.toFixed(1) : String(v);   // a JS number as a GLSL float literal
   const BP = {
+    C0: 0.25, SMAX: 5.484797, CHIMAX: 60.0, A0: 2.0570, B0: -3.9977,   // table grid; dR/dz and B_phi/B_z at the surface
     XI: [1, 1.0459, 1.094, 1.1445, 1.1974, 1.253, 1.3114, 1.3727, 1.4372, 1.5049, 1.5762, 1.6512, 1.73, 1.813, 1.9003, 1.9921, 2.0887, 2.1904, 2.2973, 2.4097, 2.5279, 2.6521, 2.7827, 2.9198, 3.0638, 3.215, 3.3736, 3.5398, 3.714, 3.8963, 4.0871, 4.2865, 4.4948, 4.712, 4.9383, 5.1739, 5.4186, 5.6726, 5.9356, 6.2076, 6.4881, 6.7769, 7.0733, 7.3768, 7.6864, 8.0012, 8.3199, 8.6411, 8.963, 9.2838, 9.601, 9.9122, 10.214, 10.505, 10.779, 11.034, 11.265, 11.469, 11.64, 11.775, 11.869, 11.919, 11.919, 11.868],
     PHI: [0.0039947, -0.084394, -0.17558, -0.26978, -0.36721, -0.4681, -0.57269, -0.68123, -0.79399, -0.91124, -1.0333, -1.1604, -1.293, -1.4314, -1.576, -1.7271, -1.8852, -2.0508, -2.2244, -2.4065, -2.5976, -2.7984, -3.0095, -3.2316, -3.4656, -3.7122, -3.9722, -4.2468, -4.5368, -4.8434, -5.1677, -5.5112, -5.8752, -6.2612, -6.6709, -7.106, -7.5685, -8.0605, -8.5843, -9.1424, -9.7374, -10.372, -11.05, -11.775, -12.55, -13.38, -14.268, -15.221, -16.242, -17.34, -18.518, -19.786, -21.149, -22.618, -24.2, -25.907, -27.748, -29.737, -31.887, -34.211, -36.727, -39.45, -42.4, -45.597],
     TAU: [-4.0518, 0.1778, 1.2026, 1.8367, 2.3168, 2.712, 3.0559, 3.3658, 3.6529, 3.923, 4.1815, 4.4316, 4.6761, 4.9172, 5.1565, 5.3957, 5.6359, 5.8785, 6.1245, 6.3749, 6.6307, 6.8929, 7.1625, 7.4404, 7.7276, 8.0253, 8.3344, 8.6561, 8.9916, 9.342, 9.7088, 10.093, 10.497, 10.922, 11.369, 11.841, 12.34, 12.867, 13.425, 14.017, 14.645, 15.313, 16.024, 16.781, 17.588, 18.449, 19.37, 20.354, 21.408, 22.537, 23.749, 25.049, 26.447, 27.95, 29.569, 31.312, 33.193, 35.222, 37.414, 39.784, 42.348, 45.123, 48.13, 51.389]
   };
   const FIELD_GLSL = `
 uniform vec3 uTab[64];                  // (xi, PHI, TAU) at chi_i = C0 (e^(s_i) - 1), s_i = i SMAX / 63
-const float C0 = 0.25, SMAX = 5.484797, CHIMAX = 60.0;   // the solution goes on to chi = 134
-const float A0 = 2.0570, B0 = -3.9977;  // dR/dz and B_phi/B_z where the line leaves the surface
-float zBase(float Rf){ float H = H0 * pow(Rf, 1.25); return H * sqrt(2.0 * max(8.5 - 1.25 * log(Rf), 1.0)); }
+const float C0 = ${G(BP.C0)}, SMAX = ${G(BP.SMAX)}, CHIMAX = ${G(BP.CHIMAX)};   // the solution goes on to chi = 134
+const float A0 = ${G(BP.A0)}, B0 = ${G(BP.B0)};  // dR/dz and B_phi/B_z where the line leaves the surface
+float cutOut(float R){ return pow(R / R_OUT, P_OUT); }      // -ln of the density cutoff
+float zBase(float Rf){ float H = H0 * pow(Rf, 1.25); return H * sqrt(2.0 * max(${G(MODEL.LNTAU1)} - 1.25 * log(Rf) - cutOut(Rf), 1.0)); }
 vec3 tabF(float f){ f = clamp(f, 0.0, 62.999); int i = int(f); return mix(uTab[i], uTab[i + 1], f - float(i)); }
 vec3 tabAt(float chi){ return tabF(log(1.0 + chi / C0) * (63.0 / SMAX)); }
 // radius and azimuth (relative to the foot; negative = lagging) of the line with foot Rf, at height h
@@ -108,18 +113,20 @@ uniform float uSeed;
 uniform float uPx;      // render pixels per CSS pixel
 uniform vec4 uClump[6];
 uniform vec4 uVapor[4];
-uniform int uMode;      // 0 all, 1 gas body, 2 surface skin, 3 dust sheet, 4 wind
+uniform int uMode;      // bit mask of the components drawn: 1 gas body, 2 surface skin, 4 pebble sheet, 8 wind
 
 const float PI = 3.14159265, TAU = 6.2831853;
-const float R_IN = 0.08, H0 = 0.025, TICE = 160.0;
+const float R_IN = ${G(MODEL.R_IN)}, H0 = ${G(MODEL.H0)}, TICE = ${G(MODEL.TICE)};
+const float R_OUT = ${G(MODEL.R_OUT)}, P_OUT = ${G(MODEL.P_OUT)};   // the disk ends in a density cutoff exp(-(R/R_OUT)^P_OUT)
 ${FIELD_GLSL}
 ${SCATTER_GLSL}
 const float OMEGA0 = 0.5236;            // 2π / 12 s at 1 au (visual time)
-const float RB = 10.0, ZB = 3.0;        // marched cylinder (au); the unlit disk beyond is the sheet alone
-const float LNTAU1 = 8.5;               // ln of the grazing optical depth toward the star at the midplane, 1 au
+const float RB = 11.0, ZB = 9.0;        // marched cylinder (au): past the edge of the disk, up to the top of the drawn wind
+const float LNTAU1 = ${G(MODEL.LNTAU1)};               // ln of the grazing optical depth toward the star at the midplane, 1 au
 // Opacities are set for a translucent rendering (a real disk is opaque at visible wavelengths):
-// gas with small grains, settled pebbles (opaque, and their mostly thin millimetre-like emission), wind.
-const float K_G = 0.8, K_D = 400.0, K_MM = 40.0, K_W = 0.1;
+// gas with small grains, settled pebbles (opaque out to the edge of the disk, and their mostly thin
+// millimetre-like emission), wind.
+const float K_G = 0.8, K_D = ${G(MODEL.K_D)}, K_MM = 40.0, K_W = 0.1;
 // Brightness of each component per unit of absorbed starlight E (see Eabs)
 const float G_SKIN = 0.04, G_GAS = 0.015, G_DUST = 1.4, G_WIND = 0.125;
 const float RELIEF = 0.9;               // brightening per unit slope of the corrugated surface
@@ -183,17 +190,21 @@ vec3 turb(float lnR, float phi, float Om, float fp, float seed, bool fine){
   return n * inversesqrt(w2);
 }
 
-// The model shows the inner 8 au of a larger disk: the gas continues outward (and still hides what is
-// behind it), while the light is faded beyond 8 au.
-float Sigma(float R, float lnR){ float r = R * R / 169.0; r *= r; return exp(-lnR - r * r) * smoothstep(R_IN * 0.8, R_IN * 1.3, R); }
-float win(float R){ float r = R * R / 60.84; return exp(-r * r); }
-// Starlight absorbed per unit area of the surface, L β / 4πR², with β the grazing angle. Shown with
-// the true R^-2 falloff inside 1 au, easing to R^-1.1 outside (scattered-light images are often
-// scaled by R² for the same reason), and faded beyond 8 au.
+// The disk ends in a density cutoff at R_OUT (exp(-(R/R_OUT)^P_OUT)); its tapering edge lies in the shadow of
+// the flared disk, so the light fades with the surface.
+// Strength of the turbulent structure: strong in the thermally ionized innermost disk (MRI-active inside
+// ~0.3 au), weak across the dead zone, modest again in the outer disk
+float turbAmp(float R){ return 1.4 * (1.0 - smoothstep(0.2, 0.5, R)) + 0.3 + 0.4 * smoothstep(2.0, 5.0, R); }
+float Sigma(float R, float lnR){ return exp(-lnR - cutOut(R)) * smoothstep(R_IN * 0.8, R_IN * 1.3, R); }
+// Starlight absorbed per unit area of the surface, L β / 4πR², with β the grazing angle of the
+// irradiation surface z_s = H sqrt(2 a), a = ln τ* at the midplane. Where the density cutoff brings the
+// surface down, β drops to zero: the edge lies in the shadow of the disk's crest. Shown with the true
+// R^-2 falloff inside 1 au, easing to R^-1.1 outside (scattered-light images are often scaled by R²
+// for the same reason).
 float Eabs(float R, float lnR, float H){
-  float a = max(LNTAU1 - 1.25 * lnR, 1.0);
-  float beta = H * sqrt(2.0 * a) / R * (0.25 - 0.625 / a) + 0.004 / R;
-  return beta / 0.022 * pow(1.0 + R, 0.9) / (0.66 * (R * R + 0.01)) * smoothstep(R_IN * 0.85, R_IN * 1.5, R) * win(R);
+  float cut = cutOut(R), a = max(LNTAU1 - 1.25 * lnR - cut, 1.0);
+  float beta = max(H * sqrt(2.0 * a) / R * (0.25 - (0.625 + 0.5 * P_OUT * cut) / a), 0.0) + 0.004 / R;
+  return beta / 0.022 * pow(1.0 + R, 0.9) / (0.66 * (R * R + 0.01)) * smoothstep(R_IN * 0.85, R_IN * 1.5, R);
 }
 
 // Temperature palette (linear RGB; the stops are chosen in display space): blue below the water-ice
@@ -224,7 +235,7 @@ vec2 boundsCyl(vec3 ro, vec3 rd){
 // x = ln of the optical depth toward the star; the irradiation surface is x = 0
 float lnTauStar(vec3 p){
   float R = max(length(p.xy), 1e-3), lnR = log(R), H = H0 * exp(1.25 * lnR);
-  return clamp(LNTAU1 - 1.25 * lnR - 0.5 * p.z * p.z / (H * H), -30.0, 30.0);
+  return clamp(LNTAU1 - 1.25 * lnR - cutOut(R) - 0.5 * p.z * p.z / (H * H), -30.0, 30.0);
 }
 
 // Faint wind streaks: density is ribbed across field lines and pulsed along them.
@@ -244,7 +255,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, float wpx, out vec3 em, 
   float R = max(length(p.xy), 1e-3), lnR = log(R);
   float H = H0 * exp(1.25 * lnR);
   float z = p.z, az = abs(z), zh = z / H;
-  float aR = LNTAU1 - 1.25 * lnR;
+  float aR = LNTAU1 - 1.25 * lnR - cutOut(R);
   x = clamp(aR - 0.5 * zh * zh, -30.0, 30.0);
   if (R < R_IN * 0.7) return;
 
@@ -258,8 +269,8 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, float wpx, out vec3 em, 
     // linearly over the step. The surface is corrugated by the turbulence; slopes facing the star
     // catch more light.
     bool atSkin = max(x, xPrev) > -4.5 && min(x, xPrev) < 2.2;
-    vec3 n = turb(lnR, phi, Om, fp, uSeed, atSkin);
-    if (atSkin && (uMode == 0 || uMode == 2)) {
+    vec3 n = turb(lnR, phi, Om, fp, uSeed, atSkin) * turbAmp(R);
+    if (atSkin && (uMode & 2) != 0) {
       float dx = x - xPrev, xm = 0.5 * (x + xPrev);
       float P = abs(dx) > 1e-3 ? (exp(-exp(xPrev)) - exp(-exp(x))) / dx : exp(xm - exp(xm));
       // cast shadows: the optical depth toward the star builds up mostly over the last part of the ray
@@ -269,7 +280,8 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, float wpx, out vec3 em, 
       for (int k = 1; k <= 5; k++) {
         float t = 1.0 - 0.1 * float(k), tm = t + 0.05;
         float r = exp(-1.25 * log(t) - aR * (inversesqrt(t) - 1.0));          // tau*(t) / tau*(1) along the ray
-        float f = exp(1.6 * turb(lnR + log(tm), phi, Om * pow(tm, -1.5), fp, uSeed, false).x - 0.08);
+        float A = turbAmp(R * tm);
+        float f = exp(1.6 * A * turb(lnR + log(tm), phi, Om * pow(tm, -1.5), fp, uSeed, false).x - 0.08 * A * A);
         dtau += (f - 1.0) * (rPrev - r); rPrev = r;
       }
       // seen by scattered starlight (near-isotropic grains); the colour stays that of the temperature
@@ -278,9 +290,10 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, float wpx, out vec3 em, 
     }
     // gas with small grains: dark and translucent, faintly glowing in the colour of its temperature
     // (cold midplane; warm only inside the snow line)
-    float rho = Sigma(R, lnR) / (2.5066 * H) * exp(-0.5 * zh * zh) * exp(1.6 * n.x - 0.08);
+    float A = turbAmp(R);
+    float rho = Sigma(R, lnR) / (2.5066 * H) * exp(-0.5 * zh * zh) * exp(1.6 * n.x - 0.08 * A * A);
     ex = K_G * rho * EXT;
-    if (uMode == 0 || uMode == 1) em = G_GAS * K_G * rho * E * tcolor(Tm);
+    if ((uMode & 1) != 0) em = G_GAS * K_G * rho * E * tcolor(Tm);
 
     // water vapor released inside the snow line, spreading outward
     for (int i = 0; i < 4; i++) {
@@ -310,7 +323,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, float wpx, out vec3 em, 
       vec3 t = tabAt(above / r0);
       float pf = atan(p.y, p.x) - Om * uTime - fieldRP(Rf, az).y;
       float st = streaks(lnr0, pf, t.z - Om * uTime);
-      if (uMode == 0 || uMode == 4) em += lit * st * vec3(0.55, 0.80, 1.0);
+      if ((uMode & 8) != 0) em += lit * st * vec3(0.55, 0.80, 1.0);
       ex += K_W * 0.05 * rw * st;
     }
   }
@@ -323,14 +336,14 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, float wpx, out vec3 em, 
 void sheet(vec3 p, vec3 rd, float fp, inout vec3 col, inout vec3 tr){
   float mu = abs(rd.z);
   float R = length(p.xy);
-  if (R < R_IN || R > 13.5) return;
+  if (R < R_IN || R > 11.0) return;
   float lnR = log(R), phi = atan(p.y, p.x);
   float Om = OMEGA0 * exp(-1.5 * lnR), H = H0 * exp(1.25 * lnR);
   float Tm = TICE * sqrt(uRSnow / R);
   float ice = 1.0 - smoothstep(TICE - 6.0, TICE + 6.0, Tm);
   float pile = 1.0 + 1.2 * ice * exp(-pow((R - 1.15 * uRSnow) / (0.13 * uRSnow), 2.0));
   float nd = turb(lnR, phi, Om, fp / R * (1.0 + (1.0 / max(mu, 0.1) - 1.0) * abs(dot(p.xy / R, normalize(rd.xy + 1e-6)))), uSeed + 11.0, true).x;
-  float sd = 0.012 * Sigma(R, lnR) * pile * (0.5 + 0.5 * ice) * max(0.0, 1.0 + 1.0 * nd), sc = 0.0;
+  float sd = ${G(MODEL.SD0)} * Sigma(R, lnR) * pile * (0.5 + 0.5 * ice) * max(0.0, 1.0 + turbAmp(R) * nd), sc = 0.0;
   for (int i = 0; i < 6; i++) {
     vec4 c = uClump[i]; if (c.w <= 0.0) continue;
     float dt = uTime - c.z; float Rc = c.x - 0.05 * dt; if (Rc < R_IN) continue;
@@ -344,7 +357,7 @@ void sheet(vec3 p, vec3 rd, float fp, inout vec3 col, inout vec3 tr){
   vec3 alb = mix(vec3(0.42, 0.20, 0.10) * 0.25, 0.9 * tcolor(min(Tm, 120.0)), ice);
   alb = mix(alb, vec3(0.85, 0.92, 1.0) * mix(0.35, 1.0, ice), sc / (sd + 1e-6));   // packed pebbles look paler
   vec3 src = G_DUST * alb * Eabs(R, lnR, H) * (1.0 - exp(-tmm)) * (1.0 + PILE * (pile - 1.0));
-  if (uMode != 0 && uMode != 3) src = vec3(0.0);
+  if ((uMode & 4) == 0) src = vec3(0.0);
   col += tr * src;
   tr *= exp(-tau);
 }
@@ -390,11 +403,11 @@ void main(){
   bool sheetDone = tCross <= 0.0;
   if (!sheetDone && (!inside || tCross < b.x)) { sheet(ro + rd * tCross, rd, tCross * pixA, col, tr); sheetDone = true; }
   if (inside) {
-    float jitter = hash12(gl_FragCoord.xy * 1.37 + 0.5);
+    float jitter = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));   // interleaved gradient noise: finer grain than a hash
     float t = b.x;
     vec3 p = ro + rd * t;
     float xPrev = lnTauStar(p);
-    for (int i = 0; i < 160; i++) {
+    for (int i = 0; i < 320; i++) {
       if (i >= uSteps || t > b.y || max(tr.r, max(tr.g, tr.b)) < 0.01) break;
       float R = length(p.xy);
       // steps follow the scale height in the disk and grow with height above it (only the wind is
@@ -417,9 +430,6 @@ void main(){
   }
   if (!sheetDone) sheet(ro + rd * tCross, rd, tCross * pixA, col, tr);
   if (!starDone) col += tr * starGlow;
-  // alpha carries the sheet's depth along the ray (as a fraction of 64 au; 0 when the ray misses it) so the
-  // line pass can hide field lines that lie behind the opaque dust sheet and keep the ones in front
-  float sheetDepth = (sheetDone && tCross > 0.0) ? clamp(tCross / 64.0, 0.0, 1.0) : 0.0;
   col = col * uExposure + tr * bg + sky;
   // asinh stretch of the luminance, as for astronomical images of high dynamic range; hue is kept and
   // channels that run past white roll off toward it
@@ -428,84 +438,58 @@ void main(){
   float m = max(col.r, max(col.g, col.b));
   if (m > 1.0) col = mix(col / m, vec3(1.0), 1.0 - 1.0 / m);
   col = pow(col, vec3(1.0 / 2.2)) + (hash12(gl_FragCoord.xy + 17.0) - 0.5) / 255.0;
-  fragColor = vec4(col, sheetDepth);
+  fragColor = vec4(col, 1.0);
 }`;
 
 
-  // Field lines and wind particles. Attribute per vertex: (R_foot, phi_foot, u, kind)
-  //   kind 0: field line, u = position along the strip; kind 1: wind parcel, u = release phase in [0, 1);
-  //   kinds 2 and 3: the same below the midplane (weaker wind for a field aligned with the rotation).
-  // Lines follow the MHD wind solution (see FIELD_GLSL) up to ZTOP; parcels move with the solution's flow.
-  const LVS = `#version 300 es
-in vec4 a;
-uniform vec3 uCam; uniform mat3 uBasis; uniform float uTanHalf; uniform vec2 uRes; uniform float uTime; uniform float uPx;
-out float vFade; out float vSide; out float vKind; out float vDepth;
-const float PI = 3.14159265, TAU = 6.2831853, OMEGA0 = 0.5236, H0 = 0.025;
-const float ZTOP = 9.0, U_IN = 0.12;    // top of the drawn lines (au); share of the strip inside the disk
-const float LNTAU1 = 8.5;               // as in the volume: ln of the optical depth toward the star at the midplane, 1 au
-${FIELD_GLSL}
-${SCATTER_GLSL}
-// height chi reached after a travel time tau (TAU increases monotonically along the table)
-float chiOfTau(float tau){
-  float lo = 0.0, hi = 63.0;
-  for (int i = 0; i < 9; i++) { float m = 0.5 * (lo + hi); if (tabF(m).z > tau) hi = m; else lo = m; }
-  return C0 * (exp(0.5 * (lo + hi) * SMAX / 63.0) - 1.0);
-}
-void main(){
-  float Rf = a.x, phi0 = a.y, u = a.z, kind = a.w;
-  float side = kind >= 2.0 ? -1.0 : 1.0;
-  float k = kind >= 2.0 ? kind - 2.0 : kind;
-  float zb = zBase(Rf), r0 = Rf + 0.5 * A0 * zb, Om = OMEGA0 * pow(r0, -1.5);
-  float chiEnd = clamp((ZTOP - zb) / r0, 0.5, CHIMAX);
-  float h, fade;
-  if (k > 0.5) {
-    // parcels released at a steady rate, each moving with the flow of the solution; they are spaced
-    // closely where the gas is slow (near the base) and spread out as it accelerates
-    float tEnd = tabAt(chiEnd).z;
-    float ph = fract(u + uTime * Om / tEnd);
-    float chi = chiOfTau(ph * tEnd);
-    h = zb + r0 * chi;
-    fade = smoothstep(0.0, 0.03, ph) * (1.0 - smoothstep(0.6, 1.0, ph)) * exp(-(h - zb) / (2.0 * r0 + 2.5)) * (1.0 - smoothstep(0.6, 1.0, chi / CHIMAX));
-  } else {
-    // the first part of the strip runs through the disk, the rest is spaced evenly in ln(1 + chi/C0)
-    h = u < U_IN ? zb * u / U_IN : zb + r0 * C0 * (exp((u - U_IN) / (1.0 - U_IN) * log(1.0 + chiEnd / C0)) - 1.0);
-    fade = exp(-max(h - zb, 0.0) / (1.5 * r0 + 2.0)) * (1.0 - smoothstep(0.85, 1.0, u))
-         * (1.0 - smoothstep(0.6, 1.0, max(h - zb, 0.0) / (r0 * CHIMAX)));   // the table ends at CHIMAX
+  // The field model again in JS, for the field lines and wind parcels drawn as vector strokes in the SVG
+  // overlay (kept in step with FIELD_GLSL above).
+  const ss = (a, b, x) => { const t = Math.min(Math.max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t); };
+  const cutOut = (R) => Math.pow(R / MODEL.R_OUT, MODEL.P_OUT);
+  const zBase = (Rf) => MODEL.H0 * Math.pow(Rf, 1.25) * Math.sqrt(2 * Math.max(MODEL.LNTAU1 - 1.25 * Math.log(Rf) - cutOut(Rf), 1));
+  const SigmaJS = (R) => Math.exp(-Math.log(R) - cutOut(R)) * ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, R);
+  const NT = BP.XI.length;
+  if (NT !== 64) throw new Error('the wind table must have 64 rows');
+  const tabF = (arr, f) => { f = Math.min(Math.max(f, 0), NT - 1.001); const i = Math.floor(f); return arr[i] + (arr[i + 1] - arr[i]) * (f - i); };
+  const tabS = (chi) => Math.log(1 + chi / BP.C0) * ((NT - 1) / BP.SMAX);
+  const chiOfS = (sv) => BP.C0 * (Math.exp(sv * BP.SMAX / (NT - 1)) - 1);
+  // radius and azimuth (relative to the foot; negative = lagging) of the line with foot Rf at height h
+  function fieldRP(Rf, h) {
+    const zb = zBase(Rf), hi = Math.min(h, zb), q = hi * hi / zb;
+    let R = Rf + 0.5 * BP.A0 * q, ph = 0.5 * BP.B0 * q / Rf;
+    if (h > zb) { const f = tabS((h - zb) / R); R *= tabF(BP.XI, f); ph += tabF(BP.PHI, f); }
+    return [R, ph];
   }
-  vec2 rp = fieldRP(Rf, h);
-  fade *= 1.0 - smoothstep(8.0, 11.0, rp.x);   // the model shows the inner ~8 au (as the disk light does)
-  float phi = phi0 + Om * uTime + rp.y;
-  vec3 P = vec3(rp.x * cos(phi), rp.x * sin(phi), side * h);
-  // lit like the dusty flow the line guides: starlight with a softened falloff, shadowed inside the disk
-  // (optical depth toward the star, as in the volume), scattered toward the observer
-  float rs = max(length(P), 1e-3), Hs = H0 * pow(rp.x, 1.25);
-  float tauStar = exp(clamp(LNTAU1 - 1.25 * log(rp.x) - 0.5 * h * h / (Hs * Hs), -30.0, 30.0));
-  fade *= mix(0.2, 1.0, exp(-tauStar)) * phaseHG(dot(P / rs, normalize(uCam - P))) / (1.0 + rs * rs / 16.0);
-  vec3 v = P - uCam;
-  float z = dot(v, uBasis[2]);
-  vec2 q = vec2(dot(v, uBasis[0]), dot(v, uBasis[1])) / (z * uTanHalf);
-  q.x *= uRes.y / uRes.x;
-  gl_Position = vec4(q, 0.0, 1.0);
-  gl_PointSize = (k > 0.5 ? 3.0 : 1.0) * uPx;
-  vFade = fade;
-  vSide = side > 0.0 ? 1.0 : 0.4;
-  vKind = k; vDepth = z;
-}`;
-  const LFS = `#version 300 es
-precision highp float;
-in float vFade; in float vSide; in float vKind; in float vDepth;
-uniform sampler2D uOccl; uniform vec2 uRes; uniform float uGain;
-out vec4 fragColor;
-void main(){
-  float a = vFade * vSide * uGain;
-  if (vKind > 0.5) { vec2 d = gl_PointCoord - 0.5; a *= smoothstep(0.25, 0.0, dot(d, d)); }
-  // hide what lies behind the opaque dust sheet; soften over a short range so lines do not pop at the edge
-  float sd = texture(uOccl, gl_FragCoord.xy / uRes).a * 64.0;
-  float behind = sd > 0.0 ? smoothstep(-0.15, 0.15, vDepth - sd) : 0.0;
-  a *= 1.0 - 0.92 * behind;
-  vec3 c = vKind > 0.5 ? vec3(0.78, 0.90, 1.0) : vec3(0.55, 0.72, 1.0);
-  fragColor = vec4(c * a, 1.0);
-}`;
+  // height chi reached after a travel time tau (TAU increases along the table)
+  function chiOfTau(tau) {
+    let lo = 0, hi = NT - 1;
+    for (let i = 0; i < 12; i++) { const m = 0.5 * (lo + hi); if (tabF(BP.TAU, m) > tau) hi = m; else lo = m; }
+    return chiOfS(0.5 * (lo + hi));
+  }
+  // point n (n >= 1) of the 2D Sobol sequence: van der Corput in base 2, and the second dimension from the
+  // polynomial x + 1 (direction numbers 1, 3, 5, 15, 17, 51, ...)
+  function sobol2(n) {
+    let xi = 0, yi = 0, m = 1;
+    for (let i = 1, k = n; k; i++, k >>= 1) {
+      if (k & 1) { xi ^= 1 << (24 - i); yi ^= m << (24 - i); }
+      m = (m << 1) ^ m;
+    }
+    return [xi / 16777216, yi / 16777216];
+  }
+  // heights chi_k at which the lines are sampled above the disk: a segment turns by at most 0.4 rad in
+  // azimuth and grows by at most 15% in 1 + chi/C0; the samples are joined by cubic Bezier curves
+  const CHI_S = (() => {
+    const out = [0]; let chi = 0;
+    while (chi < BP.CHIMAX) {
+      const target = tabF(BP.PHI, tabS(chi)) - 0.4;
+      let lo = chi, hi = Math.min(BP.CHIMAX, (chi + BP.C0) * 1.15 - BP.C0);
+      if (tabF(BP.PHI, tabS(hi)) < target) for (let i = 0; i < 20; i++) { const m = 0.5 * (lo + hi); if (tabF(BP.PHI, tabS(m)) < target) hi = m; else lo = m; }
+      chi = hi; out.push(chi);
+    }
+    return out;
+  })();
+  const hg = (mu, g) => (1 - g * g) * Math.pow(1 + g * g - 2 * g * mu, -1.5);
+  const phaseWind = (mu) => { const p = hg(mu, 0.6) / hg(0, 0.6); return p / (1 + p / 8); };
 
   const reduceOS = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const ja = () => document.documentElement.lang === 'ja';
@@ -520,9 +504,10 @@ void main(){
     box.prepend(canvas);
     const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     overlay.setAttribute('class', 'disk-overlay'); overlay.setAttribute('aria-hidden', 'true');
-    overlay.innerHTML = '<path class="disk-snowline" fill="none"/><text class="disk-label"></text>';
+    overlay.innerHTML = '<g class="disk-field"></g><path class="disk-snowline" fill="none"/><text class="disk-label"></text><g class="disk-scale"><line/><text/></g>';
     box.appendChild(overlay);
-    const ring = overlay.querySelector('path'), label = overlay.querySelector('text');
+    const ring = overlay.querySelector('.disk-snowline'), label = overlay.querySelector('.disk-label'), fieldG = overlay.querySelector('.disk-field');
+    const sbar = overlay.querySelector('.disk-scale line'), stext = overlay.querySelector('.disk-scale text');
 
     const compile = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
     const prog = gl.createProgram();
@@ -533,43 +518,107 @@ void main(){
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     const U = {}; for (const n of ['uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uExposure', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode']) U[n] = gl.getUniformLocation(prog, n);
-    // --- field lines and wind particles: a second program drawn over the volume ---
+    // --- field lines and wind parcels: vector strokes in the SVG overlay, from the wind solution ---
+    // Each line is a Catmull-Rom spline through its samples, written as cubic Bezier segments; segments are
+    // grouped into NB opacity levels, one halo and one core path per level, so the overlay is a few dozen
+    // path elements updated each frame. Parcels are small circles in paths of their own.
     let showField = !('nofield' in box.dataset);
-    const lprog = gl.createProgram();
-    gl.attachShader(lprog, compile(gl.VERTEX_SHADER, LVS)); gl.attachShader(lprog, compile(gl.FRAGMENT_SHADER, LFS)); gl.linkProgram(lprog);
-    if (!gl.getProgramParameter(lprog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(lprog));
-    const LU = {}; for (const n of ['uCam', 'uBasis', 'uTanHalf', 'uRes', 'uTime', 'uPx', 'uOccl', 'uGain']) LU[n] = gl.getUniformLocation(lprog, n);
-    // the tabulated wind solution, shared by both programs
-    const tab = new Float32Array(BP.XI.flatMap((x, i) => [x, BP.PHI[i], BP.TAU[i]]));
-    gl.useProgram(lprog); gl.uniform3fv(gl.getUniformLocation(lprog, 'uTab'), tab);
-    gl.useProgram(prog); gl.uniform3fv(gl.getUniformLocation(prog, 'uTab'), tab);
-    // geometry: NL field lines with foot radii 0.2..6.5 au (log-spaced) and golden-angle azimuths; each line
-    // is a strip of NS points in u = h / h_max; wind parcels carry a release phase in [0, 1).
-    // Lower side: every other line and fewer parcels (weaker wind for an aligned field).
-    const NL = 22, NS = 72, lineVerts = [], partVerts = [];
+    gl.uniform3fv(gl.getUniformLocation(prog, 'uTab'), new Float32Array(BP.XI.flatMap((x, i) => [x, BP.PHI[i], BP.TAU[i]])));
+    // geometry: NL field lines whose feet come from a 2D Sobol sequence, quasi-uniform in ln R (0.2 to 6.5 au)
+    // and azimuth; each line is drawn up to ZTOP, with N_IN points through the disk and the heights CHI_S
+    // above it; wind parcels carry a release phase in [0, 1). Lower side: every other line and fewer
+    // parcels (weaker wind for an aligned field).
+    const NL = 22, N_IN = 6, ZTOP = 9.0, NB = 12, lines = [], parcels = [];
     for (let i = 0; i < NL; i++) {
-      const Rf = 0.2 * Math.pow(6.5 / 0.2, (i + 0.5) / NL), phi0 = (i * 2.399963) % (2 * Math.PI);
-      for (const kind of [0, 2]) {
-        if (kind === 2 && i % 2) continue;
-        for (let j = 0; j < NS; j++) { const u = j / (NS - 1); lineVerts.push(Rf, phi0, u, kind); if (j && j < NS - 1) lineVerts.push(Rf, phi0, u, kind); }
-      }
-      for (let m = 0; m < 8; m++) partVerts.push(Rf, phi0, ((m + 0.37 * i) / 8) % 1, 1);
-      if (i % 2 === 0) for (let m = 0; m < 4; m++) partVerts.push(Rf, phi0, ((m + 0.21 * i) / 4) % 1, 3);
+      const [u1, u2] = sobol2(i + 1);
+      const Rf = 0.2 * Math.pow(6.5 / 0.2, u1), phi0 = 2 * Math.PI * u2;
+      lines.push({ Rf, phi0, side: 1 });
+      if (i % 2 === 0) lines.push({ Rf, phi0, side: -1 });
+      for (let m = 0; m < 8; m++) parcels.push({ Rf, phi0, side: 1, u: ((m + 0.37 * i) / 8) % 1 });
+      if (i % 2 === 0) for (let m = 0; m < 4; m++) parcels.push({ Rf, phi0, side: -1, u: ((m + 0.21 * i) / 4) % 1 });
     }
-    const lbuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, lbuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(lineVerts), gl.STATIC_DRAW);
-    const pbuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pbuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(partVerts), gl.STATIC_DRAW);
-    const lloc = gl.getAttribLocation(lprog, 'a');
-    // the volume is rendered to a texture so the line pass can read its occlusion (alpha)
-    const fbo = gl.createFramebuffer(), tex = gl.createTexture();
-    const sizeTex = () => { gl.bindTexture(gl.TEXTURE_2D, tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0); gl.bindFramebuffer(gl.FRAMEBUFFER, null); };
-    // a trivial blit program copies the volume texture to the screen
-    const BVS = `#version 300 es
-in vec2 p; out vec2 uv; void main(){ uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }`;
-    const BFS = `#version 300 es
-precision highp float; in vec2 uv; uniform sampler2D uTex; out vec4 o; void main(){ o = vec4(texture(uTex, uv).rgb, 1.0); }`;
-    const bprog = gl.createProgram(); gl.attachShader(bprog, compile(gl.VERTEX_SHADER, BVS)); gl.attachShader(bprog, compile(gl.FRAGMENT_SHADER, BFS)); gl.linkProgram(bprog);
-    if (!gl.getProgramParameter(bprog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(bprog));
-    const bloc = gl.getAttribLocation(bprog, 'p'), BU = gl.getUniformLocation(bprog, 'uTex');
+    const mkPath = (attrs) => { const e = document.createElementNS('http://www.w3.org/2000/svg', 'path'); for (const k in attrs) e.setAttribute(k, attrs[k]); fieldG.appendChild(e); return e; };
+    const level = (b) => (b + 0.5) * (2.4 / NB);
+    const halo = [], core = [], dots = [];
+    for (let b = 0; b < NB; b++) halo.push(mkPath({ fill: 'none', stroke: '#8cb8ff', 'stroke-width': 3, 'stroke-opacity': Math.min(0.6, 0.18 * level(b)).toFixed(3), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+    for (let b = 0; b < NB; b++) core.push(mkPath({ fill: 'none', stroke: '#bed7ff', 'stroke-width': 1, 'stroke-opacity': Math.min(1, level(b)).toFixed(3), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+    for (let b = 0; b < NB; b++) dots.push(mkPath({ fill: '#c7e6ff', 'fill-opacity': Math.min(1, level(b)).toFixed(3), stroke: 'none' }));
+    const bucket = (a) => Math.min(NB - 1, Math.floor(a / 2.4 * NB));
+    // transmission of the pebble sheet between the camera and P (the same sheet as in the volume, without
+    // its turbulent modulation); 1 when the segment does not cross the midplane
+    function sheetT(P) {
+      if ((cam[2] > 0) === (P[2] > 0)) return 1;
+      const t = cam[2] / (cam[2] - P[2]);
+      const Rc = Math.hypot(cam[0] + (P[0] - cam[0]) * t, cam[1] + (P[1] - cam[1]) * t);
+      if (Rc < MODEL.R_IN || Rc > 11) return 1;
+      const mu = Math.abs(P[2] - cam[2]) / Math.hypot(P[0] - cam[0], P[1] - cam[1], P[2] - cam[2]);
+      const ice = 1 - ss(MODEL.TICE - 6, MODEL.TICE + 6, MODEL.TICE * Math.sqrt(opt.rSnow / Rc));
+      return Math.exp(-MODEL.K_D * MODEL.SD0 * SigmaJS(Rc) * (0.5 + 0.5 * ice) / Math.max(mu, 0.03));
+    }
+    // brightness of a point P on a line (radius R, height h): starlight with a softened falloff, shadowed
+    // inside the disk (optical depth toward the star), scattered toward the observer, behind the sheet or not
+    function lit(P, R, h) {
+      const rs = Math.hypot(P[0], P[1], P[2]) || 1e-3, Hs = MODEL.H0 * Math.pow(R, 1.25);
+      const tau = Math.exp(Math.min(Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) - 0.5 * h * h / (Hs * Hs), -30), 30));
+      const vx = cam[0] - P[0], vy = cam[1] - P[1], vz = cam[2] - P[2];
+      const mu = (P[0] * vx + P[1] * vy + P[2] * vz) / (rs * Math.hypot(vx, vy, vz));
+      return (0.2 + 0.8 * Math.exp(-tau)) * phaseWind(mu) / (1 + rs * rs / 16) * sheetT(P);
+    }
+    const fx = (v) => v.toFixed(1);
+    function drawField() {
+      if (!showField) { for (const e of [...halo, ...core, ...dots]) e.setAttribute('d', ''); return; }
+      const gain = Number(box.dataset.field || 0.5);
+      const dL = new Array(NB).fill(''), dD = new Array(NB).fill('');
+      for (const L of lines) {
+        const zb = zBase(L.Rf), r0 = L.Rf + 0.5 * BP.A0 * zb, Om = Omega(r0);
+        const chiEnd = Math.min(Math.max((ZTOP - zb) / r0, 0.5), BP.CHIMAX);
+        const side = L.side > 0 ? 1 : 0.4;
+        const Q = [], A = [];   // projected samples (null behind the camera) and their brightness
+        for (let j = 0, k = 0; ; j++) {
+          let h, chi = 0;
+          if (j < N_IN) h = zb * j / N_IN;
+          else { if (k >= CHI_S.length) break; chi = Math.min(CHI_S[k++], chiEnd); h = zb + r0 * chi; }
+          const [R, dphi] = fieldRP(L.Rf, h), phi = L.phi0 + Om * time + dphi;
+          const P = [R * Math.cos(phi), R * Math.sin(phi), L.side * h];
+          let q = project(P), a = 0;
+          if (q[2] > 0.05) {
+            // brightest where the line leaves the disk; the wound-up part above fades out, and so does the
+            // part near the top, beyond the end of the table and beyond the edge of the disk
+            a = Math.exp(-(h - Math.min(h, zb)) / (1.5 * r0 + 2)) * (1 - ss(0.85 * chiEnd, chiEnd, chi)) * (1 - ss(0.6, 1, chi / BP.CHIMAX)) * (1 - ss(8, 11, R)) * side * gain * lit(P, R, h);
+          } else q = null;
+          Q.push(q); A.push(a);
+          if (chi >= chiEnd) break;
+        }
+        // centripetal Catmull-Rom tangents (knots spaced by the square root of the chord), cubic Beziers
+        const n = Q.length, T = new Array(n).fill(0);
+        for (let i = 1; i < n; i++) T[i] = T[i - 1] + (Q[i] && Q[i - 1] ? Math.sqrt(Math.hypot(Q[i][0] - Q[i - 1][0], Q[i][1] - Q[i - 1][1])) + 1e-6 : 1);
+        const tangent = (i) => { const ia = Q[i - 1] ? i - 1 : i, ib = Q[i + 1] ? i + 1 : i, dt = T[ib] - T[ia] || 1; return [(Q[ib][0] - Q[ia][0]) / dt, (Q[ib][1] - Q[ia][1]) / dt]; };
+        let lastB = -1;
+        for (let i = 0; i + 1 < n; i++) {
+          if (!Q[i] || !Q[i + 1]) { lastB = -1; continue; }
+          const am = 0.5 * (A[i] + A[i + 1]);
+          if (am <= 0.02) { lastB = -1; continue; }
+          const b = bucket(am), m0 = tangent(i), m1 = tangent(i + 1), dt = (T[i + 1] - T[i]) / 3;
+          const seg = 'C' + fx(Q[i][0] + m0[0] * dt) + ' ' + fx(Q[i][1] + m0[1] * dt) + ' ' + fx(Q[i + 1][0] - m1[0] * dt) + ' ' + fx(Q[i + 1][1] - m1[1] * dt) + ' ' + fx(Q[i + 1][0]) + ' ' + fx(Q[i + 1][1]);
+          dL[b] += (b === lastB ? '' : 'M' + fx(Q[i][0]) + ' ' + fx(Q[i][1])) + seg;
+          lastB = b;
+        }
+      }
+      for (const p of parcels) {
+        // parcels released at a steady rate, each moving with the flow of the solution: dense where the
+        // gas is slow near the base, spread out as it accelerates
+        const zb = zBase(p.Rf), r0 = p.Rf + 0.5 * BP.A0 * zb, Om = Omega(r0);
+        const chiEnd = Math.min(Math.max((ZTOP - zb) / r0, 0.5), BP.CHIMAX), tEnd = tabF(BP.TAU, tabS(chiEnd));
+        const ph = ((p.u + time * Om / tEnd) % 1 + 1) % 1;
+        const chi = chiOfTau(ph * tEnd), h = zb + r0 * chi;
+        const [R, dphi] = fieldRP(p.Rf, h), phi = p.phi0 + Om * time + dphi;
+        const P = [R * Math.cos(phi), R * Math.sin(phi), p.side * h], q = project(P);
+        if (q[2] <= 0.05) continue;
+        const a = ss(0, 0.03, ph) * (1 - ss(0.6, 1, ph)) * Math.exp(-(h - zb) / (2 * r0 + 2.5)) * (1 - ss(0.6, 1, chi / BP.CHIMAX)) * (p.side > 0 ? 1 : 0.4) * gain * 1.3 * lit(P, R, h);
+        if (a > 0.02) dD[bucket(a)] += 'M' + fx(q[0] - 1.5) + ' ' + fx(q[1]) + 'a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0';
+      }
+      for (let b = 0; b < NB; b++) { halo[b].setAttribute('d', dL[b]); core[b].setAttribute('d', dL[b]); dots[b].setAttribute('d', dD[b]); }
+    }
 
     const opt = {
       rSnow: Number(box.dataset.snow || 0.9),
@@ -582,11 +631,13 @@ precision highp float; in vec2 uv; uniform sampler2D uTex; out vec4 o; void main
       exposure: Number(box.dataset.exposure || 1.0),
       spin: Number(box.dataset.spin || 0.004),
       seed: Number(box.dataset.seed || 2.0),
-      mode: Number(box.dataset.mode || 0)
+      mode: Number(box.dataset.mode || 15),
+      scaleMax: Number(box.dataset.scaleMax || 1)
     };
     const clumps = Array.from({ length: 6 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0, crossed: true }));
     const vapor = Array.from({ length: 4 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0 }));
     let W = 0, Hh = 0, cam, basis, time = 0, last = 0, running = false, dragging = false, moved = false, px = 0, py = 0, azUser = opt.az, elUser = opt.el;
+    let paused = false, speed = 1, dirty = true;
     const Omega = (R) => 0.5236 * Math.pow(R, -1.5);
 
     function camera() {
@@ -612,7 +663,6 @@ precision highp float; in vec2 uv; uniform sampler2D uTex; out vec4 o; void main
       const dpr = Math.min(window.devicePixelRatio || 1, 2) * opt.scale;
       canvas.style.width = W + 'px'; canvas.style.height = Hh + 'px';
       canvas.width = Math.max(1, Math.round(W * dpr)); canvas.height = Math.max(1, Math.round(Hh * dpr));
-      sizeTex();
       overlay.setAttribute('viewBox', '0 0 ' + W + ' ' + Hh);
       draw();
     }
@@ -628,33 +678,15 @@ precision highp float; in vec2 uv; uniform sampler2D uTex; out vec4 o; void main
       gl.uniform1f(U.uTanHalf, Math.tan(opt.fov / 2));
       gl.uniform1f(U.uRSnow, opt.rSnow);
       gl.uniform1f(U.uExposure, opt.exposure);
-      gl.uniform1i(U.uSteps, opt.steps);
+      gl.uniform1i(U.uSteps, Math.round(opt.steps * (opt.dist < 10 ? 2 : 1)));   // finer march when zoomed in
       gl.uniform1f(U.uSeed, opt.seed);
       gl.uniform1f(U.uPx, canvas.width / W);
       gl.uniform4fv(U.uClump, clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]));
       gl.uniform4fv(U.uVapor, vapor.flatMap((v) => [v.R, v.phi, v.t0, v.amp]));
       gl.uniform1i(U.uMode, opt.mode);
       gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, showField ? fbo : null);
-      gl.disable(gl.BLEND);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      if (showField) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.useProgram(bprog); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(bloc); gl.vertexAttribPointer(bloc, 2, gl.FLOAT, false, 0, 0);
-        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(BU, 0);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-        gl.useProgram(lprog);
-        gl.uniform3fv(LU.uCam, cam); gl.uniformMatrix3fv(LU.uBasis, false, [...basis.r, ...basis.u, ...basis.f]);
-        gl.uniform1f(LU.uTanHalf, Math.tan(opt.fov / 2)); gl.uniform2f(LU.uRes, canvas.width, canvas.height);
-        gl.uniform1f(LU.uTime, time); gl.uniform1f(LU.uPx, canvas.width / W); gl.uniform1i(LU.uOccl, 0);
-        gl.uniform1f(LU.uGain, Number(box.dataset.field || 0.5));
-        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-        gl.bindBuffer(gl.ARRAY_BUFFER, lbuf); gl.enableVertexAttribArray(lloc); gl.vertexAttribPointer(lloc, 4, gl.FLOAT, false, 0, 0);
-        gl.drawArrays(gl.LINES, 0, lineVerts.length / 4);
-        gl.bindBuffer(gl.ARRAY_BUFFER, pbuf); gl.vertexAttribPointer(lloc, 4, gl.FLOAT, false, 0, 0);
-        gl.drawArrays(gl.POINTS, 0, partVerts.length / 4);
-        gl.disable(gl.BLEND);
-      }
+      drawField();
       // snow line annotation, projected with the same camera
       let d = '', best = null;
       for (let i = 0; i <= 72; i++) {
@@ -667,8 +699,15 @@ precision highp float; in vec2 uv; uniform sampler2D uTex; out vec4 o; void main
       label.textContent = ja() ? 'スノーライン' : 'snow line';
       label.setAttribute('x', best[0] + 8); label.setAttribute('y', best[1] + 14);
       canvas.setAttribute('aria-label', ja()
-        ? '原始惑星系円盤の内側8 auのモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、ダストが赤道面に沈み、約1 auのスノーラインの外側で氷をまとっています。'
-        : 'Volume rendering of a model protoplanetary disk within 8 au: warm surface layers, a cold midplane with settled dust, and a water snow line near 1 au.');
+        ? '原始惑星系円盤(半径8 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、ダストが赤道面に沈み、約1 auのスノーラインの外側で氷をまとっています。'
+        : 'Volume rendering of a model protoplanetary disk (8 au in radius): warm surface layers, a cold midplane with settled dust, and a water snow line near 1 au.');
+      // scale bar: 1 au (or a round multiple) at the distance of the star
+      const o = project([0, 0, 0]), r1 = project(basis.r), pxAu = o[2] > 0.1 ? Math.hypot(r1[0] - o[0], r1[1] - o[1]) : 0;
+      let Lb = 0.1; for (const c of [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100]) if (c * pxAu <= 150) Lb = c;
+      const x0 = 18, y0 = Hh - 18;
+      sbar.setAttribute('x1', x0); sbar.setAttribute('x2', x0 + Lb * pxAu); sbar.setAttribute('y1', y0); sbar.setAttribute('y2', y0);
+      stext.textContent = pxAu > 0 ? Lb + ' au' : ''; stext.setAttribute('x', x0); stext.setAttribute('y', y0 - 6);
+      box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12 } }));
     }
     // a clump that crosses the snow line releases vapor
     function update() {
@@ -687,9 +726,10 @@ precision highp float; in vec2 uv; uniform sampler2D uTex; out vec4 o; void main
     }
     function frame(t) {
       if (!running) return;
-      const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t; time += dt;
-      update();
-      draw();
+      const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
+      adapt(t);
+      if (!paused) { time += dt * speed; update(); dirty = true; }
+      if (dirty) { draw(); dirty = false; }
       requestAnimationFrame(frame);
     }
     const start = () => { if (!reduce && !running) { running = true; last = 0; requestAnimationFrame(frame); } };
@@ -699,17 +739,46 @@ precision highp float; in vec2 uv; uniform sampler2D uTex; out vec4 o; void main
       c.R = R; c.phi = phi; c.t0 = time - (age || 0); c.amp = 1; c.crossed = R - 0.05 * (age || 0) < opt.rSnow;
     };
 
-    canvas.addEventListener('pointerdown', (e) => { dragging = true; moved = false; px = e.clientX; py = e.clientY; canvas.setPointerCapture(e.pointerId); });
+    // --- input: drag to rotate, wheel, pinch or keys to zoom, click to drop pebbles ---
+    // On touch screens one finger moving sideways rotates and moving up or down scrolls the page
+    // (touch-action: pan-y); two fingers tilt the view and pinch to zoom.
+    const DMIN = 2, DMAX = 90, dist0 = opt.dist, el0 = opt.el, az0 = opt.az;
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    if (coarse) canvas.style.touchAction = 'pan-y';
+    canvas.tabIndex = 0;
+    const clampEl = (v) => Math.min(1.45, Math.max(-1.45, v));
+    const touched = () => { dirty = true; if (reduce) draw(); };
+    const zoomBy = (f) => { opt.dist = Math.min(DMAX, Math.max(DMIN, opt.dist * f)); touched(); };
+    const ptrs = new Map(); let pinch0 = 0, distPinch = 0;
+    canvas.addEventListener('pointerdown', (e) => {
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      canvas.setPointerCapture(e.pointerId);
+      if (ptrs.size === 1) { dragging = true; moved = false; px = e.clientX; py = e.clientY; }
+      else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); distPinch = opt.dist; moved = true; }
+    });
     canvas.addEventListener('pointermove', (e) => {
+      const p = ptrs.get(e.pointerId); if (!p) return;
+      if (ptrs.size === 2) {
+        const [a, b] = [...ptrs.values()], mx = 0.5 * (a.x + b.x), my = 0.5 * (a.y + b.y);
+        p.x = e.clientX; p.y = e.clientY;
+        const mx2 = 0.5 * (a.x + b.x), my2 = 0.5 * (a.y + b.y), d2 = Math.hypot(a.x - b.x, a.y - b.y);
+        azUser -= (mx2 - mx) * 0.006; elUser = clampEl(elUser + (my2 - my) * 0.006);
+        if (pinch0 > 0 && d2 > 0) opt.dist = Math.min(DMAX, Math.max(DMIN, distPinch * pinch0 / d2));
+        touched(); return;
+      }
       if (!dragging) return;
       const dx = e.clientX - px, dy = e.clientY - py;
       if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
-      azUser -= dx * 0.006; elUser = Math.min(1.45, Math.max(0.08, elUser + dy * 0.006)); px = e.clientX; py = e.clientY;
-      if (reduce) draw();
+      azUser -= dx * 0.006;
+      if (!coarse || e.pointerType === 'mouse') elUser = clampEl(elUser + dy * 0.006);
+      px = e.clientX; py = e.clientY; p.x = e.clientX; p.y = e.clientY;
+      touched();
     });
+    const endPtr = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0; if (ptrs.size === 0) dragging = false; };
+    canvas.addEventListener('pointercancel', (e) => { endPtr(e); moved = true; });
     canvas.addEventListener('pointerup', (e) => {
-      dragging = false;
-      if (moved) return;
+      const wasDrag = moved; endPtr(e);
+      if (wasDrag || ptrs.size) return;
       // click: drop pebbles where the ray meets the midplane
       const rect = canvas.getBoundingClientRect();
       const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1, ny = 1 - ((e.clientY - rect.top) / rect.height) * 2;
@@ -717,10 +786,33 @@ precision highp float; in vec2 uv; uniform sampler2D uTex; out vec4 o; void main
       const rd = [0, 1, 2].map((i) => basis.f[i] + th * (nx * asp * basis.r[i] + ny * basis.u[i]));
       const t = -cam[2] / rd[2]; if (t <= 0) return;
       const x = cam[0] + rd[0] * t, y = cam[1] + rd[1] * t, R = Math.hypot(x, y);
-      if (R < 0.15 || R > 8.3) return;
+      if (R < 0.15 || R > 8.5) return;
       addClump(R, Math.atan2(y, x), 0);
-      if (reduce) draw();
+      touched();
     });
+    canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomBy(Math.exp(e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015))); }, { passive: false });
+    canvas.addEventListener('keydown', (e) => {
+      const k = e.key; let used = true;
+      if (k === 'ArrowLeft') azUser += 0.08; else if (k === 'ArrowRight') azUser -= 0.08;
+      else if (k === 'ArrowUp') elUser = clampEl(elUser + 0.05); else if (k === 'ArrowDown') elUser = clampEl(elUser - 0.05);
+      else if (k === '+' || k === '=') zoomBy(0.8); else if (k === '-' || k === '_') zoomBy(1.25);
+      else if (k === 'Home') { elUser = el0; azUser = az0 - (reduce ? 0 : opt.spin * time); opt.dist = dist0; }
+      else if (k === ' ') box.diskPlay(paused);
+      else used = false;
+      if (used) { e.preventDefault(); touched(); }
+    });
+    // adaptive render scale: when frames fall behind, render smaller; when they are comfortably on time,
+    // work back up toward data-scale-max (the lines in the overlay are vector and unaffected)
+    let fEma = 16.7, fN = 0, raiseLock = 0, lastRaw = 0;
+    function adapt(t) {
+      const dtRaw = lastRaw ? t - lastRaw : 16.7; lastRaw = t;
+      if (paused) return;
+      fEma += (dtRaw - fEma) * 0.1;
+      if (++fN < 90) return;
+      fN = 0;
+      if (fEma > 24 && opt.scale > 0.4) { opt.scale = Math.max(0.4, opt.scale * 0.8); raiseLock = 20; resize(); }
+      else if (fEma < 17.5 && opt.scale < opt.scaleMax && raiseLock-- <= 0) { opt.scale = Math.min(opt.scaleMax, opt.scale * 1.15); resize(); }
+    }
     new ResizeObserver(resize).observe(box);
     new IntersectionObserver((es) => es.forEach((en) => (en.isIntersecting ? start() : stop()))).observe(box);
     document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
@@ -728,9 +820,45 @@ precision highp float; in vec2 uv; uniform sampler2D uTex; out vec4 o; void main
     resize();
     box.diskSetTime = (t) => { time = t; update(); draw(); };
     box.diskAddClump = (R, phi, age) => { addClump(R, phi, age); draw(); };
-    // controls for the preview page: camera presets (degrees, au) and the field-line overlay
-    box.diskView = (elevationDeg, azimuthDeg, distance) => { elUser = elevationDeg * Math.PI / 180; azUser = azimuthDeg * Math.PI / 180 - (reduce ? 0 : opt.spin * time); if (distance) opt.dist = distance; draw(); };
-    box.diskField = (on) => { showField = on; draw(); };
+    // controls for the preview page: view (degrees, au), components, time, state for links, snapshots
+    const deg = (r) => Math.round(r * 1800 / Math.PI) / 10;
+    box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 10) / 10, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time });
+    box.diskSet = (st) => {
+      if (st.el != null) elUser = clampEl(st.el * Math.PI / 180);
+      if (st.az != null) azUser = st.az * Math.PI / 180 - (reduce ? 0 : opt.spin * time);
+      if (st.d) opt.dist = Math.min(DMAX, Math.max(DMIN, st.d));
+      if (st.mode != null) opt.mode = Number(st.mode);
+      if (st.field != null) showField = !!Number(st.field);
+      if (st.speed) speed = Number(st.speed);
+      if (st.paused != null) paused = !!Number(st.paused);
+      if (st.time != null) { time = Number(st.time); update(); }
+      touched();
+    };
+    box.diskView = (elevationDeg, azimuthDeg, distance) => box.diskSet({ el: elevationDeg, az: azimuthDeg, d: distance });
+    box.diskField = (on) => box.diskSet({ field: on ? 1 : 0 });
+    box.diskPlay = (on) => { paused = !on; touched(); };
+    box.diskSpeed = (x) => { speed = x; };
+    box.diskZoom = (f) => zoomBy(f);
+    // for checks: render n frames to completion and return the time per frame (ms); set the render scale
+    box.diskBench = (n) => { const px1 = new Uint8Array(4), t0 = performance.now(); for (let i = 0; i < n; i++) { time += 0.05; update(); draw(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px1); } return (performance.now() - t0) / n; };   // readPixels waits for the GPU
+    box.diskScale = (sc) => { opt.scale = sc; resize(); };
+    // a PNG of the current frame: the volume plus the overlay (lines, snow line, scale bar)
+    box.diskSnapshot = async () => {
+      draw();
+      const out = document.createElement('canvas'); out.width = canvas.width; out.height = canvas.height;
+      const c2 = out.getContext('2d'); c2.drawImage(canvas, 0, 0);
+      const sv = overlay.cloneNode(true);
+      sv.setAttribute('xmlns', 'http://www.w3.org/2000/svg'); sv.setAttribute('width', out.width); sv.setAttribute('height', out.height);
+      const style = (sel, attrs) => sv.querySelectorAll(sel).forEach((el) => { for (const k in attrs) el.setAttribute(k, attrs[k]); });
+      style('.disk-snowline', { stroke: 'rgba(190,215,240,0.55)', 'stroke-width': 1, 'stroke-dasharray': '3 5' });
+      style('.disk-scale line', { stroke: 'rgba(190,215,240,0.85)', 'stroke-width': 1 });
+      style('text', { fill: 'rgba(190,215,240,0.85)', 'font-family': 'Helvetica, Arial, sans-serif', 'font-size': 11, 'letter-spacing': '0.04em' });
+      const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(sv)], { type: 'image/svg+xml' }));
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+      c2.drawImage(img, 0, 0, out.width, out.height); URL.revokeObjectURL(url);
+      return new Promise((res) => out.toBlob(res, 'image/png'));
+    };
   }
   // Panels narrower than 700 px keep the static picture: a finger drag would fight page scrolling,
   // and phone GPUs should not pay for the ray march.
