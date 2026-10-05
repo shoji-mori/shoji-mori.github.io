@@ -22,16 +22,37 @@
   .disk-label{fill:rgba(190,215,240,.8);font:11px var(--sans);letter-spacing:.04em}
   .disk-scale line{stroke:rgba(190,215,240,.85);stroke-width:1}
   .disk-scale text{fill:rgba(190,215,240,.85);font:11px var(--sans);letter-spacing:.04em}
-  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 0}
-  .row .k{font-size:13px;color:#6a6f75;margin-right:2px;min-width:3em}
+  .row{display:flex;gap:8px;align-items:flex-start;margin:10px 0 0}
+  .row .k{flex:none;font-size:13px;color:#6a6f75;margin-right:2px;min-width:3em;line-height:20px;padding:7px 0}
+  /* the buttons of a row, wrapping under each other (not under the row's name); a group keeps together */
+  .row .b,.row .grp{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .row .b{flex:1;min-width:0}
+  .row .grp{flex-wrap:nowrap}
   .row button{font:inherit;font-size:14px;padding:6px 13px;border:1px solid #d6d4cd;border-radius:999px;background:#fff;color:#15171a;cursor:pointer}
+  .row button{transition:background-color .15s,border-color .15s,color .15s,box-shadow .15s}
+  .row button:hover{border-color:#9d9a90;background:#f3f2ee}
+  .row button:active{background:#e8e6df}
+  .row button:focus-visible{outline:2px solid #4a7fd4;outline-offset:2px}
   .row button[aria-pressed=true]{background:#15171a;color:#fff;border-color:#15171a}
+  .row button[aria-pressed=true]:hover{background:#2c3036;border-color:#2c3036}
+  @media (prefers-reduced-motion: reduce){.row button{transition:none}}
+  /* phones: smaller buttons, so that each row (the five views included) fits on one line */
+  @media (max-width: 699px){
+    .row,.row .b,.row .grp{gap:6px}
+    .row .k{font-size:12px;min-width:2.7em;margin-right:0}
+    .row button{font-size:13px;padding:6px 9px}
+    .row .sep{margin:0}
+  }
   .row .clock{font-size:13px;color:#33383d;font-variant-numeric:tabular-nums;margin-left:4px}
+  .row .sep{font-size:13px;color:#6a6f75;margin:0 0 0 6px}
   .row input{font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d6d4cd;border-radius:6px;min-width:16em;flex:1}
   .hint{font-size:13px;color:#6a6f75;margin:14px 0 22px;line-height:1.7;padding-left:1.2em}
   .hint li{margin:0}
   .legend{font-size:14.5px;line-height:1.8;color:#33383d}
-  .legend h2{font-size:15px;margin:22px 0 4px;color:#15171a}
+  .legend details{margin:18px 0 0}
+  .legend summary{font-size:15px;font-weight:700;color:#15171a;cursor:pointer;padding:4px 0;list-style-position:inside}
+  .legend summary:focus-visible{outline:2px solid #8cb8ff;outline-offset:2px;border-radius:3px}
+  .legend details[open] summary{margin-bottom:4px}
   .legend ul{padding-left:1.2em;margin:0}
   .legend li{margin-bottom:6px}
 </style>
@@ -43,173 +64,243 @@
   <div class="disk-panel" id="disk" data-disk3d data-mobile data-elevation="22" data-azimuth="-65" data-distance="26" data-fov="32" data-scale="0.6" data-scale-max="1" data-steps="150">
     <img class="disk-static" src="/lab/disk/model-disk-1200.webp" width="1200" height="720" alt="原始惑星系円盤のモデル">
   </div>
+  <div class="row" role="group" aria-label="案内">
+    <span class="k">案内</span>
+    <span class="b">
+      <button type="button" id="tour" aria-pressed="false">見どころツアー</button>
+    </span>
+  </div>
   <div class="row" role="group" aria-label="視点">
     <span class="k">視点</span>
-    <button type="button" data-view="22,-65,26" aria-pressed="true">通常</button>
-    <button type="button" data-view="10,-80,24" aria-pressed="false">低い角度</button>
-    <button type="button" data-view="2,-80,24" aria-pressed="false">真横</button>
-    <button type="button" data-view="80,-65,30" aria-pressed="false">真上</button>
-    <button type="button" data-view="-14,-80,24" aria-pressed="false">下から</button>
+    <span class="b">
+      <button type="button" data-view="22,-65,26" aria-pressed="true">通常</button>
+      <button type="button" data-view="10,-80,24" aria-pressed="false">低い角度</button>
+      <button type="button" data-view="2,-80,24" aria-pressed="false">真横</button>
+      <button type="button" data-view="80,-65,30" aria-pressed="false">真上</button>
+      <button type="button" data-view="-14,-80,24" aria-pressed="false">下から</button>
+    </span>
   </div>
   <div class="row" role="group" aria-label="距離">
     <span class="k">距離</span>
-    <button type="button" id="toPlanet" aria-pressed="false">惑星に寄る</button>
-    <button type="button" data-view="14,-65,90" aria-pressed="false">遠くから</button>
-    <button type="button" data-zoom="0.7" aria-label="近づく">＋</button>
-    <button type="button" data-zoom="1.43" aria-label="離れる">−</button>
+    <span class="b">
+      <button type="button" id="toPlanet" aria-pressed="false">惑星に寄る</button>
+      <button type="button" data-view="14,-65,90" aria-pressed="false">遠くから</button>
+      <button type="button" data-zoom="0.7" aria-label="近づく">＋</button>
+      <button type="button" data-zoom="1.43" aria-label="離れる">－</button>
+    </span>
   </div>
   <div class="row" role="group" aria-label="円盤に描くもの">
     <span class="k">円盤</span>
-    <button type="button" data-comp="1" aria-pressed="true">ガス</button>
-    <button type="button" data-comp="2" aria-pressed="true">表層</button>
-    <button type="button" data-comp="4" aria-pressed="true">小石の層</button>
-    <button type="button" data-comp="16" aria-pressed="true">惑星</button>
+    <span class="b">
+      <button type="button" data-comp="1" aria-pressed="true">ガス</button>
+      <button type="button" data-comp="2" aria-pressed="true">表層</button>
+      <button type="button" data-comp="4" aria-pressed="true">小石の層</button>
+      <button type="button" data-comp="16" aria-pressed="true">惑星</button>
+    </span>
   </div>
   <div class="row" role="group" aria-label="円盤のまわりに描くもの">
     <span class="k">まわり</span>
-    <button type="button" data-comp="8" aria-pressed="true">風</button>
-    <button type="button" id="field" aria-pressed="true">磁力線</button>
-    <button type="button" data-comp="32" aria-pressed="true">エンベロープ</button>
+    <span class="b">
+      <button type="button" data-comp="8" aria-pressed="true">風</button>
+      <button type="button" id="field" aria-pressed="true">磁力線</button>
+      <button type="button" data-comp="32" aria-pressed="true">エンベロープ</button>
+    </span>
+  </div>
+  <div class="row" role="group" aria-label="見え方">
+    <span class="k">見え方</span>
+    <span class="b">
+      <button type="button" data-look="model" aria-pressed="true">物理分布</button>
+      <span class="grp">
+        <span class="sep">観測:</span>
+        <button type="button" data-look="optical" aria-pressed="false">可視・近赤外</button>
+        <button type="button" data-look="mir" aria-pressed="false">中間赤外</button>
+        <button type="button" data-look="mm" aria-pressed="false">ミリ波</button>
+      </span>
+    </span>
   </div>
   <div class="row" role="group" aria-label="断面">
     <span class="k">断面</span>
-    <button type="button" id="slice" aria-pressed="false">断面を見る</button>
-    <button type="button" data-sq="T" aria-pressed="false">温度</button>
-    <button type="button" data-sq="rho" aria-pressed="false">密度</button>
-    <button type="button" data-sq="tau" aria-pressed="false">光学的厚さ</button>
-    <button type="button" data-sq="none" aria-pressed="false">中身</button>
+    <span class="b">
+      <button type="button" id="slice" aria-pressed="false">断面を見る</button>
+      <span class="grp">
+        <button type="button" data-sq="T" aria-pressed="false">温度</button>
+        <button type="button" data-sq="rho" aria-pressed="false">密度</button>
+        <button type="button" data-sq="tau" aria-pressed="false">光学的厚さ</button>
+        <button type="button" data-sq="none" aria-pressed="false">中身</button>
+      </span>
+    </span>
   </div>
   <div class="row" role="group" aria-label="時間">
     <span class="k">時間</span>
-    <button type="button" id="play" aria-pressed="false">一時停止</button>
-    <button type="button" data-speed="0.3" aria-pressed="false">×0.3</button>
-    <button type="button" data-speed="1" aria-pressed="true">×1</button>
-    <button type="button" data-speed="3" aria-pressed="false">×3</button>
-    <span class="clock" id="clock">0.0 年</span>
+    <span class="b">
+      <button type="button" id="play" aria-pressed="false">一時停止</button>
+      <button type="button" data-speed="0.3" aria-pressed="false">×0.3</button>
+      <button type="button" data-speed="1" aria-pressed="true">×1</button>
+      <button type="button" data-speed="3" aria-pressed="false">×3</button>
+      <span class="clock" id="clock">0.0 年</span>
+    </span>
   </div>
-  <div class="row" role="group" aria-label="保存">
-    <span class="k">保存</span>
-    <button type="button" id="share">この視点のリンク</button>
-    <button type="button" id="snap">画像を保存</button>
-    <input id="link" type="text" readonly aria-label="共有リンク" hidden>
+  <div class="row" role="group" aria-label="表示と保存">
+    <span class="k">表示</span>
+    <span class="b">
+      <button type="button" id="ann" aria-pressed="true">注釈</button>
+      <button type="button" id="share">この視点のリンク</button>
+      <button type="button" id="snap">画像を保存</button>
+      <input id="link" type="text" readonly aria-label="共有リンク" hidden>
+    </span>
   </div>
   <ul class="hint">
     <li>ドラッグで回転、ホイール・ピンチ・＋/− でズーム(2〜160 au。断面と「惑星に寄る」では 0.25 au まで近づけます)。</li>
-    <li>円盤をクリック(タップ)すると、そこに小石の塊を置けます。</li>
-    <li>キーボード:矢印キーで回転、＋/− でズーム、Home で元の視点、スペースで一時停止。</li>
+    <li>円盤をクリック(タップ)すると、そこに小石の塊を置けます。初めての方は「見どころツアー」から(ドラッグやキーで止まります)。</li>
+    <li>キーボード(パネルをクリックしてから):矢印キーで回転、＋/− でズーム、Home で元の視点、スペースで一時停止。1〜5 で視点(通常・低い角度・真横・真上・下から)、P で惑星に寄る、F で磁力線、S で断面、A で注釈。</li>
     <li>スマホでは、指 1 本で横に動かすと回転、縦に動かすとページがスクロールします。2 本の指で傾けとズーム。</li>
   </ul>
   <div class="legend">
-  <h2>円盤</h2>
+  <details open>
+  <summary>円盤</summary>
   <ul>
     <li><b>色は温度</b>です。青は冷たく、スノーライン付近で白、内側と表層は琥珀色から金色。</li>
     <li>円盤は半径 8 au で密度のカットオフで終わり、H/R = 0.03 (R/au)<sup>1/4</sup> で反り返っています。中心星の光は反り返った<b>表層</b>で吸収され、そこだけが熱くなります。<b>赤道面</b>は冷たいままです。表層の明るさは散乱光として扱い、円盤のダストは等方に近い散乱(g = 0.3)にしています。乱流の凹凸は星の光をさえぎるので、山の後ろには影ができ、谷の後ろは明るくなります。縁では表面が下がるので、円盤自身の影に入って暗くなります。</li>
     <li>乱流の模様は、熱電離で磁気回転不安定性が働く最内側(0.3 au より内側)で強く、その外側のデッドゾーンでは弱く、外側の円盤でまた少し強くしています。</li>
+    <li>円盤を満たす<b>ガス</b>(細かいダストの混ざったガス、成分「ガス」)は、密度に比例して、その温度の色で光らせています。光の放射ではなく、ガスがどこにどれだけあるかを示す絵です。厚い所では明るさが頭打ちになるので、真横から見ると赤道面が光る帯になり、表層やスノーラインを覆い隠しません。</li>
     <li>大きなダストは赤道面に沈んで薄い層を作り、約1 auの<b>スノーライン</b>(点線)の外側では氷をまとって明るく、内側では暗い岩石になります。この層は可視光では不透明なので、低い角度から見ると反対側の面を隠します。</li>
     <li>置いた小石の塊は、ケプラー回転で引き伸ばされながら内側へ漂い、スノーラインを越えると氷を失います。</li>
   </ul>
-  <h2>磁力線と円盤風(成分「風」「磁力線」)</h2>
+  </details>
+  <details open>
+  <summary>見え方(物理分布と観測の見え方)</summary>
+  <ul>
+    <li><b>物理分布</b>:モデルの量をそのまま見せます。細かいダストの混ざったガスが円盤を満たし、内部まで半透明に見えます。色は温度です。断面はこの見え方の延長で、断面を開くと物理分布に戻ります。</li>
+    <li><b>観測:可視・近赤外</b>:星の光の散乱光で見た姿です。円盤は不透明で、星に照らされた表層だけが光ります。小さな粒は前へよく散乱するので手前側が明るく、真横からは赤道面が暗い帯になります。色は散乱した星の光です。</li>
+    <li><b>観測:中間赤外</b>:暖かい表層そのものの熱放射です(波長 10 µm のプランク関数で重み付け)。温度の高い内側が明るく、外側は暗くなります。色は温度(赤から黄)です。</li>
+    <li><b>観測:ミリ波</b>:赤道面の小石の熱放射です。ほぼ光学的に薄く、散乱はありません。ガスは見えないので、小石の環(スノーラインのすぐ外、ギャップの外側の圧力の極大)とギャップがくっきり見えます。色は明るさ(橙から白)です。</li>
+    <li>観測の見え方では、不透明度を波長に合わせて切り替えます(可視・中間赤外では大きく、ミリ波では小さく)。惑星のギャップは物理に近い深さで描き、モデルの中の描き込み(磁力線、風の印、エンベロープの流線)は消えます。色は見分けやすさを優先しています。</li>
+  </ul>
+  </details>
+  <details open>
+  <summary>磁力線と円盤風(成分「風」「磁力線」)</summary>
   <ul>
     <li>青白い線は<b>磁力線</b>です。定常・軸対称の理想MHDで、誘導方程式と運動方程式、質量保存を連立して解いた円盤風の解(Blandford &amp; Payne 1982 型の自己相似解、λ = 3、κ = 2.0)をそのまま使っています。円盤表面を回転軸から64°の向きに出て、足元半径の1.7倍でアルフヴェン速度を超え、その先は巻き付いた磁場のフープ応力で軸の方へ絞られます(足元半径の約50倍の高さで最も広がり、そこから軸へ戻ります)。足元と一緒に回転し(等回転)、上がるにつれて回転から遅れて巻き付きます。定常解なので、巻き付きは時間とともに増えません。回転が巻き込む分を、風が外へ運び去る分と釣り合っています。線の足元は2次元のソボル列で置いています。</li>
     <li>線の明るさは、風が運ぶ小さなダストが星の光を散乱した明るさとして決めています。散乱角(星→その点→観測者のなす角)について前方散乱の強い位相関数(Henyey–Greenstein、g = 0.6)を使うので、星と観測者を結ぶ向きに近い手前側が明るく、奥側は暗くなります。円盤の内部は星の光が届かないので暗くしています。線はベクトル(SVG)で描いているので、どの解像度でも滑らかです。</li>
-    <li>線に沿って上がる点が<b>円盤風</b>で、速さはこの解の流速です。磁場が回転と同じ向きのときの非対称性にならい、下側は弱くしています(Mori, Bai &amp; Tomida 2025)。円盤本体は上下対称です。</li>
+    <li>線に沿って上がる短い線(うしろに薄い尾を引く印)は<b>円盤風</b>の流れを示します。<b>流れの向きと速さを示す印で、実体のある塊ではありません</b>。印の長さは一定の時間に進む距離で、速さはこの解の流速です(根元ではゆっくりで印が詰まり、上空では速く、まばらになります)。ガスは磁力線と一緒に公転しながら線に沿って上がるので、印は公転の向きにも傾き、ある瞬間の形として描いた磁力線とは交わって見えます。磁場が回転と同じ向きのときの非対称性にならい、下側は弱くしています(Mori, Bai &amp; Tomida 2025)。円盤本体は上下対称です。</li>
     <li>円盤風の<b>ガス</b>(成分「風」)も同じ解から描いています。足元の半径が r<sub>0</sub> の磁力線の上で、密度は r<sub>0</sub><sup>−3/2</sup> に比例し、線に沿っては質量保存のとおりガスが加速するにつれて薄くなります(根元からアルフヴェン点までに約 20 分の 1、そこから足元半径の 10 倍の高さまでにさらに約 70 分の 1)。この冷たい解ではガスが表面で静止から動き出すので、密度は根元で無限大になります。そこで足元半径の 0.03 倍の高さより下では一定にし、その値を 1 au の照射面での円盤ガスの密度に合わせました。風が運ぶ小さなダストが星の光を前方へ散乱して光り(小さな粒は青い光をよく散乱するので青く描いています)、照射面より下では星の光が届かないので暗くなります。距離による明るさの減り方は、見やすさのため磁力線と同じく和らげています(約 4 au まではほぼ一定)。近くから見るときは、星の近くを通る長い視線で前方に散乱した光が表層の色を覆わないよう、風を暗くし、前方散乱の強さも線より抑えています。描画範囲の上端と外側では薄くしています。下側は 0.35 倍です。</li>
     <li>風の中の<b>濃淡</b>は、ガスが打ち出された場所と時刻での円盤表面の乱流の模様を、流速のまま運んだものです。塊は磁力線と一緒に回りながら上がり、円盤の乱流と同じ寿命で入れ替わるので、時間がたっても巻き込まれて細くなりません。見やすさのため、模様は円盤の乱流より大きくしています。</li>
   </ul>
-  <h2>惑星(成分「惑星」、「惑星に寄る」)</h2>
+  </details>
+  <details open>
+  <summary>惑星(成分「惑星」、「惑星に寄る」)</summary>
   <ul>
-    <li><b>惑星</b>:スノーラインの外の 3 au に、木星と同じ質量(中心星の 1/1000)の惑星を置いています。惑星の重力がガスを押しのけて<b>ギャップ</b>を開けます。ここではガスの面密度を最も深い所で 1/10 に下げ、幅は半値で 0.9 au(ヒル半径の約 4 倍)にしました。実際の木星質量の惑星はもっと深く広いギャップを開けると考えられますが、全体の見た目を保つため浅くしています。ギャップの内側の縁が星の光をさえぎるので、ギャップの底は影になり(届く光は最も暗い所で約 1/8)、縁を越えた光が外側の壁とその先に当たって、そこが最大で約 1.4 倍明るくなります。この割合は、星から出る光線をガスの中で追って求めています。ギャップのすぐ外は圧力が極大になるので、内側へ漂う小石がそこでせき止められて明るい環になり、ギャップの中には小石がほとんどありません。惑星が起こす密度波(航跡、Rafikov 2002)は、この薄い円盤ではきつく巻いた弧になります。</li>
+    <li><b>惑星</b>:スノーラインの外の 3 au に、木星と同じ質量(中心星の 1/1000)の惑星を置いています。惑星の重力がガスを押しのけて<b>ギャップ</b>を開けます(幅は半値で 0.9 au、ヒル半径の約 4 倍)。<b>ギャップの深さは見る距離で変えています</b>(見た目のための選択です)。遠くから(通常の構図)は浅く、ガスの面密度を最も深い所で 0.7 倍に下げるだけですが、惑星の軌道に近づくにつれて深くなり、軌道から 4 au 以内では 0.02 倍になります。実際の木星質量の惑星は、この薄い円盤では面密度を 0.3% ほどまで下げ、もっと広いギャップを開けると考えられます(Kanagawa et al. 2015, 2016)。ギャップの内側の縁が星の光をさえぎるので、ギャップの底は影になり(深いときに届く光は約 1/40)、縁を越えた光が外側の壁とその先に当たって、そこが最大で約 1.4 倍明るくなります。この割合は、星から出る光線をガスの中で追って求めています。ギャップが十分に深い(0.33 倍より深い)と、すぐ外にガスの圧力の極大ができ、内側へ漂う小石がそこでせき止められて明るい環になります(浅いうちは環はできません)。ギャップの中の小石は、深さに応じて減ります。小石の環、壁の明るさ、断面の値、円盤風が運ぶガスは、どれも同じ深さに従います。惑星の重力は、渦巻き状の<b>密度の波</b>(航跡)も立てます。軌道の外側には後ろへたなびく腕、内側には前へ伸びる腕ができ、形は理論の式(Rafikov 2002)のとおりで、この薄い円盤ではきつく巻いて、外側では 1.5 au ほどの間隔でもう一周してきます。波は惑星と一緒に回り、惑星から離れるほど弱くなります。<b>見やすさのため、波の振幅は強めにしています</b>(惑星のそばの波の山でガスの密度が 4 倍ほど。木星質量の惑星で期待されるより強めです)。ガスの密度、照らされた表層(盛り上がった腕の外側は影になります)、小石の層、断面の密度がそろって波を打ちます。波の強さは惑星と一緒に増減し、ギャップを描く深さ(見る距離)にはよりません。</li>
     <li>「惑星に寄る」で、惑星を追う視点に移ります(惑星の公転と一緒に回ります)。惑星と<b>周惑星円盤</b>(ヒル半径の 0.4 倍まで。惑星への降着で内側ほど熱い)が見え、後ろには星の光を受けた外側の壁があります。惑星と周惑星円盤は、近づいたとき(数 au 以内)だけ描きます。</li>
   </ul>
-  <h2>エンベロープ(成分「エンベロープ」、「遠くから」)</h2>
+  </details>
+  <details open>
+  <summary>エンベロープ(成分「エンベロープ」、「遠くから」)</summary>
   <ul>
-    <li><b>エンベロープ</b>:40 au ほど離れると、円盤を包む母体の雲の名残が見えてきます。回転しながら収縮する雲のモデル(Ulrich 1976)で、ガスは角運動量を保ったまま放物線の軌道で落ち、円盤の縁(8 au、遠心半径)より内側に降り積もります。軸に沿った空洞(開き角 30°)は流出(円盤風)が掃き出した場所で、その壁は星の光を直接受けて明るく、雲の奥は雲自身にさえぎられて暗くなります(若い星の写真でよく見る砂時計の形)。赤道面の近くは円盤の影です。細い線は落ちてくるガスの流線、点はその上を落ちるガスで、見やすいように円盤の時計の 30 倍の速さで動かしています。</li>
+    <li><b>エンベロープ</b>:40 au ほど離れると、円盤を包む母体の雲の名残が見えてきます。回転しながら収縮する雲のモデル(Ulrich 1976)で、ガスは角運動量を保ったまま放物線の軌道で落ち、円盤の縁(8 au、遠心半径)より内側に降り積もります。軸に沿った空洞(開き角 30°)は流出(円盤風)が掃き出した場所で、その壁は星の光を直接受けて明るく、雲の奥は雲自身にさえぎられて暗くなります(若い星の写真でよく見る砂時計の形)。赤道面の近くは円盤の影です。細い線は落ちてくるガスの流線、その上を動く短い線は落ちるガスの流れの向きと速さを示す印(塊ではありません)で、見やすいように円盤の時計の 30 倍の速さで動かしています。</li>
   </ul>
-  <h2>断面</h2>
+  </details>
+  <details open>
+  <summary>断面</summary>
   <ul>
     <li>「断面を見る」で、星を通る鉛直な面で円盤を切り、手前の半分を取り除いて切り口を見せます。切り口はいつも見る人の方を向きます。高さは引き伸ばしていない(縦横が等倍な)ので、円盤は薄いくさびに見えます。ズームすると 0.25 au まで近づけ、内側(0.1〜1 au)の構造が見えます。切り口の色は、モデルの式そのものの値です。</li>
     <li>切り口の量:<b>温度</b>は円盤と同じ色で、2 層です。星の光が届かない内部は赤道面の温度 T<sub>mid</sub>、照射面(τ* = 1)より上は 2.8 T<sub>mid</sub> で、縦の線が等温線です。<b>密度</b>はガス(円盤の乱流を含む、と風)の密度を対数で、1 au の赤道面に対する比で示します。<b>光学的厚さ</b>は星の方向の τ* を対数で示し、線は 10 倍ごとです。<b>中身</b>は色を塗らず、切り開いた円盤そのものを見せます。左上の帯が色の目盛りです(密度と光学的厚さには viridis と inferno の色を使っています)。</li>
-    <li>断面では、惑星のギャップが密度の切れ込みとして見えます。ギャップの中では、星の方向の光学的厚さが内側の縁の影で決まるので、照射面(τ* = 1)は縁から外側の壁までまっすぐに渡ります。赤道面の小石の層はギャップで途切れ、すぐ外の圧力極大で太くなります。ひし形は惑星の軌道が断面を横切る位置です。</li>
+    <li>断面では、惑星のギャップが密度の切れ込みとして、惑星の波の腕が断面を横切る所が密度の等高線のふくらみとして見えます。ギャップの中では、星の方向の光学的厚さが内側の縁の影で決まるので、照射面(τ* = 1)は縁から外側の壁までまっすぐに渡ります。赤道面の小石の層はギャップで途切れ、すぐ外の圧力極大で太くなります。ひし形は惑星の軌道が断面を横切る位置です。</li>
     <li>切り口の線:白い実線が<b>照射面(τ* = 1)</b>、水色の破線が<b>氷の境界</b>です。氷の境界は、内部ではスノーライン(0.9 au)の縦の線で、照射面より上では温度が 2.8 倍なので、照射面に沿って約 7 au まで外へ曲がります。赤道面の線は<b>小石の層</b>で、スノーラインの内側は岩石(茶)、外側は氷(白、すぐ外の太い所は氷のたまり)です。細い線は面内の<b>磁力線</b>(解の R–z の形)で、矢印は面内の<b>ガスの速度</b>です(長さは 1 km/s あたり 0.6 px、太陽質量の星として計算。下側は少なめ)。ガスはこのほか軸のまわりにも回っています。</li>
   </ul>
-  <h2>そのほか</h2>
+  </details>
+  <details open>
+  <summary>そのほか</summary>
   <ul>
     <li>隠れた仕掛けが二つあります。星をクリックすると<b>FU オリオン型の増光</b>(降着が急増して星が明るくなり、スノーラインが外へ動く)、成分の「惑星」を消して 3 au のあたりに小石の塊を何度か置くと、<b>惑星が育ってギャップを開けます</b>。どちらも短い説明が出ます。</li>
     <li>時計は、1 au での公転を 1 年として数えています。円盤は模式的なモデルで、シミュレーションの結果ではありません。磁力線と円盤風は上の自己相似解から計算しています。</li>
   </ul>
+  </details>
   </div>
 </main>
 <script>
-  // a taller panel on phones
-  document.getElementById('disk').dataset.aspect = window.matchMedia('(max-width: 699px)').matches ? '0.85' : '0.6';
+  // a taller panel on phones, and the legend's sections closed there (a tap opens one)
+  const narrow = window.matchMedia('(max-width: 699px)').matches;
+  document.getElementById('disk').dataset.aspect = narrow ? '0.85' : '0.6';
+  if (narrow) document.querySelectorAll('.legend details').forEach((d) => d.removeAttribute('open'));
+</script>
+<script>
+  // ?motion=reduce: as with the system's reduced motion (for checks, see ver2/tools/disk-check)
+  if (new URLSearchParams(location.search).get('motion') === 'reduce') document.getElementById('disk').dataset.static = '';
 </script>
 <script src="/lab/disk/disk3d.js"></script>
 <script>
   const box = document.getElementById('disk');
   const q = new URLSearchParams(location.search);
-  const views = [...document.querySelectorAll('[data-view]')];
+  const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
   const pressed = (b, on) => b.setAttribute('aria-pressed', String(on));
-  const toPlanet = document.getElementById('toPlanet');
-  const markView = (b) => { views.forEach((v) => pressed(v, v === b)); pressed(toPlanet, b === toPlanet); };
-  views.forEach((b) => b.addEventListener('click', () => {
+  const views = $$('[data-view]'), toPlanet = $('#toPlanet'), comps = $$('[data-comp]'), field = $('#field');
+  const slice = $('#slice'), sqs = $$('[data-sq]'), play = $('#play'), speeds = $$('[data-speed]'), ann = $('#ann'), looks = $$('[data-look]');
+  // The buttons follow the model's state: after the page's own actions, and when the model reports a change from
+  // inside (keys, the tour, the easter eggs, a drag). A view counts as current while its elevation and distance hold
+  // (the azimuth drifts with the slow spin).
+  function sync() {
+    if (!box.diskState) return;
+    const s = box.diskState();
+    views.forEach((b) => { const [el, , d] = b.dataset.view.split(',').map(Number); pressed(b, !s.p && !s.slice && Math.abs(s.el - el) < 0.6 && Math.abs(s.d - d) < 0.06); });
+    pressed(toPlanet, !!s.p);
+    comps.forEach((b) => pressed(b, (s.mode & Number(b.dataset.comp)) !== 0));
+    pressed(field, !!s.field);
+    pressed(slice, !!s.slice); slice.textContent = s.slice ? '断面を閉じる' : '断面を見る';
+    sqs.forEach((b) => pressed(b, !!s.slice && b.dataset.sq === s.sq));
+    pressed(play, !!s.paused);
+    speeds.forEach((b) => pressed(b, Number(b.dataset.speed) === s.speed));
+    pressed(ann, !!s.ann);
+    looks.forEach((b) => pressed(b, b.dataset.look === s.look));
+  }
+  box.addEventListener('diskstate', sync);
+  box.addEventListener('diskmode', sync);
+  // the tour: the highlights in turn (usual view, planet, slice, from afar), each with a short text; dragging, the
+  // wheel or a key stops it, as does this button
+  const tourBtn = $('#tour');
+  box.addEventListener('disktour', (e) => { pressed(tourBtn, e.detail.on); tourBtn.textContent = e.detail.on ? 'ツアーを止める' : '見どころツアー'; });
+  tourBtn.addEventListener('click', () => { if (box.diskTour) box.diskTour(tourBtn.getAttribute('aria-pressed') !== 'true'); });
+  const act = (f) => () => { if (box.diskSet) { f(); sync(); } };
+  views.forEach((b) => b.addEventListener('click', act(() => {
     const [el, az, d] = b.dataset.view.split(',').map(Number);
-    if (box.diskSet) { if (box.diskState().slice) setSlice(false); box.diskSet({ el, az, d, p: 0, fly: 1 }); }
-    markView(b);
-  }));
+    if (box.diskState().slice) box.diskSlice(false);
+    box.diskSet({ el, az, d, p: 0, fly: 1 });
+  })));
   // close to the planet: the camera follows it on its orbit, from the side of the star and above the disk's surface,
   // so that the outer wall of the gap, lit by the star, stands behind it
-  toPlanet.addEventListener('click', () => {
-    if (!box.diskSet) return;
-    if (box.diskState().slice) setSlice(false);
-    box.diskSet({ p: 1, el: 30, az: 160, d: 1.6, fly: 1 });
-    markView(toPlanet);
-  });
-  document.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => box.diskZoom && box.diskZoom(Number(b.dataset.zoom))));
+  toPlanet.addEventListener('click', act(() => {
+    if (box.diskState().slice) box.diskSlice(false);
+    box.diskPlanetView();
+  }));
+  $$('[data-zoom]').forEach((b) => b.addEventListener('click', act(() => box.diskZoom(Number(b.dataset.zoom)))));
   // components: a bit mask for the volume, a flag for the field lines
-  const comps = [...document.querySelectorAll('[data-comp]')];
-  const applyComps = () => { let m = 0; comps.forEach((b) => { if (b.getAttribute('aria-pressed') === 'true') m |= Number(b.dataset.comp); }); if (box.diskSet) box.diskSet({ mode: m }); };
-  comps.forEach((b) => b.addEventListener('click', () => { pressed(b, b.getAttribute('aria-pressed') !== 'true'); applyComps(); }));
-  // the model may turn a component on itself (growing the planet from pebbles)
-  box.addEventListener('diskmode', (e) => comps.forEach((b) => pressed(b, (e.detail.mode & Number(b.dataset.comp)) !== 0)));
-  const field = document.getElementById('field');
-  field.addEventListener('click', () => { const on = field.getAttribute('aria-pressed') !== 'true'; pressed(field, on); if (box.diskField) box.diskField(on); });
-  // the slice: a vertical cut through the star, facing the viewer. Turning it on moves to a low, close view
-  // (the disk is thin); turning it off returns to the view before. A quantity button also turns it on.
-  const slice = document.getElementById('slice'), sqs = [...document.querySelectorAll('[data-sq]')];
-  let before = null;
-  const setSlice = (on, sq) => {
-    if (!box.diskSet) return;
-    const s0 = box.diskState();
-    if (on && !s0.slice) { before = { el: s0.el, az: s0.az, d: s0.d, p: s0.p }; box.diskSet({ slice: 1, sq: sq || s0.sq, el: 6, d: 2.4, fly: 1 }); }
-    else if (on) box.diskSet({ sq: sq || s0.sq });
-    else { box.diskSet({ slice: 0 }); if (before) box.diskSet({ ...before, fly: 1 }); before = null; }
-    pressed(slice, on); slice.textContent = on ? '断面を閉じる' : '断面を見る';
-    const q = box.diskState().sq; sqs.forEach((b) => pressed(b, on && b.dataset.sq === q));
-    views.forEach((v) => pressed(v, false)); pressed(toPlanet, false);
-  };
-  slice.addEventListener('click', () => setSlice(slice.getAttribute('aria-pressed') !== 'true'));
-  sqs.forEach((b) => b.addEventListener('click', () => setSlice(true, b.dataset.sq)));
-  // time
-  const play = document.getElementById('play');
-  // a toggle: pressed while the model is paused
-  const setPlay = (on) => { pressed(play, !on); if (box.diskPlay) box.diskPlay(on); };
-  play.addEventListener('click', () => setPlay(play.getAttribute('aria-pressed') === 'true'));
-  const speeds = [...document.querySelectorAll('[data-speed]')];
-  speeds.forEach((b) => b.addEventListener('click', () => { speeds.forEach((v) => pressed(v, v === b)); if (box.diskSpeed) box.diskSpeed(Number(b.dataset.speed)); }));
-  const clock = document.getElementById('clock');
+  comps.forEach((b) => b.addEventListener('click', act(() => box.diskSet({ mode: box.diskState().mode ^ Number(b.dataset.comp) }))));
+  field.addEventListener('click', act(() => box.diskField(!box.diskState().field)));
+  // the look: the model's quantities, or as observed at a wavelength (the slice belongs to the model's look)
+  looks.forEach((b) => b.addEventListener('click', act(() => box.diskLook(b.dataset.look))));
+  // the annotations (snow line, scale bar, labels, the lines on the slice), also left out of the saved image
+  ann.addEventListener('click', act(() => box.diskAnnotations(!box.diskState().ann)));
+  // the slice: a vertical cut through the star, facing the viewer (the model flies to a low, close view as the
+  // plane sweeps in, and back to the view before as it sweeps out). A quantity button also opens it.
+  slice.addEventListener('click', act(() => box.diskSlice(!box.diskState().slice)));
+  sqs.forEach((b) => b.addEventListener('click', act(() => box.diskSlice(true, b.dataset.sq))));
+  // time: the pause button is pressed while the model is paused
+  play.addEventListener('click', act(() => box.diskPlay(!!box.diskState().paused)));
+  speeds.forEach((b) => b.addEventListener('click', act(() => box.diskSpeed(Number(b.dataset.speed)))));
+  const clock = $('#clock');
   let lastClock = 0;
   box.addEventListener('diskframe', (e) => { const y = e.detail.years; if (Math.abs(y - lastClock) >= 0.05) { lastClock = y; clock.textContent = y.toFixed(1) + ' 年'; } });
   // a link that restores the view, the components and the time
-  const link = document.getElementById('link');
-  document.getElementById('share').addEventListener('click', async () => {
+  const link = $('#link');
+  $('#share').addEventListener('click', async () => {
     const s = box.diskState ? box.diskState() : {};
     const u = new URL(location.href); u.search = '';
-    for (const k of ['el', 'az', 'd', 'mode', 'field', 'speed', 'paused', 'slice', 'sq', 'p']) u.searchParams.set(k, s[k]);
-    u.searchParams.set('t', Math.round(s.time * 10) / 10);
+    for (const k of ['el', 'az', 'd', 'mode', 'field', 'speed', 'paused', 'slice', 'sq', 'p', 'ann', 'look']) u.searchParams.set(k, s[k]);
+    u.searchParams.set('t', Math.round(s.time * 1000) / 1000);   // (to 0.001, so that a paused picture comes back as it was)
     link.value = u.href; link.hidden = false; link.select();
     try { await navigator.clipboard.writeText(u.href); link.value = u.href + '  (コピーしました)'; } catch (e) { /* the field shows the link */ }
   });
-  document.getElementById('snap').addEventListener('click', async () => {
+  $('#snap').addEventListener('click', async () => {
     if (!box.diskSnapshot) return;
     const blob = await box.diskSnapshot();
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'disk-model.png'; a.click();
@@ -217,17 +308,13 @@
   });
   // restore a shared state
   if (q.has('el') && box.diskSet) {
-    const st = {}; for (const k of ['p', 'el', 'az', 'd', 'mode', 'field', 'speed', 'paused', 'slice']) if (q.has(k)) st[k] = Number(q.get(k));
+    const st = {}; for (const k of ['p', 'el', 'az', 'd', 'mode', 'field', 'speed', 'paused', 'slice', 'ann']) if (q.has(k)) st[k] = Number(q.get(k));
     if (q.has('sq')) st.sq = q.get('sq');
+    if (q.has('look')) st.look = q.get('look');
     if (q.has('t')) st.time = Number(q.get('t'));
     box.diskSet(st);
-    views.forEach((v) => pressed(v, false)); pressed(toPlanet, !!st.p);
-    if (st.mode != null) comps.forEach((b) => pressed(b, (st.mode & Number(b.dataset.comp)) !== 0));
-    if (st.field != null) pressed(field, !!st.field);
-    if (st.speed) speeds.forEach((v) => pressed(v, Number(v.dataset.speed) === st.speed));
-    if (st.paused != null) pressed(play, !!st.paused);
-    const s1 = box.diskState(); pressed(slice, !!s1.slice); slice.textContent = s1.slice ? '断面を閉じる' : '断面を見る'; sqs.forEach((b) => pressed(b, !!s1.slice && b.dataset.sq === s1.sq));
   }
+  sync();
 </script>
 </body>
 </html>

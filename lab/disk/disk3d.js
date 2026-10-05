@@ -32,6 +32,9 @@
 // Clicking drops a clump of pebbles: it shears out, drifts inward and loses its ice inside
 // the snow line; the vapor spreads outward and freezes again. Clicking the star sets off an FU Orionis
 // outburst (see burstL); with the planet turned off, pebbles dropped near 3 au grow it back.
+// Looks: the model's quantities as they are (the default), or as the disk would be seen at a wavelength: scattered
+// light (optical, near-infrared), the warm surface's thermal emission (mid-infrared), the pebbles' thermal emission
+// (millimetre). See uLook.
 // This is a schematic model for the website, not simulation output.
 (function () {
   // Magnetic field lines, shared by the volume (wind gas) and the line pass. They come from a numerical
@@ -65,21 +68,24 @@
   const MODEL = { R_IN: 0.08, H0: 0.03, R_OUT: 8.0, P_OUT: 6.0, LNTAU1: 8.5, TICE: 160.0, K_D: 1200.0, SD0: 0.012 };
   const G = (v) => Number.isInteger(v) ? v.toFixed(1) : String(v);   // a JS number as a GLSL float literal
   // A planet of Jupiter's mass (mass ratio q = 1e-3) on a circular orbit at 3 au, beyond the snow line. Its Hill radius
-  // is a (q/3)^1/3 = 0.21 au. It opens a gap in the gas, here a Gaussian dip in Σ of depth D = 0.9 and width (sigma)
-  // 1.8 Hill radii, FWHM 0.88 au = 4.2 Hill radii. That is chosen for the picture: in a disk this thin (H/R = 0.04 at
-  // 3 au) a Jupiter would clear a deeper and wider gap (Kanagawa et al. 2015, 2016: Σ_min/Σ_0 ~ 0.003 and a width of
-  // ~0.8 a for alpha = 1e-3). Pebbles collect at the pressure maximum just outside it (P ∝ Σ T / H ∝ Σ R^-7/4 at the
-  // midplane). The planet's wake follows Rafikov (2002). Close up, the planet and its circumplanetary disk (out to 0.4
-  // Hill radii) show.
+  // is a (q/3)^1/3 = 0.21 au. It opens a gap in the gas, a Gaussian dip in Σ, Σ (1 - depth e^-x²) with x = (R - a)/W,
+  // of width (sigma) W = 1.8 Hill radii (FWHM 0.88 au = 4.2 Hill radii). Its depth is a choice for the picture and
+  // depends on how close the camera is (DEPTH): 0.3 from afar, so that the usual view is not dominated by a dark ring,
+  // and 0.98 close up, nearer what a Jupiter would clear in a disk this thin (H/R = 0.04 at 3 au: Σ_min/Σ_0 ~ 0.003 and
+  // a width of ~0.8 a for alpha = 1e-3; Kanagawa et al. 2015, 2016). Everything that follows from the gap takes the
+  // same depth: the starlight on it, the pebbles (filtered out of the gap, and collected at the pressure maximum just
+  // outside it once the gap is deep enough to make one, see trapOf), the wind launched from it, the wake and the slice.
+  // The wake, the spiral density wave the planet launches, follows Rafikov (2002) in shape; its strength goes with the
+  // planet rather than with the depth the gap is drawn with, and is on the strong side (WAKE_A, see wake in the disk
+  // map). Close up, the planet and its circumplanetary disk (out to 0.4 Hill radii) show.
   const PLANET = (() => {
-    const A = 3.0, Q = 1e-3, RH = A * Math.cbrt(Q / 3), W = 1.8 * RH, D = 0.9;
-    let trap = A, best = -1e9;
-    for (let R = A; R < A + 4 * W; R += 1e-4) {
-      const x = (R - A) / W, v = -2.75 * Math.log(R) - Math.pow(R / MODEL.R_OUT, MODEL.P_OUT) + Math.log(1 - D * Math.exp(-x * x));
-      if (v > best) { best = v; trap = R; }
-    }
-    return { A, Q, RH, W, D, TRAP: trap, HP: MODEL.H0 * Math.pow(A, 0.25), PHI0: 2.4 };
+    const A = 3.0, Q = 1e-3, RH = A * Math.cbrt(Q / 3), W = 1.8 * RH;
+    return { A, Q, RH, W, HP: MODEL.H0 * Math.pow(A, 0.25), PHI0: 2.4, WAKE_A: 3.5, WAKE_L: 0.6 };
   })();
+  // the gap's depth: FAR when the camera is beyond D1 au from the planet's orbit (the circle R = a in the midplane;
+  // the usual view is at 23 au), NEAR within D0, eased in between. The distance to the orbit rather than to the planet,
+  // so that the depth does not change as the planet goes round (seen from near the star, as in the slice).
+  const DEPTH = { FAR: 0.3, NEAR: 0.98, D0: 4, D1: 18 };
   const GL_R0 = 1.8, GL_DR = 7.6 / 127;   // radii of the table of starlight on the gap (see gapLightTables)
   // The envelope: the parent cloud, in solid-body rotation, collapses onto the star and the disk (Ulrich 1976). Each
   // parcel falls from rest far away on a parabolic orbit (zero energy) that keeps its angular momentum, sqrt(G M r_c)
@@ -159,26 +165,31 @@ const float OMEGA0 = 0.5236;            // 2π / 12 s at 1 au (visual time)
 const float RB = 11.0, ZB = 9.0;        // marched cylinder (au): past the edge of the disk, up to the top of the drawn wind
 `;
   const PLANET_GLSL = `
-// the planet (see PLANET in the script): uPlanet is the depth of its gap relative to the full depth (it fades in and
-// out with the planet), uPlanetPhi its azimuth
+// the planet (see PLANET in the script): uPlanet is the depth of its gap (Σ is lowered by the factor 1 - uPlanet e^-x²;
+// it depends on the camera's distance and fades in and out with the planet), uPlanetPhi its azimuth. uTrap: the radius
+// of the pressure maximum outside the gap, the fraction of the pebbles filtered out of the gap and the strength of their
+// trap at that maximum (see trapOf in the script).
 uniform float uPlanet;
 uniform float uPlanetPhi;
+uniform float uWake;        // the wake's strength: the planet's presence (0 to 1, as it fades in or grows)
+uniform vec3 uTrap;
 uniform vec3 uPlanetPos;
 uniform float uPlanetVis;   // the planet and its disk shown close up (see planetLight)
 const float R_CPD = ${G(+(0.4 * PLANET.RH).toFixed(4))};   // radius of the planet's disk, 0.4 Hill radii
-const float A_P = ${G(PLANET.A)}, GAP_D = ${G(PLANET.D)}, GAP_W = ${G(+PLANET.W.toFixed(5))}, R_TRAP = ${G(+PLANET.TRAP.toFixed(4))}, HP = ${G(+PLANET.HP.toFixed(5))};
+const float A_P = ${G(PLANET.A)}, GAP_W = ${G(+PLANET.W.toFixed(5))}, HP = ${G(+PLANET.HP.toFixed(5))};
+const float WAKE_A = ${G(PLANET.WAKE_A)}, WAKE_L = ${G(PLANET.WAKE_L)};
 // the factor by which the gap lowers Σ, and its ln
 float gapFactor(float R){
   if (uPlanet <= 0.0) return 1.0;
   float x = (R - A_P) / GAP_W;
   if (abs(x) > 3.5) return 1.0;
-  return 1.0 - uPlanet * GAP_D * exp(-x * x);
+  return 1.0 - uPlanet * exp(-x * x);
 }
 float gapLn(float R){
   if (uPlanet <= 0.0) return 0.0;
   float x = (R - A_P) / GAP_W;
   if (abs(x) > 3.5) return 0.0;
-  return log(1.0 - uPlanet * GAP_D * exp(-x * x));
+  return log(1.0 - uPlanet * exp(-x * x));
 }
 `;
   const NOISE_GLSL = `
@@ -286,23 +297,28 @@ float gapLight(float R){
   int i = int(f), j = i + 1;
   return mix(uGapLight[i >> 2][i & 3], uGapLight[j >> 2][j & 3], f - float(i));
 }
-// The planet's wake (Rafikov 2002, for c_s ∝ R^-1/4): the density wave launched by the planet, trailing outside its
-// orbit and leading inside, along phi_w = phi_p + sgn(x - 1) F(x) / h_p with x = R/a, F = 4.8 - 4 x^-1/4 - 0.8 x^5/4 and
-// h_p = H/R at the planet. Returns the relative excess of the gas density: a ridge 0.6 scale heights wide, widened
-// (and lowered, keeping its integral) where a texel or the pixel footprint across it is wider; up to a doubling near
-// the planet (a Jupiter drives a strongly nonlinear wake), fading over about 1.4 au (inside the gap the planet's disk
-// takes over).
+// The planet's wake (Rafikov 2002, for c_s ∝ R^-1/4; far from the planet it is the linear wake of Ogilvie & Lubow
+// 2002): the spiral density wave launched by the planet, trailing outside its orbit and leading inside, along
+// phi_w = phi_p + sgn(x - 1) F(x) / h_p with x = R/a, F = 4.8 - 4 x^-1/4 - 0.8 x^5/4 and h_p = H/R at the planet. In this
+// thin disk (h_p = 0.04) both arms wind tightly: the outer one comes round again 1.5 au farther out at 4.5 au, the inner
+// one 1.2 au farther in at 2 au. Returns the relative excess of the gas density on the crest: WAKE_A (3.5) next to the
+// planet (at most about 3 at the edge of the gap), decaying over WAKE_L (0.6 a) away from it, out to 0.45 a and 2.3 a:
+// exaggerated (a Jupiter-mass planet raises crests of order unity near it) so that the arms read as waves. The crest is a scale
+// height wide, broadening as the wave travels (its shock widens), and widened further (and lowered, keeping its
+// integral) where a texel or the pixel footprint across it is wider. It turns with the planet and grows and fades with
+// it (uWake), whatever depth the gap is drawn with; inside the gap the planet's own disk takes over.
 float wake(float R, float phi, float fp){
   float x = R / A_P;
-  if (uPlanet <= 0.0 || x < 0.45 || x > 2.4) return 0.0;
+  if (uWake <= 0.0 || x < 0.42 || x > 2.5) return 0.0;
   float F = 4.8 - 4.0 * pow(x, -0.25) - 0.8 * pow(x, 1.25);
   float dphi = phi - uPlanetPhi - sign(x - 1.0) * F / HP;
   dphi = mod(dphi + PI, TAU) - PI;
-  float sl = pow(x, 1.25) * abs(pow(x, -1.5) - 1.0) / HP, c = inversesqrt(1.0 + sl * sl);   // R dphi_w/dR, cos of the pitch
-  float w = 0.6 * H0 * pow(R, 1.25);
-  float px = max(fp * R, 1.5 * R * (LNR_SPAN / uMapRes.x * sl + TAU / uMapRes.y) * c);   // footprint across the ridge
+  float sl = pow(x, 1.25) * abs(pow(x, -1.5) - 1.0) / HP, c = inversesqrt(1.0 + sl * sl);   // R dphi_w/dR, sin of the pitch
+  float ax = abs(x - 1.0), w = H0 * pow(R, 1.25) * (1.0 + 0.5 * ax);
+  float px = max(fp * R, 1.5 * R * (LNR_SPAN / uMapRes.x * sl + TAU / uMapRes.y) * c);   // footprint across the crest
   float wf2 = w * w + px * px, d = R * dphi * c;
-  return 1.0 * uPlanet * exp(-abs(x - 1.0) / 0.45) * smoothstep(0.04, 0.12, abs(x - 1.0)) * w * inversesqrt(wf2) * exp(-d * d / wf2);
+  return uWake * WAKE_A * exp(-ax / WAKE_L) * smoothstep(0.03, 0.10, ax) * smoothstep(0.42, 0.55, x) * (1.0 - smoothstep(2.0, 2.5, x))
+       * w * inversesqrt(wf2) * exp(-d * d / wf2);
 }
 void main(){
   float lnR = LNR_MIN + gl_FragCoord.x / uMapRes.x * LNR_SPAN;
@@ -329,12 +345,15 @@ void main(){
     dtau += (f - 1.0) * (rPrev - r); rPrev = r;
   }
   float nd = turb(lnR, phi, Om, fp, uSeed + 11.0, false, uTime, CELLS).x;
-  // the planet's wake raises the gas and, more, the surface that faces the star
+  // the planet's wake raises the gas, the pebbles (which collect in its pressure crests, a little less) and, more, the
+  // surface that faces the star; the raised crest shades the surface just outside it, so each arm is a bright crest
+  // with a darker trough beyond
   float wk = wake(R, phi, fp);
+  float sh = exp(-2.0 * max(0.0, wake(R - H0 * pow(R, 1.25), phi, fp) - wk));
   // gas density, skin brightness (slopes facing the star catch more light), pebble surface density, starlight on the
   // gap and beyond
-  fragColor = vec4(exp(1.6 * n.x - 0.08 * A * A) * (1.0 + wk), max(0.0, 1.0 + 0.5 * n.y + RELIEF * n.z) * exp(-dtau) * (1.0 + 1.2 * wk),
-                   max(0.0, 1.0 + A * nd), gapLight(R));
+  fragColor = vec4(exp(1.6 * n.x - 0.08 * A * A) * (1.0 + wk), max(0.0, 1.0 + 0.5 * n.y + RELIEF * n.z) * exp(-dtau) * (1.0 + 2.0 * wk) * sh,
+                   max(0.0, 1.0 + A * nd) * (1.0 + 0.8 * wk), gapLight(R));
 }`;
   const WINDMAP_FS = `#version 300 es
 precision highp float;
@@ -353,9 +372,12 @@ void main(){
   // surface, has it diverge; RHO_B puts that value at the density of the disk gas at its irradiation
   // surface (tau* = 1) at 1 au. Below the base the wind fades into the disk over WIND_BLEED. Lines only
   // carry gas where the disk has it (its inner edge, as Sigma, and the density cutoff at R_OUT). The wind
-  // fades out toward the top and the side of the marched cylinder, so its edge does not show.
+  // fades out toward the top and the side of the marched cylinder, so its edge does not show: exponentially from
+  // 0.55 of the way (the display stretch is logarithmic for bright light, so a fade that only reaches zero at the edge
+  // shows the edge as a hard line once the wind is bright, as in an outburst), and to zero over the last 15%.
   float lnrho = log(RHO_B) - 1.5 * log(r0) + tabAt(max(chi, CHI_C)).w - tabAt(CHI_C).w + min(chi, 0.0) / WIND_BLEED - cutOut(r0)
-              + log(max(smoothstep(R_IN * 0.8, R_IN * 1.3, r0) * (1.0 - smoothstep(0.7 * ZB, ZB, h)) * (1.0 - smoothstep(0.8 * RB, RB, R)), 1e-30));
+              - 5.0 * smoothstep(0.55 * ZB, ZB, h) - 5.0 * smoothstep(0.55 * RB, RB, R)
+              + log(max(smoothstep(R_IN * 0.8, R_IN * 1.3, r0) * (1.0 - smoothstep(0.85 * ZB, ZB, h)) * (1.0 - smoothstep(0.85 * RB, RB, R)), 1e-30));
   // ln r0, azimuth of the line relative to its foot, travel time of the gas from the base, ln density
   fragColor = vec4(log(r0), fieldRP(Rf, h).y, tabAt(max(chi, 0.0)).z, lnrho);
 }`;
@@ -408,12 +430,20 @@ uniform float uTanHalf;
 uniform float uRSnow;
 uniform float uExposure;
 uniform float uStar;    // the star's glow relative to quiescence (an outburst brightens it)
+// The look: 0 the model's quantities as they are (the gas and small grains filling the disk, translucent, in the
+// colours of temperature); or as observed: 1 scattered light (optical and near-infrared: the disk is opaque, only its
+// irradiated surface scatters starlight, more forward than back, so the near side is brighter and an edge-on disk
+// shows a dark lane), 2 mid-infrared (the warm surface's own thermal emission, weighted by the Planck function at
+// 10 microns, so the inner disk shines), 3 millimetre (the pebbles' thermal emission at the midplane, nearly thin,
+// I ∝ T (1 - e^-tau); no scattered light, the gas transparent). The observed looks are drawn by the FULL program.
+uniform int uLook;
 uniform int uSteps;
 uniform float uSeed;
 uniform float uPx;      // render pixels per CSS pixel
 uniform vec4 uClump[6];
 uniform vec4 uVapor[4];
 uniform int uMode;      // bit mask of the components drawn: 1 gas body, 2 surface skin, 4 pebble sheet, 8 wind
+uniform vec4 uComp;     // their brightness as they fade in or out (gas, skin, pebbles, wind; 1 when on)
 uniform sampler2D uDiskMap;
 uniform sampler2D uWindMap;
 uniform sampler2D uEnvMap;
@@ -423,7 +453,13 @@ uniform float uEnv;     // the envelope: its visibility (it fades in with the di
 // the cut, 1 temperature, 2 gas density, 3 optical depth toward the star). uSliceN is the horizontal normal
 // toward the camera, uSliceR the horizontal direction to the right in the plane; uSliceZ scales heights on
 // the face (1: true proportions; a stretch would also need the march behind in stretched coordinates).
+// uSliceOff: the plane's distance from the star toward the camera; it sweeps in from the edge of the drawn
+// region when the slice opens and back out when it closes. During the sweep the face is the plain cut (the
+// quantity's colours would make large flat walls of the chords through the outer disk); they fade in, by
+// uSliceFace, as the plane reaches the star.
 uniform int uSlice;
+uniform float uSliceOff;
+uniform float uSliceFace;
 uniform int uSliceQ;
 uniform vec3 uSliceN;
 uniform vec3 uSliceR;
@@ -439,8 +475,12 @@ ${MAP_GLSL}
 // gas with small grains (also in the wind), settled pebbles (opaque out to the edge of the disk, and their
 // mostly thin millimetre-like emission).
 const float K_G = 0.8, K_D = ${G(MODEL.K_D)}, K_MM = 40.0;
-// Brightness of each component per unit of absorbed starlight E (see Eabs)
-const float G_SKIN = 0.04, G_GAS = 0.015, G_DUST = 1.4;
+// Brightness of the components: the skin and the pebble layer per unit of absorbed starlight E (see Eabs). The gas
+// body (gas mixed with small grains, which fills the disk) glows in proportion to its density, in the colour of its
+// temperature, whatever the starlight: a picture of where the gas is rather than of what it emits. Where the gas is
+// thick the glow saturates at G_GAS times the colour (emission over extinction), so the midplane shows as a band
+// without hiding the surface and the snow line.
+const float G_SKIN = 0.04, G_GAS = 0.2, G_DUST = 1.4;
 // Brightness of the wind per unit of its extinction (K_G rho) and of the starlight reaching it, chosen so
 // that the wind shows from the side without veiling the disk. Close to the disk (camera within about
 // 6-18 au of the star) it is dimmed to WIND_NEAR, since there the paths through the wind near the star
@@ -451,6 +491,15 @@ const vec3 WIND_COL = vec3(0.30, 0.56, 1.0);  // blue: small grains scatter blue
 const float PILE = 0.5;                 // extra glow of the ice pile-up beyond its surface density
 const vec3 EXT = vec3(0.90, 0.97, 1.08); // small grains absorb blue light more strongly
 const vec3 STARCOL = vec3(1.0, 0.87, 0.72);
+// the observed looks: the gas's opacity relative to K_G (the disk opaque in scattered light and the mid-infrared), the
+// colour of scattered starlight, the forward scattering of the grains at the surface, and the gains of each look
+const float OPT_K = 30.0, MIR_K = 8.0, G_OPT_HG = 0.55, G_OPT = 1.0, G_MIR = 2.5, G_MM = 0.3;
+const vec3 SCAT_COL = vec3(1.0, 0.94, 0.86);
+// mid-infrared: B_nu(10 microns, T) relative to 300 K, softly capped, and a thermal palette (red to pale yellow)
+float mirPlanck(float T){ float b = (exp(1439.0 / 300.0) - 1.0) / (exp(1439.0 / max(T, 20.0)) - 1.0); return b / (1.0 + b / 6.0); }
+vec3 mirColor(float T){ return mix(vec3(0.85, 0.16, 0.06), vec3(1.0, 0.86, 0.55), smoothstep(150.0, 700.0, T)); }
+// millimetre: one warm hue; the stretch turns the bright parts toward white (like the 'afmhot' maps of ALMA images)
+const vec3 MM_COL = vec3(1.0, 0.42, 0.12);
 // The envelope scatters starlight like the wind (small grains, forward scattering, bluish), with a softened falloff
 // with the distance from the star (about 15 au). Starlight does not reach it within the angle of the disk's surface
 // seen from the star (z/R below about 0.16): the disk's shadow. Elsewhere it is dimmed by the envelope's own column
@@ -568,17 +617,29 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       float dx = x - xPrev, xm = 0.5 * (x + xPrev);
       float P = abs(dx) > 1e-3 ? (exp(-exp(xPrev)) - exp(-exp(x))) / dx : exp(xm - exp(xm));
       // seen by scattered starlight (near-isotropic grains); the colour stays that of the temperature
-      float mu = dot(p, -rd) / max(length(p), 1e-3);
-      skin = G_SKIN * E * az / (H * H) * ds * P * dm.g * phaseDisk(mu) * tcolor(Ts);
+      float mu = dot(p, -rd) / max(length(p), 1e-3), base = G_SKIN * E * az / (H * H) * ds * P * dm.g;
+      skin = base * phaseDisk(mu) * tcolor(Ts);
+#ifdef FULL
+      if (uLook == 1) skin = base * G_OPT * hg(mu, G_OPT_HG) * SCAT_COL;
+      else if (uLook == 2) skin = base * G_MIR * mirPlanck(Ts) * mirColor(Ts);
+      else if (uLook == 3) skin = vec3(0.0);
+#endif
+      skin *= uComp.y;
     }
-    // gas with small grains: dark and translucent, faintly glowing in the colour of its temperature
-    // (cold midplane; warm only inside the snow line)
+    // gas with small grains: translucent, glowing with its density in the colour of its temperature (cold
+    // midplane; warm only inside the snow line)
     float rho = exp(-lnR - cut + gl - 0.5 * zh * zh) * smoothstep(R_IN * 0.8, R_IN * 1.3, R) / (2.5066 * H) * dm.r;   // Sigma / (sqrt(2 pi) H) e^(-z²/2H²)
     ex = K_G * rho * EXT;
-    if ((uMode & 1) != 0) em = G_GAS * K_G * rho * E * tcolor(Tm);
+    if ((uMode & 1) != 0) em = G_GAS * K_G * rho * tcolor(Tm) * uComp.x;
+#ifdef FULL
+    if (uLook != 0) { ex *= uLook == 1 ? OPT_K : uLook == 2 ? MIR_K : 0.0; em = vec3(0.0); }
+#endif
 
-    // water vapor released inside the snow line, spreading outward
+    // water vapor released inside the snow line, spreading outward (in the model's look)
     for (int i = 0; i < 4; i++) {
+#ifdef FULL
+      if (uLook != 0) break;
+#endif
       vec4 v = uVapor[i]; if (v.w <= 0.0) continue;
       float dt = uTime - v.z, Rv = v.x + 0.03 * dt, Om = OMEGA0 * exp(-1.5 * lnR);
       float dphi = phi - (v.y + Om * dt); dphi = mod(dphi + PI, TAU) - PI;
@@ -595,7 +656,11 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
   // rises out of the irradiated surface. It absorbs with the opacity of the disk's small grains, which at
   // these densities is little. wq carries the coordinates of the streaks at the previous sample (99: none).
   vec3 q = vec3(99.0);
-  if (x < 2.5) {
+  bool windOn = true;
+#ifdef FULL
+  windOn = uLook <= 1;   // the wind and the envelope scatter starlight; no thermal emission is drawn for them
+#endif
+  if (x < 2.5 && windOn) {
     vec4 w = windMap(R, az);            // ln r0, azimuth relative to the foot, travel time, ln density
     // the grains that scatter and absorb: none where the gas left the disk inside about 2.5 R_IN (sublimated)
     float r0w = exp(w.x), r = length(p), rho = exp(w.w) * gapFactor(r0w) * (z > 0.0 ? 1.0 : WIND_LOW) * smoothstep(R_IN, 2.5 * R_IN, r0w);
@@ -606,14 +671,14 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       q = vec3(w.x, atan(p.y, p.x) - w.y - w.z, w.z);
       vec3 d = q - wq; d.y = mod(d.y + PI, TAU) - PI;
       float st = windTurb(q, wq.x > 50.0 ? vec3(0.0) : abs(d));
-      if ((uMode & 8) != 0) em += lit * st * WIND_COL;
+      if ((uMode & 8) != 0) em += lit * st * WIND_COL * uComp.w;
       ex += K_G * rho * st * EXT;
     }
   }
   wq = q;
 #ifdef FULL
   // the envelope, where it reaches into the marched cylinder (lit unless in the disk's shadow)
-  if (uEnv > 0.0) { vec3 e1, e2; envLight(p, rd, e1, e2); em += e1; ex += e2; }
+  if (uEnv > 0.0 && uLook <= 1) { vec3 e1, e2; envLight(p, rd, e1, e2); em += e1; ex += e2; }
 #endif
 }
 // The envelope outside the cylinder, marched in ENV_N steps from t0 to t1 (it is smooth): beyond the disk the
@@ -649,10 +714,10 @@ void sheet(vec3 p, vec3 rd, inout vec3 col, inout vec3 tr){
   float ice = 1.0 - smoothstep(TICE - 6.0, TICE + 6.0, Tm);
   float pile = 1.0 + 1.2 * ice * exp(-pow((R - 1.15 * uRSnow) / (0.13 * uRSnow), 2.0));
   // with the planet, pebbles are filtered out of the gap (deeper and a little wider than in the gas) and collect
-  // at the pressure maximum just outside it, a bright ring
+  // at the pressure maximum just outside it, a bright ring, once the gap is deep enough to make one (uTrap)
   // (none inside the planet's Hill sphere, where its own disk is)
-  float xg = (R - A_P) / (1.15 * GAP_W), xt = (R - R_TRAP) / (0.28 * GAP_W);
-  float trap = (1.0 - uPlanet * 0.97 * exp(-xg * xg)) * (1.0 + uPlanet * 2.2 * exp(-xt * xt)) / exp(gapLn(R));
+  float xg = (R - A_P) / (1.15 * GAP_W), xt = (R - uTrap.x) / (0.28 * GAP_W);
+  float trap = (1.0 - uTrap.y * exp(-xg * xg)) * (1.0 + 2.2 * uTrap.z * exp(-xt * xt)) / gapFactor(R);
 #ifdef FULL
   if (uPlanetVis > 0.0) trap *= smoothstep(1.5 * R_CPD, 2.5 * R_CPD, length(p - uPlanetPos));
 #endif
@@ -666,12 +731,21 @@ void sheet(vec3 p, vec3 rd, inout vec3 col, inout vec3 tr){
     sc += c.w * 0.05 * (0.45 + 0.55 * ice) * exp(-pow((R - Rc) / 0.08, 2.0) - pow(dphi / w, 2.0)) * exp(-dt / 70.0);
   }
   sd += sc;
+#ifdef FULL
+  if (uLook != 0) {
+    // millimetre: the pebbles' thermal emission (Rayleigh-Jeans, nearly thin); in scattered light and the
+    // mid-infrared they lie inside the opaque disk
+    if (uLook == 3) { float tm = K_MM * sd / max(mu, 0.15); col += tr * G_MM * (Tm / 100.0) * (1.0 - exp(-tm)) * MM_COL; tr *= exp(-tm); }
+    else tr *= exp(-K_D * sd / max(mu, 0.03));
+    return;
+  }
+#endif
   float tau = K_D * sd / max(mu, 0.03);
   float tmm = K_MM * sd / max(mu, 0.3);
   vec3 alb = mix(vec3(0.42, 0.20, 0.10) * 0.25, 0.9 * tcolor(min(Tm, 120.0)), ice);
   alb = mix(alb, vec3(0.85, 0.92, 1.0) * mix(0.35, 1.0, ice), sc / (sd + 1e-6));   // packed pebbles look paler
   vec3 src = G_DUST * alb * Eabs(R, lnR, H) * dm.a * (1.0 - exp(-tmm)) * (1.0 + PILE * (pile - 1.0));
-  if ((uMode & 4) == 0) src = vec3(0.0);
+  src *= uComp.z;
   col += tr * src;
   tr *= exp(-tau);
 }
@@ -761,8 +835,8 @@ vec3 cmap(float t, bool inferno){
 // density (log10, from 10^-10 to 10^2.5 of the midplane at 1 au) over the disk and the wind; the optical
 // depth (log10 tau* from -4 to 5) over the disk. The dust-free hole inside R_IN stays open.
 vec4 sliceFace(vec3 pc){
-  float Rs = dot(pc, uSliceR), z = pc.z / uSliceZ, R = abs(Rs);
-  vec3 q = sliceQuantities(Rs, z, atan(pc.y, pc.x));
+  float R = length(pc.xy), z = pc.z / uSliceZ;   // the plane may be off the star while it sweeps
+  vec3 q = sliceQuantities(R, z, atan(pc.y, pc.x));
   float hole = smoothstep(R_IN * 0.8, R_IN * 1.3, R);
   if (uSliceQ == 1) return vec4(0.92 * pow(tcolor(q.x), vec3(1.0 / 2.2)), smoothstep(-6.0, -4.5, q.z) * hole);
   if (uSliceQ == 2) return vec4(cmap((q.y + 10.0) / 12.5, false), smoothstep(-10.5, -9.5, q.y));
@@ -789,20 +863,24 @@ void main(){
   float tStar = max(-dot(ro, rd), 0.0);
 
   // the slice: the ray enters the half that is kept at tCut, where it meets the cut face (rays that never
-  // reach that half see only the sky); the face hides what lies behind it where it is opaque
-  float tCut = 0.0;
+  // reach that half see only the sky); the face hides what lies behind it where it is opaque. While the plane
+  // sweeps it may pass the camera: from inside the kept half nothing is cut in front, and a ray that leaves it
+  // ends there.
+  float tCut = 0.0, tEnd = 1e9;
   vec4 face = vec4(0.0);
 #ifdef FULL
   if (uSlice != 0) {
-    float sn = dot(rd, uSliceN);
-    tCut = sn < -1e-6 ? -dot(ro, uSliceN) / sn : 1e9;
-    if (tCut < 1e8) face = sliceFace(ro + rd * tCut);
+    float sn = dot(rd, uSliceN), dc = dot(ro, uSliceN) - uSliceOff;
+    if (dc > 0.0) {
+      tCut = sn < -1e-6 ? dc / -sn : 1e9;
+      if (tCut < 1e8 && uSliceFace > 0.0) { face = sliceFace(ro + rd * tCut); face.a *= uSliceFace; }
+    } else if (sn > 1e-6) tEnd = -dc / sn;
   }
 #endif
 
   vec3 col = vec3(0.0), tr = vec3(1.0);
   vec2 b = boundsCyl(ro, rd);
-  b.x = max(b.x, tCut);
+  b.x = max(b.x, tCut); b.y = min(b.y, tEnd);
   bool starDone = false;
 #ifdef FULL
   // the planet and its disk, where the ray passes closest to it (1e9: not met, or done; their light is evaluated
@@ -816,7 +894,7 @@ void main(){
 #ifdef FULL
   // the envelope: the part of its sphere in front of the cylinder (all of it when the ray misses the cylinder)
   vec2 be = vec2(1.0, 0.0);
-  if (uEnv > 0.0 && face.a < 0.999) {
+  if (uEnv > 0.0 && uLook <= 1 && face.a < 0.999) {
     be = boundsSphere(ro, rd, ENV_R); be.x = max(be.x, tCut);
     envMarch(ro, rd, be.x, inside ? min(b.x, be.y) : be.y, jitter, col, tr);
   }
@@ -878,29 +956,52 @@ void main(){
   const zBase = (Rf) => MODEL.H0 * Math.pow(Rf, 1.25) * Math.sqrt(2 * Math.max(MODEL.LNTAU1 - 1.25 * Math.log(Rf) - cutOut(Rf), 1));
   const SigmaJS = (R) => Math.exp(-Math.log(R) - cutOut(R)) * ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, R);
   const Hof = (R) => MODEL.H0 * Math.pow(R, 1.25);
-  // the planet's gap at depth amp (as gapLn in PLANET_GLSL), and the pebbles relative to the smooth disk (as in sheet)
-  const gapLnJS = (R, amp) => { const x = (R - PLANET.A) / PLANET.W; return amp <= 0 || Math.abs(x) > 3.5 ? 0 : Math.log(1 - amp * PLANET.D * Math.exp(-x * x)); };
-  const pebbleJS = (R, amp) => {
-    if (amp <= 0 || Math.abs(R - PLANET.A) > 1.6) return 1;
-    const xg = (R - PLANET.A) / (1.15 * PLANET.W), xt = (R - PLANET.TRAP) / (0.28 * PLANET.W);
-    return (1 - amp * 0.97 * Math.exp(-xg * xg)) * (1 + amp * 2.2 * Math.exp(-xt * xt));
+  // ln of the planet's gap at depth d (as gapLn in PLANET_GLSL)
+  const gapLnJS = (R, d) => { const x = (R - PLANET.A) / PLANET.W; return d <= 0 || Math.abs(x) > 3.5 ? 0 : Math.log(1 - d * Math.exp(-x * x)); };
+  // The pebbles' response to a gap of depth d: the fraction filtered out of it (1.08 d, at most 0.99), and the pressure
+  // maximum just outside it (P ∝ Σ R^-7/4 at the midplane, with the edge cutoff), where they collect. The maximum appears
+  // when the depth exceeds about 0.33 (3.36 au; 3.571 au at depth 0.9, 3.585 au at 0.98); the trap's strength grows from
+  // there to depth 0.9. Remembered per depth (to 1e-3).
+  const trapMemo = new Map();
+  function trapOf(d) {
+    const key = Math.round(d * 1000);
+    let t = trapMemo.get(key);
+    if (t) return t;
+    let prev = null, rising = false, Rt = PLANET.A + 0.6, found = false;
+    for (let R = PLANET.A; R < PLANET.A + 4 * PLANET.W && !found; R += 1e-3) {
+      const x = (R - PLANET.A) / PLANET.W, v = -2.75 * Math.log(R) - cutOut(R) + Math.log(1 - d * Math.exp(-x * x));
+      if (prev !== null) { if (v > prev) rising = true; else if (rising) { Rt = R - 1e-3; found = true; } }
+      prev = v;
+    }
+    t = { R: Rt, filt: Math.min(0.99, 1.08 * d), s: found ? ss(0.33, 0.9, d) : 0 };
+    trapMemo.set(key, t);
+    return t;
+  }
+  // the pebbles relative to the smooth disk (as in sheet)
+  const pebbleJS = (R, d) => {
+    if (d <= 0 || Math.abs(R - PLANET.A) > 1.6) return 1;
+    const t = trapOf(d), xg = (R - PLANET.A) / (1.15 * PLANET.W), xt = (R - t.R) / (0.28 * PLANET.W);
+    return (1 - t.filt * Math.exp(-xg * xg)) * (1 + 2.2 * t.s * Math.exp(-xt * xt));
   };
   // Starlight absorbed per unit area with the gap, relative to the smooth disk. Rays leave the star at angles th = 0.09
   // to 0.26 above the midplane (every 0.002; 0.001 gives the same ratio to 1e-4), start at 1.5 au (inside the gap's reach) with the optical depth of the
   // local formula, and cross the gas outward in steps of 0.01 au, depositing e^-tau dtau on the way. The gas is that of
   // the volume (Σ with the gap, Gaussian in height); its opacity k makes dtau/dR agree with the local formula at the
-  // surface at 2 au. The ratio of the deposits with and without the gap, at gap depths 0, 1/4, ..., 1, on 128 radii
-  // from GL_R0 (it eases to 1 toward the end of the table, where the disk lies in its own shadow). A finer trace (from
-  // 0.3 au, 2201 rays, steps of 0.0005 au) agrees within 3%. About 10 ms at the start.
-  function gapLightTables() {
-    const R0 = 1.5, dR = 0.01, n = Math.round((9.6 - R0) / dR) + 1, levels = [0, 0.25, 0.5, 0.75, 1];
+  // surface at 2 au. The ratio of the deposits with and without the gap, on 128 radii from GL_R0 (it eases to 1 toward
+  // the end of the table, where the disk lies in its own shadow). A finer trace (from 0.3 au, 2201 rays, steps of
+  // 0.0005 au) agrees within 3%. Tabulated at the depths GL_LEVELS, each when first needed (about 2 ms), and
+  // interpolated in g = -ln(1 - depth) between neighbours (within 0.008 of a direct trace). gapLight(d, out) fills out.
+  // Depth 0.3: 0.75 of the light at the gap's floor, up to 1.09 beyond it; 0.9: 0.13 and 1.35; 0.98: 0.026 and 1.40.
+  const GL_LEVELS = [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.85, 0.92, 0.96, 0.98];
+  const gapLight = (() => {
+    const R0 = 1.5, dR = 0.01, n = Math.round((9.6 - R0) / dR) + 1;
     const Rg = new Float64Array(n), lnS = new Float64Array(n), ih2 = new Float64Array(n);
     for (let i = 0; i < n; i++) { const R = R0 + i * dR; Rg[i] = R; lnS[i] = -Math.log(R) - cutOut(R) - Math.log(Hof(R)); ih2[i] = 0.5 / (Hof(R) * Hof(R)); }
     const R2 = 2, H2 = Hof(R2), a2 = MODEL.LNTAU1 - 1.25 * Math.log(R2) - cutOut(R2), th2 = H2 * Math.sqrt(2 * a2) / R2;
     const k = (-1.25 / R2 - MODEL.P_OUT * cutOut(R2) / R2 + 0.25 * th2 * th2 * R2 / (H2 * H2)) / Math.exp(-Math.log(R2) - cutOut(R2) - Math.log(H2) - a2);
     const a0 = MODEL.LNTAU1 - 1.25 * Math.log(R0) - cutOut(R0), H0s = Hof(R0);
-    const dep = levels.map((amp) => {
-      const lg = Rg.map((R) => gapLnJS(R, amp)), out = new Float64Array(n);
+    const deposit = (d) => {
+      const lg = Rg.map((R) => gapLnJS(R, d)), out = new Float64Array(n);
       for (let th = 0.09; th < 0.2605; th += 0.002) {
         let tau = Math.exp(a0 - 0.5 * th * R0 * th * R0 / (H0s * H0s)), rPrev = 0;
         for (let i = 0; i < n; i++) {
@@ -910,13 +1011,30 @@ void main(){
         }
       }
       return out;
-    });
-    return levels.map((amp, l) => Float32Array.from({ length: 128 }, (_, j) => {
-      const R = GL_R0 + j * GL_DR, f = (R - R0) / dR, i = Math.min(n - 2, Math.floor(f)), u = f - i;
-      const q = (dep[l][i] + (dep[l][i + 1] - dep[l][i]) * u) / (dep[0][i] + (dep[0][i + 1] - dep[0][i]) * u);
-      return 1 + (q - 1) * (1 - ss(8.6, 9.4, R));
-    }));
-  }
+    };
+    let base = null;
+    const tables = [new Float32Array(128).fill(1)], gOf = (d) => -Math.log(1 - d);
+    const table = (l) => {
+      if (tables[l]) return tables[l];
+      base = base || deposit(0);
+      const dep = deposit(GL_LEVELS[l]);
+      return (tables[l] = Float32Array.from({ length: 128 }, (_, j) => {
+        const R = GL_R0 + j * GL_DR, f = (R - R0) / dR, i = Math.min(n - 2, Math.floor(f)), u = f - i;
+        const q = (dep[i] + (dep[i + 1] - dep[i]) * u) / (base[i] + (base[i + 1] - base[i]) * u);
+        return 1 + (q - 1) * (1 - ss(8.6, 9.4, R));
+      }));
+    };
+    const fill = (d, out) => {
+      const g = gOf(Math.min(Math.max(d, 0), GL_LEVELS[GL_LEVELS.length - 1]));
+      let l = 0;
+      while (l < GL_LEVELS.length - 2 && gOf(GL_LEVELS[l + 1]) <= g) l++;
+      const g0 = gOf(GL_LEVELS[l]), u = Math.min(1, (g - g0) / (gOf(GL_LEVELS[l + 1]) - g0)), a = table(l), b = table(l + 1);
+      for (let j = 0; j < 128; j++) out[j] = a[j] + (b[j] - a[j]) * u;
+    };
+    // makes the next table not yet made (false when all are): for idle time
+    fill.prefetch = () => { const l = GL_LEVELS.findIndex((_, i) => !tables[i]); if (l < 0) return false; table(l); return true; };
+    return fill;
+  })();
   const NT = BP.XI.length;
   if (NT !== 64) throw new Error('the wind table must have 64 rows');
   const tabF = (arr, f) => { f = Math.min(Math.max(f, 0), NT - 1.001); const i = Math.floor(f); return arr[i] + (arr[i + 1] - arr[i]) * (f - i); };
@@ -929,11 +1047,15 @@ void main(){
     if (h > zb) { const f = tabS((h - zb) / R); R *= tabF(BP.XI, f); ph += tabF(BP.PHI, f); }
     return [R, ph];
   }
-  // height chi reached after a travel time tau (TAU increases along the table)
+  // height chi reached after a travel time tau (TAU increases along the table, and tabF interpolates it linearly, so
+  // the row is found by bisection over the rows and the place within it solved directly)
   function chiOfTau(tau) {
+    const T = BP.TAU;
+    if (!(tau > T[0])) return chiOfS(0);
+    if (tau >= T[NT - 1]) return chiOfS(NT - 1.001);
     let lo = 0, hi = NT - 1;
-    for (let i = 0; i < 12; i++) { const m = 0.5 * (lo + hi); if (tabF(BP.TAU, m) > tau) hi = m; else lo = m; }
-    return chiOfS(0.5 * (lo + hi));
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (T[m] > tau) hi = m; else lo = m; }
+    return chiOfS(lo + (tau - T[lo]) / (T[hi] - T[lo]));
   }
   // point n (n >= 1) of the 2D Sobol sequence: van der Corput in base 2, and the second dimension from the
   // polynomial x + 1 (direction numbers 1, 3, 5, 15, 17, 51, ...)
@@ -958,9 +1080,12 @@ void main(){
     return out;
   })();
   const hg = (mu, g) => (1 - g * g) * Math.pow(1 + g * g - 2 * g * mu, -1.5);
-  const phaseWind = (mu) => { const p = hg(mu, 0.6) / hg(0, 0.6); return p / (1 + p / 8); };
+  const HG0 = hg(0, 0.6);   // (the field lines evaluate phaseWind at every sample of every frame)
+  const phaseWind = (mu) => { const x = 1.36 - 1.2 * mu, p = 0.64 / (x * Math.sqrt(x)) / HG0; return p / (1 + p / 8); };
 
   const reduceOS = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const LOOKS = { model: 0, optical: 1, mir: 2, mm: 3 };
+  const LOOK_STAR = { model: 1, optical: 1, mir: 0.4, mm: 0.05 };   // the star's glow in each look
   const ja = () => document.documentElement.lang === 'ja';
 
   function init(box) {
@@ -976,11 +1101,11 @@ void main(){
     box.prepend(canvas);
     const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     overlay.setAttribute('class', 'disk-overlay'); overlay.setAttribute('aria-hidden', 'true');
-    overlay.innerHTML = '<g class="disk-field"></g><g class="disk-slice"></g><path class="disk-snowline" fill="none"/><text class="disk-label"></text><text class="disk-label disk-plabel"></text><g class="disk-scale"><line/><text/></g>';
+    overlay.innerHTML = '<g class="disk-field"></g><g class="disk-slice"></g><path class="disk-snowline" fill="none"/><text class="disk-label"></text><text class="disk-label disk-plabel"></text><g class="disk-scale"><line/><text/></g><g class="disk-scale"><line/><text/></g>';
     box.appendChild(overlay);
     const ring = overlay.querySelector('.disk-snowline'), label = overlay.querySelector('.disk-label'), fieldG = overlay.querySelector('.disk-field');
     const plabel = overlay.querySelector('.disk-plabel');
-    const sbar = overlay.querySelector('.disk-scale line'), stext = overlay.querySelector('.disk-scale text');
+    const [sgroup, sgroup2] = overlay.querySelectorAll('.disk-scale');   // the bar, and the one it replaces as it fades out
 
     const compile0 = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
     const compile = (type, src) => { const s = compile0(type, src); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
@@ -993,7 +1118,7 @@ void main(){
     const uniforms = (p, names) => Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)]));
     const prog = link(FS), progDisk = link(DISKMAP_FS), progWind = link(WINDMAP_FS), progEnv = link(ENVMAP_FS);
     const UNAMES = ['uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
-      'uPlanet', 'uGapRim', 'uPlanetPos', 'uPlanetVis', 'uEnv', 'uEnvMap'];
+      'uPlanet', 'uTrap', 'uGapRim', 'uPlanetPos', 'uPlanetVis', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp'];
     const U0 = uniforms(prog, UNAMES);
     // the FULL program, compiled in the background where the driver can (KHR_parallel_shader_compile), otherwise
     // when first needed; null until it is ready, false if it failed (the usual program then stands in). A single
@@ -1015,7 +1140,7 @@ void main(){
       return full;
     }
     if (pcomp) startFull();
-    const UD = uniforms(progDisk, ['uMapRes', 'uTime', 'uSeed', 'uCam', 'uPixA', 'uPlanet', 'uPlanetPhi', 'uGapLight']);
+    const UD = uniforms(progDisk, ['uMapRes', 'uTime', 'uSeed', 'uCam', 'uPixA', 'uPlanet', 'uPlanetPhi', 'uGapLight', 'uWake']);
     // a full-screen triangle, shared by the passes
     gl.bindVertexArray(gl.createVertexArray());
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
@@ -1065,14 +1190,19 @@ void main(){
     }
     // --- field lines and wind parcels: vector strokes in the SVG overlay, from the wind solution ---
     // Each line is a Catmull-Rom spline through its samples, written as cubic Bezier segments; segments are
-    // grouped into NB opacity levels, one halo and one core path per level, so the overlay is a few dozen
-    // path elements updated each frame. Parcels are small circles in paths of their own.
+    // grouped into NB opacity levels, one halo and one core path per level, so the overlay is a fixed set of
+    // path elements updated each frame (only those whose data changed). The levels are fine enough (steps of 3% of
+    // the core's opacity) that the brightness changes smoothly along a line; the segments end flat (butt caps), so
+    // where a line passes from one level to the next the two paths meet without overlapping (the splines are smooth
+    // across the joints). The parcels of the wind (and of the envelope) are marks of the flow, not clumps of gas: each is
+    // a short dash from where the gas was TRACE_T earlier to where it is now, over a fainter tail from 3 TRACE_T earlier,
+    // so that its direction and speed read (the dash's length is proportional to the speed, at most TRACE_MAX px).
     let showField = !('nofield' in box.dataset);
     // geometry: NL field lines whose feet come from a 2D Sobol sequence, quasi-uniform in ln R (0.2 to 6.5 au)
     // and azimuth; each line is drawn up to ZTOP, with N_IN points through the disk and the heights CHI_S
     // above it; wind parcels carry a release phase in [0, 1). Lower side: every other line and fewer
     // parcels (weaker wind for an aligned field).
-    const NL = 22, N_IN = 6, ZTOP = 9.0, NB = 12, lines = [], parcels = [];
+    const NL = 22, N_IN = 6, ZTOP = 9.0, NB = 48, NBM = 24, lines = [], parcels = [];   // levels of the lines and of the marks
     for (let i = 0; i < NL; i++) {
       const [u1, u2] = sobol2(i + 1);
       const Rf = 0.2 * Math.pow(6.5 / 0.2, u1), phi0 = 2 * Math.PI * u2;
@@ -1111,36 +1241,52 @@ void main(){
     // by 0.1, so the stroke widths and dot radii below are ten times their size in pixels
     fieldG.setAttribute('transform', 'scale(0.1)');
     const mkPath = (attrs) => { const e = document.createElementNS('http://www.w3.org/2000/svg', 'path'); for (const k in attrs) e.setAttribute(k, attrs[k]); fieldG.appendChild(e); return e; };
-    const level = (b) => (b + 0.5) * (2.4 / NB);
+    // brightness a (0.02 to 2.4) to level: uniform in u = a up to 1, beyond which the core is opaque and only the halo
+    // (0.18 a) brightens, so u grows more slowly there
+    const U_MAX = 1 + 0.36 * 1.4, uOf = (a) => (a <= 1 ? a : 1 + 0.36 * (a - 1)), aOf = (u) => (u <= 1 ? u : 1 + (u - 1) / 0.36);
+    const level = (b, n = NB) => aOf((b + 0.5) * U_MAX / n);
     const halo = [], core = [], dots = [];
-    for (let b = 0; b < NB; b++) halo.push(mkPath({ fill: 'none', stroke: '#8cb8ff', 'stroke-width': 30, 'stroke-opacity': Math.min(0.6, 0.18 * level(b)).toFixed(3), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
-    for (let b = 0; b < NB; b++) core.push(mkPath({ fill: 'none', stroke: '#bed7ff', 'stroke-width': 10, 'stroke-opacity': Math.min(1, level(b)).toFixed(3), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
-    for (let b = 0; b < NB; b++) dots.push(mkPath({ fill: '#c7e6ff', 'fill-opacity': Math.min(1, level(b)).toFixed(3), stroke: 'none' }));
+    for (let b = 0; b < NB; b++) halo.push(mkPath({ fill: 'none', stroke: '#8cb8ff', 'stroke-width': 30, 'stroke-opacity': Math.min(0.6, 0.18 * level(b)).toFixed(3), 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }));
+    for (let b = 0; b < NB; b++) core.push(mkPath({ fill: 'none', stroke: '#bed7ff', 'stroke-width': 10, 'stroke-opacity': Math.min(1, level(b)).toFixed(3), 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }));
+    for (let b = 0; b < NBM; b++) dots.push(mkPath({ fill: 'none', stroke: '#c7e6ff', 'stroke-width': 11, 'stroke-opacity': Math.min(1, level(b, NBM)).toFixed(3), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
     const edots = [], elines = mkPath({ fill: 'none', stroke: '#c9d8f5', 'stroke-width': 8, 'stroke-linecap': 'round' });
-    for (let b = 0; b < NB; b++) edots.push(mkPath({ fill: '#eef3ff', 'fill-opacity': Math.min(1, level(b)).toFixed(3), stroke: 'none' }));
-    const bucket = (a) => Math.min(NB - 1, Math.floor(a / 2.4 * NB));
+    for (let b = 0; b < NBM; b++) edots.push(mkPath({ fill: 'none', stroke: '#eef3ff', 'stroke-width': 13, 'stroke-opacity': Math.min(1, level(b, NBM)).toFixed(3), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+    const bucket = (a, n = NB) => Math.min(n - 1, Math.floor(uOf(a) / U_MAX * n));
+    // set a path's data only when it changed (most levels are empty in most frames)
+    const setD = (e, d) => { if (e._d !== d) { e._d = d; e.setAttribute('d', d); } };
     // transmission of the pebble sheet between the camera and P (the same sheet as in the volume, without
     // its turbulent modulation); 1 when the segment does not cross the midplane
     function sheetT(P) {
       if ((cam[2] > 0) === (P[2] > 0)) return 1;
       const t = cam[2] / (cam[2] - P[2]);
-      const Rc = Math.hypot(cam[0] + (P[0] - cam[0]) * t, cam[1] + (P[1] - cam[1]) * t);
+      const cx = cam[0] + (P[0] - cam[0]) * t, cy = cam[1] + (P[1] - cam[1]) * t, Rc = Math.sqrt(cx * cx + cy * cy);
       if (Rc < MODEL.R_IN || Rc > 11) return 1;
-      const mu = Math.abs(P[2] - cam[2]) / Math.hypot(P[0] - cam[0], P[1] - cam[1], P[2] - cam[2]);
+      const dx = P[0] - cam[0], dy = P[1] - cam[1], dz = P[2] - cam[2], mu = Math.abs(dz) / Math.sqrt(dx * dx + dy * dy + dz * dz);
       const ice = 1 - ss(MODEL.TICE - 6, MODEL.TICE + 6, MODEL.TICE * Math.sqrt(rSn / Rc));
-      return Math.exp(-MODEL.K_D * MODEL.SD0 * SigmaJS(Rc) * pebbleJS(Rc, planetAmp) * (0.5 + 0.5 * ice) / Math.max(mu, 0.03));
+      return Math.exp(-MODEL.K_D * MODEL.SD0 * SigmaJS(Rc) * pebbleJS(Rc, gapDepth) * (0.5 + 0.5 * ice) / Math.max(mu, 0.03));
     }
-    // the starlight scattered toward the observer at P (relative to 90 degrees), behind the sheet or not
+    // the starlight scattered toward the observer at P (relative to 90 degrees), behind the sheet or not (written
+    // without Math.hypot, which is slow, as these run for every sample of every line in every frame)
     function seen(P) {
       const vx = cam[0] - P[0], vy = cam[1] - P[1], vz = cam[2] - P[2];
-      const mu = (P[0] * vx + P[1] * vy + P[2] * vz) / ((Math.hypot(P[0], P[1], P[2]) || 1e-3) * Math.hypot(vx, vy, vz));
+      const mu = (P[0] * vx + P[1] * vy + P[2] * vz) / ((Math.sqrt(P[0] * P[0] + P[1] * P[1] + P[2] * P[2]) || 1e-3) * Math.sqrt(vx * vx + vy * vy + vz * vz));
       return phaseWind(mu) * sheetT(P);
     }
     const fx = (v) => Math.round(v * 10);
+    // a tracer: dash from qb to q (the head) at brightness a, tail from qt to q at TRACE_TAIL a, both shortened on the
+    // screen to at most max and 2.5 max px, added to the paths of the marks d (by level)
+    const TRACE_T = 0.3, TRACE_MAX = 14, TRACE_TAIL = 0.3;
+    function tracer(d, q, qb, qt, a, max = TRACE_MAX) {
+      const cut = (from, max) => { const dx = from[0] - q[0], dy = from[1] - q[1], l = Math.sqrt(dx * dx + dy * dy); return l > max ? [q[0] + dx * max / l, q[1] + dy * max / l] : from; };
+      const hb = qb[2] > 0.05 ? cut(qb, max) : q, ht = qt[2] > 0.05 && qb[2] > 0.05 ? cut(qt, 2.5 * max) : hb;
+      const head = 'L' + fx(q[0]) + ' ' + fx(q[1]);
+      if (a * TRACE_TAIL > 0.02 && ht !== hb) d[bucket(a * TRACE_TAIL, NBM)] += 'M' + fx(ht[0]) + ' ' + fx(ht[1]) + 'L' + fx(hb[0]) + ' ' + fx(hb[1]) + head;
+      d[bucket(a, NBM)] += 'M' + fx(hb[0]) + ' ' + fx(hb[1]) + head;
+    }
     function drawField() {
-      if (!showField) { for (const e of [...halo, ...core, ...dots]) e.setAttribute('d', ''); return; }
+      if (fieldAmp <= 0) { for (const e of [...halo, ...core, ...dots]) setD(e, ''); return; }
       const gain = Number(box.dataset.field || 0.5) * (opt.slice ? 0.6 : 1);   // quieter behind a slice
-      const dL = new Array(NB).fill(''), dD = new Array(NB).fill('');
+      const dL = new Array(NB).fill(''), dD = new Array(NBM).fill('');
       for (const L of lines) {
         const rot = L.phi0 + Omega(L.r0) * time, n = L.pts.length;
         const Q = new Array(n), A = new Array(n);   // projected samples (null behind the camera) and their brightness
@@ -1151,7 +1297,7 @@ void main(){
         }
         // centripetal Catmull-Rom tangents (knots spaced by the square root of the chord), cubic Beziers
         const T = new Array(n).fill(0);
-        for (let i = 1; i < n; i++) T[i] = T[i - 1] + (Q[i] && Q[i - 1] ? Math.sqrt(Math.hypot(Q[i][0] - Q[i - 1][0], Q[i][1] - Q[i - 1][1])) + 1e-6 : 1);
+        for (let i = 1; i < n; i++) { const dx = Q[i] && Q[i - 1] ? Q[i][0] - Q[i - 1][0] : 0, dy = Q[i] && Q[i - 1] ? Q[i][1] - Q[i - 1][1] : 0; T[i] = T[i - 1] + (Q[i] && Q[i - 1] ? Math.sqrt(Math.sqrt(dx * dx + dy * dy)) + 1e-6 : 1); }
         const tangent = (i) => { const ia = Q[i - 1] ? i - 1 : i, ib = Q[i + 1] ? i + 1 : i, dt = T[ib] - T[ia] || 1; return [(Q[ib][0] - Q[ia][0]) / dt, (Q[ib][1] - Q[ia][1]) / dt]; };
         let lastB = -1;
         for (let i = 0; i + 1 < n; i++) {
@@ -1166,27 +1312,37 @@ void main(){
       }
       for (const p of parcels) {
         // parcels released at a steady rate, each moving with the flow of the solution: dense where the
-        // gas is slow near the base, spread out as it accelerates
+        // gas is slow near the base, spread out as it accelerates. Where it was dt earlier (not before its release):
+        // along the line (its phase) and with the line's turning
         const zb = zBase(p.Rf), r0 = p.Rf + 0.5 * BP.A0 * zb, Om = Omega(r0);
         const chiEnd = Math.min(Math.max((ZTOP - zb) / r0, 0.5), BP.CHIMAX), tEnd = tabF(BP.TAU, tabS(chiEnd));
         const ph = ((p.u + time * Om / tEnd) % 1 + 1) % 1;
+        const at = (dt) => {
+          const c = chiOfTau(Math.max(0, ph - dt * Om / tEnd) * tEnd), hh = zb + r0 * c;
+          const [Rr, dp] = fieldRP(p.Rf, hh), f = p.phi0 + Om * (time - dt) + dp;
+          return [Rr * Math.cos(f), Rr * Math.sin(f), p.side * hh];
+        };
         const chi = chiOfTau(ph * tEnd), h = zb + r0 * chi;
         const [R, dphi] = fieldRP(p.Rf, h), phi = p.phi0 + Om * time + dphi;
         const P = [R * Math.cos(phi), R * Math.sin(phi), p.side * h], q = project(P);
         if (q[2] <= 0.05 || !kept(P)) continue;
-        const a = ss(0, 0.03, ph) * (1 - ss(0.6, 1, ph)) * Math.exp(-(h - zb) / (2 * r0 + 2.5)) * (1 - ss(0.6, 1, chi / BP.CHIMAX)) * (p.side > 0 ? 1 : 0.4) * gain * 1.3 * starlight(R, h) * seen(P) * (1 - faceAlpha(P));
-        if (a > 0.02) dD[bucket(a)] += 'M' + fx(q[0] - 1.5) + ' ' + fx(q[1]) + 'a15 15 0 1 0 30 0a15 15 0 1 0 -30 0';
+        const a = ss(0, 0.03, ph) * (1 - ss(0.6, 1, ph)) * Math.exp(-(h - zb) / (2 * r0 + 2.5)) * (1 - ss(0.6, 1, chi / BP.CHIMAX)) * (p.side > 0 ? 1 : 0.4) * gain * starlight(R, h) * seen(P) * (1 - faceAlpha(P));
+        // (the tail's far end continues the dash backward, which is close enough for a faint tail and saves a third
+        // look-up in the table per parcel)
+        if (a > 0.02) { const B = at(TRACE_T); tracer(dD, q, project(B), project([3 * B[0] - 2 * P[0], 3 * B[1] - 2 * P[1], 3 * B[2] - 2 * P[2]]), 0.85 * a); }
       }
-      for (let b = 0; b < NB; b++) { halo[b].setAttribute('d', dL[b]); core[b].setAttribute('d', dL[b]); dots[b].setAttribute('d', dD[b]); }
+      for (let b = 0; b < NB; b++) { setD(halo[b], dL[b]); setD(core[b], dL[b]); }
+      for (let b = 0; b < NBM; b++) setD(dots[b], dD[b]);
     }
 
     // the envelope's particles: brightness as for the wind's (scattered starlight with a softened falloff, here
     // about 20 au as in the volume; in the disk's shadow near the midplane), faded in at the start and out at the end
     const envPoint = (L, r, th, ph) => [r * Math.sin(th) * Math.cos(L.phi0 + ph), r * Math.sin(th) * Math.sin(L.phi0 + ph), L.side * r * Math.cos(th)];
     function drawEnv() {
-      const dD = new Array(NB).fill('');
+      const dD = new Array(NBM).fill('');
       let dl = '';
-      if (envVis > 0.02) for (const L of envLines) {
+      const envOn = envVis * modelAmp > 0.02;
+      if (envOn) for (const L of envLines) {
         let pen = false;
         for (const [r, th, ph] of L.line) {
           const P = envPoint(L, r, th, ph), q = project(P);
@@ -1194,16 +1350,21 @@ void main(){
           dl += (pen ? 'L' : 'M') + fx(q[0]) + ' ' + fx(q[1]); pen = true;
         }
       }
-      elines.setAttribute('d', dl); elines.setAttribute('stroke-opacity', (0.18 * envVis).toFixed(3));
-      if (envVis > 0.02) for (const L of envLines) for (let m = 0; m < 3; m++) {
-        const u = ((m / 3 + 0.37 * L.phi0 + time * ENV.SPEED / L.T) % 1 + 1) % 1, f = u * (L.pts.length - 1), k = Math.min(L.pts.length - 2, Math.floor(f)), w = f - k;
-        const a0 = L.pts[k], a1 = L.pts[k + 1], r = a0[0] + (a1[0] - a0[0]) * w;
-        const P = envPoint(L, r, a0[1] + (a1[1] - a0[1]) * w, a0[2] + (a1[2] - a0[2]) * w), q = project(P);
+      elines.setAttribute('d', dl); elines.setAttribute('stroke-opacity', (0.18 * envVis * modelAmp).toFixed(3));
+      if (envOn) for (const L of envLines) for (let m = 0; m < 3; m++) {
+        const u = ((m / 3 + 0.37 * L.phi0 + time * ENV.SPEED / L.T) % 1 + 1) % 1;
+        // the point at phase v along the streamline (sampled evenly in time)
+        const pointAt = (v) => {
+          const f = Math.max(0, v) * (L.pts.length - 1), k = Math.min(L.pts.length - 2, Math.floor(f)), w = f - k, a0 = L.pts[k], a1 = L.pts[k + 1];
+          return envPoint(L, a0[0] + (a1[0] - a0[0]) * w, a0[1] + (a1[1] - a0[1]) * w, a0[2] + (a1[2] - a0[2]) * w);
+        };
+        const P = pointAt(u), q = project(P), r = Math.sqrt(P[0] * P[0] + P[1] * P[1] + P[2] * P[2]);
         if (q[2] <= 0.05 || !kept(P)) continue;
-        const a = envVis * ss(0, 0.08, u) * (1 - ss(0.85, 1, u)) * ss(0.13, 0.2, Math.abs(P[2]) / Math.hypot(P[0], P[1])) * 1.4 / Math.sqrt(1 + r * r / 900) * seen(P);
-        if (a > 0.02) dD[bucket(a)] += 'M' + fx(q[0] - 2) + ' ' + fx(q[1]) + 'a20 20 0 1 0 40 0a20 20 0 1 0 -40 0';
+        const a = envVis * modelAmp * ss(0, 0.08, u) * (1 - ss(0.85, 1, u)) * ss(0.13, 0.2, Math.abs(P[2]) / Math.hypot(P[0], P[1])) * 1.4 / Math.sqrt(1 + r * r / 900) * seen(P);
+        const du = TRACE_T * ENV.SPEED / L.T;
+        if (a > 0.02) tracer(dD, q, project(pointAt(u - du)), project(pointAt(u - 3 * du)), 0.45 * a, 8);
       }
-      for (let b = 0; b < NB; b++) edots[b].setAttribute('d', dD[b]);
+      for (let b = 0; b < NBM; b++) setD(edots[b], dD[b]);
     }
 
     const opt = {
@@ -1221,24 +1382,29 @@ void main(){
       scaleMax: Number(box.dataset.scaleMax || 1),
       // the slice (see uSlice): on with data-slice; data-slice-q picks the quantity on the cut face
       slice: 'slice' in box.dataset,
-      sliceQ: box.dataset.sliceQ || 'T'
+      sliceQ: box.dataset.sliceQ || 'T',
+      // the annotations laid over the picture (the snow line and its label, the scale bar, the planet's label, the
+      // lines, labels and colour bar on the slice's face): data-annotations="off" starts without them
+      ann: box.dataset.annotations !== 'off',
+      // the look (see uLook): 'model', or as observed: 'optical', 'mir', 'mm'
+      look: box.dataset.look in LOOKS ? box.dataset.look : 'model'
     };
     const clumps = Array.from({ length: 6 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0, crossed: true }));
     const vapor = Array.from({ length: 4 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0 }));
     let W = 0, Hh = 0, cam, basis, time = 0, last = 0, running = false, dragging = false, moved = false, px = 0, py = 0, azUser = opt.az, elUser = opt.el;
     let paused = false, speed = 1, dirty = true, benching = false, fieldMs = 0;
     const Omega = (R) => 0.5236 * Math.pow(R, -1.5);
-    // --- the planet: its gap fades in and out over about 1.5 s when it is turned on or off (planetAmp, the depth
-    // relative to the full gap); the starlight on the gap comes from tables at five depths, interpolated ---
+    // --- the planet: it fades in and out over about 1.5 s when it is turned on or off (planetAmp); the gap's depth is
+    // planetAmp times the depth for the camera's distance (DEPTH), gapDepth ---
     const planetPhi = (t) => PLANET.PHI0 + Omega(PLANET.A) * t;
     const planetPos = (t) => { const a = planetPhi(t); return [PLANET.A * Math.cos(a), PLANET.A * Math.sin(a), 0]; };
-    const glTables = gapLightTables();
-    let planetAmp = (opt.mode & 16) ? 1 : 0, ampSet = -1, rim = null;
+    let planetAmp = (opt.mode & 16) ? 1 : 0, depthSet = -1, gapDepth = 0, rim = null, trap = trapOf(0);
     const glNow = new Float32Array(128);
+    const depthFor = (c) => DEPTH.FAR + (DEPTH.NEAR - DEPTH.FAR) * (1 - ss(DEPTH.D0, DEPTH.D1, Math.hypot(Math.hypot(c[0], c[1]) - PLANET.A, c[2])));
     // the inner rim of the gap: where z_s/R, the surface's angle seen from the star, peaks inside the gap; its shadow
     // ends where the outer wall climbs above that angle again (null when the gap is too shallow to cast one)
-    function gapRim(amp) {
-      const sA = (R) => Hof(R) * Math.sqrt(2 * Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnJS(R, amp), 1)) / R;
+    function gapRim(d) {
+      const sA = (R) => Hof(R) * Math.sqrt(2 * Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnJS(R, d), 1)) / R;
       const dR = 0.0005;
       let R = PLANET.A - 3.5 * PLANET.W, prev = sA(R);
       for (; R < PLANET.A; R += dR) { const v = sA(R + dR); if (v < prev) break; prev = v; }
@@ -1268,11 +1434,14 @@ void main(){
     toast.style.cssText = 'position:absolute;right:12px;top:12px;max-width:min(360px,calc(100% - 24px));padding:9px 12px;border-radius:6px;'
       + 'background:rgba(10,13,24,.82);color:#dfe8f5;font:12.5px/1.65 var(--sans,sans-serif);letter-spacing:.02em;pointer-events:none;opacity:0;transition:opacity .6s';
     box.appendChild(toast);
-    let toastTimer = 0;
+    let toastTimer = 0, toastSwap = 0;
+    // shows a text for ms; one already showing fades out first (0.25 s), so texts never swap abruptly
     const say = (ja_, en, ms) => {
-      toast.textContent = ja() ? ja_ : en; toast.style.opacity = '1';
-      clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, ms);
+      clearTimeout(toastTimer); clearTimeout(toastSwap);
+      const show = () => { toast.textContent = ja() ? ja_ : en; toast.style.transition = 'opacity .45s'; toast.style.opacity = '1'; toastTimer = setTimeout(hush, ms); };
+      if (toast.style.opacity === '1') { toast.style.transition = 'opacity .25s'; toast.style.opacity = '0'; toastSwap = setTimeout(show, 260); } else show();
     };
+    const hush = () => { clearTimeout(toastTimer); clearTimeout(toastSwap); toast.style.transition = 'opacity .6s'; toast.style.opacity = '0'; };
     const startBurst = () => {
       if (reduce || (burst && time - burst.t0 < 8)) return;   // the clock does not run with reduced motion
       burst = { t0: time };
@@ -1289,6 +1458,9 @@ void main(){
       if (seeds.length < 3) return;
       seeds = []; planetFade = 8; opt.mode |= 16;
       box.dispatchEvent(new CustomEvent('diskmode', { detail: { mode: opt.mode } }));
+      emitState();
+      // from afar the gap would be drawn shallow (DEPTH): come closer to watch it open
+      if (Math.hypot(Math.hypot(cam[0], cam[1]) - PLANET.A, cam[2]) > 9) box.diskSet({ p: 0, slice: 0, el: Math.min(45, Math.max(25, camEl * 180 / Math.PI)), az: camAz * 180 / Math.PI, d: 10, fly: 1 });
       say('小石が 3 au に集まって惑星の核ができ、まわりのガスを集めて木星ほどの惑星に育ちました。惑星はガスを押しのけてギャップを開け、すぐ外に小石がたまります(実際には数十万年以上かかります)。',
         'The pebbles gathered at 3 au into a planetary core; it pulled in the gas around it and grew to the mass of Jupiter. The planet pushes the gas aside into a gap, and pebbles pile up just outside it (in reality this takes hundreds of thousands of years or more).', 12000);
     };
@@ -1324,31 +1496,65 @@ void main(){
       const line = raw.filter((_, k) => k % 40 === 0 || k === raw.length - 1).map((a) => [a[1], a[2], a[3]]);
       envLines.push({ phi0: 2 * Math.PI * u2, side: i % 2 ? -1 : 1, T, pts, line });
     }
+    // the depth for this view (to 1e-3), the starlight on the gap, its rim and the pebble trap
     function planetUniforms() {
-      if (planetAmp === ampSet) return;
-      ampSet = planetAmp;
-      const f = planetAmp * 4, l = Math.min(3, Math.floor(f)), u = f - l;
-      for (let j = 0; j < 128; j++) glNow[j] = glTables[l][j] + (glTables[l + 1][j] - glTables[l][j]) * u;
-      gl.useProgram(progDisk); gl.uniform4fv(UD.uGapLight, glNow); gl.uniform1f(UD.uPlanet, planetAmp);
-      rim = gapRim(planetAmp);
+      const d = Math.round(planetAmp * (lookNow === 'model' ? depthFor(cam) : DEPTH.NEAR) * 1000) / 1000;
+      if (d === depthSet) return;
+      depthSet = gapDepth = d;
+      gapLight(d, glNow);
+      gl.useProgram(progDisk); gl.uniform4fv(UD.uGapLight, glNow); gl.uniform1f(UD.uPlanet, d);
+      rim = gapRim(d); trap = trapOf(d);
     }
 
-    // The camera looks at the star, or (follow) at the planet, turning with its orbit. A change of view made with fly
-    // moves there over FLY_MS: target, elevation and azimuth eased, the distance eased in its logarithm.
-    const FLY_MS = 1600, wrapPi = (a) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
-    let follow = false, fly = null, camT = [0, 0, 0], camEl = opt.el, camAz = opt.az, camD = opt.dist;
-    function camera() {
-      let T = follow ? planetPos(time) : [0, 0, 0];
-      let el = elUser, az = azUser + (follow ? planetPhi(time) : reduce ? 0 : opt.spin * time), d = opt.dist;
-      if (fly) {
-        const u = Math.min(1, (performance.now() - fly.t0) / FLY_MS), e = u * u * (3 - 2 * u);
-        if (u >= 1) fly = null;
-        else {
-          T = T.map((v, i) => fly.T[i] + (v - fly.T[i]) * e);
-          el = fly.el + (el - fly.el) * e; az = fly.az + wrapPi(az - fly.az) * e; d = fly.d * Math.pow(d / fly.d, e);
-        }
+    // The camera looks at the star, or (follow) at the planet, turning with its orbit. Every change of view (buttons,
+    // keys, the wheel, the tour) flies there: the view (elevation, azimuth the shorter way round, ln distance) and the
+    // point looked at each move on a cubic Hermite curve that starts with the camera's present velocity, so that a
+    // flight redirected on the way (a second click, a held key, the wheel) carries on smoothly, and ends at rest. The
+    // duration grows with the size of the move, from FLY_MIN to FLY_MAX seconds, for an even pace. Flights aim at the
+    // view as it is at each moment (the slow spin and the planet's orbit keep moving it). A drag or a pinch takes over:
+    // the view stays where it is (the point looked at still settles). With reduced motion, views change at once.
+    const FLY_MIN = 0.35, FLY_MAX = 1.6, wrapPi = (a) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+    let follow = false, flyV = null, flyT = null, camT = [0, 0, 0], camEl = opt.el, camAz = opt.az, camD = opt.dist;
+    let camV = [0, 0, 0], camTV = [0, 0, 0];   // velocities of the view and of the point looked at, per second
+    const viewOff = () => (follow ? planetPhi(time) : reduce ? 0 : opt.spin * time);
+    // position (out) and velocity (vel) along a flight now; true when it has arrived
+    function hermite(fl, p1, out, vel) {
+      const u = Math.min(1, (performance.now() - fl.t0) / (1000 * fl.dur)), u2 = u * u, u3 = u2 * u;
+      const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = 3 * u2 - 2 * u3, d00 = 6 * u2 - 6 * u, d10 = 3 * u2 - 4 * u + 1, d01 = 6 * u - 6 * u2;
+      for (let i = 0; i < p1.length; i++) {
+        out[i] = h00 * fl.p0[i] + h10 * fl.dur * fl.v0[i] + h01 * p1[i];
+        vel[i] = (d00 * fl.p0[i] + d10 * fl.dur * fl.v0[i] + d01 * p1[i]) / fl.dur;
       }
-      camT = T; camEl = el; camAz = az; camD = d;
+      return u >= 1;
+    }
+    // start (or redirect) a flight from where the camera is to the view set now
+    function startFly() {
+      if (reduce || !W || !cam) { flyV = flyT = null; return; }
+      const now = performance.now(), p0 = [camEl, camAz, Math.log(camD)], to = [elUser, azUser + viewOff(), Math.log(opt.dist)];
+      to[1] = p0[1] + wrapPi(to[1] - p0[1]);
+      const Tl = follow ? planetPos(time) : [0, 0, 0], dT = Math.hypot(Tl[0] - camT[0], Tl[1] - camT[1], Tl[2] - camT[2]);
+      const m = Math.abs(to[0] - p0[0]) + Math.abs(to[1] - p0[1]) * Math.cos(p0[0]) + Math.abs(to[2] - p0[2]) + dT / Math.max(1, Math.min(camD, opt.dist));
+      const dur = Math.min(FLY_MAX, FLY_MIN + 0.45 * m);
+      flyV = { t0: now, dur, p0, v0: camV.slice() };
+      if (dT > 1e-6 || flyT) flyT = { t0: now, dur, p0: camT.slice(), v0: camTV.slice() };
+      dirty = true;
+    }
+    // a drag or a pinch takes over: the view is left where the flight has brought it
+    const takeOver = () => {
+      if (!flyV) return;
+      elUser = clampEl(camEl); azUser = camAz - viewOff(); opt.dist = camD; flyV = null; camV = [0, 0, 0];
+    };
+    function camera() {
+      const Tl = follow ? planetPos(time) : [0, 0, 0], vl = [elUser, azUser + viewOff(), Math.log(opt.dist)];
+      let T = Tl, v = vl;
+      if (flyT) { const o = [0, 0, 0]; if (hermite(flyT, Tl, o, camTV)) { flyT = null; camTV = [0, 0, 0]; } else T = o; }
+      if (flyV) {
+        vl[1] = flyV.p0[1] + wrapPi(vl[1] - flyV.p0[1]);
+        const o = [0, 0, 0];
+        if (hermite(flyV, vl, o, camV)) { flyV = null; camV = [0, 0, 0]; } else v = o;
+      }
+      camT = T; camEl = v[0]; camAz = v[1]; camD = Math.exp(v[2]);
+      const el = camEl, az = camAz, d = camD;
       const f = [-Math.cos(el) * Math.cos(az), -Math.cos(el) * Math.sin(az), -Math.sin(el)];
       cam = [T[0] - d * f[0], T[1] - d * f[1], T[2] - d * f[2]];
       const r = [f[1], -f[0], 0]; const rl = Math.hypot(r[0], r[1]) || 1; r[0] /= rl; r[1] /= rl;
@@ -1370,7 +1576,7 @@ void main(){
     const LN10 = Math.LN10, lnEta = BP.ETA.map(Math.log), CHI_C = 0.03;
     // ln tau* toward the star with the planet's gap, behind its inner rim at least that of the rim (as xRim)
     const lnTauJS = (R, z) => {
-      const x = MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnJS(R, planetAmp) - 0.5 * z * z / (Hof(R) * Hof(R));
+      const x = MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnJS(R, gapDepth) - 0.5 * z * z / (Hof(R) * Hof(R));
       if (!rim || R <= rim.R) return x;
       const th = Math.abs(z) / R, xr = 0.5 * (rim.th * rim.th - th * th) / (rim.h * rim.h);
       return x + (Math.max(x, xr) - x) * (1 - ss(rim.end, rim.end + 0.5, R));
@@ -1384,14 +1590,40 @@ void main(){
         for (let i = 0; i < 40; i++) { const m = 0.5 * (lo + hi); if (lnTauJS(R, m) > lt) lo = m; else hi = m; }
         return 0.5 * (lo + hi);
       }
-      const a = MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnJS(R, planetAmp) - lt;
+      const a = MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnJS(R, gapDepth) - lt;
       return a > 0 ? Hof(R) * Math.sqrt(2 * a) : NaN;
     };
-    const zOfRho = (R, lr) => { const v = Math.log(SigmaJS(R) * Math.exp(gapLnJS(R, planetAmp)) * MODEL.H0 / Hof(R)) - lr * LN10; return v > 0 ? Hof(R) * Math.sqrt(2 * v) : NaN; };
+    const zOfRho = (R, lr) => { const v = Math.log(SigmaJS(R) * Math.exp(gapLnJS(R, gapDepth)) * MODEL.H0 / Hof(R)) - lr * LN10; return v > 0 ? Hof(R) * Math.sqrt(2 * v) : NaN; };
     const sliceGeom = {};               // lines in (R, z), R >= 0 and z >= 0, built once per quantity and gap depth
+    // the wake (as in the disk map, without the footprint): relative excess of the gas density at R, azimuth phi
+    const wakeJS = (R, phi) => {
+      const x = R / PLANET.A;
+      if (planetAmp <= 0 || x < 0.42 || x > 2.5) return 0;
+      const F = 4.8 - 4 * Math.pow(x, -0.25) - 0.8 * Math.pow(x, 1.25), TAU = 2 * Math.PI;
+      const dphi = ((phi - planetPhi(time) - Math.sign(x - 1) * F / PLANET.HP + Math.PI) % TAU + TAU) % TAU - Math.PI;
+      const sl = Math.pow(x, 1.25) * Math.abs(Math.pow(x, -1.5) - 1) / PLANET.HP, c = 1 / Math.sqrt(1 + sl * sl);
+      const ax = Math.abs(x - 1), w = Hof(R) * (1 + 0.5 * ax), d = R * dphi * c;
+      return planetAmp * PLANET.WAKE_A * Math.exp(-ax / PLANET.WAKE_L) * ss(0.03, 0.1, ax) * ss(0.42, 0.55, x) * (1 - ss(2, 2.5, x)) * Math.exp(-d * d / (w * w));
+    };
+    // the disk's density contours on the two halves of the face (azimuths of the right half and opposite), across the
+    // arms: finely sampled where the arms are
+    let wakeR = null;
+    function wakeContours(lr) {
+      wakeR = wakeR || [...logspace(MODEL.R_IN * 1.05, 1.2, 40), ...logspace(1.21, 7.6, 420), ...logspace(7.65, 10.5, 20)];
+      const phR = Math.atan2(basis.r[1], basis.r[0]), out = [];
+      for (const [sr, ph] of [[1, phR], [-1, phR + Math.PI]]) {
+        const pts = [];
+        for (const R of wakeR) {
+          const v = Math.log(SigmaJS(R) * Math.exp(gapLnJS(R, gapDepth)) * (1 + wakeJS(R, ph)) * MODEL.H0 / Hof(R)) - lr * LN10;
+          if (v > 0) pts.push([R, Hof(R) * Math.sqrt(2 * v)]);
+        }
+        if (pts.length > 2) out.push(pathOf(pts, [[sr, 1], [sr, -1]]));
+      }
+      return out.join('');
+    }
     const logspace = (a, b, n) => Array.from({ length: n }, (_, i) => a * Math.pow(b / a, i / (n - 1)));
     function buildSlice(q) {
-      const key = q + ':' + Math.round(planetAmp * 40) + ':' + rSn.toFixed(3);
+      const key = q + ':' + Math.round(gapDepth * 50) + ':' + rSn.toFixed(3);
       if (sliceGeom.key === key) return sliceGeom.g;
       const g = { lines: [], labels: [] };
       const curve = (f, R0, R1) => logspace(R0, R1, 160).map((R) => [R, f(R)]).filter((pt) => !isNaN(pt[1]));
@@ -1403,17 +1635,18 @@ void main(){
           if (Rs > MODEL.R_IN && Rs < 10) { g.lines.push([[Rs, zOfTau(Rs, 0)], [Rs, zOfTau(Rs, -4.6)]]); g.labels.push({ R: Rs, z: zOfTau(Rs, -4.6), t: T + ' K', side: 1 }); }
         }
       } else if (q === 'rho') {
-        // the disk (above 10^-3 of the midplane at 1 au) and, along the field lines, the wind (10^-5 to 10^-7)
+        // the disk (above 10^-3 of the midplane at 1 au) and, along the field lines, the wind (10^-5 to 10^-7); with the
+        // planet, the disk's contours are drawn each frame instead, across the arms of its wake (wakeContours)
         for (const lr of [1, -1, -3]) {
           const c = curve((R) => zOfRho(R, lr), MODEL.R_IN * 1.05, 10.5);
-          if (c.length > 2) { g.lines.push(c); g.labels.push({ pts: c, t: '10' + sup(lr) }); }
+          if (c.length > 2) { g.lines.push({ pts: c, quads: ALL, lr }); g.labels.push({ pts: c, t: '10' + sup(lr) }); }
         }
         // (the lower side, at 0.35 of the upper, has its own contours)
         for (const [lr, low] of [[-5, 1], [-6, 1], [-7, 1], [-5, 0.35], [-6, 0.35], [-7, 0.35]]) {
           const c = [];
           for (const Rf of logspace(0.07, 8, 140)) {
             const zb = zBase(Rf), r0 = Rf + 0.5 * BP.A0 * zb;
-            const base = -MODEL.LNTAU1 - 1.5 * Math.log(r0) - tabF(lnEta, tabS(CHI_C)) - cutOut(r0) + gapLnJS(r0, planetAmp) + Math.log(Math.max(ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, r0) * low, 1e-30));
+            const base = -MODEL.LNTAU1 - 1.5 * Math.log(r0) - tabF(lnEta, tabS(CHI_C)) - cutOut(r0) + gapLnJS(r0, gapDepth) + Math.log(Math.max(ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, r0) * low, 1e-30));
             const want = lr * LN10 - base;   // ln ETA at the contour
             if (want > tabF(lnEta, tabS(CHI_C)) || want < lnEta[NT - 1]) continue;
             let lo = tabS(CHI_C), hi = NT - 1.001;
@@ -1528,28 +1761,48 @@ void main(){
     // opacity of the face where the segment from the camera to P crosses the plane (P on the far side): hides
     // the field lines and particles behind it (the density face covers the wind as well)
     function faceAlpha(P) {
-      if (!opt.slice || opt.sliceQ === 'none') return 0;
-      const cn = cam[0] * basis.n[0] + cam[1] * basis.n[1], pn = P[0] * basis.n[0] + P[1] * basis.n[1];
+      if (sliceU < 0.82 || opt.sliceQ === 'none') return 0;
+      const off = sliceOff(), cn = cam[0] * basis.n[0] + cam[1] * basis.n[1] - off, pn = P[0] * basis.n[0] + P[1] * basis.n[1] - off;
+      if (cn <= 0 || pn > 0) return 0;
       const t = cn / (cn - pn), C = [cam[0] + (P[0] - cam[0]) * t, cam[1] + (P[1] - cam[1]) * t, cam[2] + (P[2] - cam[2]) * t];
-      const R = Math.abs(C[0] * basis.r[0] + C[1] * basis.r[1]), z = C[2] / SZ;
-      if (opt.sliceQ === 'rho') return R < 10.5 && Math.abs(z) < 8.5 ? 1 : 0;
+      const R = Math.hypot(C[0], C[1]), z = C[2] / SZ;
+      if (opt.sliceQ === 'rho') return R < 10.5 && Math.abs(z) < 8.5 ? ss(0.82, 1, sliceU) : 0;
       const x = lnTauJS(Math.max(R, 1e-3), z), hole = ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, R);
-      return (opt.sliceQ === 'T' ? ss(-6, -4.5, x) : ss(-4.5, -3.5, x / LN10)) * hole;
+      return (opt.sliceQ === 'T' ? ss(-6, -4.5, x) : ss(-4.5, -3.5, x / LN10)) * hole * ss(0.82, 1, sliceU);
     }
+    // The slice opens and closes as a sweep: sliceU goes from 0 (closed) to 1 (open) in 1.5 s, as the fades do, and
+    // the plane moves from SWEEP au in front of the star (nothing cut) to the star, eased like the flights. The lines and
+    // labels on the face, drawn for the plane through the star, show only at the end of the sweep.
+    const SWEEP = 11;
+    let sliceU = opt.slice ? 1 : 0, annAmp = opt.ann ? 1 : 0;   // annAmp: the annotations' fade (0.4 s)
+    // A change of look dips the exposure for 0.6 s and takes effect at its darkest (lookNow), so the picture never
+    // jumps; the model's own drawings (field lines, wind tracers, the envelope's streamlines) fade out in the observed
+    // looks (fieldAmp, which also fades the field lines' toggle).
+    let lookNow = opt.look, lookT0 = -1e9, fieldAmp = 1;
+    // Other fades (in real time, as the others): the components gas, surface, pebbles and wind (compAmp, 0.6 s; uComp),
+    // the model's drawings of the envelope between looks (modelAmp, 0.4 s), the scale bar when it changes its length
+    // (the old bar fades out as the new one fades in, 0.25 s; both are true to scale)
+    const COMP_BITS = [1, 2, 4, 8], compAmp = COMP_BITS.map((b) => (opt.mode & b ? 1 : 0));
+    let modelAmp = opt.look === 'model' ? 1 : 0, sbLb = 0, sbOld = 0, sbT = -1e9;
+    const toward = (cur, want, dt, secs) => (reduce ? want : want > cur ? Math.min(want, cur + dt / secs) : Math.max(want, cur - dt / secs));
+    const fadesDone = () => COMP_BITS.every((b, i) => compAmp[i] === (opt.mode & b ? 1 : 0)) && modelAmp === (lookNow === 'model' ? 1 : 0) && performance.now() - sbT >= 250;
+    const lookDip = () => { const u = (performance.now() - lookT0) / 600; return reduce || u >= 1 || u <= 0 ? 1 : 1 - 0.92 * Math.sin(Math.PI * u); };
+    const sliceOff = () => { const u = sliceU; return SWEEP * (1 - u * u * (3 - 2 * u)); };
     // the part of space kept by the slice: the side of the plane away from the camera
-    const kept = (P) => !opt.slice || P[0] * basis.n[0] + P[1] * basis.n[1] <= 0;
+    const kept = (P) => sliceU <= 0 || P[0] * basis.n[0] + P[1] * basis.n[1] <= sliceOff();
     function drawSlice() {
-      if (!opt.slice) { for (const k in sP) sP[k].setAttribute('d', ''); sLabels.forEach((e) => { e.textContent = ''; }); drawCbar('', 0); return; }
+      sliceG.setAttribute('opacity', (ss(0.82, 1, sliceU) * annAmp).toFixed(3));
+      if (sliceU <= 0) { for (const k in sP) sP[k].setAttribute('d', ''); sLabels.forEach((e) => { e.textContent = ''; }); drawCbar('', 0); return; }
       const ja_ = ja(), g = buildSlice(opt.sliceQ), face = opt.sliceQ !== 'none';
       let li = 0;
-      sP.contour.setAttribute('d', g.lines.map((c) => (Array.isArray(c) ? pathOf(c, ALL) : pathOf(c.pts, c.quads))).join(''));
+      sP.contour.setAttribute('d', g.lines.map((c) => (Array.isArray(c) ? pathOf(c, ALL) : c.lr != null && planetAmp > 0 ? wakeContours(c.lr) : pathOf(c.pts, c.quads))).join(''));
       sP.tau1.setAttribute('d', pathOf(g.tau1, ALL));
       sP.ice.setAttribute('d', pathOf(g.ice, ALL));
       // the pebble layer: rock inside the snow line, ice outside, thick where it piles up (just outside the snow line,
       // and at the planet's pressure maximum); broken across the planet's gap
       const spans = (R0, R1, ok) => { const out = []; let a = null; for (let R = R0; R <= R1 + 1e-9; R += 0.01) { if (ok(R)) { if (a === null) a = R; } else if (a !== null) { out.push([a, R]); a = null; } } if (a !== null) out.push([a, R1]); return out; };
       const segs = (list) => list.map(([a, b]) => pathOf([[a, 0], [b, 0]], UPPER)).join('');
-      const peb = (R) => pebbleJS(R, planetAmp);
+      const peb = (R) => pebbleJS(R, gapDepth);
       sP.rock.setAttribute('d', segs(spans(MODEL.R_IN, rSn, (R) => peb(R) > 0.3)));
       sP.icy.setAttribute('d', segs(spans(rSn, 8.4, (R) => peb(R) > 0.3)));
       sP.pile.setAttribute('d', segs([[rSn * 1.02, rSn * 1.3], ...spans(Math.max(rSn, 2), 8.4, (R) => peb(R) > 1.8)]));
@@ -1620,10 +1873,22 @@ void main(){
     let fadeT = 0;
     function draw() {
       if (!W) return;
-      // the planet's fade, in real time (so that it also completes while the model is paused)
-      const now = performance.now(), want = (opt.mode & 16) ? 1 : 0, dtR = fadeT ? (now - fadeT) / 1000 : 0;
+      // the planet's fade, in real time (so that it also completes while the model is paused); the step is at most 0.1 s,
+      // since a paused model draws nothing until something changes and the first frame of a fade would otherwise jump
+      // to its end
+      const now = performance.now(), want = (opt.mode & 16) ? 1 : 0, dtR = fadeT ? Math.min(0.1, (now - fadeT) / 1000) : 0;
       fadeT = now;
       planetAmp = reduce ? want : want > planetAmp ? Math.min(want, planetAmp + dtR / planetFade) : Math.max(want, planetAmp - dtR / planetFade);
+      const wantS = opt.slice ? 1 : 0;
+      sliceU = reduce ? wantS : wantS > sliceU ? Math.min(wantS, sliceU + dtR / 1.5) : Math.max(wantS, sliceU - dtR / 1.5);
+      const wantA = opt.ann ? 1 : 0;
+      annAmp = reduce ? wantA : wantA > annAmp ? Math.min(wantA, annAmp + dtR / 0.4) : Math.max(wantA, annAmp - dtR / 0.4);
+      if (lookNow !== opt.look && (reduce || performance.now() - lookT0 >= 300)) lookNow = opt.look;
+      const wantF = showField && lookNow === 'model' ? 1 : 0;
+      fieldAmp = reduce ? wantF : wantF > fieldAmp ? Math.min(wantF, fieldAmp + dtR / 0.4) : Math.max(wantF, fieldAmp - dtR / 0.4);
+      fieldG.setAttribute('opacity', fieldAmp.toFixed(3));
+      COMP_BITS.forEach((b, i) => { compAmp[i] = toward(compAmp[i], opt.mode & b ? 1 : 0, dtR, 0.6); });
+      modelAmp = toward(modelAmp, lookNow === 'model' ? 1 : 0, dtR, 0.4);
       if (planetAmp === want) planetFade = 1.5;
       snowNow();
       const wantE = (opt.mode & 32) ? 1 : 0;
@@ -1635,6 +1900,7 @@ void main(){
       // the disk map for this moment and view (the footprints of the pixels depend on the camera)
       gl.useProgram(progDisk);
       gl.uniform1f(UD.uPlanetPhi, planetPhi(time));
+      gl.uniform1f(UD.uWake, planetAmp);
       gl.uniform1f(UD.uTime, time);
       gl.uniform1f(UD.uSeed, opt.seed);
       gl.uniform3fv(UD.uCam, cam);
@@ -1643,10 +1909,11 @@ void main(){
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       // the volume, with the FULL program while the slice or the planet close up shows
-      const F = opt.slice || pVis > 0 || envVis > 0 ? fullProgram() : null, U = F ? F.U : U0;
+      const F = sliceU > 0 || opt.slice || pVis > 0 || envVis > 0 || lookNow !== 'model' ? fullProgram() : null, U = F ? F.U : U0;
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.useProgram(F ? F.prog : prog);
-      gl.uniform1f(U.uPlanet, planetAmp);
+      gl.uniform1f(U.uPlanet, gapDepth);
+      gl.uniform3f(U.uTrap, trap.R, trap.filt, trap.s);
       gl.uniform4f(U.uGapRim, rim ? rim.R : 1e9, rim ? rim.th : 0, rim ? rim.end : 0, rim ? rim.h : 1);
       gl.uniform2f(U.uRes, canvas.width, canvas.height);
       gl.uniform1f(U.uTime, time);
@@ -1654,15 +1921,19 @@ void main(){
       gl.uniformMatrix3fv(U.uBasis, false, [...basis.r, ...basis.u, ...basis.f]);
       gl.uniform1f(U.uTanHalf, Math.tan(opt.fov / 2));
       gl.uniform1f(U.uRSnow, rSn);
-      gl.uniform1f(U.uExposure, opt.exposure * Math.pow(burstL(), 0.6));   // brighter starlight, compressed by the stretch
-      gl.uniform1f(U.uStar, Math.pow(burstL(), 0.7));
+      gl.uniform1f(U.uExposure, opt.exposure * Math.pow(burstL(), 0.6) * lookDip());   // brighter starlight, compressed by the stretch
+      gl.uniform1f(U.uStar, Math.pow(burstL(), 0.7) * LOOK_STAR[lookNow]);
+      gl.uniform1i(U.uLook, LOOKS[lookNow]);
       gl.uniform1i(U.uSteps, Math.round(opt.steps * (camD < 10 ? 2 : 1)));   // finer march when zoomed in
       gl.uniform1f(U.uSeed, opt.seed);
       gl.uniform1f(U.uPx, canvas.width / W);
       gl.uniform4fv(U.uClump, clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]));
       gl.uniform4fv(U.uVapor, vapor.flatMap((v) => [v.R, v.phi, v.t0, v.amp]));
-      gl.uniform1i(U.uMode, opt.mode);
-      gl.uniform1i(U.uSlice, opt.slice ? 1 : 0);
+      gl.uniform1i(U.uMode, (opt.mode & ~15) | COMP_BITS.reduce((m, b, i) => m | (compAmp[i] > 0 ? b : 0), 0));
+      gl.uniform4fv(U.uComp, compAmp.map((v) => v * v * (3 - 2 * v)));
+      gl.uniform1i(U.uSlice, sliceU > 0 ? 1 : 0);
+      gl.uniform1f(U.uSliceOff, sliceOff());
+      gl.uniform1f(U.uSliceFace, ss(0.82, 1, sliceU));
       gl.uniform1i(U.uSliceQ, SLICE_Q[opt.sliceQ] || 0);
       gl.uniform3fv(U.uSliceN, basis.n);
       gl.uniform3fv(U.uSliceR, basis.r);
@@ -1679,7 +1950,7 @@ void main(){
       // snow line annotation, projected with the same camera; with the slice, only the half that is kept
       // (on a painted face the ice boundary is drawn instead)
       let d = '', best = null, pen = false;
-      const ringOn = !opt.slice || opt.sliceQ === 'none';
+      const ringA = annAmp * (opt.sliceQ === 'none' ? 1 : 1 - ss(0.82, 1, sliceU)), ringOn = ringA > 0.002;
       for (let i = 0; i <= 72 && ringOn; i++) {
         const a = i / 72 * Math.PI * 2, P = [rSn * Math.cos(a), rSn * Math.sin(a), 0];
         if (!kept(P)) { pen = false; continue; }
@@ -1687,15 +1958,17 @@ void main(){
         d += (pen ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1); pen = true;
         if (!best || q[1] > best[1]) best = q;
       }
-      ring.setAttribute('d', d + (opt.slice ? '' : 'Z'));
+      ring.setAttribute('d', d + (sliceU > 0 ? '' : 'Z'));
       label.textContent = best ? (ja() ? 'スノーライン' : 'snow line') : '';
+      const aop = annAmp.toFixed(3);
+      ring.setAttribute('opacity', ringA.toFixed(3)); label.setAttribute('opacity', ringA.toFixed(3));
       if (best) { label.setAttribute('x', best[0] + 8); label.setAttribute('y', best[1] + 14); }
       // the planet, named when it shows (close up)
       const pq = project(pPos), pa = ss(0.3, 0.6, pVis) * (kept(pPos) ? 1 : 0);
       plabel.textContent = pa > 0 && pq[2] > 0.05 ? (ja() ? '惑星と周惑星円盤' : 'planet and its disk') : '';
       if (plabel.textContent) {
         const rc = 0.4 * PLANET.RH / pq[2] * Hh / (2 * basis.th);   // radius of the planet's disk on the screen (px)
-        plabel.setAttribute('x', (pq[0] + 0.75 * rc + 10).toFixed(1)); plabel.setAttribute('y', (pq[1] - 0.35 * rc - 12).toFixed(1)); plabel.setAttribute('opacity', pa.toFixed(2));
+        plabel.setAttribute('x', (pq[0] + 0.75 * rc + 10).toFixed(1)); plabel.setAttribute('y', (pq[1] - 0.35 * rc - 12).toFixed(1)); plabel.setAttribute('opacity', (pa * annAmp).toFixed(2));
       }
       const QN = { T: ['温度', 'temperature'], rho: ['ガスの密度', 'gas density'], tau: ['星の方向の光学的厚さ', 'optical depth toward the star'], none: ['', ''] }[opt.sliceQ] || ['', ''];
       canvas.setAttribute('aria-label', ja()
@@ -1704,9 +1977,15 @@ void main(){
       // scale bar: 1 au (or a round multiple) at the distance of the star (of the planet when following it)
       const o = project(camT), r1 = project(camT.map((v, i) => v + basis.r[i])), pxAu = o[2] > 0.1 ? Math.hypot(r1[0] - o[0], r1[1] - o[1]) : 0;
       let Lb = 0.05; for (const c of [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200]) if (c * pxAu <= 150) Lb = c;
-      const x0 = 18, y0 = Hh - 18;
-      sbar.setAttribute('x1', x0); sbar.setAttribute('x2', x0 + Lb * pxAu); sbar.setAttribute('y1', y0); sbar.setAttribute('y2', y0);
-      stext.textContent = pxAu > 0 ? Lb + ' au' : ''; stext.setAttribute('x', x0); stext.setAttribute('y', y0 - 6);
+      if (Lb !== sbLb) { if (sbLb && !reduce) { sbOld = sbLb; sbT = performance.now(); } sbLb = Lb; }
+      const sbU = Math.min(1, (performance.now() - sbT) / 250), x0 = 18, y0 = Hh - 18;
+      const bar = (g, L, a) => {
+        const [ln, tx] = g.children;
+        ln.setAttribute('x1', x0); ln.setAttribute('x2', x0 + L * pxAu); ln.setAttribute('y1', y0); ln.setAttribute('y2', y0);
+        tx.textContent = pxAu > 0 && a > 0 ? L + ' au' : ''; tx.setAttribute('x', x0); tx.setAttribute('y', y0 - 6);
+        g.setAttribute('opacity', (a * annAmp).toFixed(3));
+      };
+      bar(sgroup, Lb, sbU * sbU * (3 - 2 * sbU)); bar(sgroup2, sbOld, sbU < 1 ? 1 - sbU * sbU * (3 - 2 * sbU) : 0);
       box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12 } }));
     }
     // a clump that crosses the snow line releases vapor
@@ -1725,17 +2004,24 @@ void main(){
       }
       for (const v of vapor) if (v.amp > 0 && time - v.t0 > 30) v.amp = 0;
     }
+    // a flight, a fade or the sweep under way
+    const busy = () => !!(flyV || flyT) || planetAmp !== ((opt.mode & 16) ? 1 : 0) || envAmp !== ((opt.mode & 32) ? 1 : 0) || sliceU !== (opt.slice ? 1 : 0)
+      || annAmp !== (opt.ann ? 1 : 0) || lookNow !== opt.look || lookDip() < 1 || fieldAmp !== (showField && lookNow === 'model' ? 1 : 0) || !fadesDone();
     function frame(t) {
       if (!running) return;
       if (benching) { last = 0; lastRaw = 0; requestAnimationFrame(frame); return; }   // diskBench draws on its own
       const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
       adapt(t);
       if (!paused) { time += dt * speed; update(); dirty = true; }
-      if (fly || planetAmp !== ((opt.mode & 16) ? 1 : 0) || envAmp !== ((opt.mode & 32) ? 1 : 0)) dirty = true;   // flights and fades run in real time (see draw)
+      if (busy()) dirty = true;   // flights, fades and the sweep run in real time (see draw)
       if (dirty) { draw(); dirty = false; }
       requestAnimationFrame(frame);
     }
     const start = () => { if (!reduce && !running) { running = true; last = 0; requestAnimationFrame(frame); } };
+    // the gap's light tables (about 2 ms each), one per idle moment, so that a zoom or the tour never waits for one
+    const idle = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 3000 }) : (f) => setTimeout(f, 300);
+    const prefetch = () => { if (gapLight.prefetch()) idle(prefetch); };
+    idle(prefetch);
     const stop = () => { running = false; };
     const addClump = (R, phi, age) => {
       const c = clumps.reduce((a, b) => (a.amp <= 0 ? a : b.amp <= 0 ? b : a.t0 < b.t0 ? a : b));
@@ -1753,11 +2039,15 @@ void main(){
     canvas.tabIndex = 0;
     const clampEl = (v) => Math.min(1.45, Math.max(-1.45, v));
     const touched = () => { dirty = true; if (reduce) draw(); };
-    const zoomBy = (f) => { opt.dist = Math.min(DMAX, Math.max(dmin(), opt.dist * f)); touched(); };
+    // tells the page that the view or the components changed from inside (keys, tour, easter eggs, a drag)
+    const emitState = () => { if (box.diskState) box.dispatchEvent(new CustomEvent('diskstate', { detail: box.diskState() })); };
+    const zoomBy = (f) => { opt.dist = Math.min(DMAX, Math.max(dmin(), opt.dist * f)); startFly(); touched(); };
     const ptrs = new Map(); let pinch0 = 0, distPinch = 0;
     canvas.addEventListener('pointerdown', (e) => {
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      canvas.setPointerCapture(e.pointerId);
+      // (only a real pointer can be captured; events made by a script have none)
+      if (e.isTrusted) canvas.setPointerCapture(e.pointerId);
+      takeOver(); stopTour(false);
       if (ptrs.size === 1) { dragging = true; moved = false; px = e.clientX; py = e.clientY; }
       else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); distPinch = opt.dist; moved = true; }
     });
@@ -1783,6 +2073,7 @@ void main(){
     canvas.addEventListener('pointercancel', (e) => { endPtr(e); moved = true; });
     canvas.addEventListener('pointerup', (e) => {
       const wasDrag = moved; endPtr(e);
+      if (wasDrag) emitState();
       if (wasDrag || ptrs.size) return;
       // click: drop pebbles where the ray meets the midplane
       const rect = canvas.getBoundingClientRect();
@@ -1799,16 +2090,28 @@ void main(){
       seedPlanet(R);
       touched();
     });
-    canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomBy(Math.exp(e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015))); }, { passive: false });
+    canvas.addEventListener('wheel', (e) => { e.preventDefault(); stopTour(false); zoomBy(Math.exp(e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015))); }, { passive: false });
+    // The keys: arrows turn, + and - zoom, Home goes back to the first view, space pauses; 1 to 5 the views
+    // (VIEWS, in step with the preview page's buttons), P the planet, F the field lines, S the slice, A the annotations.
+    const VIEWS = [[el0 * 180 / Math.PI, az0 * 180 / Math.PI, dist0], [10, -80, 24], [2, -80, 24], [80, -65, 30], [-14, -80, 24]];
+    const PLANET_VIEW = { p: 1, el: 30, az: 160, d: 1.6 };
     canvas.addEventListener('keydown', (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      stopTour(false);
       const k = e.key; let used = true;
-      if (k === 'ArrowLeft') azUser += 0.08; else if (k === 'ArrowRight') azUser -= 0.08;
-      else if (k === 'ArrowUp') elUser = clampEl(elUser + 0.05); else if (k === 'ArrowDown') elUser = clampEl(elUser - 0.05);
+      const view = (st) => { if (opt.slice) box.diskSlice(false); box.diskSet({ ...st, fly: 1 }); };
+      if (k === 'ArrowLeft') { azUser += 0.08; startFly(); } else if (k === 'ArrowRight') { azUser -= 0.08; startFly(); }
+      else if (k === 'ArrowUp') { elUser = clampEl(elUser + 0.05); startFly(); } else if (k === 'ArrowDown') { elUser = clampEl(elUser - 0.05); startFly(); }
       else if (k === '+' || k === '=') zoomBy(0.8); else if (k === '-' || k === '_') zoomBy(1.25);
       else if (k === 'Home') { box.diskSet({ p: 0, slice: 0, el: el0 * 180 / Math.PI, az: az0 * 180 / Math.PI, d: dist0, fly: 1 }); }
       else if (k === ' ') box.diskPlay(paused);
+      else if (k >= '1' && k <= '5') { const v = VIEWS[Number(k) - 1]; view({ p: 0, el: v[0], az: v[1], d: v[2] }); }
+      else if (k === 'p' || k === 'P') view(PLANET_VIEW);
+      else if (k === 'f' || k === 'F') box.diskField(!showField);
+      else if (k === 's' || k === 'S') box.diskSlice(!opt.slice);
+      else if (k === 'a' || k === 'A') box.diskAnnotations(!opt.ann);
       else used = false;
-      if (used) { e.preventDefault(); touched(); }
+      if (used) { e.preventDefault(); touched(); emitState(); }
     });
     // adaptive render scale: when frames fall behind, render smaller; when they are comfortably on time,
     // work back up toward data-scale-max (the lines in the overlay are vector and unaffected)
@@ -1829,14 +2132,14 @@ void main(){
     resize();
     box.diskSetTime = (t) => { time = t; update(); draw(); };
     box.diskBurst = () => { startBurst(); touched(); };
-    box.diskAddClump = (R, phi, age) => { addClump(R, phi, age); draw(); };
+    // a clump of pebbles dropped as a click drops one (three near the planet's orbit grow it, see seedPlanet)
+    box.diskAddClump = (R, phi, age) => { addClump(R, phi, age); if (!age) seedPlanet(R); draw(); };
     // controls for the preview page: view (degrees, au), components, time, state for links, snapshots
-    const deg = (r) => Math.round(r * 1800 / Math.PI) / 10;
+    // (to 0.01 degree and 0.001 au, so that a link restores the picture to within a pixel)
+    const deg = (r) => Math.round(r * 18000 / Math.PI) / 100;
     // az is measured from the planet's azimuth while following it (p = 1)
-    box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 100) / 100, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? 1 : 0, sq: opt.sliceQ, p: follow ? 1 : 0 });
+    box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 1000) / 1000, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? 1 : 0, sq: opt.sliceQ, p: follow ? 1 : 0, ann: opt.ann ? 1 : 0, look: opt.look });
     box.diskSet = (st) => {
-      // with fly the camera moves to the new view over FLY_MS from where it is now
-      if (Number(st.fly) && !reduce && W) fly = { T: camT, el: camEl, az: camAz, d: camD, t0: performance.now() };
       // the slice and following the planet first (they exclude each other), since they set how close the camera may come
       if (st.slice != null) { opt.slice = !!Number(st.slice); if (opt.slice) follow = false; }
       if (st.p != null) { follow = !!Number(st.p); if (follow) opt.slice = false; }
@@ -1849,12 +2152,71 @@ void main(){
       if (st.d) opt.dist = Math.min(DMAX, Math.max(dmin(), st.d));
       if (st.mode != null) opt.mode = Number(st.mode);
       if (st.field != null) showField = !!Number(st.field);
+      if (st.ann != null) opt.ann = !!Number(st.ann);
+      // the look: the slice belongs to the model's look (opening it returns there; an observed look closes it)
+      if (st.look != null && st.look in LOOKS && st.look !== opt.look) {
+        opt.look = st.look; lookT0 = performance.now();
+        if (opt.look !== 'model' && opt.slice && st.slice == null) box.diskSlice(false);
+      }
+      if (opt.slice && opt.look !== 'model') { opt.look = 'model'; lookT0 = performance.now(); }
       if (st.speed) speed = Number(st.speed);
       if (st.paused != null) paused = !!Number(st.paused);
+      // a new view: with fly the camera flies there from where it is, otherwise it is there at once
+      if (st.el != null || st.az != null || st.d != null || st.p != null || st.slice != null) { if (Number(st.fly)) startFly(); else flyV = flyT = null; }
       touched();
     };
     box.diskView = (elevationDeg, azimuthDeg, distance) => box.diskSet({ el: elevationDeg, az: azimuthDeg, d: distance, p: 0 });
+    box.diskPlanetView = () => box.diskSet({ ...PLANET_VIEW, fly: 1 });
+    // --- the tour: the highlights in turn, each with a short text, then back to the first view. It turns on what it
+    // shows (the planet, the envelope), and stops when the visitor takes over (a drag, the wheel, a key) or asks. The
+    // page learns of it from disktour events. ---
+    const comps = (bits) => { if ((opt.mode & bits) !== bits) { box.diskSet({ mode: opt.mode | bits }); box.dispatchEvent(new CustomEvent('diskmode', { detail: { mode: opt.mode } })); } };
+    const home = () => box.diskSet({ p: 0, el: VIEWS[0][0], az: VIEWS[0][1], d: VIEWS[0][2], fly: 1 });
+    const TOUR = [
+      { go: () => { if (opt.slice) box.diskSlice(false); home(); }, ms: 8000,
+        ja: '原始惑星系円盤のモデル(半径 8 au)。星の光が反り返った表層を温め、赤道面は冷たいままです。約 1 au のスノーラインの外では、赤道面に沈んだ小石が氷をまとっています。表面からは、磁場に駆動された風が吹き出しています。',
+        en: 'A model protoplanetary disk, 8 au in radius. Starlight warms its flared surface while the midplane stays cold; beyond the snow line near 1 au the pebbles settled at the midplane are icy. A magnetically driven wind leaves the surface.' },
+      { go: () => { comps(16); if (opt.slice) box.diskSlice(false); box.diskPlanetView(); }, ms: 9500,
+        ja: '3 au の木星質量の惑星です。ガスを押しのけてギャップを開け、まわりに周惑星円盤を持っています。後ろに明るく見えるのは、星の光を受けたギャップの外側の壁です。',
+        en: 'A Jupiter-mass planet at 3 au. It pushes the gas aside into a gap and has its own circumplanetary disk; behind it, the outer wall of the gap is lit by the star.' },
+      { go: () => box.diskSlice(true, 'T'), ms: 10000,
+        ja: '星を通る断面です。色は温度で、星の光が届く表層(白い線 τ* = 1 より上)は熱く、内部は冷たいままです。水色の破線は氷の境界、矢印は円盤風の速さです。',
+        en: 'A slice through the star, coloured by temperature: the layer reached by starlight (above the white line, tau* = 1) is hot and the interior cold. The dashed line is the ice boundary; the arrows show the wind.' },
+      { go: () => { comps(32); box.diskSlice(false); box.diskSet({ p: 0, el: 14, az: -65, d: 90, fly: 1 }); }, ms: 10000,
+        ja: '遠くから見ると、母体の雲の名残(エンベロープ)が回転しながら円盤へ落ちてきます。軸に沿った空洞の壁が、星の光で明るく見えます。',
+        en: 'From afar, the remains of the parent cloud (the envelope) fall onto the disk as they rotate; the walls of a cavity along the axis are lit by the star.' },
+      { go: () => home(), ms: 6000, last: true,
+        ja: 'ツアーはここまでです。ドラッグで回し、ボタンやキーで成分や断面を切り替えて、自由に見てください。',
+        en: 'That is the tour. Drag to look around, and use the buttons or keys to switch components and the slice.' }
+    ];
+    let tour = null;
+    const tourEvent = () => box.dispatchEvent(new CustomEvent('disktour', { detail: { on: !!tour, step: tour ? tour.i : -1 } }));
+    function tourStep(i) {
+      const st = TOUR[i];
+      tour = { i, timer: setTimeout(() => (st.last ? stopTour(false) : tourStep(i + 1)), st.ms) };
+      st.go(); say(st.ja, st.en, st.ms - 300); touched(); emitState(); tourEvent();
+    }
+    function stopTour(quiet) {
+      if (!tour) return;
+      clearTimeout(tour.timer); tour = null;
+      if (!quiet) hush();
+      tourEvent();
+    }
+    box.diskTour = (on) => { if (on) { stopTour(true); tourStep(0); } else stopTour(false); };
+    // the slice for the page, the keys and the tour: opening flies to a low, close view of the inner disk (6 degrees,
+    // 2.4 au) as the plane sweeps in; closing flies back to the view before as it sweeps out
+    let sliceBefore = null;
+    box.diskSlice = (on, sq) => {
+      if (sq && sq in SLICE_Q) opt.sliceQ = sq;
+      if (!!on !== opt.slice) {
+        if (on) { const st = box.diskState(); sliceBefore = { el: st.el, az: st.az, d: st.d, p: st.p }; box.diskSet({ slice: 1, el: 6, d: 2.4, fly: 1 }); }
+        else { box.diskSet({ slice: 0 }); if (sliceBefore) box.diskSet({ ...sliceBefore, fly: 1 }); sliceBefore = null; }
+      }
+      touched(); emitState();
+    };
     box.diskField = (on) => box.diskSet({ field: on ? 1 : 0 });
+    box.diskAnnotations = (on) => box.diskSet({ ann: on ? 1 : 0 });
+    box.diskLook = (look) => { box.diskSet({ look }); emitState(); };
     box.diskPlay = (on) => { paused = !on; touched(); };
     box.diskSpeed = (x) => { speed = x; };
     box.diskZoom = (f) => zoomBy(f);
@@ -1912,9 +2274,25 @@ void main(){
       } finally { benching = false; dirty = true; }
     };
     box.diskScale = (sc) => { opt.scale = sc; resize(); };
+    // draws until every flight, fade and sweep has finished (at most maxMs): for scripts and tests, and it works in a
+    // hidden page too, where no animation frames come. Each frame is waited for (a pixel read back), so that frames do
+    // not pile up on the GPU when they are slow.
+    box.diskSettle = async (maxMs = 5000) => {
+      const mc = new MessageChannel(), px = new Uint8Array(4); let wake = null;
+      mc.port1.onmessage = () => { const w = wake; wake = null; if (w) w(); };
+      const t0 = performance.now();
+      for (;;) {
+        draw(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        if (!busy() || performance.now() - t0 > maxMs) break;
+        await new Promise((r) => { wake = r; mc.port2.postMessage(0); });
+      }
+      dirty = true;
+      return !busy();
+    };
     box.diskSteps = (n) => { opt.steps = n; };
-    // a PNG of the current frame: the volume plus the overlay (lines, snow line, scale bar)
-    box.diskSnapshot = async () => {
+    // a PNG of the current frame: the volume plus the overlay (lines, snow line, scale bar); with { canvas: true } the
+    // canvas it is drawn on instead (for checks: encoding a PNG takes a second or more in a background page)
+    box.diskSnapshot = async (o = {}) => {
       fullWait = true; draw(); fullWait = false;
       const out = document.createElement('canvas'); out.width = canvas.width; out.height = canvas.height;
       const c2 = out.getContext('2d'); c2.drawImage(canvas, 0, 0);
@@ -1928,6 +2306,7 @@ void main(){
       const img = new Image();
       await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
       c2.drawImage(img, 0, 0, out.width, out.height); URL.revokeObjectURL(url);
+      if (o.canvas) return out;
       return new Promise((res) => out.toBlob(res, 'image/png'));
     };
   }
