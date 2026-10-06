@@ -44,6 +44,10 @@
     .row .sep{margin:0}
   }
   .row .clock{font-size:13px;color:#33383d;font-variant-numeric:tabular-nums;margin-left:4px}
+  .row button:disabled{opacity:.45;cursor:default}
+  .row .co-v{display:flex;align-items:center;gap:8px;font-size:13px;color:#33383d}
+  .row .co-v input{min-width:0;width:170px;flex:none;padding:0;border:0}
+  .row .co-v output{font-variant-numeric:tabular-nums;min-width:6.5em}
   .row .sep{font-size:13px;color:#6a6f75;margin:0 0 0 6px}
   .row input{font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d6d4cd;border-radius:6px;min-width:16em;flex:1}
   .hint{font-size:13px;color:#6a6f75;margin:14px 0 22px;line-height:1.7;padding-left:1.2em}
@@ -104,6 +108,7 @@
       <button type="button" data-comp="8" aria-pressed="true">風</button>
       <button type="button" id="field" aria-pressed="true">磁力線</button>
       <button type="button" data-comp="32" aria-pressed="true">エンベロープ</button>
+      <button type="button" id="asym" aria-pressed="true">上下非対称</button>
     </span>
   </div>
   <div class="row" role="group" aria-label="見え方">
@@ -115,18 +120,35 @@
         <button type="button" data-look="optical" aria-pressed="false">可視・近赤外</button>
         <button type="button" data-look="mir" aria-pressed="false">中間赤外</button>
         <button type="button" data-look="mm" aria-pressed="false">ミリ波</button>
+        <button type="button" data-look="co" aria-pressed="false">CO 輝線</button>
       </span>
     </span>
   </div>
-  <div class="row" role="group" aria-label="断面">
+  <div class="row" role="group" aria-label="CO 輝線の表示" id="coRow" hidden>
+    <span class="k">CO</span>
+    <span class="b">
+      <span class="grp">
+        <button type="button" data-co="chan" aria-pressed="true">チャンネル</button>
+        <button type="button" data-co="m1" aria-pressed="false">モーメント 1</button>
+        <button type="button" data-co="m0" aria-pressed="false">モーメント 0</button>
+      </span>
+      <label class="co-v">速度 <input type="range" id="coV" min="-15" max="15" step="0.25" value="2"> <output id="coVout">+2.00 km/s</output></label>
+    </span>
+  </div>
+  <div class="row" role="group" aria-label="断面とカットアウェイ">
     <span class="k">断面</span>
     <span class="b">
-      <button type="button" id="slice" aria-pressed="false">断面を見る</button>
+      <span class="grp">
+        <button type="button" data-cut="0" aria-pressed="true">なし</button>
+        <button type="button" data-cut="1" aria-pressed="false">1/2 カット</button>
+        <button type="button" data-cut="2" aria-pressed="false">1/4 カット</button>
+      </span>
       <span class="grp">
         <button type="button" data-sq="T" aria-pressed="false">温度</button>
         <button type="button" data-sq="rho" aria-pressed="false">密度</button>
         <button type="button" data-sq="tau" aria-pressed="false">光学的厚さ</button>
         <button type="button" data-sq="none" aria-pressed="false">中身</button>
+        <button type="button" data-sq="layers" aria-pressed="false">層構造</button>
       </span>
     </span>
   </div>
@@ -144,16 +166,16 @@
     <span class="k">表示</span>
     <span class="b">
       <button type="button" id="ann" aria-pressed="true">注釈</button>
-      <button type="button" id="ms" aria-pressed="false">多重散乱(近似)</button>
+      <button type="button" id="ms" aria-pressed="true">多重散乱(近似)</button>
       <button type="button" id="share">この視点のリンク</button>
       <button type="button" id="snap">画像を保存</button>
       <input id="link" type="text" readonly aria-label="共有リンク" hidden>
     </span>
   </div>
   <ul class="hint">
-    <li>ドラッグで回転、ホイール・ピンチ・＋/− でズーム(2〜160 au。断面と「惑星に寄る」では 0.25 au まで近づけます)。</li>
+    <li>ドラッグで回転、ホイール・ピンチ・＋/− でズーム(2〜160 au。断面・カットアウェイと「惑星に寄る」では 0.25 au まで近づけます)。</li>
     <li>円盤をクリック(タップ)すると、そこに小石の塊を置けます。初めての方は「見どころツアー」から(ドラッグやキーで止まります)。</li>
-    <li>キーボード(パネルをクリックしてから):矢印キーで回転、＋/− でズーム、Home で元の視点、スペースで一時停止。1〜5 で視点(通常・低い角度・真横・真上・下から)、P で惑星に寄る、F で磁力線、S で断面、A で注釈。</li>
+    <li>キーボード(パネルをクリックしてから):矢印キーで回転、＋/− でズーム、Home で元の視点、スペースで一時停止。1〜5 で視点(通常・低い角度・真横・真上・下から)、P で惑星に寄る、F で磁力線、S で断面(なし → 1/2 カット → 1/4 カット)、A で注釈。</li>
     <li>スマホでは、指 1 本で横に動かすと回転、縦に動かすとページがスクロールします。2 本の指で傾けとズーム。</li>
   </ul>
   <div class="legend">
@@ -161,10 +183,12 @@
   <summary>円盤</summary>
   <ul>
     <li><b>色は温度</b>です。青は冷たく、スノーライン付近で白、内側と表層は琥珀色から金色。</li>
-    <li>円盤は半径 8 au で密度のカットオフで終わり、H/R = 0.03 (R/au)<sup>1/4</sup> で反り返っています。中心星の光は反り返った<b>表層</b>で吸収され、そこだけが熱くなります。<b>赤道面</b>は冷たいままです。表層の明るさは散乱光として扱い、円盤のダストは等方に近い散乱(g = 0.3)にしています。乱流の凹凸は星の光をさえぎるので、山の後ろには影ができ、谷の後ろは明るくなります。縁では表面が下がるので、円盤自身の影に入って暗くなります。</li>
-    <li>乱流の模様は、熱電離で磁気回転不安定性が働く最内側(0.3 au より内側)で強く、その外側のデッドゾーンでは弱く、外側の円盤でまた少し強くしています。</li>
-    <li>柱全体にわたる大きな模様の中に、スケールハイトほどの大きさの<b>3 次元の渦</b>があり、模様と同じ寿命で入れ替わります。最内側では柱全体が渦で乱れ、<b>デッドゾーンでは赤道面が層流的</b>で、星の X 線などで電離された表層だけに渦があります(層状の降着、Gammie 1996)。外側の円盤では、赤道面は弱く、表層ほど強く乱れています。真横からや断面の「中身」で、表層の雲のような渦と静かな赤道面の違いが見えます。表層の渦は、星の光を多く受けて明るくなり、その後ろ(外側)に細長い影を落とします。渦の強さと影の濃さは、見やすさのため強めにしています。</li>
+    <li>円盤は半径 8 au で密度のカットオフで終わり、H/R = 0.03 (R/au)<sup>1/4</sup> で反り返っています。中心星の光は反り返った<b>表層</b>で吸収され、そこだけが熱くなります。<b>赤道面</b>は冷たいままです。表層の明るさは散乱光として扱い、円盤のダストは等方に近い散乱(g = 0.3)にしています。最内側の乱流の凹凸は星の光をさえぎるので、山の後ろには影ができ、谷の後ろは明るくなります。縁では表面が下がるので、円盤自身の影に入って暗くなります。</li>
+    <li><b>磁場とガスの結合(非理想 MHD)</b>:円盤のガスはわずかしか電離していないので、磁場はガスの中をすべります。密度の高い赤道面付近では<b>オーム散逸</b>が強く、磁場がガスと結合しません。ここが<b>デッドゾーン</b>で、電流が流れず、乱流も起きません。抵抗の大きさは高さについてガウス形(幅はスケールハイト H)とし、オームのエルザッサー数が 1 になる高さ z<sub>k</sub> より下をデッドゾーンとしています。z<sub>k</sub> は 1 au で 2.5 H(最小質量円盤の面密度なら、この上に残るガスは約 10 g cm<sup>−2</sup> で、星の X 線が電離できる深さです)で、外側ほど抵抗が小さくなるので低くなり、約 6.7 au でなくなります。その上の<b>表層</b>は磁場と結合し、電流が流れますが、密度の低い所ほど強い<b>両極性拡散</b>のために磁気回転不安定性は育たず、<b>層流</b>です。照射面より上では星の紫外線で電離が進み、そこから風が吹き出します。</li>
+    <li><b>表層降着</b>:風が磁場を通して角運動量を運び去るので、磁力線が曲がる所(デッドゾーンのすぐ上の、電流の流れる層)でガスは角運動量を失い、公転しながら内側へ流れ込みます(層流です)。高さ方向の誘導方程式を解くと、流れ込みの速さは音速の 2 倍ほどになります。<b>上下非対称</b>のとき(既定)は電流の層が下側の表面だけにでき、そこを 2 倍の速さ(音速の 4 倍、1 au でケプラー速度の約 12%。Mori, Bai &amp; Tomida 2025 の計算では約 10%、ところにより 30%)で流れ込みます。オフでは上下の両方で流れ込みます。物理分布では、この層を<b>琥珀色の薄い層</b>として光らせ(電流が散逸してジュール加熱が起こる所です。色は見分けるための選択です)、層に沿って渦巻きながら内側へ流れる筋を描いています(層の中では塊ができては落ちていく、という論文の結果にならいました)。層の柱密度は見やすさのため面密度の 2% としています(10<sup>−8</sup> 太陽質量/年の降着なら、1 au で面密度の 10<sup>−5</sup> ほどで、見えません。面密度に比例させると、どの半径でも同じ質量流量になります)。琥珀色の短い線は層の中の流れの印で、実体のある塊ではありません。上下非対称のときは下側にあるので、下から見るか、断面で見てください。</li>
+    <li><b>乱流</b>は、温度が約 1000 K を超えてアルカリ金属が熱電離し、磁気回転不安定性が働く<b>最内側(0.3 au より内側)だけ</b>で、柱全体が乱れています。このモデルの赤道面の温度はそこまで高くないので、熱電離の縁は降着加熱のあるモデルにならって置いた、見た目のための選択です。乱流は、柱全体にわたる大きな模様と、その中のスケールハイトほどの<b>3 次元の渦</b>で描き、渦は模様と同じ寿命で入れ替わります。渦は星の光を多く受けて明るくなり、その後ろ(外側)に細長い影を落とします。渦の強さと影の濃さは、見やすさのため強めにしています。その外側の円盤は層流で、模様は風の筋、表層降着の流れ、惑星の波とギャップです(結合の分布は、Mori, Bai &amp; Tomida 2025 とその前の研究にならいました)。</li>
     <li>円盤を満たす<b>ガス</b>(細かいダストの混ざったガス、成分「ガス」)は、密度に比例して、その温度の色で光らせています。光の放射ではなく、ガスがどこにどれだけあるかを示す絵です。厚い所では明るさが頭打ちになるので、真横から見ると赤道面が光る帯になり、表層やスノーラインを覆い隠しません。</li>
+    <li><b>多重散乱(近似)</b>:表層で散乱された星の光の一部は拡散光になって円盤の内側へしみ込み、鉛直方向の光学的厚さとともに弱まっていきます。これを二流近似の考え方で近似し、表層の下、スケールハイトほどの深さにやわらかな光の層として描いています(粒子のアルベドを約 0.5 としました。色はその深さの温度の色です)。真横からや断面・カットアウェイの「中身」で、表層の光が内側へにじむのが見えます。輸送方程式を解いたものではありません。既定でオンで、「表示」のボタンで切れます。</li>
     <li>大きなダストは赤道面に沈んで薄い層を作り、約1 auの<b>スノーライン</b>(点線)の外側では氷をまとって明るく、内側では暗い岩石になります。この層は可視光では不透明なので、低い角度から見ると反対側の面を隠します。</li>
     <li>置いた小石の塊は、ケプラー回転で引き伸ばされながら内側へ漂い、スノーラインを越えると氷を失います。</li>
   </ul>
@@ -176,17 +200,19 @@
     <li><b>観測:可視・近赤外</b>:星の光の散乱光で見た姿です。円盤は不透明で、星に照らされた表層だけが光ります。小さな粒は前へよく散乱するので手前側が明るく、真横からは赤道面が暗い帯になります。色は散乱した星の光です。</li>
     <li><b>観測:中間赤外</b>:暖かい表層そのものの熱放射です(波長 10 µm のプランク関数で重み付け)。温度の高い内側が明るく、外側は暗くなります。色は温度(赤から黄)です。</li>
     <li><b>観測:ミリ波</b>:赤道面の小石の熱放射です。ほぼ光学的に薄く、散乱はありません。ガスは見えないので、小石の環(スノーラインのすぐ外、ギャップの外側の圧力の極大)とギャップがくっきり見えます。色は明るさ(橙から白)です。</li>
+    <li><b>観測:CO 輝線</b>:一酸化炭素の回転遷移(ミリ波)の輝線で見た姿です。ガスはその場の温度で光り(局所熱平衡。明るさは輝度温度 K)、線は光学的に厚いので、ある速度で見える光は、その速度での線の光学的厚さが視線に沿って 1 に達する所、円盤の高い所(1 au で真上から見て約 3.6 H、照射面のやや下)から出ます。線の幅は熱運動と少しの乱流で、全幅が音速ほど(100 K で σ = 0.25 km/s)です。ガスの速度は、太陽質量の星のまわりのケプラー回転(上空ほどわずかに遅く、圧力勾配で惑星のギャップのまわりが波打ちます)、惑星の航跡による外向きの押し出し、表層降着の流れ込み、風の中では磁力線に沿った流れ(風の解の速度)で、視線方向の成分(遠ざかる向きを正)を取ります。風の中の CO は星の光で一部が壊れているとして 3 割にしています(照らされた風の中でも分子が残ることは Mori, Bai &amp; Tomida 2025 も示しています)。赤道面の小石の層は、裏側の線を吸収します(連続光は差し引いた図です)。CO の円盤は塵の円盤より大きく見えます(線が非常に厚いので、縁の薄いガスまで光ります)。計算する範囲(半径 11 au)で切れて見えないよう、9〜10.5 au で薄くしています(見た目のための選択)。<b>チャンネル</b>はある速度(スライダーで選び、幅 0.25 km/s)の光だけを見せ、ケプラー回転の等速度線が蝶のような模様になります。<b>モーメント 1</b> は光の強さで重みを付けた平均の速度(青は近づく、赤は遠ざかる。色の範囲は傾きに合わせて変えます)、<b>モーメント 0</b> は線の積分強度です。速度の模様は傾きで変わり、真上から見ると回転は視線に垂直なので、残るのは風の上昇(青方偏移)だけになり(降着の流れも円盤の面内なので見えません。カメラは有限の距離にあるので、画面の端では回転が少し見えます)、真横から見ると最大になります。風は青方偏移の筋として、表層降着は回転に内向きの成分を加えた模様の傾きとして、惑星のギャップと航跡は等速度線の乱れとして現れます。ビームによるぼかしは入れていません。</li>
     <li>観測の見え方では、不透明度を波長に合わせて切り替えます(可視・中間赤外では大きく、ミリ波では小さく)。惑星のギャップは物理に近い深さで描き、モデルの中の描き込み(磁力線、風の印、エンベロープの流線)は消えます。色は見分けやすさを優先しています。</li>
   </ul>
   </details>
   <details open>
   <summary>磁力線と円盤風(成分「風」「磁力線」)</summary>
   <ul>
-    <li>青白い線は<b>磁力線</b>です。定常・軸対称の理想MHDで、誘導方程式と運動方程式、質量保存を連立して解いた円盤風の解(Blandford &amp; Payne 1982 型の自己相似解、λ = 3、κ = 2.0)をそのまま使っています。円盤表面を回転軸から64°の向きに出て、足元半径の1.7倍でアルフヴェン速度を超え、その先は巻き付いた磁場のフープ応力で軸の方へ絞られます(足元半径の約50倍の高さで最も広がり、そこから軸へ戻ります)。足元と一緒に回転し(等回転)、上がるにつれて回転から遅れて巻き付きます。定常解なので、巻き付きは時間とともに増えません。回転が巻き込む分を、風が外へ運び去る分と釣り合っています。線の足元は2次元のソボル列で置いています。</li>
+    <li>青白い線は<b>磁力線</b>です。定常・軸対称の理想MHDで、誘導方程式と運動方程式、質量保存を連立して解いた円盤風の解(Blandford &amp; Payne 1982 型の自己相似解、λ = 3、κ = 2.0)をそのまま使っています。円盤表面を回転軸から64°の向きに出て、足元半径の1.7倍でアルフヴェン速度を超え、その先は巻き付いた磁場のフープ応力で軸の方へ絞られます(足元半径の約50倍の高さで最も広がり、そこから軸へ戻ります)。足元と一緒に回転し(等回転)、上がるにつれて回転から遅れて巻き付きます。<b>円盤の中</b>では、磁力線はデッドゾーンをまっすぐ縦に通り(電流が流れないので曲がりません)、その上端 z<sub>k</sub> から約 0.6 H の間で折れ曲がって、照射面の高さで風の解の傾きにつながります。デッドゾーンのない所(0.3 au より内側と約 6.7 au より外側)では赤道面で折れ曲がります。この形は、高さ方向の定常な誘導方程式を、オーム散逸と両極性拡散の分布のもとで数値的に解いた形を簡単にしたものです(折れ曲がりの 8 割は z<sub>k</sub> の上 0.6 H 以内で起こり、その上の線はほぼまっすぐです)。定常解なので、巻き付きは時間とともに増えません。回転が巻き込む分を、風が外へ運び去る分と釣り合っています。線の足元は2次元のソボル列で置いています。</li>
     <li>線の明るさは、風が運ぶ小さなダストが星の光を散乱した明るさとして決めています。散乱角(星→その点→観測者のなす角)について前方散乱の強い位相関数(Henyey–Greenstein、g = 0.6)を使うので、星と観測者を結ぶ向きに近い手前側が明るく、奥側は暗くなります。円盤の内部は星の光が届かないので暗くしています。線はベクトル(SVG)で描いているので、どの解像度でも滑らかです。</li>
-    <li>線に沿って上がる短い線(うしろに薄い尾を引く印)は<b>円盤風</b>の流れを示します。<b>流れの向きと速さを示す印で、実体のある塊ではありません</b>。印の長さは一定の時間に進む距離で、速さはこの解の流速です(根元ではゆっくりで印が詰まり、上空では速く、まばらになります)。ガスは磁力線と一緒に公転しながら線に沿って上がるので、印は公転の向きにも傾き、ある瞬間の形として描いた磁力線とは交わって見えます。磁場が回転と同じ向きのときの非対称性にならい、下側は弱くしています(Mori, Bai &amp; Tomida 2025)。円盤本体は上下対称です。</li>
-    <li>円盤風の<b>ガス</b>(成分「風」)も同じ解から描いています。足元の半径が r<sub>0</sub> の磁力線の上で、密度は r<sub>0</sub><sup>−3/2</sup> に比例し、線に沿っては質量保存のとおりガスが加速するにつれて薄くなります(根元からアルフヴェン点までに約 20 分の 1、そこから足元半径の 10 倍の高さまでにさらに約 70 分の 1)。この冷たい解ではガスが表面で静止から動き出すので、密度は根元で無限大になります。そこで足元半径の 0.03 倍の高さより下では一定にし、その値を 1 au の照射面での円盤ガスの密度に合わせました。風が運ぶ小さなダストが星の光を前方へ散乱して光り(小さな粒は青い光をよく散乱するので青く描いています)、照射面より下では星の光が届かないので暗くなります。距離による明るさの減り方は、見やすさのため磁力線と同じく和らげています(約 4 au まではほぼ一定)。近くから見るときは、星の近くを通る長い視線で前方に散乱した光が表層の色を覆わないよう、風を暗くし、前方散乱の強さも線より抑えています。描画範囲の上端と外側では薄くしています。下側は 0.35 倍です。<b>風の明るさは、どの向きからも体積と筋が見えるよう、大きく強調しています</b>(風の光学的厚さは 10<sup>−3</sup> ほどで、実際には円盤よりずっと暗いはずです)。また、高いところの流れも見えるよう、明るさは密度ほど急には弱めていません(根元に対する密度の比の 0.85 乗。密度は足元半径の高さまでに約 60 分の 1、10 倍の高さまでに約 1500 分の 1 になります)。観測の見え方(可視・近赤外)では、以前の控えめな明るさのままです。</li>
-    <li>風の中の<b>筋(ストリーマー)</b>は、磁力線の束ごとに持ち上げるガスの量(質量の負荷)が違うことを表しています。負荷は、ガスが打ち出されたときの円盤表面の大きな構造で決まります。その構造は円盤の乱流より 3 倍長く続くので、その間に打ち出されたガスは同じ負荷を持ち、磁力線の束が 1 本の筋になります。筋は磁力線と一緒にねじれながら回り、ガスは流速で筋に沿って上がっていきます。負荷が変わる所は、筋に沿って上がる塊に見えます。筋は構造と一緒に入れ替わるので、時間がたっても巻き込まれて細くなりません。見やすさのため、筋は太く(円盤のまわりに数本)、濃淡を強くしています。筋を描き分けるため、風の明るい所では光線を細かく刻んでいます。</li>
+    <li>線に沿って上がる短い線(うしろに薄い尾を引く印)は<b>円盤風</b>の流れを示します。<b>流れの向きと速さを示す印で、実体のある塊ではありません</b>。印の長さは一定の時間に進む距離で、速さはこの解の流速です(根元ではゆっくりで印が詰まり、上空では速く、まばらになります)。ガスは磁力線と一緒に公転しながら線に沿って上がるので、印は公転の向きにも傾き、ある瞬間の形として描いた磁力線とは交わって見えます。下側は上側より弱くしています(「上下非対称」、既定でオン)。</li>
+    <li><b>上下非対称</b>(「まわり」のボタン、既定でオン):<b>磁場が回転と同じ向きのとき、円盤風は片側に偏ります</b>(Mori, Bai &amp; Tomida 2025)。ホール効果で強められた磁場が、電流の層(トロイダル磁場が向きを変える所)を片方の表面へ押し上げ、その側では風の根元のガスが薄くなって風が弱まります(論文の計算では、その側の質量放出率が 1 桁ほど小さくなります)。その側の表層では、電流の層を通って速い降着が起こります。このモデルは論文の計算と同じく、上側に強い風、下側に電流の層と表層降着を置いています(どちらの側になるかは偶然で決まります)。オンでは、下側の風のガスを上側の 0.35 倍、磁力線を 1 本おきで 0.4 倍の明るさ、風の印を半分にしています。オフでは上下を同じにします(磁場が回転と逆向きのときは、風はおおむね対称です)。円盤本体は、どちらでも上下対称です。</li>
+    <li>円盤風の<b>ガス</b>(成分「風」)も同じ解から描いています。足元の半径が r<sub>0</sub> の磁力線の上で、密度は r<sub>0</sub><sup>−3/2</sup> に比例し、線に沿っては質量保存のとおりガスが加速するにつれて薄くなります(根元からアルフヴェン点までに約 20 分の 1、そこから足元半径の 10 倍の高さまでにさらに約 70 分の 1)。この冷たい解ではガスが表面で静止から動き出すので、密度は根元で無限大になります。そこで足元半径の 0.03 倍の高さより下では一定にし、その値を 1 au の照射面での円盤ガスの密度に合わせました。風が運ぶ小さなダストが星の光を前方へ散乱して光り(小さな粒は青い光をよく散乱するので青く描いています)、照射面より下では星の光が届かないので暗くなります。距離による明るさの減り方は、見やすさのため磁力線と同じく和らげています(約 4 au まではほぼ一定)。近くから見るときは、星の近くを通る長い視線で前方に散乱した光が表層の色を覆わないよう、風を暗くし、前方散乱の強さも線より抑えています。描画範囲の上端と外側では薄くしています。下側は、上下非対称のとき 0.35 倍です。<b>風の明るさは、どの向きからも体積と筋が見えるよう、大きく強調しています</b>(風の光学的厚さは 10<sup>−3</sup> ほどで、実際には円盤よりずっと暗いはずです)。また、高いところの流れも見えるよう、明るさは密度ほど急には弱めていません(根元に対する密度の比の 0.85 乗。密度は足元半径の高さまでに約 60 分の 1、10 倍の高さまでに約 1500 分の 1 になります)。観測の見え方(可視・近赤外)では、以前の控えめな明るさのままです。</li>
+    <li>風の中の<b>筋(ストリーマー)</b>は、磁力線の束ごとに持ち上げるガスの量(質量の負荷)が違うことを表しています。円盤の表層は層流ですが、風の打ち出しは定常ではなく、場所と時間によって負荷が変わります(シミュレーションでは、表層の流れと風が公転周期ほどの時間で変動します)。ここではその変動を、表面でゆっくり入れ替わる模様として与えています。同じ模様のもとで打ち出されたガスは同じ負荷を持ち、磁力線の束が 1 本の筋になります。筋は磁力線と一緒にねじれながら回り、ガスは流速で筋に沿って上がっていきます。負荷が変わる所は、筋に沿って上がる塊に見えます。筋は構造と一緒に入れ替わるので、時間がたっても巻き込まれて細くなりません。見やすさのため、筋は太く(円盤のまわりに数本)、濃淡を強くしています。筋を描き分けるため、風の明るい所では光線を細かく刻んでいます。</li>
   </ul>
   </details>
   <details open>
@@ -205,17 +231,16 @@
   <details open>
   <summary>断面</summary>
   <ul>
-    <li>「断面を見る」で、星を通る鉛直な面で円盤を切り、手前の半分を取り除いて切り口を見せます。切り口はいつも見る人の方を向きます。高さは引き伸ばしていない(縦横が等倍な)ので、円盤は薄いくさびに見えます。ズームすると 0.25 au まで近づけ、内側(0.1〜1 au)の構造が見えます。切り口の色は、モデルの式そのものの値です。</li>
-    <li>切り口の量:<b>温度</b>は円盤と同じ色で、2 層です。星の光が届かない内部は赤道面の温度 T<sub>mid</sub>、照射面(τ* = 1)より上は 2.8 T<sub>mid</sub> で、縦の線が等温線です。<b>密度</b>はガス(円盤の乱流を含む、と風)の密度を対数で、1 au の赤道面に対する比で示します。<b>光学的厚さ</b>は星の方向の τ* を対数で示し、線は 10 倍ごとです。<b>中身</b>は色を塗らず、切り開いた円盤そのものを見せます。切り口から奥まで見通せるよう、中身ではガスを 4 倍薄く(光り方と吸収をそろえて)描いているので、内側の暖かい芯や奥の層、表層の渦が重なって見えます。左上の帯が色の目盛りです(密度と光学的厚さには viridis と inferno の色を使っています)。</li>
-    <li>断面では、惑星のギャップが密度の切れ込みとして、惑星の波の腕が断面を横切る所が密度の等高線のふくらみとして見えます。ギャップの中では、星の方向の光学的厚さが内側の縁の影で決まるので、照射面(τ* = 1)は縁から外側の壁までまっすぐに渡ります。赤道面の小石の層はギャップで途切れ、すぐ外の圧力極大で太くなります。ひし形は惑星の軌道が断面を横切る位置です。</li>
-    <li>切り口の線:白い実線が<b>照射面(τ* = 1)</b>、水色の破線が<b>氷の境界</b>です。氷の境界は、内部ではスノーライン(0.9 au)の縦の線で、照射面より上では温度が 2.8 倍なので、照射面に沿って約 7 au まで外へ曲がります。赤道面の線は<b>小石の層</b>で、スノーラインの内側は岩石(茶)、外側は氷(白、すぐ外の太い所は氷のたまり)です。細い線は面内の<b>磁力線</b>(解の R–z の形)で、矢印は面内の<b>ガスの速度</b>です(長さは 1 km/s あたり 0.6 px、太陽質量の星として計算。下側は少なめ)。ガスはこのほか軸のまわりにも回っています。</li>
+    <li>「断面」の行で円盤を星を通る鉛直な面で切り、手前を取り除いて切り口を見せます。<b>1/2 カット</b>は手前の半分を取り除き、見る人の方を向いた 1 枚の切り口を正面から見せます(低い角度から近づくので、層の重なりが読めます)。<b>1/4 カット</b>は手前の 90° のくさびを取り除き、左右 2 枚の切り口から中を立体的に見せる、古典的なカットアウェイの図です(少し上から見ます)。どちらも切り口はいつも見る人の方を向き、開くときは切り口が見る人の側から星まで動いて入り、閉じるときは逆に出ていきます。高さは引き伸ばしていない(縦横が等倍な)ので、円盤は薄いくさびに見えます。ズームすると 0.25 au まで近づけ、内側(0.1〜1 au)の構造が見えます。切り口の色は、モデルの式そのものの値です。断面は物理分布の見え方のためのもので、観測の見え方では使えません(ボタンは押せなくなります)。</li>
+    <li>切り口の量:<b>温度</b>は円盤と同じ色で、2 層です。星の光が届かない内部は赤道面の温度 T<sub>mid</sub>、照射面(τ* = 1)より上は 2.8 T<sub>mid</sub> で、縦の線が等温線です。<b>密度</b>はガス(円盤と風)の密度を対数で、1 au の赤道面に対する比で示します。<b>光学的厚さ</b>は星の方向の τ* を対数で示し、線は 10 倍ごとです。<b>中身</b>は色を塗らず、切り開いた円盤そのものを見せます。切り口から奥まで見通せるよう、中身ではガスを 4 倍薄く(光り方と吸収をそろえて)描いているので、内側の暖かい芯や奥の層、表層降着の層が重なって見えます。<b>層構造</b>は、磁場とガスの結合を領域で塗り分けます:最内側の<b>乱流</b>(熱電離)、<b>デッドゾーン</b>(オーム散逸で磁場が結合しない)、<b>層流の表層</b>(両極性拡散)、その中の<b>降着層</b>、照射面(風の根元)より上の<b>風</b>(密度とともに薄く)。1/4 カットで見ると、層の重なりが立体的にわかります。左上の帯が色の目盛りです(密度と光学的厚さには viridis と inferno の色を使っています。層構造では色見本)。</li>
+    <li>断面では、惑星のギャップが密度の切れ込みとして、惑星の波の腕が断面を横切る所が密度の等高線のふくらみとして見えます。ギャップの中では、星の方向の光学的厚さが内側の縁の影で決まるので、照射面(τ* = 1)は縁から外側の壁までまっすぐに渡ります。赤道面の小石の層はギャップで途切れ、すぐ外の圧力極大で太くなります。ひし形は惑星の軌道が断面を横切る位置です。1/4 カットでは、線とラベルを 2 枚の切り口の両方に描き、切り口の向こうの磁力線と粒子は切り口の量が不透明な所で隠れます。</li>
+    <li>切り口の線:白い実線が<b>照射面(τ* = 1)</b>、水色の破線が<b>氷の境界</b>です。氷の境界は、内部ではスノーライン(0.9 au)の縦の線で、照射面より上では温度が 2.8 倍なので、照射面に沿って約 7 au まで外へ曲がります。赤道面の線は<b>小石の層</b>で、スノーラインの内側は岩石(茶)、外側は氷(白、すぐ外の太い所は氷のたまり)です。細い線は面内の<b>磁力線</b>(解の R–z の形。デッドゾーンでは縦で、その上端で折れ曲がります)で、矢印は面内の<b>ガスの速度</b>です(長さは 1 km/s あたり 0.6 px、太陽質量の星として計算。上下非対称のときは下側は少なめ)。点線は<b>デッドゾーンの上端</b>、琥珀色の矢印は<b>表層降着</b>の流れ込みです(1 km/s あたり 6 px。風の矢印の 10 倍の縮尺)。ガスはこのほか軸のまわりにも回っています。</li>
   </ul>
   </details>
   <details open>
   <summary>そのほか</summary>
   <ul>
     <li>隠れた仕掛けが二つあります。星をクリックすると<b>FU オリオン型の増光</b>(降着が急増して星が明るくなり、スノーラインが外へ動く)、成分の「惑星」を消して 3 au のあたりに小石の塊を何度か置くと、<b>惑星が育ってギャップを開けます</b>。どちらも短い説明が出ます。</li>
-    <li>「表示」の<b>多重散乱(近似)</b>は、試しに付けた見え方です(既定はオフ)。表層で散乱された星の光の一部が拡散光になって円盤の内側へしみ込み、鉛直方向の光学的厚さとともに弱まっていく様子を、二流近似の考え方で近似しています(粒子のアルベドを約 0.5 として、表層の下、スケールハイトほどの深さにやわらかな光の層ができます。色はその深さの温度の色です)。真横からや断面の「中身」で、表層の光が内側へにじむのが見えます。輸送方程式を解いたものではありません。</li>
     <li>一時停止して視点も止まっていると、光線の刻み方と画素の中の位置を少しずつ変えた絵を重ねて平均し、細かい粒状のむらとぎざぎざを消していきます(16 枚まで。保存する画像は 12 枚以上の平均です)。何かが変わると、すぐに 1 枚目からやり直します。</li>
     <li>時計は、1 au での公転を 1 年として数えています。円盤は模式的なモデルで、シミュレーションの結果ではありません。磁力線と円盤風は上の自己相似解から計算しています。</li>
   </ul>
@@ -239,7 +264,9 @@
   const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
   const pressed = (b, on) => b.setAttribute('aria-pressed', String(on));
   const views = $$('[data-view]'), toPlanet = $('#toPlanet'), comps = $$('[data-comp]'), field = $('#field');
-  const slice = $('#slice'), sqs = $$('[data-sq]'), play = $('#play'), speeds = $$('[data-speed]'), ann = $('#ann'), looks = $$('[data-look]'), ms = $('#ms');
+  const cuts = $$('[data-cut]'), sqs = $$('[data-sq]'), play = $('#play'), speeds = $$('[data-speed]'), ann = $('#ann'), looks = $$('[data-look]'), ms = $('#ms'), asym = $('#asym');
+  const coRow = $('#coRow'), coBtns = $$('[data-co]'), coV = $('#coV'), coVout = $('#coVout');
+  const kms = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' km/s';
   // The buttons follow the model's state: after the page's own actions, and when the model reports a change from
   // inside (keys, the tour, the easter eggs, a drag). A view counts as current while its elevation and distance hold
   // (the azimuth drifts with the slow spin).
@@ -250,17 +277,25 @@
     pressed(toPlanet, !!s.p);
     comps.forEach((b) => pressed(b, (s.mode & Number(b.dataset.comp)) !== 0));
     pressed(field, !!s.field);
-    pressed(slice, !!s.slice); slice.textContent = s.slice ? '断面を閉じる' : '断面を見る';
+    cuts.forEach((b) => pressed(b, Number(b.dataset.cut) === s.slice));
     sqs.forEach((b) => pressed(b, !!s.slice && b.dataset.sq === s.sq));
+    // the cutaway belongs to the model's look: not offered in the observed ones
+    [...cuts, ...sqs].forEach((b) => { b.disabled = s.look !== 'model'; b.title = b.disabled ? '物理分布の見え方で使えます' : ''; });
     pressed(play, !!s.paused);
     speeds.forEach((b) => pressed(b, Number(b.dataset.speed) === s.speed));
     pressed(ann, !!s.ann);
     pressed(ms, !!s.ms);
+    pressed(asym, !!s.asym);
     looks.forEach((b) => pressed(b, b.dataset.look === s.look));
+    // the CO line's display: its row shows with the look; the velocity slider is for the channel map
+    coRow.hidden = s.look !== 'co';
+    coBtns.forEach((b) => pressed(b, b.dataset.co === s.coMode));
+    if (document.activeElement !== coV) coV.value = s.coV;
+    coVout.textContent = kms(s.coV); coV.disabled = s.coMode !== 'chan';
   }
   box.addEventListener('diskstate', sync);
   box.addEventListener('diskmode', sync);
-  // the tour: the highlights in turn (usual view, planet, slice, from afar), each with a short text; dragging, the
+  // the tour: the highlights in turn (usual view, planet, the 1/2 and 1/4 cuts, from afar), each with a short text; dragging, the
   // wheel or a key stops it, as does this button
   const tourBtn = $('#tour');
   box.addEventListener('disktour', (e) => { pressed(tourBtn, e.detail.on); tourBtn.textContent = e.detail.on ? 'ツアーを止める' : '見どころツアー'; });
@@ -283,13 +318,19 @@
   field.addEventListener('click', act(() => box.diskField(!box.diskState().field)));
   // the look: the model's quantities, or as observed at a wavelength (the slice belongs to the model's look)
   looks.forEach((b) => b.addEventListener('click', act(() => box.diskLook(b.dataset.look))));
+  // the CO line: channel map, moment 1 or moment 0, and the channel's velocity
+  coBtns.forEach((b) => b.addEventListener('click', act(() => box.diskSet({ coMode: b.dataset.co }))));
+  coV.addEventListener('input', () => { if (box.diskSet) { box.diskSet({ coV: Number(coV.value) }); coVout.textContent = kms(Number(coV.value)); } });
   // the annotations (snow line, scale bar, labels, the lines on the slice), also left out of the saved image
   ann.addEventListener('click', act(() => box.diskAnnotations(!box.diskState().ann)));
-  // multiple scattering, approximate (off by default): light seeping into the disk below its lit surface
+  // multiple scattering, approximate (on by default): light seeping into the disk below its lit surface
   ms.addEventListener('click', act(() => box.diskSet({ ms: box.diskState().ms ? 0 : 1 })));
-  // the slice: a vertical cut through the star, facing the viewer (the model flies to a low, close view as the
-  // plane sweeps in, and back to the view before as it sweeps out). A quantity button also opens it.
-  slice.addEventListener('click', act(() => box.diskSlice(!box.diskState().slice)));
+  // the wind's up-down asymmetry (on by default): as for a field aligned with the rotation (Mori, Bai & Tomida 2025)
+  asym.addEventListener('click', act(() => box.diskSet({ asym: box.diskState().asym ? 0 : 1 })));
+  // the cutaway: none, half of the disk cut away along a vertical plane through the star facing the viewer, or a
+  // quarter (a wedge of 90 degrees toward the viewer, two faces); the model flies to a close view as the planes sweep
+  // in, and back to the view before as they sweep out. A quantity button opens the cut last used.
+  cuts.forEach((b) => b.addEventListener('click', act(() => { const k = Number(b.dataset.cut); box.diskSlice(k > 0, null, k === 2 ? 'quarter' : 'half'); })));
   sqs.forEach((b) => b.addEventListener('click', act(() => box.diskSlice(true, b.dataset.sq))));
   // time: the pause button is pressed while the model is paused
   play.addEventListener('click', act(() => box.diskPlay(!!box.diskState().paused)));
@@ -303,7 +344,9 @@
     const s = box.diskState ? box.diskState() : {};
     const u = new URL(location.href); u.search = '';
     for (const k of ['el', 'az', 'd', 'mode', 'field', 'speed', 'paused', 'slice', 'sq', 'p', 'ann', 'look']) u.searchParams.set(k, s[k]);
-    if (s.ms) u.searchParams.set('ms', 1);
+    u.searchParams.set('ms', s.ms);
+    u.searchParams.set('asym', s.asym);
+    if (s.look === 'co') { u.searchParams.set('com', s.coMode); u.searchParams.set('cov', s.coV); }
     u.searchParams.set('t', Math.round(s.time * 1000) / 1000);   // (to 0.001, so that a paused picture comes back as it was)
     link.value = u.href; link.hidden = false; link.select();
     try { await navigator.clipboard.writeText(u.href); link.value = u.href + '  (コピーしました)'; } catch (e) { /* the field shows the link */ }
@@ -316,9 +359,11 @@
   });
   // restore a shared state
   if (q.has('el') && box.diskSet) {
-    const st = {}; for (const k of ['p', 'el', 'az', 'd', 'mode', 'field', 'speed', 'paused', 'slice', 'ann', 'ms']) if (q.has(k)) st[k] = Number(q.get(k));
+    const st = {}; for (const k of ['p', 'el', 'az', 'd', 'mode', 'field', 'speed', 'paused', 'slice', 'ann', 'ms', 'asym']) if (q.has(k)) st[k] = Number(q.get(k));
     if (q.has('sq')) st.sq = q.get('sq');
     if (q.has('look')) st.look = q.get('look');
+    if (q.has('com')) st.coMode = q.get('com');
+    if (q.has('cov')) st.coV = Number(q.get('cov'));
     if (q.has('t')) st.time = Number(q.get('t'));
     box.diskSet(st);
   }
