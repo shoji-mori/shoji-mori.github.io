@@ -154,8 +154,9 @@
   // that from the usual view its arms do not stand out as rings. Both are choices for the picture.
   const DEPTH = { FAR: 0.3, NEAR: 0.98, D0: 4, D1: 18, WAKE_FAR: 0.2 };
   const GL_R0 = 1.8, GL_DR = 7.6 / 127;   // radii of the table of starlight on the gap (see gapLightTables)
-  const WIND_LOW_JS = 0.1;
-  const ASYM_F_JS = 0.5;                  // the dead zone's horizontal field with the asymmetry, as a share of the wind's (see bendQ)                // the weaker side of the wind relative to the stronger, with the asymmetry (see uWindLow)
+  const WIND_LOW_JS = 0.1;                // the weaker side of the wind relative to the stronger, with the asymmetry (see uWindLow)
+  const ASYM_F_JS = 0.5;                  // the dead zone's horizontal field with the asymmetry, as a share of the wind's (see bendQ)
+  const PUFF = { P: 2 };                  // the wind's puffs: a bundle's launch period (s of the model's clock; see puffFactor)
   // The envelope: the parent cloud, in solid-body rotation, collapses onto the star and the disk (Ulrich 1976). Each
   // parcel falls from rest far away on a parabolic orbit (zero energy) that keeps its angular momentum, sqrt(G M r_c)
   // sin(theta0) with theta0 its starting polar angle (z-component sqrt(G M r_c) sin^2 theta0), so it lands on the
@@ -876,6 +877,8 @@ const float G_WIND = 450.0, WIND_NEAR = 0.35, G_WIND_OBS = 200.0, WIND_RISE = 0.
 // (0.1, the paper's order of magnitude in the mass-loss rate; 0.35 until the seventh round, a milder picture) or 1 for a
 // symmetric wind, as it fades between them.
 uniform float uWindLow;
+uniform float uPuffT;   // the wind's puffs (see puffFactor): their clock, the model's (s, modulo 1000 periods)
+uniform float uPuff;    // and their strength: 1 in the model's look (fading in with it), 0 in the observed ones
 const vec3 WIND_COL = vec3(0.30, 0.56, 1.0);  // blue: small grains scatter blue light more strongly
 const float PILE = 0.5;                 // extra glow of the ice pile-up beyond its surface density
 const vec3 EXT = vec3(0.90, 0.97, 1.08); // small grains absorb blue light more strongly
@@ -1002,13 +1005,57 @@ ${WSTR_GLSL}
 const float WIND_DS = 0.12, WIND_DSMAX = 0.25, WIND_FINE = 1e-3;
 // the streamers' radial wavenumber once sheared (as in turb, on average over a lifetime: Ω age ≈ 0.75 WIND_LIFE LIFE)
 const float WIND_KR = length(vec2(WIND_CELLS.x / TAU * (1.125 * WIND_LIFE * LIFE + 1.0 / TILT_PITCH), WIND_CELLS.y));
-float windTurb(vec3 q, vec3 dq){
+// The wind's puffs (round 8): intermittent launches carried with the gas, so that the wind shows leaving the disk and
+// flowing out without marks. Each bundle of lines (a cell of PUFF_CELLS around the disk and per unit ln r0, in the disk's
+// frame at the moment of the launch) launches every PUFF_P s of the clock at its own phase, a share PUFF_SHARE of them each
+// time, a puff lasting PUFF_DUTY of the period (a Gaussian in the launch time) and filling its cell as a smooth blob: it is
+// born at the base, bright, and rides up the lines. Its light is the wind's times 1 + PUFF_A g, and as the
+// wind thins it keeps more of its brightness than the gas around it, (rho_base / rho)^PUFF_KEEP (at most 12), fading with
+// the travel time (PUFF_TAU, in 1/Omega(r0)); the gas between the puffs is a little fainter, so that the mean is kept. The
+// puffs ride the lines k times faster than the gas, a display factor, k = PUFF_K (r0 / 1 au)^1.5 up to PUFF_KMAX: the
+// wind's own time scale is the orbit at r0 (12 s at 1 au, 6 minutes at 10 au on the model's clock), so the outer wind
+// would hardly move on the screen; with the factor every radius flows in about the same time (inside 7.4 au a puff
+// rides, per launch period, as far along its line as the gas does in half an orbit at r0). Faded where the march's steps
+// do not resolve them, and not drawn where the gas is nearer the camera than the star (seen from inside the wind, they
+// would sweep across the whole picture). In the model's look only.
+// (Tried in the eighth round, see the notes: shells in step across the disk, arcs, pulses on the streamers, puffs of
+// other sizes, contrasts and speeds; this form is the one that reads as an outflow in the usual and edge-on views.)
+const vec2 PUFF_CELLS = vec2(10.0, 4.0);
+const float PUFF_P = ${G(PUFF.P)}, PUFF_DUTY = 0.25, PUFF_A = 10.0, PUFF_KEEP = 0.3, PUFF_TAU = 30.0, PUFF_SHARE = 0.3;
+const float PUFF_K = 3.0, PUFF_KMAX = 60.0;
+float puffFactor(vec3 q, vec3 dq, float lr, float pc){
+  if (uPuff <= 0.0) return 1.0;
+  float near = smoothstep(0.4, 1.0, pc);   // (none nearer the camera than the star: pc, the distance from the camera over that from the star)
+  if (near <= 0.0) return 1.0;
+  // W = Omega(r0) k, the rate of the travel time at which the puffs ride (k = PUFF_K (r0 / 1 au)^1.5 up to PUFF_KMAX)
+  float lnr0 = q.x, tau = max(q.z, 0.0), ir15 = exp(-1.5 * lnr0), W = OMEGA0 * clamp(PUFF_K, ir15, PUFF_KMAX * ir15), tW = tau / W;
+  // the steps' resolution: across the bundles (in ln r0 and, at the foot's azimuth at the launch, around) and along the
+  // lines (a puff spans W PUFF_P PUFF_DUTY of the travel time)
+  float kr = max(max(PUFF_CELLS.y * dq.x, PUFF_CELLS.x / TAU * (dq.y + dq.z)), dq.z / (W * PUFF_P * PUFF_DUTY));
+  float fr = 1.0 - smoothstep(0.35, 0.7, kr);
+  if (fr <= 0.0) return 1.0;
+  float s = (uPuffT - tW) / PUFF_P;                          // launches since the clock's zero, at this gas's puff's launch
+  float phiL = q.y + q.z - OMEGA0 * ir15 * tW;               // the foot's azimuth at that launch (it turned tau / k since)
+  // one blob per bundle: a smooth window in its cell (1 in the middle, 0 at the edges), its own phase (a hash of the
+  // cell), and whether it puffs at each launch (a share PUFF_SHARE of them: the golden ratio's sequence from its own start)
+  vec2 c = vec2(phiL / TAU * PUFF_CELLS.x, lnr0 * PUFF_CELLS.y), ci = floor(c), cf = c - ci;
+  ci.x = mod(ci.x, PUFF_CELLS.x);
+  float h = hash12(ci + 0.37), x = fract(s + h), n = floor(s + h);
+  vec2 wv = 4.0 * cf * (1.0 - cf);
+  float mask = wv.x * wv.y * step(fract(7.0 * h + 0.618034 * n), PUFF_SHARE);
+  float u = (x - 0.5) / (0.5 * PUFF_DUTY), g = exp(-0.5 * u * u);
+  // (the brightness kept at most 12 times, e^2.485)
+  float a0 = uPuff * near * fr * PUFF_A * exp(min(-PUFF_KEEP * min(lr, 0.0), 2.485) - tau / PUFF_TAU);
+  return (1.0 + a0 * mask * g) / (1.0 + a0 * PUFF_SHARE * 0.444 * 1.2533 * PUFF_DUTY);   // (the means: the window's 4/9, the pulse's sigma sqrt(2 pi))
+}
+float windTurb(vec3 q, vec3 dq, float lr, float pc){
+  float pf = puffFactor(q, dq, lr, pc);   // (lr: ln of the density relative to the line's base)
   float k = max(max(WIND_KR * dq.x, WIND_CELLS.x / TAU * dq.y), dq.z / (WIND_LIFE * LIFE));   // cells crossed per step
   float f = 1.0 - smoothstep(0.3, 0.6, k);
-  if (f <= 0.0) return 1.0;
+  if (f <= 0.0) return pf;
   // the pattern from the streamers' texture, at the azimuth of the foot now (q.y + q.z: the foot has turned by q.z since)
   float n = texture(uWStr, vec3((q.x - LNW_MIN) / LNW_SPAN, (q.y + q.z) / TAU + 0.5, q.z / WSTR_TAU)).r;
-  return exp(f * 1.6 * WIND_TURB * n - 0.059 * WIND_TURB * WIND_TURB * f * f);
+  return pf * exp(f * 1.6 * WIND_TURB * n - 0.059 * WIND_TURB * WIND_TURB * f * f);
 }
 
 // the length (in au of path) that a step from height z0 to z1 (in units of H; dzh = z1 - z0) spends in a Gaussian layer
@@ -1143,7 +1190,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       // the foot of the line, now at azimuth phi - w.y, has turned by w.z since this gas left it
       q = vec3(w.x, atan(p.y, p.x) - w.y - w.z, w.z);
       vec3 d = q - wq; d.y = mod(d.y + PI, TAU) - PI;
-      float st = windTurb(q, wq.x > 50.0 ? vec3(0.0) : abs(d));
+      float st = windTurb(q, wq.x > 50.0 ? vec3(0.0) : abs(d), w.w - log(RHO_B) + 1.5 * w.x, length(p - uCam) / max(r, 0.1));
       if ((uMode & 8) != 0) em += lit * st * WIND_COL * uComp.w;
       ex += K_G * rho * st * EXT;
     }
@@ -1897,7 +1944,7 @@ void main(){
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
     const UNAMES = ['uCutA', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
-      'uPlanet', 'uTrap', 'uGapRim', 'uPlanetPos', 'uPlanetVis', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT'];
+      'uPlanet', 'uTrap', 'uGapRim', 'uPlanetPos', 'uPlanetVis', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff'];
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS);
     gl.useProgram(progShow); gl.uniform1i(gl.getUniformLocation(progShow, 'uAcc'), 6);
@@ -3142,6 +3189,9 @@ void main(){
       gl.uniform3fv(U.uMagAxis, mAx);
       gl.uniform3f(U.uMagE1, e1[0] / e1n, e1[1] / e1n, e1[2] / e1n);
       gl.uniform1f(U.uMagT, time % 600);
+      // the wind's puffs (see puffFactor): their clock, and in the model's look only
+      gl.uniform1f(U.uPuffT, time % (PUFF.P * 1000));
+      gl.uniform1f(U.uPuff, lookNow === 'model' ? modelAmp : 0);
       magFrame = { vis: magVis, ax: mAx, e1: e1.map((v) => v / e1n) };
       gl.uniform1i(U.uLook, LOOKS[lookNow]);
       gl.uniform1i(U.uSteps, Math.round(opt.steps * (camD < 10 ? 2 : 1)));   // finer march when zoomed in
