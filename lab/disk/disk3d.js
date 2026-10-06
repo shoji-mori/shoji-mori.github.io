@@ -75,17 +75,19 @@
   // a width of ~0.8 a for alpha = 1e-3; Kanagawa et al. 2015, 2016). Everything that follows from the gap takes the
   // same depth: the starlight on it, the pebbles (filtered out of the gap, and collected at the pressure maximum just
   // outside it once the gap is deep enough to make one, see trapOf), the wind launched from it, the wake and the slice.
-  // The wake, the spiral density wave the planet launches, follows Rafikov (2002) in shape; its strength goes with the
-  // planet rather than with the depth the gap is drawn with, and is on the strong side (WAKE_A, see wake in the disk
-  // map). Close up, the planet and its circumplanetary disk (out to 0.4 Hill radii) show.
+  // The wake, the spiral density wave the planet launches, follows Rafikov (2002) in shape; it is exaggerated (WAKE_A,
+  // see wake in the disk map) and, like the gap, drawn weaker from afar (DEPTH.WAKE_FAR). Close up, the planet and its
+  // circumplanetary disk (out to 0.4 Hill radii) show.
   const PLANET = (() => {
     const A = 3.0, Q = 1e-3, RH = A * Math.cbrt(Q / 3), W = 1.8 * RH;
     return { A, Q, RH, W, HP: MODEL.H0 * Math.pow(A, 0.25), PHI0: 2.4, WAKE_A: 3.5, WAKE_L: 0.6 };
   })();
   // the gap's depth: FAR when the camera is beyond D1 au from the planet's orbit (the circle R = a in the midplane;
   // the usual view is at 23 au), NEAR within D0, eased in between. The distance to the orbit rather than to the planet,
-  // so that the depth does not change as the planet goes round (seen from near the star, as in the slice).
-  const DEPTH = { FAR: 0.3, NEAR: 0.98, D0: 4, D1: 18 };
+  // so that the depth does not change as the planet goes round (seen from near the star, as in the slice). The wake's
+  // strength follows the same function, from WAKE_FAR of its full (exaggerated) amplitude afar to all of it near, so
+  // that from the usual view its arms do not stand out as rings. Both are choices for the picture.
+  const DEPTH = { FAR: 0.3, NEAR: 0.98, D0: 4, D1: 18, WAKE_FAR: 0.2 };
   const GL_R0 = 1.8, GL_DR = 7.6 / 127;   // radii of the table of starlight on the gap (see gapLightTables)
   // The envelope: the parent cloud, in solid-body rotation, collapses onto the star and the disk (Ulrich 1976). Each
   // parcel falls from rest far away on a parabolic orbit (zero energy) that keeps its angular momentum, sqrt(G M r_c)
@@ -171,7 +173,7 @@ const float RB = 11.0, ZB = 9.0;        // marched cylinder (au): past the edge 
 // trap at that maximum (see trapOf in the script).
 uniform float uPlanet;
 uniform float uPlanetPhi;
-uniform float uWake;        // the wake's strength: the planet's presence (0 to 1, as it fades in or grows)
+uniform float uWake;        // the wake's strength (0 to 1): the planet's presence times the strength for the camera's distance
 uniform vec3 uTrap;
 uniform vec3 uPlanetPos;
 uniform float uPlanetVis;   // the planet and its disk shown close up (see planetLight)
@@ -306,7 +308,8 @@ float gapLight(float R){
 // exaggerated (a Jupiter-mass planet raises crests of order unity near it) so that the arms read as waves. The crest is a scale
 // height wide, broadening as the wave travels (its shock widens), and widened further (and lowered, keeping its
 // integral) where a texel or the pixel footprint across it is wider. It turns with the planet and grows and fades with
-// it (uWake), whatever depth the gap is drawn with; inside the gap the planet's own disk takes over.
+// it; from afar it is drawn weaker, as the gap is drawn shallower (uWake, see DEPTH in the script); inside the gap the
+// planet's own disk takes over.
 float wake(float R, float phi, float fp){
   float x = R / A_P;
   if (uWake <= 0.0 || x < 0.42 || x > 2.5) return 0.0;
@@ -1251,7 +1254,12 @@ void main(){
     for (let b = 0; b < NBM; b++) dots.push(mkPath({ fill: 'none', stroke: '#c7e6ff', 'stroke-width': 11, 'stroke-opacity': Math.min(1, level(b, NBM)).toFixed(3), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
     const edots = [], elines = mkPath({ fill: 'none', stroke: '#c9d8f5', 'stroke-width': 8, 'stroke-linecap': 'round' });
     for (let b = 0; b < NBM; b++) edots.push(mkPath({ fill: 'none', stroke: '#eef3ff', 'stroke-width': 13, 'stroke-opacity': Math.min(1, level(b, NBM)).toFixed(3), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
-    const bucket = (a, n = NB) => Math.min(n - 1, Math.floor(uOf(a) / U_MAX * n));
+    // (lvStep > 1, for measurements only: every lvStep-th level, as before the levels were made finer; see diskFrameStats)
+    let lvStep = 1;
+    const bucket = (a, n = NB) => {
+      const b = Math.min(n - 1, Math.floor(uOf(a) / U_MAX * n)), k = n === NB ? lvStep : Math.max(1, lvStep >> 1);
+      return k > 1 ? Math.min(n - 1, Math.floor(b / k) * k + (k >> 1)) : b;
+    };
     // set a path's data only when it changed (most levels are empty in most frames)
     const setD = (e, d) => { if (e._d !== d) { e._d = d; e.setAttribute('d', d); } };
     // transmission of the pebble sheet between the camera and P (the same sheet as in the volume, without
@@ -1395,12 +1403,16 @@ void main(){
     let paused = false, speed = 1, dirty = true, benching = false, fieldMs = 0;
     const Omega = (R) => 0.5236 * Math.pow(R, -1.5);
     // --- the planet: it fades in and out over about 1.5 s when it is turned on or off (planetAmp); the gap's depth is
-    // planetAmp times the depth for the camera's distance (DEPTH), gapDepth ---
+    // planetAmp times the depth for the camera's distance (DEPTH), gapDepth, and the wake's strength planetAmp times
+    // the strength for that distance, wakeAmp (the observed looks take the near values of both) ---
     const planetPhi = (t) => PLANET.PHI0 + Omega(PLANET.A) * t;
     const planetPos = (t) => { const a = planetPhi(t); return [PLANET.A * Math.cos(a), PLANET.A * Math.sin(a), 0]; };
-    let planetAmp = (opt.mode & 16) ? 1 : 0, depthSet = -1, gapDepth = 0, rim = null, trap = trapOf(0);
+    let planetAmp = (opt.mode & 16) ? 1 : 0, depthSet = -1, gapDepth = 0, rim = null, trap = trapOf(0), wakeAmp = 0;
     const glNow = new Float32Array(128);
-    const depthFor = (c) => DEPTH.FAR + (DEPTH.NEAR - DEPTH.FAR) * (1 - ss(DEPTH.D0, DEPTH.D1, Math.hypot(Math.hypot(c[0], c[1]) - PLANET.A, c[2])));
+    // how near the camera is to the planet's orbit: 0 beyond D1, 1 within D0
+    const nearOf = (c) => 1 - ss(DEPTH.D0, DEPTH.D1, Math.hypot(Math.hypot(c[0], c[1]) - PLANET.A, c[2]));
+    const depthFor = (c) => DEPTH.FAR + (DEPTH.NEAR - DEPTH.FAR) * nearOf(c);
+    const wakeFor = (c) => DEPTH.WAKE_FAR + (1 - DEPTH.WAKE_FAR) * nearOf(c);
     // the inner rim of the gap: where z_s/R, the surface's angle seen from the star, peaks inside the gap; its shadow
     // ends where the outer wall climbs above that angle again (null when the gap is too shallow to cast one)
     function gapRim(d) {
@@ -1598,12 +1610,12 @@ void main(){
     // the wake (as in the disk map, without the footprint): relative excess of the gas density at R, azimuth phi
     const wakeJS = (R, phi) => {
       const x = R / PLANET.A;
-      if (planetAmp <= 0 || x < 0.42 || x > 2.5) return 0;
+      if (wakeAmp <= 0 || x < 0.42 || x > 2.5) return 0;
       const F = 4.8 - 4 * Math.pow(x, -0.25) - 0.8 * Math.pow(x, 1.25), TAU = 2 * Math.PI;
       const dphi = ((phi - planetPhi(time) - Math.sign(x - 1) * F / PLANET.HP + Math.PI) % TAU + TAU) % TAU - Math.PI;
       const sl = Math.pow(x, 1.25) * Math.abs(Math.pow(x, -1.5) - 1) / PLANET.HP, c = 1 / Math.sqrt(1 + sl * sl);
       const ax = Math.abs(x - 1), w = Hof(R) * (1 + 0.5 * ax), d = R * dphi * c;
-      return planetAmp * PLANET.WAKE_A * Math.exp(-ax / PLANET.WAKE_L) * ss(0.03, 0.1, ax) * ss(0.42, 0.55, x) * (1 - ss(2, 2.5, x)) * Math.exp(-d * d / (w * w));
+      return wakeAmp * PLANET.WAKE_A * Math.exp(-ax / PLANET.WAKE_L) * ss(0.03, 0.1, ax) * ss(0.42, 0.55, x) * (1 - ss(2, 2.5, x)) * Math.exp(-d * d / (w * w));
     };
     // the disk's density contours on the two halves of the face (azimuths of the right half and opposite), across the
     // arms: finely sampled where the arms are
@@ -1795,7 +1807,7 @@ void main(){
       if (sliceU <= 0) { for (const k in sP) sP[k].setAttribute('d', ''); sLabels.forEach((e) => { e.textContent = ''; }); drawCbar('', 0); return; }
       const ja_ = ja(), g = buildSlice(opt.sliceQ), face = opt.sliceQ !== 'none';
       let li = 0;
-      sP.contour.setAttribute('d', g.lines.map((c) => (Array.isArray(c) ? pathOf(c, ALL) : c.lr != null && planetAmp > 0 ? wakeContours(c.lr) : pathOf(c.pts, c.quads))).join(''));
+      sP.contour.setAttribute('d', g.lines.map((c) => (Array.isArray(c) ? pathOf(c, ALL) : c.lr != null && wakeAmp > 0 ? wakeContours(c.lr) : pathOf(c.pts, c.quads))).join(''));
       sP.tau1.setAttribute('d', pathOf(g.tau1, ALL));
       sP.ice.setAttribute('d', pathOf(g.ice, ALL));
       // the pebble layer: rock inside the snow line, ice outside, thick where it piles up (just outside the snow line,
@@ -1870,9 +1882,10 @@ void main(){
       diskTarget();
       draw();
     }
-    let fadeT = 0;
+    let fadeT = 0, fstats = null;   // fstats: a running measurement, see diskFrameStats
     function draw() {
       if (!W) return;
+      const d0 = fstats ? performance.now() : 0;
       // the planet's fade, in real time (so that it also completes while the model is paused); the step is at most 0.1 s,
       // since a paused model draws nothing until something changes and the first frame of a fade would otherwise jump
       // to its end
@@ -1900,7 +1913,8 @@ void main(){
       // the disk map for this moment and view (the footprints of the pixels depend on the camera)
       gl.useProgram(progDisk);
       gl.uniform1f(UD.uPlanetPhi, planetPhi(time));
-      gl.uniform1f(UD.uWake, planetAmp);
+      wakeAmp = planetAmp * (lookNow === 'model' ? wakeFor(cam) : 1);
+      gl.uniform1f(UD.uWake, wakeAmp);
       gl.uniform1f(UD.uTime, time);
       gl.uniform1f(UD.uSeed, opt.seed);
       gl.uniform3fv(UD.uCam, cam);
@@ -1942,7 +1956,7 @@ void main(){
       gl.uniform1f(U.uPlanetVis, pVis);
       gl.uniform1f(U.uEnv, envVis);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      const f0 = performance.now();
+      const f0 = performance.now(), o0 = f0;
       drawField();
       drawEnv();
       fieldMs = performance.now() - f0;
@@ -1986,6 +2000,11 @@ void main(){
         g.setAttribute('opacity', (a * annAmp).toFixed(3));
       };
       bar(sgroup, Lb, sbU * sbU * (3 - 2 * sbU)); bar(sgroup2, sbOld, sbU < 1 ? 1 - sbU * sbU * (3 - 2 * sbU) : 0);
+      if (fstats) {
+        // the overlay's style and layout, forced here so that they are measured (otherwise done after the frame's script)
+        const o1 = performance.now(); overlay.getBoundingClientRect(); const o2 = performance.now();
+        fstats.draw.push(o1 - d0); fstats.over.push(o1 - o0); fstats.layout.push(o2 - o1);
+      }
       box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12 } }));
     }
     // a clump that crosses the snow line releases vapor
@@ -2011,13 +2030,42 @@ void main(){
       if (!running) return;
       if (benching) { last = 0; lastRaw = 0; requestAnimationFrame(frame); return; }   // diskBench draws on its own
       const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
-      adapt(t);
+      if (fstats) { fstats.t.push(t); dirty = true; if (t >= fstats.until) fsDone(); } else adapt(t);
       if (!paused) { time += dt * speed; update(); dirty = true; }
       if (busy()) dirty = true;   // flights, fades and the sweep run in real time (see draw)
       if (dirty) { draw(); dirty = false; }
       requestAnimationFrame(frame);
     }
     const start = () => { if (!reduce && !running) { running = true; last = 0; requestAnimationFrame(frame); } };
+    // For measurements in a visible window (no animation frames come in a hidden one, nor with reduced motion):
+    // diskFrameStats(seconds, { levelStep }) draws the model in every animation frame for that long (playing or
+    // paused; the render scale held), and resolves with the intervals between frames (median, 95th percentile,
+    // maximum; the share over 20 and over 33 ms), per frame the script of draw() and of the overlay within it (field
+    // lines, envelope, slice, labels) and the overlay's style and layout forced right after it, and the overlay's size
+    // (path elements, those with data, characters of path data). frames: 0 when none came. levelStep 4 draws the
+    // field lines with every 4th of their 48 opacity levels (and the marks with every 2nd of their 24) for the time
+    // of the measurement, so that about as many paths carry data as before the levels were made finer (12 + 12):
+    // the same picture but for the banding, to compare the cost of the number of paths.
+    const qs = (a, p) => { if (!a.length) return NaN; const s = a.slice().sort((x, y) => x - y); return Math.round(s[Math.min(s.length - 1, Math.floor(p * s.length))] * 100) / 100; };
+    function fsDone() {
+      const f = fstats; if (!f) return;
+      fstats = null; clearTimeout(f.timer);
+      const iv = f.t.slice(1).map((v, i) => v - f.t[i]), paths = [...overlay.querySelectorAll('path')];
+      const share = (lim) => (iv.length ? Math.round(iv.filter((v) => v > lim).length / iv.length * 1000) / 1000 : NaN);
+      const st = (a) => ({ median: qs(a, 0.5), p95: qs(a, 0.95), max: qs(a, 1) });
+      lvStep = 1;
+      f.resolve({ frames: f.t.length, levelStep: f.levelStep, interval: { ...st(iv), over20: share(20), over33: share(33) }, draw: st(f.draw), overlay: st(f.over), layout: st(f.layout),
+        paths: paths.length, pathsWithData: paths.filter((e) => e.getAttribute('d')).length, chars: paths.reduce((n, e) => n + (e.getAttribute('d') || '').length, 0),
+        size: [canvas.width, canvas.height], scale: opt.scale, visible: document.visibilityState === 'visible' });
+      dirty = true;
+    }
+    box.diskFrameStats = (seconds = 5, { levelStep = 1 } = {}) => new Promise((resolve) => {
+      if (fstats) fsDone();
+      lvStep = Math.max(1, Math.round(levelStep));
+      fstats = { until: performance.now() + seconds * 1000, t: [], draw: [], over: [], layout: [], resolve, levelStep: lvStep };
+      fstats.timer = setTimeout(fsDone, seconds * 1000 + 1000);   // (when no frames come)
+      dirty = true;
+    });
     // the gap's light tables (about 2 ms each), one per idle moment, so that a zoom or the tour never waits for one
     const idle = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 3000 }) : (f) => setTimeout(f, 300);
     const prefetch = () => { if (gapLight.prefetch()) idle(prefetch); };
