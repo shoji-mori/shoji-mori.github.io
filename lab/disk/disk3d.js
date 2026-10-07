@@ -130,7 +130,7 @@
   // (where the disk lies above the magnetic equator) and toward the south one on the other: two broad funnels, as in the
   // simulations of tilted dipoles (Romanova et al. 2003, 2004). It lands at sin^2 theta = RS / L, about 25 degrees from
   // the poles, in hot spots. Close to the star the model's clock slows (see clockK): an orbit at RT takes 0.13 s of it.
-  const MAG = { RS: 0.0093, RT: 0.05, TILT: 10 * Math.PI / 180, P_DAYS: 8, DL: 0.15, SHOW: 2, DMIN: 0.04 };
+  const MAG = { RS: 0.0093, RT: 0.05, TILT: 10 * Math.PI / 180, P_DAYS: 8, DL: 0.3, SHOW: 2, DMIN: 0.04 };
   MAG.SPIN = 2 * Math.PI / (12 * MAG.P_DAYS / 365.25);   // rad per second of the model's clock (a year at 1 au is 12 s)
   // A planet of Jupiter's mass (mass ratio q = 1e-3) on a circular orbit at 3 au, beyond the snow line. Its Hill radius
   // is a (q/3)^1/3 = 0.21 au. It opens a gap in the gas, a Gaussian dip in Σ, Σ (1 - depth e^-x²) with x = (R - a)/W,
@@ -260,7 +260,10 @@ const float R_OUT = ${G(MODEL.R_OUT)}, P_OUT = ${G(MODEL.P_OUT)};   // the disk 
 const float LNTAU1 = ${G(MODEL.LNTAU1)};               // ln of the grazing optical depth toward the star at the midplane, 1 au
 const float OMEGA0 = 0.5236;            // 2π / 12 s at 1 au (visual time)
 const float MAG_RS = ${G(MAG.RS)}, MAG_RT = ${G(MAG.RT)};   // the star's radius and the magnetosphere's (au; see MAG)
-const float MAG_DL = ${G(MAG.DL)}, MAG_SIG = 0.3;   // the streams' bundle of lines (L from MAG_RT to MAG_RT (1 + MAG_DL)) and half width around the axis (radians)
+const float MAG_DL = ${G(MAG.DL)};   // the curtains' bundle of lines: L from MAG_RT to MAG_RT (1 + MAG_DL)
+// the curtains' density across the magnetic azimuth, from a curtain's middle (dph): cos^2(dph / 2) cubed, half at 54
+// degrees: two broad arcs, as the funnel flows of a slightly tilted dipole (Romanova et al. 2003, 2004), not narrow streams
+float magAz(float dph){ float c = 0.5 + 0.5 * cos(dph); return c * c * c; }
 const float RB = ${G(RB_JS)}, ZB = ${G(ZB_JS)};   // marched cylinder (au): past the edge of the disk, up to the top of the drawn wind
 // non-ideal MHD (see NONIDEAL in the script): the thermally ionized inner disk inside R_TI, the dead zone's top z_k (in
 // units of H; 0 where there is none) and the height over which the field bends above it (DZ_BEND H)
@@ -771,6 +774,79 @@ void main(){
 ${Array.from({ length: nb }, (_, i) => `  o${i} = vec4(o[${i}], 0.0, 0.0);`).join('\n')}
 }`;
 
+  // The CO line's transfer (see the CO line in FS), generated for Q groups of four velocities, with the arrays local
+  // and the segment's update inline (passed to functions, the arrays would be copied in and out at every call):
+  // coChannel for the channel map (one group: the channel's width) and coMoments (CO_Q groups, CO_N = 4 CO_Q velocities)
+  const CO_Q = 6;
+  const CO_MARCH_GLSL = (name, Q, ret, args, vq, result) => `
+${ret} ${name}(vec3 ro, vec3 rd, vec2 b, float tCross, float jitter, ${args}){
+  // the intensities and transmissions at the velocities vq(q) (four in a group)
+  vec4 I[${Q}], Tr[${Q}];
+  for (int q = 0; q < ${Q}; q++) { I[q] = vec4(0.0); Tr[q] = vec4(1.0); }
+  // the previous sample: where, opacity (per au), source (K), velocity (km/s), line width (km/s)
+  float t = b.x, tP = -1.0, kP = 0.0, sP = 0.0, uP = 0.0, wP = 0.0;
+  bool sheetDone = tCross <= b.x || tCross >= b.y;
+  for (int i = 0; i < 320; i++) {
+    if (i >= uSteps || t > b.y) break;
+    vec4 m4 = Tr[0];
+    for (int q = 1; q < ${Q}; q++) m4 = max(m4, Tr[q]);
+    if (max(max(m4.x, m4.y), max(m4.z, m4.w)) < 3e-4) break;   // (every velocity hidden)
+    vec3 p = ro + rd * t;
+    float R = max(length(p.xy), 0.05), Hs = H0 * pow(R, 1.25), az = abs(p.z);
+    // (the steps as in the other looks, but lengthening smoothly above 4 to 5 scale heights instead of at once: a
+    // sample crossing that height moved all the later ones, a seam in a refined still seen face-on)
+    float ds = clamp(max(0.4 * Hs, mix(0.18, 0.25, smoothstep(4.0 * Hs, 5.0 * Hs, az)) * az), 0.004, max(0.4, 0.05 * length(p)));
+    if (i == 0) ds *= 0.25 + jitter;
+    float tm = t + 0.5 * ds;
+    vec3 pm = ro + rd * tm;
+    vec4 g = coGas(pm, rd);
+    float k = length(pm.xy) > MAG_RT * 0.9 ? K_CO * g.x : 0.0;
+    if (tP < 0.0) { tP = tm; kP = k; sP = g.y; uP = g.z; wP = g.w; }
+    // the segment from the previous sample to this one, in two parts where the pebble sheet lies between them (it
+    // absorbs what lies behind it)
+    float tc = tm;
+    bool split = !sheetDone && tm >= tCross;
+    if (split) { tc = max(tCross, tP); sheetDone = true; }
+    float f = (tc - tP) / max(tm - tP, 1e-9);
+    float kC = mix(kP, k, f), sC = mix(sP, g.y, f), uC = mix(uP, g.z, f), wC = mix(wP, g.w, f);
+    for (int h = 0; h < 2; h++) {
+      float L = tc - tP, kA = kP, kB = kC, sA = sP, sB = sC, uA = uP, uB = uC, w = 0.5 * (wP + wC);
+      if (h == 1) {
+        if (!split) break;
+        vec3 c0 = vec3(0.0), tr0 = vec3(1.0);
+        sheet(ro + rd * tCross, rd, c0, tr0);
+        for (int q = 0; q < ${Q}; q++) Tr[q] *= tr0.r;
+        L = tm - tc; kA = kC; kB = k; sA = sC; sB = g.y; uA = uC; uB = g.z; w = 0.5 * (wC + g.w);
+      }
+      // the part's line-centre optical depth: the log mean of the opacities (the density changes exponentially); under
+      // 1e-4 it adds nothing that shows (a hundredth of a K km/s)
+      float kM = max(kA, kB);
+      if (kM * L < 1e-4) continue;
+      float r = max(min(kA, kB), 1e-4 * kM) / kM, d0 = L * kM * (r > 0.999 ? 1.0 : (r - 1.0) / log(r));
+      if (d0 < 1e-4) continue;
+      // the profile: the Gaussian averaged over the sweep of velocities (erf), or where the sweep is narrower than two
+      // line widths the Gaussian of the same area and variance (the two agree there); the velocities beyond reach get
+      // an optical depth under 1e-4 from it, and those already hidden nothing that shows
+      float du = uB - uA, uM = 0.5 * (uA + uB), dS = sB - sA, reach = 0.5 * abs(du) + w * sqrt(2.0 * log(d0 * 1e4));
+      bool wide = abs(du) > 2.0 * w;
+      float g2 = w * w + du * du / 12.0, gk = w * inversesqrt(g2), ek = 0.70710678 / w, ak = 1.2533141 * w / (wide ? du : 1.0);
+      for (int q = 0; q < ${Q}; q++) {
+        vec4 vv = ${vq}, x = vv - uM;
+        if (any(lessThan(abs(x), vec4(reach))) && any(greaterThan(Tr[q], vec4(1e-4)))) {
+          vec4 dt = d0 * (wide ? ak * (erfA((vv - uA) * ek) - erfA((vv - uB) * ek)) : gk * exp(-0.5 * x * x / g2));
+          vec4 e = exp(-dt), a = 1.0 - e;
+          // (the source linear in the optical depth across the part: the far end's share)
+          vec4 fl = mix(a / max(dt, vec4(1e-9)) - e, dt * (0.5 - dt / 3.0), step(dt, vec4(1e-3)));
+          I[q] += Tr[q] * (sA * a + dS * fl);
+          Tr[q] *= e;
+        }
+      }
+    }
+    tP = tm; kP = k; sP = g.y; uP = g.z; wP = g.w;
+    t += ds;
+  }
+  ${result}
+}`;
   const FS = `#version 300 es
 precision highp float;
 out vec4 fragColor;
@@ -1367,17 +1443,19 @@ vec3 cmap(float t, bool inferno){
 // above the base the wind, translucent, fading with its density. The disk's edge ends the face as the temperature's does.
 const vec3 LAY_MRI = vec3(0.88, 0.47, 0.27), LAY_DEAD = vec3(0.15, 0.19, 0.34), LAY_SURF = vec3(0.44, 0.58, 0.76), LAY_ACC = vec3(1.0, 0.71, 0.28), LAY_WIND = vec3(0.64, 0.85, 0.95);
 // Close to the star (uMag), the magnetosphere's regions (see MAG) at p3 (alpha 0 elsewhere): the star, the region of the
-// closed lines inside the disk's inner edge, the streams (the lines L = MAG_RT to MAG_RT (1 + MAG_DL) where the gas
-// falls, as in magColumn) and the dust-free gas disk between the magnetosphere's edge and the dust's (within 2 H of the
-// midplane); inside the dust's edge nothing else (the face is open there, as from afar).
-const vec3 LAY_MAG = vec3(0.60, 0.48, 0.86), LAY_STREAM = vec3(1.0, 0.42, 0.62), LAY_GAS = vec3(0.98, 0.64, 0.52);
-vec4 magFace(float R, float z, vec3 p3){
+// closed lines inside the disk's inner edge (no disk there: the cavity), the curtains' cross-section (the lines L =
+// MAG_RT to MAG_RT (1 + MAG_DL) where the gas falls, where a curtain is denser than 0.3 of its middle, as in magColumn)
+// and (gas) the dust-free gas disk between the magnetosphere's edge and the dust's (within 2 H of the midplane); inside
+// the dust's edge nothing else (the face is open there, as from afar). On every quantity's face, so that the curtains
+// are not taken for the disk's own flows: labelled in the overlay.
+const vec3 LAY_MAG = vec3(0.60, 0.48, 0.86), LAY_STREAM = vec3(1.0, 0.36, 0.50), LAY_GAS = vec3(0.98, 0.64, 0.52);
+vec4 magFace(float R, float z, vec3 p3, bool gas){
   float r = length(p3), cz = dot(p3, uMagAxis) / max(r, 1e-6), L = r / max(1.0 - cz * cz, 1e-5), u = (L / MAG_RT - 1.0) / MAG_DL;
   if (r < MAG_RS) return vec4(pow(STARCOL, vec3(1.0 / 2.2)), 1.0);
   if (u < 0.0) return vec4(LAY_MAG, 0.6);
   float phm = atan(dot(p3, cross(uMagAxis, uMagE1)), dot(p3, uMagE1)), dph = cz > 0.0 ? phm : PI - abs(phm);
-  if (u < 1.0 && exp(-0.5 * dph * dph / (MAG_SIG * MAG_SIG)) * smoothstep(0.08, 0.3, abs(cz)) > 0.3) return vec4(LAY_STREAM, 0.85);
-  if (R > MAG_RT && R < R_IN * 1.05 && abs(z) < 2.0 * H0 * pow(R, 1.25)) return vec4(LAY_GAS, 1.0);
+  if (u < 1.0 && magAz(dph) * smoothstep(0.08, 0.3, abs(cz)) > 0.3) return vec4(LAY_STREAM, 0.9);
+  if (gas && R > MAG_RT && R < R_IN * 1.05 && abs(z) < 2.0 * H0 * pow(R, 1.25)) return vec4(LAY_GAS, 1.0);
   return vec4(0.0);
 }
 vec4 layersFace(float R, float z, vec3 q){
@@ -1396,13 +1474,14 @@ vec4 sliceFace(vec3 pc){
   float R = length(pc.xy), z = pc.z / uSliceZ;   // the plane may be off the star while it sweeps
   vec3 q = sliceQuantities(R, z, atan(pc.y, pc.x));
   float hole = smoothstep(R_IN * 0.8, R_IN * 1.3, R), holeG = max(hole, uMag * smoothstep(MAG_RT * 0.95, MAG_RT * 1.08, R));   // (the gas's, close up)
+  // (close to the star the magnetosphere's regions, on every face: the gas disk inside the dust's edge keeps its
+  // quantity, on the layers' face its colour)
+  vec4 m = uSliceQ > 0 && uMag > 0.0 && R < R_IN * 1.05 ? magFace(R, z, vec3(pc.xy, z), uSliceQ == 4) * vec4(1.0, 1.0, 1.0, uMag) : vec4(0.0);
+  if (m.a > 0.0) return m;
   if (uSliceQ == 1) return vec4(0.92 * pow(tcolor(q.x), vec3(1.0 / 2.2)), smoothstep(-6.0, -4.5, q.z) * holeG);
   if (uSliceQ == 2) return vec4(cmap((q.y + 10.0) / 12.5, false), smoothstep(-10.5, -9.5, q.y));
   if (uSliceQ == 3) return vec4(cmap((q.z / LN10 + 4.0) / 9.0, true), smoothstep(-4.5, -3.5, q.z / LN10) * hole);
-  if (uSliceQ == 4) {
-    vec4 m = uMag > 0.0 && R < R_IN * 1.05 ? magFace(R, z, vec3(pc.xy, z)) * vec4(1.0, 1.0, 1.0, uMag) : vec4(0.0);
-    return m.a > 0.0 ? m : layersFace(R, z, q) * vec4(1.0, 1.0, 1.0, hole);
-  }
+  if (uSliceQ == 4) return layersFace(R, z, q) * vec4(1.0, 1.0, 1.0, hole);
   return vec4(0.0);
 }
 
@@ -1412,29 +1491,41 @@ vec4 sliceFace(vec3 pc){
 // in the Rayleigh-Jeans limit). The line is optically thick: what is seen at a velocity comes from where the line's
 // optical depth along the ray, at that velocity, reaches about one, high in the disk (with the line-centre opacity
 // K_CO, the line's tau = 1 seen face-on lies at 3.6 H at 1 au, a little below the irradiation surface, where the gas is
-// between the interior's temperature and the surface's). The local profile is a Gaussian of thermal and some turbulent
-// width (sigma = 0.025 sqrt(T) km/s: 0.25 km/s at 100 K, so the full width is about the sound speed), and a channel
-// is 0.25 km/s wide. The velocity along the ray (km/s, positive away from the observer) is the gas's: Keplerian rotation
-// for a star of one solar mass, a little slower above the midplane and with the pressure gradient (the planet's gap
-// makes it wiggle), the radial push of the planet's wake, the inflow of the accretion layer(s), and in the wind its flow
-// along the field lines (from the wind's velocity map), weighted by the densities. The wind keeps CO_WIND of the CO
-// (partly dissociated by the star's light; molecules survive in the irradiated wind, Mori, Bai & Tomida 2025). The line
-// is so thick that the disk's tapering edge would show out to the end of the marched cylinder at 40 au (as real CO disks
-// are larger than their dust), so the CO is faded out from 33 to 39 au, a choice for the picture. The
-// pebble sheet absorbs the line from behind it (continuum subtracted: it does not add its own light).
-//   Channel map (uCoMode 0): the intensity at the channel's velocity uCoV, by exact integration along the ray.
-//   Moments (1: the mean velocity, 2: the integrated intensity): the spectrum along the ray is followed as up to three
-//   velocity components (a new one starts where the gas's velocity leaves the others' by more than two line widths):
-//   each gathers its own optical depth, so gas behind at the same velocity is hidden and gas at other velocities is
-//   not; a component's integrated intensity is its peak times its width, broadened where it is thick (the curve of
-//   growth of a Gaussian line).
+// between the interior's temperature and the surface's). The local profile is a Gaussian of thermal and turbulent
+// width (0.27 km/s at 100 K, so the full width is about the sound speed). The velocity along the ray (km/s, positive
+// away from the observer) is the gas's: Keplerian rotation for a star of one solar mass, a little slower above the
+// midplane and with the pressure gradient (the planet's gap makes it wiggle), the radial push of the planet's wake, the
+// inflow of the accretion layer(s), and in the wind its flow along the field lines (from the wind's velocity map),
+// weighted by the densities. The wind keeps CO_WIND of the CO (partly dissociated by the star's light; molecules
+// survive in the irradiated wind, Mori, Bai & Tomida 2025). The pebble sheet absorbs the line from behind it (continuum
+// subtracted: it does not add its own light).
+//   The transfer (coMarch, generated in the script): the ray is sampled as in the other looks, and between two samples
+// the gas changes linearly: its velocity sweeps from one sample's to the next (each velocity of the sweep gets an equal
+// share of the opacity: the Gaussian averaged over the sweep, which is the Sobolev approximation where the sweep is
+// wide, and the Gaussian itself where it is narrow), its opacity changes exponentially (the log mean), and the source
+// function linearly in the optical depth. So the picture changes smoothly with where the samples fall (the march's
+// jitter leaves no grain), and a line that sweeps past a velocity between two samples is not missed.
+//   Channel map (uCoMode 0): the intensity averaged over a channel 0.25 km/s wide around uCoV (four velocities).
+//   Moments (1: the mean velocity, 2: the integrated intensity): the same transfer on a grid of CO_N velocities spread
+// evenly over those of the ray's gas (coWindow: from a coarser march, widened by 6.5 line widths, as far as the wings of
+// a thick line reach), and summed as an observer sums a cube: moment 0 is the sum of the channels times their width,
+// moment 1 their intensity-weighted mean velocity. Each velocity has its own optical depth, so gas behind at the same
+// velocity is hidden and gas at other velocities is not (the surface where the line becomes thick differs from one
+// velocity to the next). Moment 1 is left out where moment 0 is under CO_MASK of its base range (observers leave out
+// what is under a few times the noise).
 uniform int uCoMode;
 uniform float uCoV;          // the channel's velocity (km/s)
 uniform float uCoRange;      // the range of the moment-1 colours (km/s)
 uniform float uCoK;          // the channel map's and moment 0's range, relative to CO_TB and CO_M0 (see coAim in the script)
 uniform sampler2D uWindVel;  // the wind's velocity (see WINDMAP_FS)
-const float K_CO = 6000.0, CO_WIND = 0.3, CO_TB = 220.0, CO_M0 = 900.0;
+const float K_CO = 6000.0, CO_WIND = 0.3, CO_TB = 220.0, CO_M0 = 900.0, CO_MASK = 0.02;
 const vec2 CO_SH = vec2(-7.0, -10.0);   // the CO: shielded above e^-7 of the density, dissociated below e^-10
+const int CO_Q = ${CO_Q};
+// erf, to 1.5e-7 (Abramowitz & Stegun 7.1.26)
+vec4 erfA(vec4 x){
+  vec4 a = abs(x), t = 1.0 / (1.0 + 0.3275911 * a);
+  return sign(x) * (1.0 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * exp(-a * a));
+}
 // the gap's slope d ln Σ / d ln R (for the pressure gradient)
 float gapSlope(float R){
   if (uPlanet <= 0.0) return 0.0;
@@ -1443,7 +1534,8 @@ float gapSlope(float R){
   float e = exp(-x * x);
   return R * 2.0 * uPlanet * x * e / (GAP_W * (1.0 - uPlanet * e));
 }
-// the gas at p for the CO line: CO density (relative), temperature (K), velocity along rd (km/s), line width (km/s)
+// the gas at p for the CO line: CO density (relative), temperature (K), velocity along rd (km/s), line width (km/s:
+// thermal and turbulent, sigma^2 = (0.025 sqrt(T))^2 + 0.011)
 vec4 coGas(vec3 p, vec3 rd){
   float R = max(length(p.xy), 1e-3), lnR = log(R), H = H0 * exp(1.25 * lnR), zh = p.z / H, az = abs(p.z);
   float cut = cutOut(R), gl = gapLn(R), phi = atan(p.y, p.x);
@@ -1484,66 +1576,57 @@ vec4 coGas(vec3 p, vec3 rd){
     v = (rD * v + rW * vw) / rS;
     T = (rD * Td + rW * Ts) / rS;
   }
-  return vec4(rhoCO, T, dot(v, rd), 0.025 * sqrt(T));
+  return vec4(rhoCO, T, dot(v, rd), sqrt(0.000625 * T + 0.011));
 }
-// the CO picture for a ray within the marched cylinder (b), in display values
-vec3 coPicture(vec3 ro, vec3 rd, vec2 b, float tCross, float jitter){
-  float t = b.x, tau = 0.0, I = 0.0;
-  // the components as the three slots of vec3s (velocity, optical depth, intensity, intensity times velocity and times
-  // width), selected by masks rather than by an index, which keeps them in registers
-  vec3 vC = vec3(0.0), tC = vec3(0.0), IC = vec3(0.0), IvC = vec3(0.0), sC = vec3(0.0);
-  float nC = 0.0;
+// the channel map's intensity at velocity v: averaged over a channel 0.25 km/s wide (four velocities)
+${CO_MARCH_GLSL('coChannel', 1, 'float', 'float v', 'v + vec4(-0.09375, -0.03125, 0.03125, 0.09375)', 'return dot(I[0], vec4(0.25));')}
+// moments 0 and 1 from CO_N velocities spread evenly over the window wv (see coWindow), as an observer sums a cube: the
+// channels summed times their width, and their intensity-weighted mean velocity
+${CO_MARCH_GLSL('coMoments', 'CO_Q', 'vec2', 'vec2 wv', '(wv.x + (wv.y - wv.x) / float(4 * CO_Q) * (4.0 * float(q) + vec4(0.5, 1.5, 2.5, 3.5)))',
+  'float m0 = 0.0, mv = 0.0; for (int q = 0; q < CO_Q; q++) { m0 += dot(I[q], vec4(1.0)); mv += dot(I[q], wv.x + (wv.y - wv.x) / float(4 * CO_Q) * (4.0 * float(q) + vec4(0.5, 1.5, 2.5, 3.5))); } return vec2(m0 * (wv.y - wv.x) / float(4 * CO_Q), m0 > 0.0 ? mv / m0 : 0.0);')}
+// the velocities the moments need along a ray: those of its gas with line opacity in front of the opaque pebble sheet,
+// from a march three times as coarse, widened by 6.5 line widths (and a little for what the coarse march may miss)
+vec2 coWindow(vec3 ro, vec3 rd, vec2 b, float tCross){
+  float t = b.x, lo = 1e9, hi = -1e9, w = 0.0;
   bool sheetDone = tCross <= b.x || tCross >= b.y;
-  for (int i = 0; i < 320; i++) {
-    if (i >= uSteps || t > b.y || tau > 8.0) break;
+  for (int i = 0; i < 110; i++) {
+    if (3 * i >= uSteps || t > b.y) break;
     vec3 p = ro + rd * t;
     float R = max(length(p.xy), 0.05), Hs = H0 * pow(R, 1.25), az = abs(p.z);
-    float ds = clamp(max(0.4 * Hs, (az > 4.5 * Hs ? 0.25 : 0.18) * az), 0.004, max(0.4, 0.05 * length(p)));
-    if (i == 0) ds *= 0.25 + jitter;
-    float t1 = t + ds;
-    if (!sheetDone && t1 >= tCross) {
-      // the pebble sheet absorbs what lies behind it
+    float ds = 3.0 * clamp(max(0.4 * Hs, (az > 4.5 * Hs ? 0.25 : 0.18) * az), 0.004, max(0.4, 0.05 * length(p)));
+    vec3 pm = ro + rd * (t + 0.5 * ds);
+    vec4 g = coGas(pm, rd);
+    if (K_CO * g.x * ds > 1e-3 && length(pm.xy) > MAG_RT * 0.9) { lo = min(lo, g.z); hi = max(hi, g.z); w = max(w, g.w); }
+    if (!sheetDone && t + ds >= tCross) {
       vec3 c0 = vec3(0.0), tr0 = vec3(1.0);
       sheet(ro + rd * tCross, rd, c0, tr0);
-      float tm = -log(max(tr0.r, 1e-6));
-      tau += tm; tC += tm;
       sheetDone = true;
+      if (tr0.r < 0.01) break;
     }
-    p = ro + rd * (t + 0.5 * ds);
-    vec4 g = coGas(p, rd);
-    float d0 = K_CO * g.x * ds;
-    if (d0 > 1e-5 && length(p.xy) > MAG_RT * 0.9) {
-      if (uCoMode == 0) {
-        float sg2 = g.w * g.w + 0.011, dv = uCoV - g.z, dt = d0 * exp(-0.5 * dv * dv / sg2);
-        I += exp(-tau) * g.y * (1.0 - exp(-dt)); tau += dt;
-      } else {
-        // the component this gas belongs to (the nearest in velocity, within two line widths), or a new one where the
-        // gas is dense enough to matter (thin stretches, as in the wind, join the nearest); when all three are taken,
-        // the nearest takes it at full opacity and moves its centre toward it (its mean velocity stays right)
-        vec3 dvs = mix(vec3(1e9), abs(g.z - vC), vec3(step(0.5, nC), step(1.5, nC), step(2.5, nC)));
-        float best = min(dvs.x, min(dvs.y, dvs.z));
-        vec3 m = vec3(equal(dvs, vec3(best)));
-        m *= vec3(1.0, 1.0 - m.x, (1.0 - m.x) * (1.0 - m.y));   // (the first of equals)
-        bool apart = nC < 0.5 || best > 2.0 * g.w;
-        if (apart && nC < 2.5 && (d0 > 0.02 || nC < 0.5)) { m = vec3(equal(vec3(nC), vec3(0.0, 1.0, 2.0))); vC = mix(vC, vec3(g.z), m); nC += 1.0; apart = false; }
-        float vc = dot(vC, m), tc = dot(tC, m);
-        float dv = apart ? 0.0 : (g.z - vc) / g.w, dt = d0 * exp(-0.5 * dv * dv);
-        if (apart) vC = mix(vC, vec3(mix(vc, g.z, dt / (dt + tc + 1e-3))), m);
-        float dI = exp(-tc) * g.y * (1.0 - exp(-dt));
-        IC += m * dI; IvC += m * (dI * g.z); sC += m * (dI * g.w); tC += m * dt;
-      }
-    }
-    t = t1;
+    t += ds;
   }
-  if (uCoMode == 0) return cmap(sqrt(I / (CO_TB * uCoK)), true);
-  // each component's width times the curve of growth of a Gaussian line
-  vec3 wd = 2.5066 * sC / max(IC, vec3(1e-9)) * sqrt(max(vec3(1.0), 2.0 * log(1.0 + tC)));
-  float m0 = dot(IC, wd), m1 = dot(IvC, wd);
-  if (uCoMode == 2) return cmap(sqrt(m0 / (CO_M0 * uCoK)), true);
-  float v = m0 > 0.0 ? clamp(m1 / m0 / uCoRange, -1.0, 1.0) : 0.0;
-  // blue (toward us) through pale grey to red (away), dimmed where the line is faint
-  vec3 c = v < 0.0 ? mix(vec3(0.86, 0.87, 0.90), vec3(0.20, 0.36, 0.92), -v) : mix(vec3(0.86, 0.87, 0.90), vec3(0.88, 0.16, 0.12), v);
-  return c * sqrt(clamp(m0 / CO_M0, 0.0, 1.0));
+  if (lo > hi) return vec2(0.0, -1.0);
+  float m = 6.5 * w + 0.1 + 0.03 * max(abs(lo), abs(hi));
+  return vec2(lo - m, hi + m);
+}
+// the CO line along a ray within the marched cylinder (b): (the channel's intensity in K, or moment 0 in K km/s and
+// moment 1 in km/s, 0, 1)
+vec4 coLinear(vec3 ro, vec3 rd, vec2 b, float tCross, float jitter){
+  if (uCoMode == 0) return vec4(coChannel(ro, rd, b, tCross, jitter, uCoV), 0.0, 0.0, 1.0);
+  vec2 wv = coWindow(ro, rd, b, tCross);
+  if (wv.y <= wv.x) return vec4(0.0, 0.0, 0.0, 1.0);
+  return vec4(coMoments(ro, rd, b, tCross, jitter, wv), 0.0, 1.0);
+}
+// the CO picture for a ray within the marched cylinder, in display values
+vec3 coPicture(vec3 ro, vec3 rd, vec2 b, float tCross, float jitter){
+  vec4 q = coLinear(ro, rd, b, tCross, jitter);
+  if (uCoMode == 0) return cmap(sqrt(q.x / (CO_TB * uCoK)), true);
+  if (uCoMode == 2) return cmap(sqrt(q.x / (CO_M0 * uCoK)), true);
+  // moment 1: blue (toward us) through grey to red (away), where moment 0 is bright enough (in full, as observers draw
+  // it; the grey a middle one, so that a disk seen face-on, all near 0 km/s, is not a white glare)
+  float v = clamp(q.y / uCoRange, -1.0, 1.0);
+  vec3 c = v < 0.0 ? mix(vec3(0.60, 0.61, 0.64), vec3(0.20, 0.36, 0.92), -v) : mix(vec3(0.60, 0.61, 0.64), vec3(0.88, 0.16, 0.12), v);
+  return c * smoothstep(CO_MASK, 1.5 * CO_MASK, q.x / CO_M0);
 }
 #endif
 #ifdef FULL
@@ -1553,14 +1636,19 @@ const float GM_V = 0.274156;            // G M in au^3 s^-2 on the model's clock
 const int MAG_N = 48;                   // steps through the magnetosphere's sphere (about 2.5 ms at 0.15 au, at the usual resolution)
 const vec2 MAG_CELLS = vec2(10.0, 2.0); // the columns' fluctuations: cells around the axis and across the bundle of lines
 const float MAG_PULSE = 0.005, MAG_FL = 2.2;   // their time (s of the model's clock; the fall takes 0.024 s) and contrast
-const vec3 MAG_COL = vec3(1.0, 0.42, 0.62);    // the columns' glow (hot gas, about 10^4 K; a colour to tell them apart)
-const vec3 HOT_COL = vec3(0.80, 0.88, 1.0);    // the hot spots, hotter than the photosphere
-const float MAG_COLB = 3000.0, MAG_SURF = 3.0, MAG_GASB = 1.2;   // brightness: the columns, the star's surface, the gas disk
-// The accretion columns' light at p, per unit length: the gas leaving the disk's inner edge along the closed lines
-// L = MAG_RT to MAG_RT (1 + MAG_DL) and falling freely onto the star, toward the north magnetic pole where the magnetic
-// azimuth is near 0 (the side the dipole tilts to) and toward the south one on the other side, in broad crescents
-// (Gaussian around the axis, MAG_SIG = 17 degrees, from the stream's middle; sin across the bundle),
-// lifting off the disk within about 15 degrees of the magnetic equator. The density along a flux tube, rho ∝ B / v (the mass flux
+// (the colours are a choice for the picture: the falling gas of several thousand K shines in hydrogen lines, red like
+// H-alpha; the shock where it lands heats the gas to about a million K, which shines in ultraviolet and X-rays: violet)
+const vec3 MAG_COL = vec3(1.0, 0.36, 0.50);    // the curtains' glow
+const vec3 HOT_COL = vec3(0.76, 0.66, 1.0);    // the shocks where they land
+const vec3 CAV_COL = vec3(0.55, 0.45, 1.0);    // the closed magnetosphere's edge, faintly
+const float MAG_COLB = 9000.0, MAG_SURF = 3.0, MAG_GASB = 1.2, MAG_CAVB = 6.0;   // brightness: the curtains, the star's surface, the gas disk, the closed region's edge
+// The accretion curtains' light at p, per unit length (the funnel flow of Hartmann, Hewett & Calvet 1994): the gas
+// leaving the ring at the disk's inner edge along the closed lines L = MAG_RT to MAG_RT (1 + MAG_DL) and falling freely
+// onto the star, toward the north magnetic pole where the magnetic azimuth is near 0 (the side the dipole tilts to) and
+// toward the south one on the other side: two curtains, thin across the lines (sin across the bundle) and broad in
+// azimuth (magAz: arcs about 110 degrees across at half their density), that turn with the star; lifting off the disk
+// within about 15 degrees of the magnetic equator. Inside the curtains (L < MAG_RT) the closed magnetosphere holds no
+// disk (the cavity); its edge, the last closed lines, glows faintly (CAV_COL) so that its extent shows. The density along a flux tube, rho ∝ B / v (the mass flux
 // rho v A is the same through the tube, whose cross-section A ∝ 1 / B), with B ∝ r^-3 (1 + 3 cos^2 theta)^1/2 and v the
 // free fall from rest at r = L (floored at 0.1 of its value at the star); its light ∝ rho^1.2 (recombination light goes
 // as rho^2; less, so that the stream shows up to the disk's edge: per unit length it is brightest at its foot). The fluctuations are carried at the free-fall speed: the noise is taken at the
@@ -1570,9 +1658,10 @@ vec3 magColumn(vec3 p){
   float r = length(p);
   if (r < MAG_RS || r > MAG_R) return vec3(0.0);
   float cz = dot(p, uMagAxis) / r, s2 = max(1.0 - cz * cz, 1e-5), L = r / s2, u = (L / MAG_RT - 1.0) / MAG_DL;
-  if (u <= 0.0 || u >= 1.0) return vec3(0.0);
-  float phm = atan(dot(p, cross(uMagAxis, uMagE1)), dot(p, uMagE1)), dph = cz > 0.0 ? phm : PI - abs(phm);   // (from the stream's middle)
-  float w = exp(-0.5 * dph * dph / (MAG_SIG * MAG_SIG)) * sin(PI * u) * smoothstep(0.08, 0.3, abs(cz));   // (lifting off the disk near the magnetic equator)
+  if (u >= 1.0) return vec3(0.0);
+  if (u <= 0.0) return u < -0.8 ? vec3(0.0) : CAV_COL * (MAG_CAVB * exp(u * MAG_DL / 0.06) * smoothstep(0.0, 0.15, abs(cz)) * smoothstep(MAG_RS, 1.5 * MAG_RS, r));   // (the closed region's edge)
+  float phm = atan(dot(p, cross(uMagAxis, uMagE1)), dot(p, uMagE1)), dph = cz > 0.0 ? phm : PI - abs(phm);   // (from the curtain's middle)
+  float w = magAz(dph) * sin(PI * u) * smoothstep(0.08, 0.3, abs(cz));   // (lifting off the disk near the magnetic equator)
   if (w < 1e-3) return vec3(0.0);
   float x = min(s2, 0.9999), vt = sqrt(2.0 * GM_V / L), v = vt * sqrt(1.0 / x - 1.0), vs = vt * sqrt(L / MAG_RS - 1.0);   // (x = r / L)
   float rho = sqrt(1.0 + 3.0 * cz * cz) / (x * x * x) * vs / max(v, 0.1 * vs);
@@ -1580,20 +1669,23 @@ vec3 magColumn(vec3 p){
   float n = vnoise3(vec3(phm / TAU * MAG_CELLS.x, u * MAG_CELLS.y, (uMagT - tff) / MAG_PULSE), MAG_CELLS.x);
   return MAG_COL * (MAG_COLB * w * pow(rho / 500.0, 1.2) * exp(MAG_FL * n - 0.0171 * MAG_FL * MAG_FL));
 }
-// the star's surface at the unit normal nrm: the photosphere (limb darkened) and the hot spots where the columns land,
-// the same crescents at the colatitudes where the lines L meet the surface (sin^2 theta = MAG_RS / L)
+// the star's surface at the unit normal nrm: the photosphere (limb darkened) and the hot spots where the curtains land:
+// arcs (parts of rings) at the colatitudes where the lines L meet the surface (sin^2 theta = MAG_RS / L), as wide in
+// azimuth as the curtains, turning with the star
 vec3 magSurface(vec3 nrm, vec3 rd){
   float mu = max(dot(nrm, -rd), 0.0), cz = dot(nrm, uMagAxis), s2 = max(1.0 - cz * cz, 1e-5), u = (MAG_RS / s2 / MAG_RT - 1.0) / MAG_DL;
   float phm = atan(dot(nrm, cross(uMagAxis, uMagE1)), dot(nrm, uMagE1)), dph = cz > 0.0 ? phm : PI - abs(phm);
-  float spot = exp(-0.5 * dph * dph / (MAG_SIG * MAG_SIG)) * smoothstep(-0.25, 0.15, u) * (1.0 - smoothstep(0.85, 1.25, u));
-  return mix(STARCOL, HOT_COL * 2.5, spot) * MAG_SURF * (0.4 + 0.6 * mu);
+  float spot = smoothstep(0.05, 0.4, magAz(dph)) * smoothstep(-0.25, 0.15, u) * (1.0 - smoothstep(0.85, 1.25, u));
+  return mix(STARCOL, HOT_COL * 2.8, spot) * MAG_SURF * (0.4 + 0.6 * mu);
 }
 // the dust-free gas disk between the magnetosphere's edge MAG_RT and the dust's sublimation radius R_IN, where the ray
 // crosses the midplane (cosi: |rd.z|): hot gas, about 1500 K, glowing faintly (its emission per unit area over the
 // cosine of the crossing, at most 20 times)
+// (its inner edge at the truncation, the wall the curtains rise from, brighter: where the disk ends shows)
 vec3 magGasDisk(float R, float cosi){
   float a = smoothstep(MAG_RT * 0.97, MAG_RT * 1.05, R) * (1.0 - smoothstep(R_IN * 0.85, R_IN * 1.25, R));
-  return a > 0.0 ? MAG_GASB * tcolor(1500.0) * a / max(cosi, 0.05) : vec3(0.0);
+  float wall = 1.0 + 2.5 * exp(-pow((R - MAG_RT * 1.04) / (0.05 * MAG_RT), 2.0));
+  return a > 0.0 ? MAG_GASB * tcolor(1500.0) * a * wall / max(cosi, 0.05) : vec3(0.0);
 }
 // The magnetosphere laid in at the star's distance, as the star's light is (the disk in front dims it): the columns
 // (optically thin; not in the part cut away), the gas disk inside the dust's edge where the ray crosses the midplane in
@@ -2296,7 +2388,12 @@ void main(){
       for (const [k, v] of [['fill', 'none'], ['stroke', 'rgb(225,235,255)'], ['stroke-width', w], ['stroke-opacity', op], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round']]) e.setAttribute(k, v);
       magG.appendChild(e); return e;
     };
-    const magClosed = magPath(1, 0.5), magEdge = magPath(1.3, 0.8), magOpen = magPath(1, 0.45);
+    const magClosed = magPath(1, 0.5), magEdge = magPath(1.3, 0.8), magOpen = magPath(1, 0.45), magCurt = magPath(1.2, 0.85), magX = magPath(1.6, 0.95);
+    magCurt.setAttribute('stroke', 'rgb(255,120,150)');
+    magX.setAttribute('stroke', 'rgb(255,236,170)');
+    const magXL = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    for (const [k, v] of [['font-size', 11], ['fill', 'rgba(255,236,170,0.95)'], ['text-anchor', 'middle']]) magXL.setAttribute(k, v);
+    magG.appendChild(magXL);
     const MAG_LINES = [0.022, 0.032, 0.044], MAG_FEET = [0.066, 0.08, 0.1, 0.13];
     // behind the star: the segment from the camera to P passes within MAG.RS of its centre
     const behindStar = (P) => {
@@ -2308,7 +2405,7 @@ void main(){
     };
     function drawMag() {
       const a = magFrame.vis * fieldAmp * modelAmp;
-      if (a <= 0.01) { for (const e of [magClosed, magEdge, magOpen]) if (e.getAttribute('d')) e.setAttribute('d', ''); return; }
+      if (a <= 0.01) { for (const e of [magClosed, magEdge, magOpen, magCurt, magX]) if (e.getAttribute('d')) e.setAttribute('d', ''); magXL.textContent = ''; return; }
       const { ax: m, e1 } = magFrame, e2 = [m[1] * e1[2] - m[2] * e1[1], m[2] * e1[0] - m[0] * e1[2], m[0] * e1[1] - m[1] * e1[0]];
       const fmt = (q) => q[0].toFixed(1) + ' ' + q[1].toFixed(1);
       // a polyline through the points, broken where hidden (visible(P) false) or behind the camera
@@ -2352,7 +2449,32 @@ void main(){
           }
         }
       });
-      magClosed.setAttribute('d', dC); magEdge.setAttribute('d', dE); magOpen.setAttribute('d', dO);
+      // the curtains: the middle line of their bundle, L = MAG.RT (1 + MAG.DL / 2), at the azimuths where they are dense
+      // (as magAz on the GPU), from the disk to the star, north on the side the dipole tilts to and south on the other
+      let dK = '';
+      const Lc = MAG.RT * (1 + 0.5 * MAG.DL), thc = Math.asin(Math.sqrt(MAG.RS / Lc));
+      for (const north of [1, -1]) for (let k = -4; k <= 4; k++) {
+        const dph = k * Math.PI / 9, ph = (north > 0 ? 0 : Math.PI) + dph, cp = Math.cos(ph), sp = Math.sin(ph), pts = [];
+        if (Math.pow(0.5 + 0.5 * Math.cos(dph), 3) < 0.15) continue;
+        for (let j = 0; j <= 24; j++) {
+          const th = north > 0 ? Math.PI / 2 - (Math.PI / 2 - thc) * j / 24 : Math.PI / 2 + (Math.PI / 2 - thc) * j / 24;
+          const r = Lc * Math.sin(th) * Math.sin(th), st = r * Math.sin(th), ct = r * Math.cos(th);
+          pts.push([0, 1, 2].map((i) => st * (cp * e1[i] + sp * e2[i]) + ct * m[i]));
+        }
+        dK += poly(pts, vis);
+      }
+      // the X-point: where the star's last closed line (L = MAG.RT) meets the disk's open lines, on the ring at the
+      // truncation radius; marked where the ring shows at the sides of the star (across the line of sight), with a label
+      let dX = '', lx = null;
+      const azC = Math.atan2(cam[1], cam[0]);
+      for (const sgn of [1, -1]) {
+        const ph = azC + sgn * Math.PI / 2, P = [MAG.RT * Math.cos(ph), MAG.RT * Math.sin(ph), 0], q = project(P);
+        if (q[2] <= zN || !vis(P)) continue;
+        dX += 'M' + (q[0] - 5) + ' ' + (q[1] - 5) + 'L' + (q[0] + 5) + ' ' + (q[1] + 5) + 'M' + (q[0] - 5) + ' ' + (q[1] + 5) + 'L' + (q[0] + 5) + ' ' + (q[1] - 5);
+        if (!lx || q[0] > lx[0]) lx = q;
+      }
+      magClosed.setAttribute('d', dC); magEdge.setAttribute('d', dE); magOpen.setAttribute('d', dO); magCurt.setAttribute('d', dK); magX.setAttribute('d', dX);
+      if (lx) { magXL.setAttribute('x', lx[0].toFixed(1)); magXL.setAttribute('y', (lx[1] - 9).toFixed(1)); magXL.textContent = ja() ? 'X 点' : 'X-point'; } else magXL.textContent = '';
       magG.setAttribute('opacity', a.toFixed(3));
     }
     function sheetT(P) {
@@ -2585,8 +2707,8 @@ void main(){
     descEl.style.cssText = keysEl.style.cssText = hidden;
     box.append(descEl, keysEl);
     canvas.setAttribute('aria-describedby', descEl.id + ' ' + keysEl.id);
-    const KEYS_JA = 'ドラッグで回転、ピンチでズーム。キー:矢印で回転、＋と−でズーム(ホイールのズームはこの図にフォーカスしてから)、Home で元の視点、スペースで一時停止、1〜5 で視点、P で惑星に寄る、F で磁力線、S で断面、A で注釈、B で星の増光、G で惑星を育てる。円盤をクリックすると、そこに小石の塊を置きます。';
-    const KEYS_EN = 'Drag to turn, pinch to zoom. Keys: arrows turn, + and - zoom (the wheel zooms once this picture has the focus), Home returns to the first view, space pauses, 1 to 5 pick views, P goes to the planet, F toggles the field lines, S the cut, A the annotations, B makes the star flare, G grows the planet. A click on the disk drops a clump of pebbles there.';
+    const KEYS_JA = 'ドラッグで回転、ピンチでズーム、Shift+ドラッグ(または中・右ボタン、2 本指)で見る中心を動かす。キー:矢印で回転、Shift+矢印で中心を動かす、＋と−でズーム(ホイールのズームはこの図にフォーカスしてから)、Home で元の視点と星の中心、スペースで一時停止、1〜5 で視点、P で惑星に寄る、F で磁力線、S で断面、A で注釈、B で星の増光、G で惑星を育てる。円盤をクリックすると、そこに小石の塊を置きます。';
+    const KEYS_EN = 'Drag to turn, pinch to zoom, Shift+drag (or the middle or right button, or two fingers) to move the point looked at. Keys: arrows turn, Shift+arrows move the point looked at, + and - zoom (the wheel zooms once this picture has the focus), Home returns to the first view centred on the star, space pauses, 1 to 5 pick views, P goes to the planet, F toggles the field lines, S the cut, A the annotations, B makes the star flare, G grows the planet. A click on the disk drops a clump of pebbles there.';
     let toastTimer = 0, toastSwap = 0, toastMsg = null;   // toastMsg: the text showing, in both languages
     // shows a text for ms; one already showing fades out first (0.25 s), so texts never swap abruptly
     const say = (ja_, en, ms) => {
@@ -2667,7 +2789,10 @@ void main(){
       rim = gapRim(d); trap = trapOf(d);
     }
 
-    // The camera looks at the star, or (follow) at the planet, turning with its orbit. Every change of view (buttons,
+    // The camera looks at the star, or (follow) at the planet, turning with its orbit, or at a point moved from it by the
+    // pan (panV, au, in the frame that turns with the view: the slow spin, or the planet's orbit, so that what is framed
+    // stays framed; Shift+drag, the middle or right button, two fingers, Shift+arrows; Home and the planet's view bring it
+    // back, the cut looks at the star and restores it when closed). Every change of view (buttons,
     // keys, the wheel, the tour) flies there: the view (elevation, azimuth the shorter way round, ln distance) and the
     // point looked at each move on a cubic Hermite curve that starts with the camera's present velocity, so that a
     // flight redirected on the way (a second click, a held key, the wheel) carries on smoothly, and ends at rest. The
@@ -2678,6 +2803,19 @@ void main(){
     let follow = false, flyV = null, flyT = null, camT = [0, 0, 0], camEl = opt.el, camAz = opt.az, camD = opt.dist;
     let camV = [0, 0, 0], camTV = [0, 0, 0];   // velocities of the view and of the point looked at, per second
     const viewOff = () => (follow ? planetPhi(time) : reduce ? 0 : opt.spin * time);
+    let panV = [0, 0, 0];
+    const PAN_MAX = 400;
+    // the point looked at now (without a flight): the star or the planet, and the pan turned with the view
+    const lookAt = () => {
+      const B = follow ? planetPos(time) : [0, 0, 0], a = viewOff(), c = Math.cos(a), s = Math.sin(a);
+      return [B[0] + c * panV[0] - s * panV[1], B[1] + s * panV[0] + c * panV[1], B[2] + panV[2]];
+    };
+    // the pan that makes the point looked at P (the inverse of lookAt)
+    const panOf = (P) => {
+      const B = follow ? planetPos(time) : [0, 0, 0], a = viewOff(), c = Math.cos(a), s = Math.sin(a), x = P[0] - B[0], y = P[1] - B[1];
+      return [c * x + s * y, -s * x + c * y, P[2] - B[2]];
+    };
+    const clampPan = (v) => { const m = Math.hypot(v[0], v[1], v[2]); return m > PAN_MAX ? v.map((x) => x * PAN_MAX / m) : v; };
     // position (out) and velocity (vel) along a flight now; true when it has arrived
     function hermite(fl, p1, out, vel) {
       const u = Math.min(1, (performance.now() - fl.t0) / (1000 * fl.dur)), u2 = u * u, u3 = u2 * u;
@@ -2693,7 +2831,7 @@ void main(){
       if (reduce || !W || !cam) { flyV = flyT = null; return; }
       const now = performance.now(), p0 = [camEl, camAz, Math.log(camD)], to = [elUser, azUser + viewOff(), Math.log(opt.dist)];
       to[1] = p0[1] + wrapPi(to[1] - p0[1]);
-      const Tl = follow ? planetPos(time) : [0, 0, 0], dT = Math.hypot(Tl[0] - camT[0], Tl[1] - camT[1], Tl[2] - camT[2]);
+      const Tl = lookAt(), dT = Math.hypot(Tl[0] - camT[0], Tl[1] - camT[1], Tl[2] - camT[2]);
       const m = Math.abs(to[0] - p0[0]) + Math.abs(to[1] - p0[1]) * Math.cos(p0[0]) + Math.abs(to[2] - p0[2]) + dT / Math.max(1, Math.min(camD, opt.dist));
       const dur = Math.min(FLY_MAX, FLY_MIN + 0.45 * m);
       flyV = { t0: now, dur, p0, v0: camV.slice() };
@@ -2702,15 +2840,24 @@ void main(){
     }
     // a drag or a pinch takes over: the view is left where the flight has brought it
     const takeOver = () => {
+      if (flyT) { panV = clampPan(panOf(camT)); flyT = null; camTV = [0, 0, 0]; }
       if (!flyV) return;
       elUser = clampEl(camEl); azUser = camAz - viewOff(); opt.dist = camD; flyV = null; camV = [0, 0, 0];
+    };
+    // the pan by a move of dx, dy pixels on the screen: the point looked at moves against it in the picture's plane, as
+    // far as a pixel spans at its distance, so that what is under the pointer follows it
+    const panBy = (dx, dy) => {
+      if (!basis || !Hh) return;
+      const k = 2 * camD * Math.tan(opt.fov / 2) / Hh, P = lookAt();
+      for (let i = 0; i < 3; i++) P[i] += (-dx * basis.r[i] + dy * basis.u[i]) * k;
+      panV = clampPan(panOf(P));
     };
     // The overlay leaves out points nearer the camera than zN (behind it, or so near that they would be thrown far off the
     // screen): in proportion to the camera's distance from the point it looks at, up to 0.05 au, so that close to the
     // star (0.04 au) the lines in front of it and the scale bar stay (a fixed 0.05 au dropped them inside 0.1 au)
     let zN = 0.05;
     function camera() {
-      const Tl = follow ? planetPos(time) : [0, 0, 0], vl = [elUser, azUser + viewOff(), Math.log(opt.dist)];
+      const Tl = lookAt(), vl = [elUser, azUser + viewOff(), Math.log(opt.dist)];
       let T = Tl, v = vl;
       if (flyT) { const o = [0, 0, 0]; if (hermite(flyT, Tl, o, camTV)) { flyT = null; camTV = [0, 0, 0]; } else T = o; }
       if (flyV) {
@@ -2876,7 +3023,9 @@ void main(){
       dead: mkS('path', { fill: 'none', stroke: '#c9d4ff', 'stroke-opacity': 0.75, 'stroke-width': 1.2, 'stroke-dasharray': '1.5 3.5', 'stroke-linecap': 'round' }),
       acc: mkS('path', { fill: 'none', stroke: '#ffbe6a', 'stroke-opacity': 0.95, 'stroke-width': 1.3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
       // the 1/4 cut's edge, where its two planes meet along the axis, on the far side of the disk from the camera
-      edge: mkS('path', { fill: 'none', stroke: '#dfeaff', 'stroke-opacity': 0.6, 'stroke-width': 1, 'stroke-dasharray': '3 4' })
+      edge: mkS('path', { fill: 'none', stroke: '#dfeaff', 'stroke-opacity': 0.6, 'stroke-width': 1, 'stroke-dasharray': '3 4' }),
+      // the X-points on the face, close to the star (where the star's closed lines meet the disk's open ones)
+      xpt: mkS('path', { fill: 'none', stroke: '#ffecaa', 'stroke-opacity': 0.95, 'stroke-width': 1.6, 'stroke-linecap': 'round' })
     };
     // the dead zone's top, z_k(R), where there is one (from the thermally ionized edge out to where it ends)
     const deadTop = logspace(0.27, 7, 160).map((R) => [R, zKinkHJS(R) * Hof(R)]).filter(([, z]) => z > 0);
@@ -2932,7 +3081,7 @@ void main(){
         cbarTicks.setAttribute('d', '');
         let x = 18, y = 25, right = 18 + textW(title);
         // (close to the star, the magnetosphere's regions too; on a narrow panel the swatches wrap onto more rows)
-        const sw = q === 'layers' && magFrame.vis > 0.5 ? [...c.swatches, ['#9a7adb', '磁気圏', 'magnetosphere'], ['#ff6b9e', '降着流', 'accretion stream'], ['#faa385', 'ダストのないガス', 'dust-free gas']] : c.swatches;
+        const sw = q === 'layers' && magFrame.vis > 0.5 ? [...c.swatches, ['#9a7adb', '磁気圏', 'magnetosphere'], ['#ff5c80', '降着カーテン', 'accretion curtain'], ['#faa385', 'ダストのないガス', 'dust-free gas']] : c.swatches;
         sw.forEach(([col, ja_, en], i) => {
           const t = ja() ? ja_ : en, w = 14 + textW(t);
           if (x > 18 && x + w > W - 14) { x = 18; y += 17; }
@@ -2979,7 +3128,7 @@ void main(){
         coE.texts = Array.from({ length: 6 }, () => mk('text', { class: 'disk-label', stroke: '#0a0d18', 'stroke-width': 3, 'stroke-opacity': 0.75, 'paint-order': 'stroke' }));
       }
       const j = ja(), rng = coRange(), mode = opt.coMode, key = mode + ':' + (mode === 'm1' ? rng.toFixed(1) : '');   // (the colours; the ticks are set each frame)
-      const div = (u) => { const v = 2 * u - 1, g = [0.86, 0.87, 0.90], b = [0.20, 0.36, 0.92], r = [0.88, 0.16, 0.12]; return g.map((c, i) => c + ((v < 0 ? b : r)[i] - c) * Math.abs(v)); };
+      const div = (u) => { const v = 2 * u - 1, g = [0.60, 0.61, 0.64], b = [0.20, 0.36, 0.92], r = [0.88, 0.16, 0.12]; return g.map((c, i) => c + ((v < 0 ? b : r)[i] - c) * Math.abs(v)); };
       const spec = mode === 'm1' ? { col: div, ticks: [[0, '−' + rng.toFixed(0)], [0.5, '0'], [1, '+' + rng.toFixed(0)]], title: ['平均の視線速度 (km/s、赤は遠ざかる)', 'mean line-of-sight velocity (km/s, red receding)'] }
         : mode === 'm0' ? { col: (u) => cmapJS(u, 'inferno'), ticks: coTicks(900 * Math.exp(coLn), [1 / 9, 4 / 9, 1]), title: ['CO の積分強度 (K km/s)', 'CO integrated intensity (K km/s)'] }
         : { col: (u) => cmapJS(u, 'inferno'), ticks: coTicks(220 * Math.exp(coLn), [25 / 220, 100 / 220, 1]), title: ['CO の輝度温度 (K)', 'CO brightness temperature (K)'] };
@@ -3164,8 +3313,9 @@ void main(){
       const boxes = [[0, 0, CBW + 30, 52]], textW = (t) => [...t].reduce((w, c) => w + (c.charCodeAt(0) > 0x2e80 ? 11 : 6.3), 0);
       const place = (x, y, t, anchor) => {
         const w = textW(t), x0 = anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x, b = [x0 - 2, y - 11, x0 + w + 2, y + 3];
-        if (b[0] < 2 || b[2] > W - 2 || b[1] < 2 || b[3] > Hh - 24 || boxes.some((o) => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])) return;
+        if (b[0] < 2 || b[2] > W - 2 || b[1] < 2 || b[3] > Hh - 24 || boxes.some((o) => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])) return false;
         boxes.push(b); sLabel(li++, x, y, t, anchor);
+        return true;
       };
       const at = (pts, xFrac) => { let best = null; for (const [R, z] of pts) { const q = sp(R, z); if (inView(q) && (!best || Math.abs(q[0] - xFrac * W) < Math.abs(best[0] - xFrac * W))) best = q; } return best; };
       if (dA) {
@@ -3188,11 +3338,7 @@ void main(){
           [[[2.0, sideA * za(2.0)], [2.8, sideA * za(2.8)], [3.8, sideA * za(3.8)]], ja_ ? '降着層' : 'accretion layer'],
           [[[2.5, 2.2 * zBase(2.5)], [3.5, 2.2 * zBase(3.5)]], ja_ ? '風' : 'wind']];
         for (const [pts, t] of tries) { const q2 = at(pts, 0.6); if (q2) place(q2[0] + 4, q2[1] + 4, t); }
-        // close to the star: the magnetosphere and the dust-free gas disk
-        if (magFrame.vis > 0.5) {
-          let q2 = sp(0.55 * MAG.RT, 0.5 * MAG.RT); if (inView(q2)) place(q2[0], q2[1], ja_ ? '磁気圏' : 'magnetosphere', 'middle');
-          q2 = sp(0.5 * (MAG.RT + MODEL.R_IN), 0); if (inView(q2)) place(q2[0], q2[1] + 16, ja_ ? 'ダストのないガス円盤' : 'dust-free gas disk', 'middle');
-        }
+        // (close to the star: the magnetosphere's labels, on every face, below)
       } else {
         q = at(deadTop.filter((pt) => pt[0] > 1.2 && pt[0] < 3), 0.7); if (q) place(q[0], q[1] + 13, ja_ ? 'デッドゾーンの上端' : 'top of the dead zone', 'middle');
       }
@@ -3215,6 +3361,37 @@ void main(){
         if (inView(qL)) place(qL[0] + 8, qL[1], sz < 0 ? (ja_ ? '円盤の下の空間(切り口ごしに)' : 'the space under the disk, through the cut') : (ja_ ? '円盤の上の空間(切り口ごしに)' : 'the space over the disk, through the cut'));
       }
       sP.edge.setAttribute('d', dE);
+      // close to the star, on every face: the closed magnetosphere (no disk there), the curtains' cross-section (named, so
+      // that they are not taken for the disk's own flows), the X-points at the truncation radius, the dust-free gas disk
+      let dXp = '';
+      if (magFrame.vis > 0.5 && opt.sliceQ !== 'none') {
+        let q2 = sp(0.55 * MAG.RT, 0.45 * MAG.RT); if (inView(q2)) place(q2[0], q2[1], ja_ ? '磁気圏(閉じた磁力線、円盤なし)' : 'magnetosphere (closed lines, no disk)', 'middle');
+        // (the curtain's label where a curtain crosses the face: of the four places, each face and each hemisphere, the
+        // densest, as magAz on the GPU with the dipole as it has turned)
+        const Lc = MAG.RT * (1 + 0.5 * MAG.DL), th = 0.95, rr = Lc * Math.sin(th) * Math.sin(th), { ax: mA, e1: mE } = magFrame;
+        const mE2 = [mA[1] * mE[2] - mA[2] * mE[1], mA[2] * mE[0] - mA[0] * mE[2], mA[0] * mE[1] - mA[1] * mE[0]];
+        const cands = [];
+        for (const sr of [1, -1]) for (const sz of [1, -1]) {
+          const e = cutE[sr > 0 ? 1 : 0], P = [rr * Math.sin(th) * e[0], rr * Math.sin(th) * e[1], sz * rr * Math.cos(th)], r3 = Math.hypot(...P);
+          const cz = (P[0] * mA[0] + P[1] * mA[1] + P[2] * mA[2]) / r3, phm = Math.atan2(P[0] * mE2[0] + P[1] * mE2[1] + P[2] * mE2[2], P[0] * mE[0] + P[1] * mE[1] + P[2] * mE[2]);
+          const dph = cz > 0 ? phm : Math.PI - Math.abs(phm);
+          cands.push({ w: Math.pow(0.5 + 0.5 * Math.cos(dph), 3), sr, sz });
+        }
+        // (the densest place where the label fits)
+        for (const c of cands.sort((a2, b2) => b2.w - a2.w)) {
+          if (c.w < 0.3) break;
+          q2 = sp(c.sr * rr * Math.sin(th), c.sz * rr * Math.cos(th));
+          if (inView(q2) && place(q2[0] + (c.sr > 0 ? 8 : -8), q2[1] + (c.sz > 0 ? -10 : 14), ja_ ? '磁気圏降着(カーテン)' : 'magnetospheric accretion (curtain)', c.sr > 0 ? 'start' : 'end')) break;
+        }
+        for (const sr of [1, -1]) {
+          const qx = sp(sr * MAG.RT, 0);
+          if (qx[2] <= zN || !inView(qx)) continue;
+          dXp += 'M' + (qx[0] - 5) + ' ' + (qx[1] - 5) + 'L' + (qx[0] + 5) + ' ' + (qx[1] + 5) + 'M' + (qx[0] - 5) + ' ' + (qx[1] + 5) + 'L' + (qx[0] + 5) + ' ' + (qx[1] - 5);
+        }
+        q2 = sp(MAG.RT, 0); if (inView(q2)) place(q2[0] + 8, q2[1] - 8, ja_ ? 'X 点' : 'X-point');
+        q2 = sp(0.5 * (MAG.RT * (1 + MAG.DL) + MODEL.R_IN), 0); if (inView(q2)) place(q2[0], q2[1] + 16, ja_ ? 'ダストのないガス円盤' : 'dust-free gas disk', 'middle');
+      }
+      sP.xpt.setAttribute('d', dXp);
       if (face) g.labels.forEach((lb, i) => {
         const q2 = lb.pts ? at(lb.pts, 0.55 + 0.08 * (i % 5)) : sp(lb.R, lb.z);
         if (inView(q2)) place(q2[0] + 4, q2[1] - 4, lb.t);
@@ -3378,7 +3555,7 @@ void main(){
       // (a new view: the exposure is measured afresh, with its moves counted anew; a new exposure or CO range: measured again)
       const ne = sig.length - 2, viewNew = sig.length !== lastSig.length || sig.some((v, i) => i < ne && v !== lastSig[i]);
       if (viewNew || sig[ne] !== lastSig[ne] || sig[ne + 1] !== lastSig[ne + 1]) { accN = 0; aeFresh = false; coFresh = false; }
-      const key = [Math.round(10 * Math.log(Math.hypot(...cam))), Math.round(20 * camEl), Math.round(20 * camAz), lookNow, opt.mode, opt.slice ? opt.cut + opt.sliceQ : '', follow, msAmp, W, Hh, opt.coMode, opt.coV].join();
+      const key = [Math.round(10 * Math.log(Math.hypot(...cam))), Math.round(20 * camEl), Math.round(20 * camAz), ...panV.map((v) => Math.round(10 * v / camD)), lookNow, opt.mode, opt.slice ? opt.cut + opt.sliceQ : '', follow, msAmp, W, Hh, opt.coMode, opt.coV].join();
       if (key !== aeKey) { aeKey = key; aeTries = 0; aeLo = -Infinity; aeHi = Infinity; coTries = 0; coLo = -Infinity; coHi = Infinity; aeGen++; }
       lastSig = sig;
       const acc = accN;
@@ -3672,39 +3849,43 @@ void main(){
       c.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(4.5)', opacity: 0 }], { duration: 900, easing: 'ease-out', fill: 'forwards' });
       setTimeout(() => c.remove(), 950);
     };
-    const ptrs = new Map(); let pinch0 = 0, distPinch = 0;
+    const ptrs = new Map(); let pinch0 = 0, distPinch = 0, panning = false;
+    // (the right button pans: no menu over the picture)
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault(), on);
     canvas.addEventListener('pointerdown', (e) => {
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       // (only a real pointer can be captured; events made by a script have none)
       if (e.isTrusted) canvas.setPointerCapture(e.pointerId);
       takeOver(); stopTour(false);
-      if (ptrs.size === 1) { dragging = true; moved = false; px = e.clientX; py = e.clientY; }
+      if (ptrs.size === 1) { dragging = true; moved = false; px = e.clientX; py = e.clientY; panning = e.shiftKey || e.button === 1 || e.button === 2; if (e.button === 1) e.preventDefault(); }
       else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); distPinch = opt.dist; moved = true; }
     }, on);
     canvas.addEventListener('pointermove', (e) => {
       const p = ptrs.get(e.pointerId); if (!p) return;
       if (ptrs.size === 2) {
+        // two fingers: their middle moves the point looked at, their spread zooms
         const [a, b] = [...ptrs.values()], mx = 0.5 * (a.x + b.x), my = 0.5 * (a.y + b.y);
         p.x = e.clientX; p.y = e.clientY;
         const mx2 = 0.5 * (a.x + b.x), my2 = 0.5 * (a.y + b.y), d2 = Math.hypot(a.x - b.x, a.y - b.y);
-        azUser -= (mx2 - mx) * 0.006; elUser = clampEl(elUser + (my2 - my) * 0.006);
+        panBy(mx2 - mx, my2 - my);
         if (pinch0 > 0 && d2 > 0) opt.dist = Math.min(DMAX, Math.max(dmin(), distPinch * pinch0 / d2));
         touched(); return;
       }
       if (!dragging) return;
       const dx = e.clientX - px, dy = e.clientY - py;
       if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      if (panning) { panBy(dx, dy); px = e.clientX; py = e.clientY; p.x = e.clientX; p.y = e.clientY; touched(); return; }
       azUser -= dx * 0.006;
       if (!coarse || e.pointerType === 'mouse') elUser = clampEl(elUser + dy * 0.006);
       px = e.clientX; py = e.clientY; p.x = e.clientX; p.y = e.clientY;
       touched();
     }, on);
-    const endPtr = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0; if (ptrs.size === 0) dragging = false; };
+    const endPtr = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0; if (ptrs.size === 0) { dragging = false; panning = false; } };
     canvas.addEventListener('pointercancel', (e) => { endPtr(e); moved = true; }, on);
     canvas.addEventListener('pointerup', (e) => {
-      const wasDrag = moved; endPtr(e);
+      const wasDrag = moved, wasPan = panning; endPtr(e);
       if (wasDrag) emitState();
-      if (wasDrag || ptrs.size) return;
+      if (wasDrag || ptrs.size || wasPan || e.button > 0) return;   // (a click of the middle or right button, or with Shift, does nothing)
       // click: drop pebbles where the ray meets the midplane
       const rect = canvas.getBoundingClientRect();
       // the star: an outburst
@@ -3738,10 +3919,12 @@ void main(){
       if (document.activeElement !== canvas && !e.ctrlKey && !e.metaKey) { wheelHint(); return; }
       e.preventDefault(); stopTour(false); zoomBy(Math.exp(e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015)));
     }, { passive: false, signal: ac.signal });
-    // The keys: arrows turn, + and - zoom, Home goes back to the first view, space pauses; 1 to 5 the views
-    // (VIEWS, in step with the preview page's buttons), P the planet, F the field lines, S the slice, A the annotations.
+    // The keys: arrows turn (with Shift they move the point looked at, by a tenth of the picture), + and - zoom, Home goes
+    // back to the first view and to the star, space pauses; 1 to 5 the views' angles (VIEWS, in step with the preview
+    // page's buttons: the distance and the point looked at stay), P the planet, F the field lines, S the slice, A the
+    // annotations.
     const VIEWS = [[el0 * 180 / Math.PI, az0 * 180 / Math.PI, dist0], [10, -80, 85], [2, -80, 85], [89, -65, 100], [-14, -80, 85]];
-    const PLANET_VIEW = { p: 1, el: 30, az: 160, d: 1.6 };
+    const PLANET_VIEW = { p: 1, el: 30, az: 160, d: 1.6, tx: 0, ty: 0, tz: 0 };
     // (Tab and the modifiers alone do not stop the tour: moving the focus is not taking over)
     const QUIET_KEYS = new Set(['Tab', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock']);
     canvas.addEventListener('keydown', (e) => {
@@ -3749,12 +3932,13 @@ void main(){
       if (!QUIET_KEYS.has(e.key)) stopTour(false);
       const k = e.key; let used = true;
       const view = (st) => { if (opt.slice) box.diskSlice(false); box.diskSet({ ...st, fly: 1 }); };
-      if (k === 'ArrowLeft') { azUser += 0.08; startFly(); } else if (k === 'ArrowRight') { azUser -= 0.08; startFly(); }
+      if (e.shiftKey && k.startsWith('Arrow')) { const a = 0.1 * Hh; panBy(k === 'ArrowLeft' ? -a : k === 'ArrowRight' ? a : 0, k === 'ArrowUp' ? -a : k === 'ArrowDown' ? a : 0); startFly(); }
+      else if (k === 'ArrowLeft') { azUser += 0.08; startFly(); } else if (k === 'ArrowRight') { azUser -= 0.08; startFly(); }
       else if (k === 'ArrowUp') { elUser = clampEl(elUser + 0.05); startFly(); } else if (k === 'ArrowDown') { elUser = clampEl(elUser - 0.05); startFly(); }
       else if (k === '+' || k === '=') zoomBy(0.8); else if (k === '-' || k === '_') zoomBy(1.25);
-      else if (k === 'Home') { box.diskSet({ p: 0, slice: 0, el: el0 * 180 / Math.PI, az: az0 * 180 / Math.PI, d: dist0, fly: 1 }); }
+      else if (k === 'Home') { box.diskSet({ p: 0, slice: 0, el: el0 * 180 / Math.PI, az: az0 * 180 / Math.PI, d: dist0, tx: 0, ty: 0, tz: 0, fly: 1 }); }
       else if (k === ' ') box.diskPlay(paused);
-      else if (k >= '1' && k <= '5') { const v = VIEWS[Number(k) - 1]; view({ p: 0, el: v[0], az: v[1], d: v[2] }); }
+      else if (k >= '1' && k <= '5') { const v = VIEWS[Number(k) - 1]; view({ p: 0, el: v[0], az: v[1] }); }
       else if (k === 'p' || k === 'P') view(PLANET_VIEW);
       else if (k === 'f' || k === 'F') box.diskField(!showField);
       else if ((k === 's' || k === 'S') && opt.look === 'model') { if (!opt.slice) box.diskSlice(true, null, 'half'); else if (opt.cut === 'half') box.diskSlice(true, null, 'quarter'); else box.diskSlice(false); }   // none, 1/2, 1/4 (not in the observed looks)
@@ -3817,12 +4001,13 @@ void main(){
     // (to 0.01 degree and 0.001 au, so that a link restores the picture to within a pixel)
     const deg = (r) => Math.round(r * 18000 / Math.PI) / 100;
     // az is measured from the planet's azimuth while following it (p = 1)
-    box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 1000) / 1000, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? (opt.cut === 'quarter' ? 2 : 1) : 0, sq: opt.sliceQ, p: follow ? 1 : 0, ann: opt.ann ? 1 : 0, look: opt.look, ms: opt.ms ? 1 : 0, asym: opt.asym ? 1 : 0, marks: opt.marks ? 1 : 0, coMode: opt.coMode, coV: opt.coV });
+    box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 1000) / 1000, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? (opt.cut === 'quarter' ? 2 : 1) : 0, sq: opt.sliceQ, p: follow ? 1 : 0, ann: opt.ann ? 1 : 0, look: opt.look, ms: opt.ms ? 1 : 0, asym: opt.asym ? 1 : 0, marks: opt.marks ? 1 : 0, coMode: opt.coMode, coV: opt.coV,
+      tx: Math.round(panV[0] * 1e4) / 1e4, ty: Math.round(panV[1] * 1e4) / 1e4, tz: Math.round(panV[2] * 1e4) / 1e4 });
     // A state from outside (a link, the page, a script) is checked first: the numbers must be finite (a link copied with
     // text after it, or edited by hand, must not poison the picture: a NaN in the camera or the clock would blank it),
     // the distance and the speed positive, the components a mask of the six, the time within [0, TIME_MAX] (the shader's
     // clock is single precision); what fails is left as it is.
-    const NUM_KEYS = ['slice', 'p', 'time', 'el', 'az', 'd', 'mode', 'field', 'ann', 'ms', 'asym', 'marks', 'coV', 'speed', 'paused', 'fly'];
+    const NUM_KEYS = ['slice', 'p', 'time', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'mode', 'field', 'ann', 'ms', 'asym', 'marks', 'coV', 'speed', 'paused', 'fly'];
     const checked = (raw) => {
       const st = { ...raw };
       for (const k of NUM_KEYS) {
@@ -3836,6 +4021,7 @@ void main(){
       if (st.time != null) st.time = Math.min(TIME_MAX, Math.max(0, st.time));
       if (st.mode != null) st.mode = Math.round(st.mode) & 63;
       if (st.slice != null) st.slice = Math.min(2, Math.max(0, Math.round(st.slice)));
+      for (const k of ['tx', 'ty', 'tz']) if (st[k] != null) st[k] = Math.min(PAN_MAX, Math.max(-PAN_MAX, st[k]));
       return st;
     };
     box.diskSet = (raw) => {
@@ -3851,6 +4037,7 @@ void main(){
       if (st.el != null) elUser = clampEl(st.el * Math.PI / 180);
       if (st.az != null) azUser = st.az * Math.PI / 180 - (follow || reduce ? 0 : opt.spin * time);
       if (st.d) opt.dist = Math.min(DMAX, Math.max(dmin(), st.d));
+      if (st.tx != null || st.ty != null || st.tz != null) panV = clampPan([st.tx ?? panV[0], st.ty ?? panV[1], st.tz ?? panV[2]]);
       if (st.mode != null) opt.mode = Number(st.mode);
       if (st.field != null) showField = !!Number(st.field);
       if (st.ann != null) opt.ann = !!Number(st.ann);
@@ -3868,7 +4055,7 @@ void main(){
       if (st.speed) speed = Number(st.speed);
       if (st.paused != null) paused = !!Number(st.paused);
       // a new view: with fly the camera flies there from where it is, otherwise it is there at once
-      if (st.el != null || st.az != null || st.d != null || st.p != null || st.slice != null) { if (Number(st.fly)) startFly(); else flyV = flyT = null; }
+      if (st.el != null || st.az != null || st.d != null || st.p != null || st.slice != null || st.tx != null || st.ty != null || st.tz != null) { if (Number(st.fly)) startFly(); else flyV = flyT = null; }
       touched();
     };
     box.diskView = (elevationDeg, azimuthDeg, distance) => box.diskSet({ el: elevationDeg, az: azimuthDeg, d: distance, p: 0 });
@@ -3880,7 +4067,7 @@ void main(){
     // zooms, a key but Tab and the modifiers) or asks; the page stops it at any other operation too. The page learns
     // of it from disktour events. ---
     const comps = (bits) => { if ((opt.mode & bits) !== bits) { box.diskSet({ mode: opt.mode | bits }); box.dispatchEvent(new CustomEvent('diskmode', { detail: { mode: opt.mode } })); } };
-    const home = () => box.diskSet({ p: 0, el: VIEWS[0][0], az: VIEWS[0][1], d: VIEWS[0][2], fly: 1 });
+    const home = () => box.diskSet({ p: 0, el: VIEWS[0][0], az: VIEWS[0][1], d: VIEWS[0][2], tx: 0, ty: 0, tz: 0, fly: 1 });
     const TOUR = [
       { go: () => {
         if (opt.slice) box.diskSlice(false);
@@ -3895,8 +4082,8 @@ void main(){
         ja: '内側の数 au に寄りました。約 0.9 au のスノーラインの外では、赤道面に沈んだ小石が氷をまとっています。3 au の惑星がギャップを開け、渦巻きの波を立てています。',
         en: 'Closer in, the inner few au: beyond the snow line near 0.9 au the pebbles settled at the midplane are icy, and a planet at 3 au opens a gap and raises spiral waves.' },
       { go: () => { if (opt.slice) box.diskSlice(false); box.diskSet({ p: 0, el: 22, az: -65, d: 0.15, fly: 1 }); }, ms: 11000,
-        ja: '星のすぐ近く(0.15 au)。星の双極子磁場が円盤を 0.05 au で切り取り、ガスは閉じた磁力線に沿って星へ落ちています(降着カラム、着地のときは秒速約 400 km)。着地点は熱いスポットになり、星と一緒に回ります。0.05〜0.08 au はダストのないガスの円盤です。ここでは時計を遅くしています。',
-        en: 'Right next to the star (0.15 au). Its dipole field truncates the disk at 0.05 au; the gas falls onto the star along the closed field lines (accretion columns, about 400 km/s at impact), making hot spots that turn with the star. Between 0.05 and 0.08 au the gas disk has no dust. The clock runs slower here.' },
+        ja: '星のすぐ近く(0.15 au)。星の双極子磁場が円盤を 0.05 au で切り取り(内側は円盤のない磁気圏)、ガスは閉じた磁力線に沿って、2 枚の弧状のカーテンになって星へ落ちています(着地のときは秒速約 400 km)。着地点は弧状の熱いスポットになり、星と一緒に回ります。0.05〜0.08 au はダストのないガスの円盤です。ここでは時計を遅くしています。',
+        en: 'Right next to the star (0.15 au). Its dipole field truncates the disk at 0.05 au (inside, the magnetosphere holds no disk); the gas falls onto the star along the closed field lines as two arc-shaped curtains (about 400 km/s at impact), landing in arcs of hot spots that turn with the star. Between 0.05 and 0.08 au the gas disk has no dust. The clock runs slower here.' },
       { go: () => { comps(16); if (opt.slice) box.diskSlice(false); box.diskPlanetView(); }, ms: 9500,
         ja: '3 au の木星質量の惑星です。ガスを押しのけてギャップを開け、まわりに周惑星円盤を持っています。後ろに明るく見えるのは、星の光を受けたギャップの外側の壁です。',
         en: 'A Jupiter-mass planet at 3 au. It pushes the gas aside into a gap and has its own circumplanetary disk; behind it, the outer wall of the gap is lit by the star.' },
@@ -3938,8 +4125,8 @@ void main(){
       if (sq && own(SLICE_Q, sq)) opt.sliceQ = sq;
       const kind = cut === 2 || cut === 'quarter' ? 'quarter' : cut === 1 || cut === 'half' ? 'half' : opt.cut;
       if (on && !opt.slice) {
-        const st = box.diskState(); sliceBefore = { el: st.el, az: st.az, d: st.d, p: st.p };
-        box.diskSet({ slice: kind === 'quarter' ? 2 : 1, ...CUT_VIEW[kind], fly: 1 });
+        const st = box.diskState(); sliceBefore = { el: st.el, az: st.az, d: st.d, p: st.p, tx: st.tx, ty: st.ty, tz: st.tz };
+        box.diskSet({ slice: kind === 'quarter' ? 2 : 1, ...CUT_VIEW[kind], tx: 0, ty: 0, tz: 0, fly: 1 });
       } else if (on && kind !== opt.cut) box.diskSet({ slice: kind === 'quarter' ? 2 : 1, ...CUT_VIEW[kind], fly: 1 });
       // (back to the view before; to the usual view when the cut was opened by a link or a script, with no view kept)
       else if (!on && opt.slice) { box.diskSet({ slice: 0 }); box.diskSet({ ...(sliceBefore || { p: 0, el: VIEWS[0][0], az: VIEWS[0][1], d: VIEWS[0][2] }), fly: 1 }); sliceBefore = null; }
