@@ -140,18 +140,20 @@
   // a width of ~0.8 a for alpha = 1e-3; Kanagawa et al. 2015, 2016). Everything that follows from the gap takes the
   // same depth: the starlight on it, the pebbles (filtered out of the gap, and collected at the pressure maximum just
   // outside it once the gap is deep enough to make one, see trapOf), the wind launched from it, the wake and the slice.
-  // The wake, the spiral density wave the planet launches, follows Rafikov (2002) in shape; it is exaggerated (WAKE_A,
-  // see wake in the disk map) and, like the gap, drawn weaker from afar (DEPTH.WAKE_FAR). Close up, the planet and its
-  // circumplanetary disk (out to 0.4 Hill radii) show.
+  // The wake, the spiral density wave the planet launches, follows Rafikov (2002) in shape; its amplitude is the
+  // physical one (WAKE_P at WAKE_X0 from the orbit, decaying away from it), or exaggerated on demand (WAKE_A, WAKE_L:
+  // the waves' emphasis, opt.waves; see wake in the disk map), and, like the gap, drawn weaker from afar
+  // (DEPTH.WAKE_FAR). Close up, the planet and its circumplanetary disk (out to 0.4 Hill radii) show.
   const PLANET = (() => {
     const A = 3.0, Q = 1e-3, RH = A * Math.cbrt(Q / 3), W = 1.8 * RH;
-    return { A, Q, RH, W, HP: MODEL.H0 * Math.pow(A, 0.25), PHI0: 2.4, WAKE_A: 3.5, WAKE_L: 0.6 };
+    return { A, Q, RH, W, HP: MODEL.H0 * Math.pow(A, 0.25), PHI0: 2.4, WAKE_A: 3.5, WAKE_L: 0.6, WAKE_P: 1, WAKE_X0: 0.1 };
   })();
   // the gap's depth: FAR when the camera is beyond D1 au from the planet's orbit (the circle R = a in the midplane;
   // the usual view is at 23 au), NEAR within D0, eased in between. The distance to the orbit rather than to the planet,
   // so that the depth does not change as the planet goes round (seen from near the star, as in the slice). The wake's
-  // strength follows the same function, from WAKE_FAR of its full (exaggerated) amplitude afar to all of it near, so
-  // that from the usual view its arms do not stand out as rings. Both are choices for the picture.
+  // strength follows the same function, from WAKE_FAR of its amplitude afar to all of it near, so that from the usual
+  // view its arms do not stand out as rings (made for the exaggerated amplitude, and kept with the physical one). Both
+  // are choices for the picture.
   const DEPTH = { FAR: 0.3, NEAR: 0.98, D0: 4, D1: 18, WAKE_FAR: 0.2 };
   const GL_R0 = 1.8, GL_DR = 7.6 / 127;   // radii of the table of starlight on the gap (see gapLightTables)
   const WIND_LOW_JS = 0.1;                // the weaker side of the wind relative to the stronger, with the asymmetry (see uWindLow)
@@ -283,12 +285,13 @@ float accAmp(float R){ return smoothstep(0.4, 1.0, zKinkH(R)); }
 uniform float uPlanet;
 uniform float uPlanetPhi;
 uniform float uWake;        // the wake's strength (0 to 1): the planet's presence times the strength for the camera's distance
+uniform float uWakeX;       // the waves' emphasis (0: the wake's physical amplitude, 1: exaggerated; eased), see wake
 uniform vec3 uTrap;
 uniform vec3 uPlanetPos;
 uniform float uPlanetVis;   // the planet and its disk shown close up (see planetLight)
 const float R_CPD = ${G(+(0.4 * PLANET.RH).toFixed(4))};   // radius of the planet's disk, 0.4 Hill radii
 const float A_P = ${G(PLANET.A)}, GAP_W = ${G(+PLANET.W.toFixed(5))}, HP = ${G(+PLANET.HP.toFixed(5))};
-const float WAKE_A = ${G(PLANET.WAKE_A)}, WAKE_L = ${G(PLANET.WAKE_L)};
+const float WAKE_A = ${G(PLANET.WAKE_A)}, WAKE_L = ${G(PLANET.WAKE_L)}, WAKE_P = ${G(PLANET.WAKE_P)}, WAKE_X0 = ${G(PLANET.WAKE_X0)};
 // the factor by which the gap lowers Σ, and its ln
 float gapFactor(float R){
   if (uPlanet <= 0.0) return 1.0;
@@ -435,10 +438,15 @@ float gapLight(float R){
 // 2002): the spiral density wave launched by the planet, trailing outside its orbit and leading inside, along
 // phi_w = phi_p + sgn(x - 1) F(x) / h_p with x = R/a, F = 4.8 - 4 x^-1/4 - 0.8 x^5/4 and h_p = H/R at the planet. In this
 // thin disk (h_p = 0.04) both arms wind tightly: the outer one comes round again 1.5 au farther out at 4.5 au, the inner
-// one 1.2 au farther in at 2 au. Returns the relative excess of the gas density on the crest: WAKE_A (3.5) next to the
-// planet (at most about 3 at the edge of the gap), decaying over WAKE_L (0.6 a) away from it, out to 0.45 a and 2.3 a:
-// exaggerated (a Jupiter-mass planet raises crests of order unity near it) so that the arms read as waves. The crest is a scale
-// height wide, broadening as the wave travels (its shock widens), and widened further (and lowered, keeping its
+// one 1.2 au farther in at 2 au. Returns the relative excess of the gas density on the crest, out to 0.45 a and 2.3 a.
+// Its physical amplitude (uWakeX = 0, the default): WAKE_P (1) at |x - 1| = WAKE_X0 (0.1, 2.5 scale heights from the
+// orbit, about the gap's edge), as a planet of some 16 thermal masses (q = 1e-3 against h_p^3 = 6.4e-5) raises crests of
+// order unity next to it, its wake shocking within a scale height (Goodman & Rafikov 2001); beyond, the shock's jump
+// decays as |x - 1|^-3/4, the local asymptotic form (the N-wave's amplitude falls as t^-1/2 with t ∝ |x - 1|^5/2, on
+// top of the linear wave's growth as |x - 1|^1/2; its flux of angular momentum falls as |x - 1|^-5/4; Rafikov 2002):
+// 0.3 at 0.5 a from the orbit, 0.18 at a. Exaggerated with the waves' emphasis (uWakeX = 1, the button "波を強調"):
+// WAKE_A (3.5) decaying over WAKE_L (0.6 a), at most about 3 at the edge of the gap, so that the arms read as waves.
+// The crest is a scale height wide, broadening as the wave travels (its shock widens), and widened further (and lowered, keeping its
 // integral) where a texel or the pixel footprint across it is wider. It turns with the planet and grows and fades with
 // it; from afar it is drawn weaker, as the gap is drawn shallower (uWake, see DEPTH in the script); inside the gap the
 // planet's own disk takes over.
@@ -452,7 +460,8 @@ float wake(float R, float phi, float fp){
   float ax = abs(x - 1.0), w = H0 * pow(R, 1.25) * (1.0 + 0.5 * ax);
   float px = max(fp * R, 1.5 * R * (LNR_SPAN / uMapRes.x * sl + TAU / uMapRes.y) * c);   // footprint across the crest
   float wf2 = w * w + px * px, d = R * dphi * c;
-  return uWake * WAKE_A * exp(-ax / WAKE_L) * smoothstep(0.03, 0.10, ax) * smoothstep(0.42, 0.55, x) * (1.0 - smoothstep(2.0, 2.5, x))
+  float amp = mix(WAKE_P * pow(max(ax, WAKE_X0) / WAKE_X0, -0.75), WAKE_A * exp(-ax / WAKE_L), uWakeX);
+  return uWake * amp * smoothstep(0.03, 0.10, ax) * smoothstep(0.42, 0.55, x) * (1.0 - smoothstep(2.0, 2.5, x))
        * w * inversesqrt(wf2) * exp(-d * d / wf2);
 }
 // The streaks of the surface accretion (see ACC in the script): clumps form in the current layer and accrete (Mori, Bai &
@@ -892,10 +901,11 @@ uniform vec3 uMagE1;     // the zero of the magnetic azimuth: toward the tilt, p
 uniform float uMagT;     // the model's clock (modulo 600 s), for the columns' fluctuations
 // The cutaway: the part of space toward the camera between two vertical planes through the star (containing the
 // axis) is cut away, and the cut faces show a quantity in false colour (uSliceQ: 0 none, only the cut, 1 temperature,
-// 2 gas density, 3 optical depth toward the star). The planes' normals point toward the camera at ±uCutA from its
-// horizontal direction uSliceN (uSliceR the horizontal direction to the right): with uCutA = 0 they coincide and half
-// of space is cut away (the 1/2 cut, one face facing the viewer); with 45 degrees a quarter, a wedge of 90 degrees (the
-// 1/4 cut, two faces that open the interior like a book); a change between them turns the planes. uSliceZ scales
+// 2 gas density, 3 optical depth toward the star). One plane faces the camera (its normal the camera's horizontal
+// direction uSliceN; uSliceR the horizontal direction to the right), the other is turned from it toward the right by
+// 2 uCutA: with uCutA = 0 they coincide and half of space is cut away (the 1/2 cut, one face facing the viewer); with 45
+// degrees the quarter in front on the right (the 1/4 cut: its right face seen face-on, the other along the line of
+// sight, seen edge-on, the left half of the disk left whole); a change between them turns the second plane. uSliceZ scales
 // heights on the faces (1: true proportions; a stretch would also need the march behind in stretched coordinates).
 // uSliceOff: the planes' distance from the star toward the camera; they sweep in from the camera (or the edge of the
 // drawn region, when the camera is farther) when the cut opens and back out when it closes. During the sweep the faces are the plain cut (the quantity's
@@ -1099,7 +1109,9 @@ const float WIND_KR = length(vec2(WIND_CELLS.x / TAU * (1.125 * WIND_LIFE * LIFE
 // (Tried in the eighth round, see the notes: shells in step across the disk, arcs, pulses on the streamers, puffs of
 // other sizes, contrasts and speeds; this form is the one that reads as an outflow in the usual and edge-on views.)
 const vec2 PUFF_CELLS = vec2(10.0, 4.0);
-const float PUFF_P = ${G(PUFF.P)}, PUFF_DUTY = 0.25, PUFF_A = 10.0, PUFF_KEEP = 0.3, PUFF_TAU = 30.0, PUFF_SHARE = 0.3;
+// (round 12: quieter, the least that still shows the flow: half the contrast, PUFF_A 10 to 5, and 2 launches in 10,
+// PUFF_SHARE 0.3 to 0.2)
+const float PUFF_P = ${G(PUFF.P)}, PUFF_DUTY = 0.25, PUFF_A = 5.0, PUFF_KEEP = 0.3, PUFF_TAU = 30.0, PUFF_SHARE = 0.2;
 const float PUFF_K = 3.0, PUFF_KMAX = 60.0;
 float puffFactor(vec3 q, vec3 dq, float lr, float pc){
   if (uPuff <= 0.0) return 1.0;
@@ -1146,6 +1158,11 @@ float accColumn(float z0, float z1, float za, float ds, float dzh){
   float u0 = (z0 - za) / ACC_W;
   return ds / abs(dzh) * ACC_W * 1.2533141 * abs(erfA(u1 * 0.70710678) - erfA(u0 * 0.70710678));
 }
+#ifdef FULL
+// the cutaway (the quantity 'none'): along the rays that pass through the part cut away, the gas behind the cut is drawn
+// thinner (set per ray in main; see sampleDisk); the part left whole (the 1/4 cut's left half) keeps its look
+float gThin = 1.0;
+#endif
 // One step of the ray march, from the previous sample (with ln τ* = xPrev) to p over a length ds.
 // Returns emission and extinction per unit length for the gas and the wind, and the emission of the
 // irradiated skin integrated over the step (it is far thinner than a step, so it is integrated
@@ -1194,12 +1211,13 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     // midplane; warm only inside the snow line)
     float rho0 = exp(-lnR - cut + gl) * smoothstep(R_IN * 0.8, R_IN * 1.3, R) / (2.5066 * H);   // Sigma / (sqrt(2 pi) H)
     float rho = rho0 * exp(-0.5 * zh * zh) * dm.r * ed.x;   // ... e^(-z²/2H²)
-    // in the slice's open interior (the quantity 'none') the gas is drawn four times thinner, its glow and its extinction
+    // in the cutaway (the quantity 'none') the gas behind the cut is drawn four times thinner, its glow and its extinction
     // alike, so that the eye sees past the cut into the volume behind it (the depth, the inner disk's warm core, the far
-    // layers) instead of the glow of the first stretch behind the face
+    // layers) instead of the glow of the first stretch behind the face; only along the rays through the part cut away
+    // (gThin), so that what is left whole keeps its look
     float thin = 1.0;
 #ifdef FULL
-    if (uSliceQ == 0 && uSlice != 0) thin = mix(1.0, 0.25, uSliceFace);
+    thin = gThin;
 #endif
     ex = thin * K_G * rho * EXT * uComp.x;   // (the gas's absorption goes with the gas)
     // (beyond OUTER_R the glow is raised as the column thins, by R / OUTER_R, a picture of where the gas is)
@@ -1416,9 +1434,9 @@ vec3 sliceQuantities(float Rs, float z, float phi){
 // The stretch (tIn, tOut) of the ray in the part cut away (empty when tIn >= tOut): the intersection of the two
 // half-spaces dot(p, n_i) > uSliceOff, so a single stretch, as the part is convex.
 vec2 cutSpan(vec3 ro, vec3 rd){
-  float ca = cos(uCutA), sa = sin(uCutA), lo = -1e9, hi = 1e9;
+  float ca = cos(2.0 * uCutA), sa = sin(2.0 * uCutA), lo = -1e9, hi = 1e9;
   for (int i = 0; i < 2; i++) {
-    vec3 n = ca * uSliceN + (i == 0 ? sa : -sa) * uSliceR;
+    vec3 n = i == 0 ? ca * uSliceN + sa * uSliceR : uSliceN;
     float s0 = dot(ro, n) - uSliceOff, sv = dot(rd, n);
     if (abs(sv) < 1e-7) { if (s0 <= 0.0) return vec2(1e9, -1e9); }
     else if (sv > 0.0) lo = max(lo, -s0 / sv);
@@ -1718,7 +1736,41 @@ void magLayer(vec3 ro, vec3 rd, float jitter, vec3 starGlow, float tCut, vec2 tS
   if (hit) tr *= 1.0 - uMag;
 }
 #endif
+#ifdef FULL
+// The cut face seen through the point fc (in pixels of uRes): premultiplied, with its fade (uSliceFace); none where the
+// ray does not leave the part cut away there. The face alone is drawn at the screen's resolution (faceT in the script,
+// laid over the volume by SHOW_FS), so that its colours' boundaries and its edges are as sharp as the screen whatever
+// the render scale of the volume: uFacePass 1, one sample per pixel (into faceA); 2, from it, four samples on a rotated
+// grid where a pixel differs from one of its four neighbours (a boundary between colours, an edge), else the one.
+uniform int uFacePass;
+uniform sampler2D uFaceA;
+uniform int uFaceRdy;     // 1: faceA holds the face of this picture (drawn before the volume)
+uniform vec2 uFaceRes;    // its size (the screen's pixels)
+vec4 faceAt(vec2 fc){
+  vec2 uv = (fc / uRes) * 2.0 - 1.0;
+  vec3 rd = normalize(uBasis[2] + uTanHalf * (uv.x * (uRes.x / uRes.y) * uBasis[0] + uv.y * uBasis[1]));
+  vec2 cs = cutSpan(uCam, rd);
+  if (uSlice == 0 || uSliceFace <= 0.0 || !(cs.x < cs.y && cs.x <= 0.0 && cs.y > 0.0 && cs.y < 1e8)) return vec4(0.0);
+  vec4 f = sliceFace(uCam + rd * cs.y);
+  float a = f.a * uSliceFace;
+  return vec4(f.rgb * a, a);
+}
+#endif
 void main(){
+#ifdef FULL
+  // (the face alone, see faceAt)
+  if (uFacePass == 1) { fragColor = faceAt(gl_FragCoord.xy); return; }
+  if (uFacePass == 2) {
+    ivec2 ip = ivec2(gl_FragCoord.xy), mx = textureSize(uFaceA, 0) - 1;
+    vec4 c0 = texelFetch(uFaceA, ip, 0);
+    vec4 d = max(max(abs(texelFetch(uFaceA, min(ip + ivec2(1, 0), mx), 0) - c0), abs(texelFetch(uFaceA, max(ip - ivec2(1, 0), ivec2(0)), 0) - c0)),
+                 max(abs(texelFetch(uFaceA, min(ip + ivec2(0, 1), mx), 0) - c0), abs(texelFetch(uFaceA, max(ip - ivec2(0, 1), ivec2(0)), 0) - c0)));
+    if (max(max(d.r, d.g), max(d.b, d.a)) < 0.02) { fragColor = c0; return; }
+    vec2 fc = gl_FragCoord.xy;
+    fragColor = 0.25 * (faceAt(fc + vec2(0.125, 0.375)) + faceAt(fc + vec2(0.375, -0.125)) + faceAt(fc + vec2(-0.125, -0.375)) + faceAt(fc + vec2(-0.375, 0.125)));
+    return;
+  }
+#endif
   vec2 uv = ((gl_FragCoord.xy + uJit.xy) / uRes) * 2.0 - 1.0, uv0 = (gl_FragCoord.xy / uRes) * 2.0 - 1.0;
   float aspect = uRes.x / uRes.y;
   vec3 rd = normalize(uBasis[2] + uTanHalf * (uv.x * aspect * uBasis[0] + uv.y * uBasis[1]));
@@ -1739,20 +1791,37 @@ void main(){
   // the cutaway: from a camera in the part cut away the ray enters the kept part at tCut, where it meets a cut face
   // (rays that never reach it see only the sky); the face hides what lies behind it where it is opaque. While the
   // planes sweep they may pass the camera: from inside the kept part nothing is cut in front, and a ray that crosses
-  // the part cut away skips it (tSkip) or, when it leaves the kept part for good, ends there.
+  // the part cut away skips it (tSkip) or, when it leaves the kept part for good, ends there. The face itself is laid
+  // over at the screen's resolution (faceAt); here its opacity counts for the exposure's measurement, and what lies
+  // behind it is left out where it is opaque at the pixel and a pixel around (so that the volume, upsampled to the
+  // screen, has no dark rim along the face's edges).
   float tCut = 0.0, tEnd = 1e9;
   vec2 tSkip = vec2(1e9);
   vec4 face = vec4(0.0);
+  bool faceOpaque = false;
 #ifdef FULL
   if (uSlice != 0) {
     vec2 cs = cutSpan(ro, rd);
     if (cs.x < cs.y && cs.y > 0.0) {
       if (cs.x <= 0.0) {
         tCut = cs.y;
-        if (tCut < 1e8 && uSliceFace > 0.0) { face = sliceFace(ro + rd * tCut); face.a *= uSliceFace; }
+        if (tCut < 1e8 && uSliceFace > 0.0) {
+          face = sliceFace(ro + rd * tCut); face.a *= uSliceFace;
+          // (opaque over the screen's pixels this one reaches when upsampled, a render pixel around, and one more screen
+          // pixel, where the face's edge is smoothed: faceA at the corners of that square, which a straight edge across it
+          // cannot all miss)
+          if (face.a >= 0.999 && uFaceRdy != 0) {
+            vec2 c = gl_FragCoord.xy * uFaceRes / uRes, sc = uFaceRes / uRes + 1.0;
+            ivec2 mx = ivec2(uFaceRes) - 1;
+            faceOpaque = min(min(texelFetch(uFaceA, clamp(ivec2(c - sc), ivec2(0), mx), 0).a, texelFetch(uFaceA, clamp(ivec2(c + vec2(sc.x, -sc.y)), ivec2(0), mx), 0).a),
+                             min(texelFetch(uFaceA, clamp(ivec2(c + vec2(-sc.x, sc.y)), ivec2(0), mx), 0).a, texelFetch(uFaceA, clamp(ivec2(c + sc), ivec2(0), mx), 0).a)) >= 0.999;
+          }
+        }
       } else if (cs.y > 1e8) tEnd = cs.x;
       else tSkip = cs;
     }
+    // (the cutaway's thinner gas, along the rays through the part cut away)
+    if (uSliceQ == 0 && (tCut > 0.0 || tSkip.x < 1e8)) gThin = mix(1.0, 0.25, uSliceFace);
   }
 #endif
 
@@ -1767,7 +1836,7 @@ void main(){
   if (tPl <= tCut || (tPl > tSkip.x && tPl < tSkip.y)) tPl = 1e9;
 #endif
   float tCross = abs(rd.z) > 1e-5 ? -ro.z / rd.z : -1.0;
-  bool inside = b.y > b.x && face.a < 0.999;
+  bool inside = b.y > b.x && !faceOpaque;
   float jitter = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y) + uJit.z);   // interleaved gradient noise: finer grain than a hash
 #ifdef FULL
   if (uLook == 4) {
@@ -1780,14 +1849,14 @@ void main(){
 #ifdef FULL
   // the envelope: the part of its sphere in front of the cylinder (all of it when the ray misses the cylinder)
   vec2 be = vec2(1.0, 0.0);
-  if (uEnv > 0.0 && uLook <= 1 && face.a < 0.999) {
+  if (uEnv > 0.0 && uLook <= 1 && !faceOpaque) {
     be = boundsSphere(ro, rd, ENV_R); be.x = max(be.x, tCut); be.y = min(be.y, tEnd);
     envMarch(ro, rd, be.x, inside ? min(b.x, be.y) : be.y, jitter, tSkip, col, tr);
   }
 #endif
   // the midplane crossing may lie in the unlit outer disk, in front of or behind the marched part (or in
   // the half cut away)
-  bool sheetDone = tCross <= tCut || tCross >= tEnd || (tCross > tSkip.x && tCross < tSkip.y) || face.a >= 0.999;
+  bool sheetDone = tCross <= tCut || tCross >= tEnd || (tCross > tSkip.x && tCross < tSkip.y) || faceOpaque;
   if (!sheetDone && (!inside || tCross < b.x)) { sheet(ro + rd * tCross, rd, col, tr); sheetDone = true; }
   if (inside) {
     float t = b.x;
@@ -1850,7 +1919,7 @@ void main(){
   col *= pow(asinh(L / 0.012) / 7.2, 2.2) / L;
   float m = max(col.r, max(col.g, col.b));
   if (m > 1.0) col = mix(col / m, vec3(1.0), 1.0 - 1.0 / m);
-  col = mix(pow(col, vec3(1.0 / 2.2)), face.rgb, face.a);   // the cut face is a picture of a quantity, laid over in display values
+  col = pow(col, vec3(1.0 / 2.2));   // (the cut face, a picture of a quantity, is laid over in display values by SHOW_FS)
   fragColor = vec4(col, aeW);   // (alpha: see aeW)
 }`;
 
@@ -1877,13 +1946,19 @@ void main(){
 
   // The picture is drawn into a float target and shown by this pass, with a dither against banding: a still picture is
   // refined there (see the accumulation in draw).
+  // The display: the volume (accT, at the render scale) upsampled to the screen's pixels (bilinear), and the cut face
+  // (faceT, at the screen's resolution, premultiplied) laid over it in display values; dithered.
   const SHOW_FS = `#version 300 es
 precision highp float;
 out vec4 fragColor;
 uniform sampler2D uAcc;
+uniform sampler2D uFace;
+uniform vec2 uDev;
+uniform int uFaceOn;
 ${NOISE_GLSL}
 void main(){
-  vec3 c = texelFetch(uAcc, ivec2(gl_FragCoord.xy), 0).rgb;
+  vec3 c = texture(uAcc, gl_FragCoord.xy / uDev).rgb;
+  if (uFaceOn != 0) { vec4 f = texelFetch(uFace, ivec2(gl_FragCoord.xy), 0); c = c * (1.0 - f.a) + f.rgb; }
   fragColor = vec4(c + (hash12(gl_FragCoord.xy + 17.0) - 0.5) / 255.0, 1.0);
 }`;
 
@@ -2098,11 +2173,18 @@ void main(){
     const UWS = uniforms(progWS, ['uResW', 'uLayer0', 'uTime', 'uSeed']);
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
-    const UNAMES = ['uCutA', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
+    const UNAMES = ['uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
       'uPlanet', 'uTrap', 'uGapRim', 'uPlanetPos', 'uPlanetVis', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK'];
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS);
-    gl.useProgram(progShow); gl.uniform1i(gl.getUniformLocation(progShow, 'uAcc'), 6);
+    gl.useProgram(progShow); gl.uniform1i(gl.getUniformLocation(progShow, 'uAcc'), 6); gl.uniform1i(gl.getUniformLocation(progShow, 'uFace'), 11);
+    const uShowDev = gl.getUniformLocation(progShow, 'uDev'), uShowFace = gl.getUniformLocation(progShow, 'uFaceOn');
+    // (a texel of nothing on units 11 and 12 (the cut face, see faceT) until the face is first drawn, and on unit 12 while
+    // faceA is drawn into: the samplers must not point at no texture)
+    const noFace = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE11); gl.bindTexture(gl.TEXTURE_2D, noFace); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, 1, 1);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, noFace); gl.activeTexture(gl.TEXTURE2);
     const progAE = link(AE_FS), uAeSrc = gl.getUniformLocation(progAE, 'uSrc');
     gl.useProgram(progAE); gl.uniform1i(gl.getUniformLocation(progAE, 'uAcc'), 6);
     // the FULL program, compiled in the background where the driver can (KHR_parallel_shader_compile), otherwise
@@ -2121,11 +2203,11 @@ void main(){
       if (pcomp && !reduce && !fullWait && !gl.getProgramParameter(fullP, pcomp.COMPLETION_STATUS_KHR)) return null;
       if (!gl.getProgramParameter(fullP, gl.LINK_STATUS)) { console.error('disk3d:', gl.getProgramInfoLog(fullP)); full = false; return full; }
       full = { prog: fullP, U: uniforms(fullP, UNAMES) };
-      gl.useProgram(fullP); gl.uniform1i(full.U.uDiskMap, 0); gl.uniform1i(full.U.uWindMap, 1); gl.uniform1i(full.U.uEnvMap, 3); gl.uniform1i(full.U.uTurb3, 4); gl.uniform1i(full.U.uEnv3, 7); gl.uniform1i(full.U.uWStr, 8); gl.uniform1i(full.U.uAccMap, 9); gl.uniform1i(full.U.uWindVel, 10);
+      gl.useProgram(fullP); gl.uniform1i(gl.getUniformLocation(fullP, 'uFaceA'), 12); gl.uniform1i(full.U.uDiskMap, 0); gl.uniform1i(full.U.uWindMap, 1); gl.uniform1i(full.U.uEnvMap, 3); gl.uniform1i(full.U.uTurb3, 4); gl.uniform1i(full.U.uEnv3, 7); gl.uniform1i(full.U.uWStr, 8); gl.uniform1i(full.U.uAccMap, 9); gl.uniform1i(full.U.uWindVel, 10);
       return full;
     }
     if (pcomp) startFull();
-    const UD = uniforms(progDisk, ['uMapRes', 'uTime', 'uSeed', 'uCam', 'uPixA', 'uPlanet', 'uPlanetPhi', 'uGapLight', 'uWake', 'uAccK']);
+    const UD = uniforms(progDisk, ['uMapRes', 'uTime', 'uSeed', 'uCam', 'uPixA', 'uPlanet', 'uPlanetPhi', 'uGapLight', 'uWake', 'uWakeX', 'uAccK']);
     // a full-screen triangle, shared by the passes
     gl.bindVertexArray(gl.createVertexArray());
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
@@ -2234,7 +2316,7 @@ void main(){
     let diskMapT = null, accMapTex = null, t3a = null, t3b = null;
     const MAX3 = gl.getParameter(gl.MAX_3D_TEXTURE_SIZE);
     function diskTarget() {
-      const nx = Math.min(2048, Math.max(512, 2 ** Math.ceil(Math.log2(canvas.width * 1.6))));
+      const nx = Math.min(2048, Math.max(512, 2 ** Math.ceil(Math.log2(rW * 1.6))));
       if (diskMapT && diskMapT.w === nx) return;
       if (diskMapT) { gl.deleteFramebuffer(diskMapT.fb); gl.deleteTexture(diskMapT.tex); gl.deleteTexture(accMapTex); }
       diskMapT = target(nx, 256, gl.RGBA16F, gl.REPEAT);
@@ -2271,7 +2353,7 @@ void main(){
     function eddyPass() {
       gl.useProgram(progT3);
       gl.uniform3f(UT3.uRes3, t3a.w, t3a.h, t3a.d); gl.uniform1f(UT3.uTime, time); gl.uniform1f(UT3.uSeed, opt.seed);
-      gl.uniform3fv(UT3.uCam, cam); gl.uniform1f(UT3.uPixA, 2 * Math.tan(opt.fov / 2) / canvas.height);
+      gl.uniform3fv(UT3.uCam, cam); gl.uniform1f(UT3.uPixA, 2 * Math.tan(opt.fov / 2) / rH);
       gl.viewport(0, 0, t3a.w, t3a.h);
       for (const f of t3a.fbs) { gl.bindFramebuffer(gl.FRAMEBUFFER, f.fb); gl.uniform1f(UT3.uLayer0, f.z0); gl.drawArrays(gl.TRIANGLES, 0, 3); }
       gl.useProgram(progS3); gl.uniform3f(US3.uRes3, t3b.w, t3b.h, t3b.d);
@@ -2648,19 +2730,22 @@ void main(){
       // the marks of the flows (the wind's and the envelope's dashes, the accretion's marks, the arrows on the cut faces):
       // off unless data-marks="on" (they read as clumps; without them the patterns carried by the flows remain, the
       // wind's streamers and the accretion's streaks)
-      marks: box.dataset.marks === 'on'
+      marks: box.dataset.marks === 'on',
+      // the waves' emphasis (the planet's wake exaggerated, see wake): off unless data-waves="on"
+      waves: box.dataset.waves === 'on'
     };
     const clumps = Array.from({ length: 6 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0, crossed: true }));
     const vapor = Array.from({ length: 4 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0 }));
-    let W = 0, Hh = 0, cam, basis, time = 0, last = 0, running = false, dragging = false, moved = false, px = 0, py = 0, azUser = opt.az, elUser = opt.el;
+    let W = 0, Hh = 0, rW = 1, rH = 1, faceT = null, faceA = null, cam, basis, time = 0, last = 0, running = false, dragging = false, moved = false, px = 0, py = 0, azUser = opt.az, elUser = opt.el;
     let paused = false, speed = 1, dirty = true, benching = false, fieldMs = 0;
     const Omega = (R) => 0.5236 * Math.pow(R, -1.5);
     // --- the planet: it fades in and out over about 1.5 s when it is turned on or off (planetAmp); the gap's depth is
     // planetAmp times the depth for the camera's distance (DEPTH), gapDepth, and the wake's strength planetAmp times
-    // the strength for that distance, wakeAmp (the observed looks take the near values of both) ---
+    // the strength for that distance, wakeAmp (the observed looks take the near values of both); the waves' emphasis
+    // eases in and out (wavesAmp) ---
     const planetPhi = (t) => PLANET.PHI0 + Omega(PLANET.A) * t;
     const planetPos = (t) => { const a = planetPhi(t); return [PLANET.A * Math.cos(a), PLANET.A * Math.sin(a), 0]; };
-    let planetAmp = (opt.mode & 16) ? 1 : 0, depthSet = -1, gapDepth = 0, rim = null, trap = trapOf(0), wakeAmp = 0;
+    let planetAmp = (opt.mode & 16) ? 1 : 0, depthSet = -1, gapDepth = 0, rim = null, trap = trapOf(0), wakeAmp = 0, wavesAmp = opt.waves ? 1 : 0;
     const glNow = new Float32Array(128);
     // how near the camera is to the planet's orbit: 0 beyond D1, 1 within D0
     const nearOf = (c) => 1 - ss(DEPTH.D0, DEPTH.D1, Math.hypot(Math.hypot(c[0], c[1]) - PLANET.A, c[2]));
@@ -2707,8 +2792,8 @@ void main(){
     descEl.style.cssText = keysEl.style.cssText = hidden;
     box.append(descEl, keysEl);
     canvas.setAttribute('aria-describedby', descEl.id + ' ' + keysEl.id);
-    const KEYS_JA = 'ドラッグで回転、ピンチでズーム、Shift+ドラッグ(または中・右ボタン、2 本指)で見る中心を動かす。キー:矢印で回転、Shift+矢印で中心を動かす、＋と−でズーム(ホイールのズームはこの図にフォーカスしてから)、Home で元の視点と星の中心、スペースで一時停止、1〜5 で視点、P で惑星に寄る、F で磁力線、S で断面、A で注釈、B で星の増光、G で惑星を育てる。円盤をクリックすると、そこに小石の塊を置きます。';
-    const KEYS_EN = 'Drag to turn, pinch to zoom, Shift+drag (or the middle or right button, or two fingers) to move the point looked at. Keys: arrows turn, Shift+arrows move the point looked at, + and - zoom (the wheel zooms once this picture has the focus), Home returns to the first view centred on the star, space pauses, 1 to 5 pick views, P goes to the planet, F toggles the field lines, S the cut, A the annotations, B makes the star flare, G grows the planet. A click on the disk drops a clump of pebbles there.';
+    const KEYS_JA = 'ドラッグで回転、Shift+ドラッグ(または中・右ボタン)で見る中心を動かす。タッチでは指 1 本で移動、2 本の指でピンチしてズーム、ひねって回転、そろえて上下に動かして傾き、ダブルタップで拡大、2 本指のタップで縮小。キー:矢印で回転、Shift+矢印で中心を動かす、＋と−でズーム(ホイールのズームはこの図にフォーカスしてから)、Home で元の視点と星の中心、C で中心を星に戻す(視点はそのまま)、スペースで一時停止、1〜5 で視点、P で惑星に寄る、F で磁力線、S で断面、A で注釈、B で星の増光、G で惑星を育てる。円盤をクリックすると、そこに小石の塊を置きます。';
+    const KEYS_EN = 'Drag to turn, Shift+drag (or the middle or right button) to move the point looked at. On a touch screen one finger moves, two fingers pinch to zoom, twist to turn and move up or down together to tilt; a double tap zooms in, a two-finger tap zooms out. Keys: arrows turn, Shift+arrows move the point looked at, + and - zoom (the wheel zooms once this picture has the focus), Home returns to the first view centred on the star, C brings the point looked at back to the star (the view kept), space pauses, 1 to 5 pick views, P goes to the planet, F toggles the field lines, S the cut, A the annotations, B makes the star flare, G grows the planet. A click on the disk drops a clump of pebbles there.';
     let toastTimer = 0, toastSwap = 0, toastMsg = null;   // toastMsg: the text showing, in both languages
     // shows a text for ms; one already showing fades out first (0.25 s), so texts never swap abruptly
     const say = (ja_, en, ms) => {
@@ -2921,7 +3006,8 @@ void main(){
       const dphi = ((phi - planetPhi(time) - Math.sign(x - 1) * F / PLANET.HP + Math.PI) % TAU + TAU) % TAU - Math.PI;
       const sl = Math.pow(x, 1.25) * Math.abs(Math.pow(x, -1.5) - 1) / PLANET.HP, c = 1 / Math.sqrt(1 + sl * sl);
       const ax = Math.abs(x - 1), w = Hof(R) * (1 + 0.5 * ax), d = R * dphi * c;
-      return wakeAmp * PLANET.WAKE_A * Math.exp(-ax / PLANET.WAKE_L) * ss(0.03, 0.1, ax) * ss(0.42, 0.55, x) * (1 - ss(2, 2.5, x)) * Math.exp(-d * d / (w * w));
+      const amp = PLANET.WAKE_P * Math.pow(Math.max(ax, PLANET.WAKE_X0) / PLANET.WAKE_X0, -0.75) * (1 - wavesAmp) + PLANET.WAKE_A * Math.exp(-ax / PLANET.WAKE_L) * wavesAmp;
+      return wakeAmp * amp * ss(0.03, 0.1, ax) * ss(0.42, 0.55, x) * (1 - ss(2, 2.5, x)) * Math.exp(-d * d / (w * w));
     };
     // the disk's density contours on the two faces (or halves of the face; at the azimuths of cutE), across the arms:
     // finely sampled where the arms are
@@ -2941,7 +3027,7 @@ void main(){
     }
     const logspace = (a, b, n) => Array.from({ length: n }, (_, i) => a * Math.pow(b / a, i / (n - 1)));
     function buildSlice(q) {
-      const key = q + ':' + Math.round(gapDepth * 50) + ':' + rSn.toFixed(3) + ':' + (opt.asym ? 1 : 0);
+      const key = q + ':' + Math.round(gapDepth * 50) + ':' + rSn.toFixed(3) + ':' + (opt.asym ? 1 : 0) + ':' + (q === 'none' ? ja() : '');
       if (sliceGeom.key === key) return sliceGeom.g;
       const g = { lines: [], labels: [] };
       const curve = (f, R0, R1) => logspace(R0, R1, 160).map((R) => [R, f(R)]).filter((pt) => !isNaN(pt[1]));
@@ -2974,6 +3060,16 @@ void main(){
             if (z < ZB_JS) c.push([r0 * tabF(BP.XI, tabS(chi)), z]);
           }
           if (c.length > 2) { g.lines.push({ pts: c, quads: lower ? LOWER : UPPER }); if (!lower) g.labels.push({ pts: c, t: '10' + sup(lr) }); }
+        }
+      } else if (q === 'none') {
+        // the cutaway: a thin outline of the disk where the cut passes through it (10^-3 of the midplane at 1 au, as the
+        // density's face shows the disk) and two contours inside it (10^1, 10^-1), so that the open cut reads as a
+        // cross-section; with the planet, across the arms of its wake (as the density's)
+        for (const lr of [1, -1, -3]) {
+          const c = curve((R) => zOfRho(R, lr), MODEL.R_IN * 1.05, RB_JS - 1);
+          if (c.length < 3) continue;
+          (lr === -3 ? (g.outline = []) : g.lines).push({ pts: c, quads: ALL, lr });
+          g.labels.push({ pts: c, t: lr === -3 ? (ja() ? '円盤の縁(密度 10' + sup(lr) + ')' : 'edge of the disk (density 10' + sup(lr) + ')') : '10' + sup(lr) });
         }
       } else if (q === 'tau') {
         for (const k of [-3, -2, -1, 1, 2, 3, 4]) {
@@ -3012,6 +3108,7 @@ void main(){
     const mkS = (tag, attrs) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in attrs) e.setAttribute(k, attrs[k]); sliceG.appendChild(e); return e; };
     const sP = {
       contour: mkS('path', { fill: 'none', stroke: '#ffffff', 'stroke-opacity': 0.55, 'stroke-width': 0.9 }),
+      outline: mkS('path', { fill: 'none', stroke: '#ffffff', 'stroke-opacity': 0.8, 'stroke-width': 1.2 }),
       flines: mkS('path', { fill: 'none', stroke: '#cfe3ff', 'stroke-opacity': 0.5, 'stroke-width': 0.8 }),
       arrows: mkS('path', { fill: 'none', stroke: '#e8f4ff', 'stroke-opacity': 0.85, 'stroke-width': 1, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
       tau1: mkS('path', { fill: 'none', stroke: '#fff3df', 'stroke-opacity': 0.95, 'stroke-width': 1.5 }),
@@ -3159,6 +3256,7 @@ void main(){
     function pathOf(pts, quads) {
       let d = '';
       for (const [sr, sz] of quads) {
+        if (!faceSeen[sr > 0 ? 1 : 0]) continue;   // (none on a face seen edge-on)
         let pen = false;
         for (const [R, z] of pts) {
           const q = sp(sr * R, sz * z);
@@ -3192,17 +3290,19 @@ void main(){
     // star, eased like the flights. The start follows the camera through the flight that comes with the opening, so
     // that the camera stays in the part cut away and the cut is seen to move in all along (from a fixed start a camera
     // flying in would pass the planes, and the cut would vanish until they passed it again). The lines
-    // and labels on the faces, drawn for the planes through the star, show only at the end of the sweep. cutA, the
-    // angle of the planes' normals from the camera's direction (0 for the 1/2 cut, 45 degrees for the 1/4 cut), turns
-    // over 0.9 s when the cut changes while open. cutN: the planes' normals, cutE: the faces' directions from the axis
-    // (left, right), for this frame.
+    // and labels on the faces, drawn for the planes through the star, show only at the end of the sweep. One plane faces
+    // the camera; the other is turned from it toward the right by 2 cutA (0 for the 1/2 cut, 90 degrees for the 1/4 cut:
+    // the quarter in front on the right cut away, its right face seen face-on and the other along the line of sight);
+    // it turns over 0.9 s when the cut changes while open. cutN: the planes' normals, cutE: the faces' directions from
+    // the axis (left, right), faceSeen: whether a face is seen (not edge-on), for this frame.
     const SWEEP = RB_JS, CUT_A = { half: 0, quarter: Math.PI / 4 };
     let sliceU = opt.slice ? 1 : 0, annAmp = opt.ann ? 1 : 0;   // annAmp: the annotations' fade (0.4 s)
-    let cutA = CUT_A[opt.cut], cutN = [[1, 0, 0], [1, 0, 0]], cutE = [[0, -1, 0], [0, 1, 0]];
+    let cutA = CUT_A[opt.cut], cutN = [[1, 0, 0], [1, 0, 0]], cutE = [[0, -1, 0], [0, 1, 0]], faceSeen = [true, true];
     function cutFrame() {
-      const c = Math.cos(cutA), s = Math.sin(cutA), n = basis.n, r = basis.r;
-      cutN = [[c * n[0] + s * r[0], c * n[1] + s * r[1], 0], [c * n[0] - s * r[0], c * n[1] - s * r[1], 0]];
-      cutE = [[s * n[0] - c * r[0], s * n[1] - c * r[1], 0], [s * n[0] + c * r[0], s * n[1] + c * r[1], 0]];
+      const c = Math.cos(2 * cutA), s = Math.sin(2 * cutA), n = basis.n, r = basis.r;
+      cutN = [[c * n[0] + s * r[0], c * n[1] + s * r[1], 0], [n[0], n[1], 0]];
+      cutE = [[s * n[0] - c * r[0], s * n[1] - c * r[1], 0], [r[0], r[1], 0]];
+      faceSeen = [c > 0.3, true];   // (the turned plane, seen more and more edge-on)
     }
     // A change of look dips the exposure for 0.6 s and takes effect at its darkest (lookNow), so the picture never
     // jumps; the model's own drawings (field lines, wind tracers, the envelope's streamlines) fade out in the observed
@@ -3236,9 +3336,9 @@ void main(){
     // moment 1's range: the line-of-sight speeds for the inclination, and faster closer in (the gas the camera frames
     // turns faster: up to twice as fast, as the square root of 30 au over the distance)
     const coRange = () => Math.max(2, 12 * Math.sqrt(Math.max(0, 1 - basis.f[2] * basis.f[2]))) * Math.min(2, Math.max(1, Math.sqrt(30 / camD)));
-    const fadesDone = () => COMP_BITS.every((b, i) => compAmp[i] === (opt.mode & b ? 1 : 0)) && modelAmp === (lookNow === 'model' ? 1 : 0) && performance.now() - sbT >= 250 && msAmp === (opt.ms ? 1 : 0) && asymAmp === (opt.asym ? 1 : 0) && marksAmp === (opt.marks ? 1 : 0);
+    const fadesDone = () => COMP_BITS.every((b, i) => compAmp[i] === (opt.mode & b ? 1 : 0)) && modelAmp === (lookNow === 'model' ? 1 : 0) && performance.now() - sbT >= 250 && msAmp === (opt.ms ? 1 : 0) && asymAmp === (opt.asym ? 1 : 0) && marksAmp === (opt.marks ? 1 : 0) && wavesAmp === (opt.waves ? 1 : 0);
     const lookDip = () => { const u = (performance.now() - lookT0) / 600; return reduce || u >= 1 || u <= 0 ? 1 : 1 - 0.92 * Math.sin(Math.PI * u); };
-    const sliceOff = () => { const u = sliceU; return (1 - u * u * (3 - 2 * u)) * Math.min(Math.max(Math.hypot(cam[0], cam[1]), 2), SWEEP) * Math.cos(cutA); };
+    const sliceOff = () => { const u = sliceU; return (1 - u * u * (3 - 2 * u)) * Math.min(Math.max(Math.hypot(cam[0], cam[1]), 2), SWEEP); };
     // the part of space kept by the cutaway: outside the part between the planes toward the camera
     const kept = (P) => {
       if (sliceU <= 0) return true;
@@ -3248,9 +3348,11 @@ void main(){
     function drawSlice() {
       sliceG.setAttribute('opacity', (ss(0.82, 1, sliceU) * annAmp).toFixed(3));
       if (sliceU <= 0) { for (const k in sP) sP[k].setAttribute('d', ''); sLabels.forEach((e) => { e.textContent = ''; }); drawCbar('', 0); return; }
-      const ja_ = ja(), g = buildSlice(opt.sliceQ), face = opt.sliceQ !== 'none';
+      const ja_ = ja(), g = buildSlice(opt.sliceQ);
       let li = 0;
-      sP.contour.setAttribute('d', g.lines.map((c) => (Array.isArray(c) ? pathOf(c, ALL) : c.lr != null && wakeAmp > 0 ? wakeContours(c.lr) : pathOf(c.pts, c.quads))).join(''));
+      const lines = (ls) => ls.map((c) => (Array.isArray(c) ? pathOf(c, ALL) : c.lr != null && wakeAmp > 0 ? wakeContours(c.lr) : pathOf(c.pts, c.quads))).join('');
+      sP.contour.setAttribute('d', lines(g.lines));
+      sP.outline.setAttribute('d', lines(g.outline || []));
       sP.tau1.setAttribute('d', pathOf(g.tau1, ALL));
       sP.ice.setAttribute('d', pathOf(g.ice, ALL));
       // the pebble layer: rock inside the snow line, ice outside, thick where it piles up (just outside the snow line,
@@ -3269,6 +3371,7 @@ void main(){
       shapePlaneLines(Math.round(ASYM_F_JS * asymSm() * 100) / 100);
       if (showField) for (const L of planeLines) dF += pathOf(L.up.pts, UPPER) + pathOf(L.low.pts, LOWER);
       if ((opt.mode & 8) && opt.marks) for (const L0 of planeLines) for (const [sr, sz] of ALL) {
+        if (!faceSeen[sr > 0 ? 1 : 0]) continue;
         let acc = 0, prev = null;
         const gap = sz > 0 || !opt.asym ? 64 : 110, L = sz > 0 ? L0.up : L0.low;
         for (let i = 0; i + 1 < L.pts.length; i++) {
@@ -3297,6 +3400,7 @@ void main(){
       let dAcc = '';
       const aw = accW(), ak = accK();
       if ((opt.mode & 1) && opt.marks) for (const R of [0.55, 0.8, 1.15, 1.65, 2.4, 3.5, 5]) for (const [sr, sz] of ALL) {
+        if (!faceSeen[sr > 0 ? 1 : 0]) continue;
         if ((sz > 0 ? aw[0] : aw[1]) < 0.5 || accAmpJS(R) < 0.5) continue;
         const v = (sz > 0 ? ak[0] : ak[1]) * MODEL.H0 * Math.pow(R, 0.25) * vK(R), len = Math.min(40, ACC_PX * v);
         const z = (zKinkHJS(R) + ACC.OFF) * Hof(R), q = sp(sr * R, sz * z), q2 = sp(sr * R * 0.97, sz * z);
@@ -3345,22 +3449,13 @@ void main(){
       q = sp(PLANET.A, 0); if (planetAmp > 0.5 && inView(q)) place(q[0] + 8, q[1] - 8, ja_ ? '惑星の軌道' : 'planet orbit');
       q = sp(rSn, 0.55 * zOfTau(rSn, 0)); if (inView(q)) place(q[0] - 5, q[1], ja_ ? '氷の境界' : 'ice line', 'end');
       q = at([[0.5 * (MODEL.R_IN + rSn), 0], [2, 0], [4, 0]], 0.72); if (q) place(q[0], q[1] + 15, ja_ ? '小石の層' : 'pebbles', 'middle');
-      // The 1/4 cut: between its two faces, beyond the disk's thin layer, lies the space under the disk (over it, from
-      // below), seen through the cut, dark; the faces are clear there (no gas). It read as a hole: the edge where the two
-      // planes meet is drawn along the axis, and the space named.
-      let dE = '';
+      // (the 1/4 cut: through its face, below the disk's thin layer, lies the space under the disk behind it, dark, beside
+      // the left half of the disk left whole: named, as it reads as a hole)
+      sP.edge.setAttribute('d', '');
       if (opt.cut === 'quarter' && sliceU >= 0.82) {
-        const sz = cam[2] >= 0 ? -1 : 1, zE = Math.min(ZB_JS, 0.6 * camD);
-        let pen = false;
-        for (let i = 1; i <= 24; i++) {
-          const qe = project([0, 0, sz * zE * i / 24]);
-          if (qe[2] <= zN) { pen = false; continue; }
-          dE += (pen ? 'L' : 'M') + qe[0].toFixed(1) + ' ' + qe[1].toFixed(1); pen = true;
-        }
-        const qL = project([0, 0, sz * 0.3 * camD]);
-        if (inView(qL)) place(qL[0] + 8, qL[1], sz < 0 ? (ja_ ? '円盤の下の空間(切り口ごしに)' : 'the space under the disk, through the cut') : (ja_ ? '円盤の上の空間(切り口ごしに)' : 'the space over the disk, through the cut'));
+        const sz = cam[2] >= 0 ? -1 : 1, qL = sp(0.3 * camD, sz * 0.14 * camD);
+        if (inView(qL)) place(qL[0], qL[1], sz < 0 ? (ja_ ? '円盤の下の空間(切り口ごしに)' : 'the space under the disk, through the cut') : (ja_ ? '円盤の上の空間(切り口ごしに)' : 'the space over the disk, through the cut'), 'middle');
       }
-      sP.edge.setAttribute('d', dE);
       // close to the star, on every face: the closed magnetosphere (no disk there), the curtains' cross-section (named, so
       // that they are not taken for the disk's own flows), the X-points at the truncation radius, the dust-free gas disk
       let dXp = '';
@@ -3380,19 +3475,20 @@ void main(){
         // (the densest place where the label fits)
         for (const c of cands.sort((a2, b2) => b2.w - a2.w)) {
           if (c.w < 0.3) break;
+          if (!faceSeen[c.sr > 0 ? 1 : 0]) continue;
           q2 = sp(c.sr * rr * Math.sin(th), c.sz * rr * Math.cos(th));
           if (inView(q2) && place(q2[0] + (c.sr > 0 ? 8 : -8), q2[1] + (c.sz > 0 ? -10 : 14), ja_ ? '磁気圏降着(カーテン)' : 'magnetospheric accretion (curtain)', c.sr > 0 ? 'start' : 'end')) break;
         }
         for (const sr of [1, -1]) {
           const qx = sp(sr * MAG.RT, 0);
-          if (qx[2] <= zN || !inView(qx)) continue;
+          if (!faceSeen[sr > 0 ? 1 : 0] || qx[2] <= zN || !inView(qx)) continue;
           dXp += 'M' + (qx[0] - 5) + ' ' + (qx[1] - 5) + 'L' + (qx[0] + 5) + ' ' + (qx[1] + 5) + 'M' + (qx[0] - 5) + ' ' + (qx[1] + 5) + 'L' + (qx[0] + 5) + ' ' + (qx[1] - 5);
         }
         q2 = sp(MAG.RT, 0); if (inView(q2)) place(q2[0] + 8, q2[1] - 8, ja_ ? 'X 点' : 'X-point');
         q2 = sp(0.5 * (MAG.RT * (1 + MAG.DL) + MODEL.R_IN), 0); if (inView(q2)) place(q2[0], q2[1] + 16, ja_ ? 'ダストのないガス円盤' : 'dust-free gas disk', 'middle');
       }
       sP.xpt.setAttribute('d', dXp);
-      if (face) g.labels.forEach((lb, i) => {
+      g.labels.forEach((lb, i) => {
         const q2 = lb.pts ? at(lb.pts, 0.55 + 0.08 * (i % 5)) : sp(lb.R, lb.z);
         if (inView(q2)) place(q2[0] + 4, q2[1] - 4, lb.t);
       });
@@ -3404,13 +3500,18 @@ void main(){
       box.style.height = Hh + 'px';
       toastFit();
       if (lost) return;   // (without a context: the static picture shows, and the canvas is sized when the context is back)
-      const dpr = Math.min(window.devicePixelRatio || 1, 2) * opt.scale;
+      // the canvas at the screen's pixels (the cut face is drawn there, faceT), the volume at the render scale (accT,
+      // rW x rH, upsampled by SHOW_FS)
+      const dprS = Math.min(window.devicePixelRatio || 1, 2), dpr = dprS * opt.scale;
       canvas.style.width = W + 'px'; canvas.style.height = Hh + 'px';
-      canvas.width = Math.max(1, Math.round(W * dpr)); canvas.height = Math.max(1, Math.round(Hh * dpr));
+      const cw = Math.max(1, Math.round(W * dprS)), ch = Math.max(1, Math.round(Hh * dprS));
+      if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+      rW = Math.max(1, Math.round(W * dpr)); rH = Math.max(1, Math.round(Hh * dpr));
       overlay.setAttribute('viewBox', '0 0 ' + W + ' ' + Hh);
       diskTarget();
       if (accT) { gl.deleteFramebuffer(accT.fb); gl.deleteTexture(accT.tex); }
-      accT = target(canvas.width, canvas.height, gl.RGBA16F, gl.CLAMP_TO_EDGE);
+      accT = target(rW, rH, gl.RGBA16F, gl.CLAMP_TO_EDGE);
+      if (faceT && (faceT.w !== cw || faceT.h !== ch)) { for (const t of [faceT, faceA]) { gl.deleteFramebuffer(t.fb); gl.deleteTexture(t.tex); } faceT = faceA = null; for (const u of [gl.TEXTURE11, gl.TEXTURE12]) { gl.activeTexture(u); gl.bindTexture(gl.TEXTURE_2D, noFace); } }
       accN = 0;   // (the new target is empty: a still starts over, else its next frame would be averaged with nothing)
       gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, accT.tex);
       draw();
@@ -3442,7 +3543,7 @@ void main(){
     const aeHeld = () => !!burst || lookDip() < 1;
     function aePass() {   // the measurement of the frame in accT, into aeT
       gl.bindFramebuffer(gl.FRAMEBUFFER, aeT.fb); gl.viewport(0, 0, AE_W, AE_H);
-      gl.useProgram(progAE); gl.uniform2f(uAeSrc, canvas.width, canvas.height);
+      gl.useProgram(progAE); gl.uniform2f(uAeSrc, rW, rH);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
     // A new goal for ln of the exposure from the cells read back (of a frame drawn at lnUsed); true when it moved. Too
@@ -3526,6 +3627,7 @@ void main(){
       msAmp = toward(msAmp, opt.ms ? 1 : 0, dtR, 0.6);
       asymAmp = toward(asymAmp, opt.asym ? 1 : 0, dtR, 0.6);
       marksAmp = toward(marksAmp, opt.marks ? 1 : 0, dtR, 0.4);
+      wavesAmp = toward(wavesAmp, opt.waves ? 1 : 0, dtR, 0.6);
       if (planetAmp === want) planetFade = 1.5;
       snowNow();
       const wantE = (opt.mode & 32) ? 1 : 0;
@@ -3550,8 +3652,8 @@ void main(){
       // FULL is still compiling)
       const F = sliceU > 0 || opt.slice || pVis > 0 || envVis > 0 || magVis > 0 || lookNow !== 'model' ? fullProgram() : null, U = F ? F.U : U0;
       // a still picture (see ACC_MAX): the same state as the last frame, drawn by the same program
-      const sig = [time, ...cam, ...basis.f, canvas.width, canvas.height, opt.steps, opt.fov, opt.seed, starL, LOOKS[lookNow], rSn, opt.mode, ...compAmp,
-        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, gapDepth, wakeAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), coLn, expo];
+      const sig = [time, ...cam, ...basis.f, rW, rH, canvas.width, opt.steps, opt.fov, opt.seed, starL, LOOKS[lookNow], rSn, opt.mode, ...compAmp,
+        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, gapDepth, wakeAmp, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), coLn, expo];
       // (a new view: the exposure is measured afresh, with its moves counted anew; a new exposure or CO range: measured again)
       const ne = sig.length - 2, viewNew = sig.length !== lastSig.length || sig.some((v, i) => i < ne && v !== lastSig[i]);
       if (viewNew || sig[ne] !== lastSig[ne] || sig[ne + 1] !== lastSig[ne + 1]) { accN = 0; aeFresh = false; coFresh = false; }
@@ -3567,21 +3669,22 @@ void main(){
         gl.useProgram(progDisk);
         gl.uniform1f(UD.uPlanetPhi, planetPhi(time));
         gl.uniform1f(UD.uWake, wakeAmp);
+        gl.uniform1f(UD.uWakeX, wavesAmp);
         gl.uniform1f(UD.uTime, time);
         gl.uniform1f(UD.uSeed, opt.seed);
         gl.uniform3fv(UD.uCam, cam);
-        gl.uniform1f(UD.uPixA, 2 * Math.tan(opt.fov / 2) / canvas.height);
+        gl.uniform1f(UD.uPixA, 2 * Math.tan(opt.fov / 2) / rH);
         gl.uniform2fv(UD.uAccK, accK());
         gl.bindFramebuffer(gl.FRAMEBUFFER, diskMapT.fb); gl.viewport(0, 0, diskMapT.w, diskMapT.h);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
       gl.bindFramebuffer(gl.FRAMEBUFFER, accT.fb);
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.viewport(0, 0, rW, rH);
       gl.useProgram(F ? F.prog : prog);
       gl.uniform1f(U.uPlanet, gapDepth);
       gl.uniform3f(U.uTrap, trap.R, trap.filt, trap.s);
       gl.uniform4f(U.uGapRim, rim ? rim.R : 1e9, rim ? rim.th : 0, rim ? rim.end : 0, rim ? rim.h : 1);
-      gl.uniform2f(U.uRes, canvas.width, canvas.height);
+      gl.uniform2f(U.uRes, rW, rH);
       gl.uniform1f(U.uTime, time);
       gl.uniform3fv(U.uCam, cam);
       gl.uniformMatrix3fv(U.uBasis, false, [...basis.r, ...basis.u, ...basis.f]);
@@ -3604,7 +3707,7 @@ void main(){
       gl.uniform1i(U.uLook, LOOKS[lookNow]);
       gl.uniform1i(U.uSteps, Math.round(opt.steps * (camD < 10 ? 2 : 1)));   // finer march when zoomed in
       gl.uniform1f(U.uSeed, opt.seed);
-      gl.uniform1f(U.uPx, canvas.width / W);
+      gl.uniform1f(U.uPx, rW / W);
       gl.uniform4fv(U.uClump, clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]));
       gl.uniform4fv(U.uVapor, vapor.flatMap((v) => [v.R, v.phi, v.t0, v.amp]));
       gl.uniform1i(U.uMode, (opt.mode & ~15) | COMP_BITS.reduce((m, b, i) => m | (compAmp[i] > 0 ? b : 0), 0));
@@ -3630,6 +3733,25 @@ void main(){
       gl.uniform1f(U.uEnv, envVis);
       // frame acc of a still picture: R2 and golden-ratio sequences (none for the first), weighted 1/(acc + 1)
       gl.uniform3f(U.uJit, acc ? (acc * 0.7548777) % 1 - 0.5 : 0, acc ? (acc * 0.5698403) % 1 - 0.5 : 0, (acc * 0.618034) % 1);
+      // the cut face at the screen's resolution (the same program and uniforms, see faceAt), drawn again when the picture
+      // starts over (it does not depend on a still's jitter), before the volume (which leaves out what lies behind it
+      // where it is opaque): one sample per pixel into faceA (unit 12, unbound while it is drawn into), then faceT (unit
+      // 11, for SHOW_FS), four samples where the face changes from pixel to pixel
+      const faceOn = !!F && opt.sliceQ !== 'none' && sliceU > 0.82 && lookNow === 'model';
+      if (faceOn && !acc) {
+        if (!faceT) {
+          faceA = target(canvas.width, canvas.height, gl.RGBA8, gl.CLAMP_TO_EDGE); faceT = target(canvas.width, canvas.height, gl.RGBA8, gl.CLAMP_TO_EDGE);
+          gl.activeTexture(gl.TEXTURE11); gl.bindTexture(gl.TEXTURE_2D, faceT.tex);
+        }
+        gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, noFace);
+        gl.viewport(0, 0, faceT.w, faceT.h); gl.uniform2f(U.uRes, faceT.w, faceT.h);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, faceA.fb); gl.uniform1i(U.uFacePass, 1); gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindTexture(gl.TEXTURE_2D, faceA.tex); gl.activeTexture(gl.TEXTURE2);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, faceT.fb); gl.uniform1i(U.uFacePass, 2); gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.uniform1i(U.uFacePass, 0); gl.uniform2f(U.uRes, rW, rH);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, accT.fb); gl.viewport(0, 0, rW, rH);
+      }
+      gl.uniform1i(U.uFaceRdy, faceOn ? 1 : 0); gl.uniform2f(U.uFaceRes, canvas.width, canvas.height);
       // (the first frame replaces what the target holds, so that nothing from before carries over, not even a NaN:
       // blended with weight 0 it would stay, since NaN times 0 is NaN)
       if (acc) { gl.enable(gl.BLEND); gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA); gl.blendColor(0, 0, 0, 1 / (acc + 1)); }
@@ -3637,7 +3759,9 @@ void main(){
       gl.disable(gl.BLEND);
       accN = acc + 1;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, canvas.width, canvas.height);
       gl.useProgram(progShow);
+      gl.uniform2f(uShowDev, canvas.width, canvas.height); gl.uniform1i(uShowFace, faceOn ? 1 : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       // the automatic exposure's measurements, one at a time: started on a frame drawn at the exposure's goal, read on a
       // later frame once the GPU has done it (reduced motion measures in draw instead)
@@ -3710,13 +3834,13 @@ void main(){
       }
       const QN = { T: ['温度', 'temperature'], rho: ['ガスの密度', 'gas density'], tau: ['星の方向の光学的厚さ', 'optical depth toward the star'], layers: ['磁場とガスの結合の層', 'the layers of the coupling of field and gas'], none: ['', ''] }[opt.sliceQ] || ['', ''];
       const CON = { chan: ['チャンネルマップ(' + opt.coV.toFixed(2) + ' km/s)', 'a channel map at ' + opt.coV.toFixed(2) + ' km/s'], m1: ['平均の視線速度(モーメント 1)', 'its mean velocity (moment 1)'], m0: ['積分強度(モーメント 0)', 'its integrated intensity (moment 0)'] }[opt.coMode];
-      const cutJa = opt.cut === 'quarter' ? '手前の 4 分の 1 を切り取り' : '星を通る鉛直な面で手前の半分を切り取り', cutEn = opt.cut === 'quarter' ? ' The near quarter is cut away' : ' The near half is cut away along a vertical plane through the star';
+      const cutJa = opt.cut === 'quarter' ? '右手前の 4 分の 1 を切り取り(右の切り口を正面から見る)' : '星を通る鉛直な面で手前の半分を切り取り', cutEn = opt.cut === 'quarter' ? ' The near right quarter is cut away (its right face seen face-on)' : ' The near half is cut away along a vertical plane through the star';
       const LKD = { optical: ['可視光・近赤外線の散乱光で見た姿で、星の光を散乱する表層と円盤風が見えます。', ' Seen in scattered light (visible and near infrared): the surface and the wind scatter starlight.'],
         mir: ['中間赤外線で見た姿で、暖かい表層の熱放射が内側ほど明るく見えます。', ' Seen in the mid-infrared: the warm surface glows, brightest close in.'],
         mm: ['ミリ波で見た姿で、赤道面に沈んだ小石の熱放射が、惑星のギャップのすぐ外の環とともに見えます。', ' Seen at millimetre wavelengths: the pebbles at the midplane glow, with a ring just outside the planet\u2019s gap.'] }[lookNow];
       const desc = ja()
-        ? '原始惑星系円盤(半径30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、ダストが赤道面に沈み、約0.9 auのスノーラインの外側で氷をまとっています。' + (planetAmp > 0.5 ? '3 au に木星質量の惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + (QN[0] ? QN[0] + 'を色で示しています。' : '円盤の内部を見せています。') : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? '一酸化炭素の輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
-        : 'Volume rendering of a model protoplanetary disk (30 au in radius): warm surface layers, a cold midplane with settled dust, and a water snow line near 0.9 au.' + (planetAmp > 0.5 ? ' A Jupiter-mass planet at 3 au opens a gap.' : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + (QN[1] ? QN[1] + ' in colour.' : 'the inside of the disk.') : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in the line of carbon monoxide: ' + CON[1] + '.' : '');
+        ? '原始惑星系円盤(半径30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、ダストが赤道面に沈み、約0.9 auのスノーラインの外側で氷をまとっています。' + (planetAmp > 0.5 ? '3 au に木星質量の惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + (QN[0] ? QN[0] + 'を色で示しています。' : '切り口から円盤の内部を見た目のまま見せ、ガスの密度の等高線を重ねています。') : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? '一酸化炭素の輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
+        : 'Volume rendering of a model protoplanetary disk (30 au in radius): warm surface layers, a cold midplane with settled dust, and a water snow line near 0.9 au.' + (planetAmp > 0.5 ? ' A Jupiter-mass planet at 3 au opens a gap.' : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + (QN[1] ? QN[1] + ' in colour.' : 'the inside of the disk as it looks, with contours of the gas density.') : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in the line of carbon monoxide: ' + CON[1] + '.' : '');
       if (desc !== descEl.textContent) descEl.textContent = desc;
       const name = ja() ? '原始惑星系円盤のモデル(操作できる図)' : 'Model protoplanetary disk (interactive)';
       if (canvas.getAttribute('aria-label') !== name) { canvas.setAttribute('aria-label', name); keysEl.textContent = ja() ? KEYS_JA : KEYS_EN; }
@@ -3794,7 +3918,7 @@ void main(){
       lvStep = 1;
       f.resolve({ frames: f.t.length, levelStep: f.levelStep, interval: { ...st(iv), over20: share(20), over33: share(33) }, draw: st(f.draw), overlay: st(f.over), layout: st(f.layout),
         paths: paths.length, pathsWithData: paths.filter((e) => e.getAttribute('d')).length, chars: paths.reduce((n, e) => n + (e.getAttribute('d') || '').length, 0),
-        size: [canvas.width, canvas.height], scale: opt.scale, visible: document.visibilityState === 'visible' });
+        size: [rW, rH], scale: opt.scale, visible: document.visibilityState === 'visible' });
       dirty = true;
     }
     box.diskFrameStats = (seconds = 5, { levelStep = 1 } = {}) => new Promise((resolve) => {
@@ -3814,15 +3938,12 @@ void main(){
       c.R = R; c.phi = phi; c.t0 = time - (age || 0); c.amp = 1; c.crossed = R - 0.05 * (age || 0) < rSn;
     };
 
-    // --- input: drag to rotate, wheel, pinch or keys to zoom, click to drop pebbles ---
-    // On touch screens one finger moving sideways rotates and moving up or down scrolls the page
-    // (touch-action: pan-y); two fingers tilt the view and pinch to zoom.
+    // --- input: drag to rotate, wheel, pinch or keys to zoom, click to drop pebbles; touch as a map (see below) ---
     // closest approach: 2 au, or 0.25 au with the slice, where the structure of the inner disk (a few
     // hundredths of an au thick at 0.1 au) is to be seen
     const EL_MAX = 89 * Math.PI / 180;
     const DMAX = 600, dist0 = opt.dist, el0 = opt.el, az0 = opt.az, dmin = () => (follow ? 0.25 : MAG.DMIN);
-    const coarse = window.matchMedia('(pointer: coarse)').matches;
-    if (coarse) canvas.style.touchAction = 'pan-y';
+    canvas.style.touchAction = 'none';   // (every touch on the picture is its own: see the touch handlers)
     canvas.tabIndex = 0;
     const clampEl = (v) => Math.min(EL_MAX, Math.max(-EL_MAX, v));   // (to 89 degrees: from straight above, the disk face-on)
     const touched = () => { dirty = true; if (reduce) draw(); };
@@ -3849,59 +3970,140 @@ void main(){
       c.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(4.5)', opacity: 0 }], { duration: 900, easing: 'ease-out', fill: 'forwards' });
       setTimeout(() => c.remove(), 950);
     };
-    const ptrs = new Map(); let pinch0 = 0, distPinch = 0, panning = false;
-    // (the right button pans: no menu over the picture)
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault(), on);
-    canvas.addEventListener('pointerdown', (e) => {
-      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      // (only a real pointer can be captured; events made by a script have none)
-      if (e.isTrusted) canvas.setPointerCapture(e.pointerId);
-      takeOver(); stopTour(false);
-      if (ptrs.size === 1) { dragging = true; moved = false; px = e.clientX; py = e.clientY; panning = e.shiftKey || e.button === 1 || e.button === 2; if (e.button === 1) e.preventDefault(); }
-      else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); distPinch = opt.dist; moved = true; }
-    }, on);
-    canvas.addEventListener('pointermove', (e) => {
-      const p = ptrs.get(e.pointerId); if (!p) return;
-      if (ptrs.size === 2) {
-        // two fingers: their middle moves the point looked at, their spread zooms
-        const [a, b] = [...ptrs.values()], mx = 0.5 * (a.x + b.x), my = 0.5 * (a.y + b.y);
-        p.x = e.clientX; p.y = e.clientY;
-        const mx2 = 0.5 * (a.x + b.x), my2 = 0.5 * (a.y + b.y), d2 = Math.hypot(a.x - b.x, a.y - b.y);
-        panBy(mx2 - mx, my2 - my);
-        if (pinch0 > 0 && d2 > 0) opt.dist = Math.min(DMAX, Math.max(dmin(), distPinch * pinch0 / d2));
-        touched(); return;
-      }
-      if (!dragging) return;
-      const dx = e.clientX - px, dy = e.clientY - py;
-      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
-      if (panning) { panBy(dx, dy); px = e.clientX; py = e.clientY; p.x = e.clientX; p.y = e.clientY; touched(); return; }
-      azUser -= dx * 0.006;
-      if (!coarse || e.pointerType === 'mouse') elUser = clampEl(elUser + dy * 0.006);
-      px = e.clientX; py = e.clientY; p.x = e.clientX; p.y = e.clientY;
-      touched();
-    }, on);
-    const endPtr = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0; if (ptrs.size === 0) { dragging = false; panning = false; } };
-    canvas.addEventListener('pointercancel', (e) => { endPtr(e); moved = true; }, on);
-    canvas.addEventListener('pointerup', (e) => {
-      const wasDrag = moved, wasPan = panning; endPtr(e);
-      if (wasDrag) emitState();
-      if (wasDrag || ptrs.size || wasPan || e.button > 0) return;   // (a click of the middle or right button, or with Shift, does nothing)
-      // click: drop pebbles where the ray meets the midplane
+    // a click (or a tap): on the star, an outburst; elsewhere pebbles dropped where the ray meets the midplane
+    function clickAt(cx, cy) {
       const rect = canvas.getBoundingClientRect();
-      // the star: an outburst
       const so = project([0, 0, 0]);
-      if (so[2] > zN && Math.hypot(e.clientX - rect.left - so[0], e.clientY - rect.top - so[1]) < 14) { burstNow(); return; }
-      const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1, ny = 1 - ((e.clientY - rect.top) / rect.height) * 2;
+      if (so[2] > zN && Math.hypot(cx - rect.left - so[0], cy - rect.top - so[1]) < 14) { burstNow(); return; }
+      const nx = ((cx - rect.left) / rect.width) * 2 - 1, ny = 1 - ((cy - rect.top) / rect.height) * 2;
       const th = Math.tan(opt.fov / 2), asp = W / Hh;
       const rd = [0, 1, 2].map((i) => basis.f[i] + th * (nx * asp * basis.r[i] + ny * basis.u[i]));
       const t = -cam[2] / rd[2]; if (t <= 0) return;
       const x = cam[0] + rd[0] * t, y = cam[1] + rd[1] * t, R = Math.hypot(x, y);
       if (R < 0.15 || R > 31 || !kept([x, y, 0]) || faceAlpha([x, y, 0]) > 0.5) return;
       addClump(R, Math.atan2(y, x), 0);
-      ripple(e.clientX - rect.left, e.clientY - rect.top);
+      ripple(cx - rect.left, cy - rect.top);
       seedPlanet(R);
       touched();
+    }
+    // The mouse and the pen: a drag turns (with Shift, or the middle or the right button, it moves the point looked at);
+    // a click is clickAt.
+    let panning = false, mousePtr = null;
+    // (the right button pans: no menu over the picture)
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault(), on);
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch' || mousePtr !== null) return;
+      mousePtr = e.pointerId;
+      // (only a real pointer can be captured; events made by a script have none)
+      if (e.isTrusted) canvas.setPointerCapture(e.pointerId);
+      takeOver(); stopTour(false);
+      dragging = true; moved = false; px = e.clientX; py = e.clientY; panning = e.shiftKey || e.button === 1 || e.button === 2; if (e.button === 1) e.preventDefault();
     }, on);
+    canvas.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== mousePtr || !dragging) return;
+      const dx = e.clientX - px, dy = e.clientY - py;
+      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      if (panning) panBy(dx, dy);
+      else { azUser -= dx * 0.006; elUser = clampEl(elUser + dy * 0.006); }
+      px = e.clientX; py = e.clientY;
+      touched();
+    }, on);
+    const endMouse = () => { mousePtr = null; dragging = false; panning = false; };
+    canvas.addEventListener('pointercancel', (e) => { if (e.pointerId === mousePtr) { endMouse(); moved = true; } }, on);
+    canvas.addEventListener('pointerup', (e) => {
+      if (e.pointerId !== mousePtr) return;
+      const wasDrag = moved, wasPan = panning; endMouse();
+      if (wasDrag) emitState();
+      if (wasDrag || wasPan || e.button > 0) return;   // (a click of the middle or right button, or with Shift, does nothing)
+      clickAt(e.clientX, e.clientY);
+    }, on);
+    // Touch, as a map on a phone: one finger moves the point looked at (what is under it follows it); two fingers pinch
+    // to zoom, twist to turn (the azimuth: what is under them turns with them) and, moved up or down together, tilt (the
+    // elevation: up for a lower view); a double tap zooms in toward the tapped point (it stays under the finger), a tap
+    // with two fingers zooms out; a single tap is a click (clickAt) once no second tap has followed. The picture takes
+    // every touch (touch-action: none): the page scrolls from outside the panel. The first touch shows a short hint.
+    const TAP_MS = 300, TAP_PX = 10, DTAP_PX = 32;
+    const tch = { pts: new Map(), last: null, t1: 0, t2: 0, moved: false, two: false, mode: '', g0: null, mid: null, tapT: 0, tapX: 0, tapY: 0, tapTimer: 0, hinted: false };
+    // the first two fingers: their spread, angle and middle
+    const twoOf = () => { const [a, b] = [...tch.pts.values()]; return { a, b, s: Math.hypot(b.x - a.x, b.y - a.y), ang: Math.atan2(b.y - a.y, b.x - a.x), mx: 0.5 * (a.x + b.x), my: 0.5 * (a.y + b.y) }; };
+    // zoom by f toward the point under (cx, cy): the point looked at moves toward it, so that it stays under the finger
+    const zoomAt = (cx, cy, f) => {
+      const rect = canvas.getBoundingClientRect(), ox = cx - rect.left - W / 2, oy = cy - rect.top - Hh / 2;
+      const g = Math.min(DMAX, Math.max(dmin(), opt.dist * f)) / opt.dist;
+      panBy(-ox * (1 - g), -oy * (1 - g)); opt.dist *= g;
+      startFly(); touched(); emitState();
+    };
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      e.preventDefault();
+      tch.pts.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY });
+      if (e.isTrusted) canvas.setPointerCapture(e.pointerId);
+      takeOver(); stopTour(false);
+      if (!tch.hinted) { tch.hinted = true; touchHint(); }
+      // (taps are timed by the events' own times: a long frame does not stretch them)
+      if (tch.pts.size === 1) { tch.t1 = e.timeStamp; tch.moved = false; tch.two = false; tch.last = { x: e.clientX, y: e.clientY }; }
+      else if (tch.pts.size === 2) {
+        // (the gesture is told from where both fingers are now)
+        tch.two = true; tch.t2 = e.timeStamp; tch.mode = ''; tch.g0 = null;
+        for (const q of tch.pts.values()) { q.x0 = q.x; q.y0 = q.y; }
+      }
+    }, on);
+    canvas.addEventListener('pointermove', (e) => {
+      const p = e.pointerType === 'touch' ? tch.pts.get(e.pointerId) : null; if (!p) return;
+      p.x = e.clientX; p.y = e.clientY;
+      if (tch.pts.size === 1) {
+        if (!tch.moved && Math.hypot(p.x - p.x0, p.y - p.y0) > TAP_PX) tch.moved = true;
+        if (tch.moved) { panBy(p.x - tch.last.x, p.y - tch.last.y); tch.last = { x: p.x, y: p.y }; touched(); }
+        return;
+      }
+      const g = twoOf();
+      if (!tch.g0) {
+        // told once both fingers have moved half of TAP_PX, or one of them twice TAP_PX (their moves come one finger at a
+        // time): both up or down together, with little pinch or twist, tilts; anything else pinches, twists and moves
+        const da = [g.a.x - g.a.x0, g.a.y - g.a.y0], db = [g.b.x - g.b.x0, g.b.y - g.b.y0], ma = Math.hypot(da[0], da[1]), mb = Math.hypot(db[0], db[1]);
+        if (!(Math.min(ma, mb) >= 0.5 * TAP_PX || Math.max(ma, mb) >= 2 * TAP_PX)) return;
+        const s0 = Math.hypot(g.b.x0 - g.a.x0, g.b.y0 - g.a.y0), ang0 = Math.atan2(g.b.y0 - g.a.y0, g.b.x0 - g.a.x0), dy = 0.5 * (da[1] + db[1]);
+        const turn = Math.abs(wrapPi(g.ang - ang0)) * 0.5 * g.s;
+        const together = da[1] * db[1] > 0 && Math.abs(da[1]) > 1.5 * Math.abs(da[0]) && Math.abs(db[1]) > 1.5 * Math.abs(db[0]);
+        tch.mode = together && Math.abs(g.s - s0) < 0.5 * Math.abs(dy) && turn < 0.5 * Math.abs(dy) ? 'tilt' : 'pinch';
+        tch.moved = true;
+        // (from where the fingers came down: nothing of the gesture is lost to its telling)
+        tch.g0 = { s: s0, ang: ang0, my: 0.5 * (g.a.y0 + g.b.y0), d: opt.dist, az: azUser, el: elUser };
+        tch.mid = [0.5 * (g.a.x0 + g.b.x0), 0.5 * (g.a.y0 + g.b.y0)];
+      }
+      if (tch.mode === 'tilt') elUser = clampEl(tch.g0.el + (g.my - tch.g0.my) * 0.006);
+      else {
+        opt.dist = Math.min(DMAX, Math.max(dmin(), tch.g0.d * tch.g0.s / Math.max(g.s, 1)));
+        // (seen from below, the disk turns the other way on the screen)
+        azUser = tch.g0.az + wrapPi(g.ang - tch.g0.ang) * (tch.g0.el < 0 ? -1 : 1);
+        panBy(g.mx - tch.mid[0], g.my - tch.mid[1]); tch.mid = [g.mx, g.my];
+      }
+      touched();
+    }, on);
+    const touchEnd = (e, cancel) => {
+      const p = e.pointerType === 'touch' ? tch.pts.get(e.pointerId) : null; if (!p) return;
+      tch.pts.delete(e.pointerId);
+      const now = e.timeStamp;
+      if (tch.two) {
+        // (a finger left after two: it goes on moving the point looked at, from where it is)
+        if (tch.pts.size === 1) { const [r] = [...tch.pts.values()]; tch.last = { x: r.x, y: r.y }; tch.mode = ''; tch.g0 = null; return; }
+        if (tch.pts.size) return;
+        const tap = !tch.moved && !cancel && now - tch.t2 < TAP_MS;
+        tch.two = false; tch.mode = ''; tch.g0 = null;
+        if (tap) zoomAt(canvas.getBoundingClientRect().left + W / 2, canvas.getBoundingClientRect().top + Hh / 2, 2);
+        else emitState();
+        return;
+      }
+      if (tch.pts.size) return;
+      if (tch.moved || cancel) { if (tch.moved) emitState(); return; }
+      if (now - tch.t1 > 400) return;   // (a long press does nothing)
+      const x = e.clientX, y = e.clientY;
+      if (tch.tapTimer && now - tch.tapT < TAP_MS && Math.hypot(x - tch.tapX, y - tch.tapY) < DTAP_PX) { clearTimeout(tch.tapTimer); tch.tapTimer = 0; zoomAt(x, y, 0.5); return; }
+      tch.tapT = now; tch.tapX = x; tch.tapY = y;
+      tch.tapTimer = setTimeout(() => { tch.tapTimer = 0; clickAt(x, y); }, TAP_MS);
+    };
+    canvas.addEventListener('pointerup', (e) => touchEnd(e, false), on);
+    canvas.addEventListener('pointercancel', (e) => touchEnd(e, true), on);
     // The wheel zooms only when the panel has the focus (after a click on it, or Tab) or with Ctrl or Cmd held (a
     // trackpad's pinch comes as a wheel with ctrlKey): otherwise it scrolls the page, as a wheel over a picture should,
     // and a short hint fades in over the panel.
@@ -3915,14 +4117,19 @@ void main(){
       hint.textContent = ja() ? 'クリックしてからホイールでズーム(⌘/Ctrl+ホイールでも)' : 'Click the picture, then scroll to zoom (or \u2318/Ctrl + scroll)';
       hint.style.opacity = '1'; clearTimeout(hintT); hintT = setTimeout(() => { hint.style.opacity = '0'; }, 1600);
     };
+    // (the first touch: how to move, as on a map)
+    const touchHint = () => {
+      hint.textContent = ja() ? '指 1 本で移動、2 本でズーム' : 'One finger moves, two zoom';
+      hint.style.opacity = '1'; clearTimeout(hintT); hintT = setTimeout(() => { hint.style.opacity = '0'; }, 2200);
+    };
     canvas.addEventListener('wheel', (e) => {
       if (document.activeElement !== canvas && !e.ctrlKey && !e.metaKey) { wheelHint(); return; }
       e.preventDefault(); stopTour(false); zoomBy(Math.exp(e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015)));
     }, { passive: false, signal: ac.signal });
     // The keys: arrows turn (with Shift they move the point looked at, by a tenth of the picture), + and - zoom, Home goes
-    // back to the first view and to the star, space pauses; 1 to 5 the views' angles (VIEWS, in step with the preview
-    // page's buttons: the distance and the point looked at stay), P the planet, F the field lines, S the slice, A the
-    // annotations.
+    // back to the first view and to the star, C brings the point looked at back to the star (the view kept), space
+    // pauses; 1 to 5 the views' angles (VIEWS, in step with the preview page's buttons: the distance and the point looked
+    // at stay), P the planet, F the field lines, S the slice, A the annotations.
     const VIEWS = [[el0 * 180 / Math.PI, az0 * 180 / Math.PI, dist0], [10, -80, 85], [2, -80, 85], [89, -65, 100], [-14, -80, 85]];
     const PLANET_VIEW = { p: 1, el: 30, az: 160, d: 1.6, tx: 0, ty: 0, tz: 0 };
     // (Tab and the modifiers alone do not stop the tour: moving the focus is not taking over)
@@ -3937,6 +4144,7 @@ void main(){
       else if (k === 'ArrowUp') { elUser = clampEl(elUser + 0.05); startFly(); } else if (k === 'ArrowDown') { elUser = clampEl(elUser - 0.05); startFly(); }
       else if (k === '+' || k === '=') zoomBy(0.8); else if (k === '-' || k === '_') zoomBy(1.25);
       else if (k === 'Home') { box.diskSet({ p: 0, slice: 0, el: el0 * 180 / Math.PI, az: az0 * 180 / Math.PI, d: dist0, tx: 0, ty: 0, tz: 0, fly: 1 }); }
+      else if (k === 'c' || k === 'C') box.diskCenter();
       else if (k === ' ') box.diskPlay(paused);
       else if (k >= '1' && k <= '5') { const v = VIEWS[Number(k) - 1]; view({ p: 0, el: v[0], az: v[1] }); }
       else if (k === 'p' || k === 'P') view(PLANET_VIEW);
@@ -4001,7 +4209,7 @@ void main(){
     // (to 0.01 degree and 0.001 au, so that a link restores the picture to within a pixel)
     const deg = (r) => Math.round(r * 18000 / Math.PI) / 100;
     // az is measured from the planet's azimuth while following it (p = 1)
-    box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 1000) / 1000, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? (opt.cut === 'quarter' ? 2 : 1) : 0, sq: opt.sliceQ, p: follow ? 1 : 0, ann: opt.ann ? 1 : 0, look: opt.look, ms: opt.ms ? 1 : 0, asym: opt.asym ? 1 : 0, marks: opt.marks ? 1 : 0, coMode: opt.coMode, coV: opt.coV,
+    box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 1000) / 1000, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? (opt.cut === 'quarter' ? 2 : 1) : 0, sq: opt.sliceQ, p: follow ? 1 : 0, ann: opt.ann ? 1 : 0, look: opt.look, ms: opt.ms ? 1 : 0, asym: opt.asym ? 1 : 0, marks: opt.marks ? 1 : 0, waves: opt.waves ? 1 : 0, coMode: opt.coMode, coV: opt.coV,
       tx: Math.round(panV[0] * 1e4) / 1e4, ty: Math.round(panV[1] * 1e4) / 1e4, tz: Math.round(panV[2] * 1e4) / 1e4 });
     // A state from outside (a link, the page, a script) is checked first: the numbers must be finite (a link copied with
     // text after it, or edited by hand, must not poison the picture: a NaN in the camera or the clock would blank it),
@@ -4044,6 +4252,7 @@ void main(){
       if (st.ms != null) opt.ms = !!Number(st.ms);
       if (st.asym != null) opt.asym = !!Number(st.asym);
       if (st.marks != null) opt.marks = !!Number(st.marks);
+      if (st.waves != null) opt.waves = !!Number(st.waves);
       if (st.coMode != null && own(CO_MODES, st.coMode)) opt.coMode = st.coMode;
       if (st.coV != null && isFinite(Number(st.coV))) opt.coV = Math.max(-20, Math.min(20, Math.round(Number(st.coV) * 100) / 100));
       // the look: the slice belongs to the model's look (opening it returns there; an observed look closes it)
@@ -4060,6 +4269,8 @@ void main(){
     };
     box.diskView = (elevationDeg, azimuthDeg, distance) => box.diskSet({ el: elevationDeg, az: azimuthDeg, d: distance, p: 0 });
     box.diskPlanetView = () => box.diskSet({ ...PLANET_VIEW, fly: 1 });
+    // back to the centre: the point looked at back to the star (the planet, when following it), the view as it is
+    box.diskCenter = () => { box.diskSet({ tx: 0, ty: 0, tz: 0, fly: 1 }); emitState(); };
     // --- the tour: the highlights in turn, each with a short text, then back to the first view. Its first step brings
     // back the state the texts describe (the model's look; the gas, the surface, the pebbles, the wind and the planet;
     // the field lines, the annotations, the multiple scattering and the wind's asymmetry on, the marks off), and later
@@ -4091,8 +4302,8 @@ void main(){
         ja: '星を通る断面です。色は温度で、星の光が届く表層(白い線 τ* = 1 より上)は熱く、内部は冷たいままです。水色の破線は氷の境界、矢印は円盤風の速さです。',
         en: 'A slice through the star, coloured by temperature: the layer reached by starlight (above the white line, tau* = 1) is hot and the interior cold. The dashed line is the ice boundary; the arrows show the wind.' },
       { go: () => box.diskSlice(true, 'layers', 'quarter'), ms: 12000,
-        ja: '手前の 4 分の 1 を切り取り、切り口を磁場とガスの結合で塗り分けました。紺がデッドゾーン(磁場が結合せず、乱流もない)、青がその上の層流の表層、琥珀色が表層降着の層、内側の朱色が熱電離して乱れた領域です。降着の層は、磁場が回転と同じ向きのとき片側(ここでは下)にできます。',
-        en: 'The near quarter cut away, the faces coloured by how the field couples to the gas: the dead zone in navy (no coupling, no turbulence), the laminar surface above it in blue, the accretion layer in amber, and the turbulent, thermally ionized inner disk in red. With the field aligned with the rotation the accretion layer forms on one side (here below).' },
+        ja: '右手前の 4 分の 1 を切り取り、右の切り口を正面から見ています(左半分は切らずに残した円盤)。切り口は磁場とガスの結合で塗り分けました。紺がデッドゾーン(磁場が結合せず、乱流もない)、青がその上の層流の表層、琥珀色が表層降着の層、内側の朱色が熱電離して乱れた領域です。降着の層は、磁場が回転と同じ向きのとき片側(ここでは下)にできます。',
+        en: 'The near right quarter cut away, its right face seen face-on (the left half of the disk left whole), coloured by how the field couples to the gas: the dead zone in navy (no coupling, no turbulence), the laminar surface above it in blue, the accretion layer in amber, and the turbulent, thermally ionized inner disk in red. With the field aligned with the rotation the accretion layer forms on one side (here below).' },
       { go: () => { comps(32); box.diskSlice(false); box.diskSet({ p: 0, el: 14, az: -65, d: 340, fly: 1 }); }, ms: 10000,
         ja: '遠くから見ると、母体の雲の名残(エンベロープ)が回転しながら円盤へ落ちてきます。軸に沿った空洞の壁が、星の光で明るく見えます。',
         en: 'From afar, the remains of the parent cloud (the envelope) fall onto the disk as they rotate; the walls of a cavity along the axis are lit by the star.' },
@@ -4189,10 +4400,11 @@ void main(){
         gl.deleteBuffer(pbo);
         const ok = gpu.filter((v) => !isNaN(v));
         return { gpu: r2(med(ok)), gpuMin: ok.length ? r2(Math.min(...ok)) : NaN, wall: r2(wall), cpu: r2(med(cpu)), field: r2(med(fld)),
-          n: ok.length, disjoint, size: [canvas.width, canvas.height], scale: opt.scale, steps: Math.round(opt.steps * (opt.dist < 10 ? 2 : 1)) };
+          n: ok.length, disjoint, size: [rW, rH], scale: opt.scale, steps: Math.round(opt.steps * (opt.dist < 10 ? 2 : 1)) };
       } finally { benching = false; dirty = true; }
     };
-    box.diskScale = (sc) => { opt.scale = sc; resize(); };
+    // the render scale of the volume (the canvas has the screen's pixels); without an argument, the scale now
+    box.diskScale = (sc) => { if (sc == null) return opt.scale; opt.scale = sc; resize(); return opt.scale; };
     // draws until every flight, fade and sweep has finished (at most maxMs): for scripts and tests, and it works in a
     // hidden page too, where no animation frames come. Each frame is waited for (a pixel read back), so that frames do
     // not pile up on the GPU when they are slow.
