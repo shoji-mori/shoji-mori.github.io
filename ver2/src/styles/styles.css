@@ -1,4 +1,4 @@
-/* Self-hosted Inter and a site-specific subset of Noto Sans JP (SIL OFL, see /fonts/OFL-*.txt).
+/* Self-hosted Outfit, Inter, and a site-specific subset of Noto Sans JP (SIL OFL, see /fonts/OFL-*.txt).
    The Japanese subset is regenerated with tools/subset-jp-font.py; characters it lacks fall back to system Gothic faces. */
 @font-face{font-family:'Noto Sans JP Site';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/noto-sans-jp-site-400.woff) format('woff')}
 @font-face{font-family:'Noto Sans JP Site';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/noto-sans-jp-site-600.woff) format('woff')}
@@ -8,6 +8,8 @@
 @font-face{font-family:Inter;font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/inter-latin-ext-500-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
 @font-face{font-family:Inter;font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/inter-latin-600-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:Inter;font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/inter-latin-ext-600-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+
+@font-face{font-family:Outfit;font-style:normal;font-weight:500 700;font-display:swap;src:url(/fonts/outfit-latin-500-700-normal.woff2) format('woff2')}
 
 :root{--paper:#fafaf8;--white:#fff;--ink:#15171a;--muted:#6a6f75;--line:#e7e6e1;--tint:#f2f1ec;--navy:#15171a;--accent:#b8532a;--orange:#e0915a;--sans:Inter,'Noto Sans JP Site','Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif;--jp-system:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif;--width:1180px;--gutter:clamp(20px,5vw,72px)}
 
@@ -47,10 +49,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .button{display:inline-flex;align-items:center;justify-content:space-between;gap:22px;min-height:50px;padding:12px 22px;font-size:14px;line-height:1.5;font-weight:500;border:1px solid transparent;border-radius:999px;transition:background .2s,color .2s,transform .2s,box-shadow .2s}
 .site-header{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 86%,transparent);-webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line)}
 .header-inner{width:min(1440px,100%);padding-inline:var(--gutter);height:76px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:32px}
-.wordmark{display:flex;align-items:center;gap:12px;font:500 27px/1 var(--sans);letter-spacing:-.02em;white-space:nowrap}
-.wordmark-symbol{display:block;width:66px;height:24px;flex-shrink:0}
-.wordmark-name{display:inline-flex;align-items:baseline;gap:14px}
-.wordmark-ja{font:12px/1 var(--sans);letter-spacing:.09em;color:var(--muted)}
+/* Outfit 600 at the approved optical size; the SVG's transparent margin is accounted for at the text baseline. */
+.wordmark{display:flex;align-items:baseline;gap:12px;color:#4b6057;white-space:nowrap}
+.wordmark:hover{color:#4b6057}
+.wordmark-symbol{display:block;width:88px;height:32px;flex-shrink:0;transform:translateY(1.75px)}
+.wordmark-name{display:inline-flex;align-items:baseline;gap:14px;font:600 29.2727px/1.1 Outfit,var(--sans);letter-spacing:.01em;font-feature-settings:normal;font-kerning:normal;font-synthesis:none}
+.wordmark-ja{font:12px/1 var(--sans);letter-spacing:.09em;color:inherit}
 .desktop-nav{display:flex;align-items:center;gap:26px;margin-left:auto}
 .desktop-nav a{font-size:14px;padding-block:8px;position:relative;color:#3b4146}
 .desktop-nav a:after{content:'';height:2px;position:absolute;bottom:0;inset-inline:0;background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform .25s}
@@ -220,7 +224,6 @@ h1{font-size:clamp(40px,4.6vw,62px);letter-spacing:-.035em}
 h2{font-size:clamp(28px,2.8vw,38px);letter-spacing:-.025em}
 h3{font-size:24px;letter-spacing:-.015em}
 .lang-ja h1,.lang-ja h2,.lang-ja h3{line-height:1.4;letter-spacing:.02em}
-.wordmark{font:600 20px/1 var(--sans);letter-spacing:-.02em}
 .site-header{background:color-mix(in srgb,var(--paper) 90%,transparent)}
 .desktop-nav a:after{transition:none}
 .desktop-nav a:hover:after{transform:scaleX(0)}
@@ -231,7 +234,6 @@ h3{font-size:24px;letter-spacing:-.015em}
 
 /* Home: a fixed profile column beside dated lists. */
 .home{display:grid;grid-template-columns:260px minmax(0,1fr);gap:clamp(48px,7vw,104px);padding-block:64px 96px}
-.index-page .wordmark-name{display:none}
 .profile{align-self:start}
 @media(min-width:901px) and (min-height:760px){.profile{position:sticky;top:104px}}
 .profile-photo{width:100%;aspect-ratio:4/5;object-fit:cover;object-position:50% 22%;border-radius:4px}
@@ -342,9 +344,11 @@ h3{font-size:24px;letter-spacing:-.015em}
 
 @media(max-width:860px){.desktop-nav{display:none}.menu-toggle{display:block}}
 
-@media(max-width:420px){.wordmark-name{display:none}}
+@media(max-width:420px){.wordmark-name{display:none}.wordmark{align-items:center}.wordmark-symbol{transform:none}}
 
 @media(max-width:680px){body{font-size:16px}
+.wordmark{gap:10px}
+.wordmark-name{font-size:26.6382px}
 .header-inner{height:70px;gap:15px}
 .header-controls{gap:17px}
 .header-cv{display:none}
