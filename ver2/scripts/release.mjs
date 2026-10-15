@@ -12,7 +12,7 @@ const site = path.join(root, '..');
 const directories = ['research', 'publications', 'talks', 'cv', 'news', 'images', 'fonts'];
 // Routes that were published earlier and have since been removed from the site.
 const removed = ['mentoring'];
-const files = ['index.html', '404.html', 'styles.css', 'site.js', 'publications.bib', 'sitemap.xml'];
+const files = ['index.html', '404.html', 'styles.css', 'site.js', 'publications.bib', 'sitemap.xml', 'favicon.ico', 'apple-touch-icon.png'];
 
 console.log('Built', build());
 const run = (args) => execFileSync(process.execPath, args, { cwd: root, stdio: 'inherit' });
