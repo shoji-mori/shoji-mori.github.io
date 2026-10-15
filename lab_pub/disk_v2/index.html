@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0c0f17">
+<title>Disk Lab | Shoji Mori</title>
+<meta name="description" content="An interactive, physically based model of a protoplanetary disk, drawn on the GPU in the browser.">
+<link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+<link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="disk-lab.css?v=20261015c">
+<script>
+  // The language, chosen as the site chooses it: ?lang=, the visit's choice, then the browser's language.
+  (() => {
+    const requested = new URLSearchParams(location.search).get('lang');
+    let selected;
+    try { selected = sessionStorage.getItem('site-language'); } catch {}
+    const preferred = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
+    const supported = (l) => l === 'en' || l === 'ja';
+    const lang = supported(requested) ? requested : supported(selected) ? selected : /^ja(?:-|$)/i.test(preferred) ? 'ja' : 'en';
+    document.documentElement.lang = lang;
+    document.documentElement.classList.toggle('lang-ja', lang === 'ja');
+  })();
+</script>
+<script type="module" src="app.js?v=20261015c"></script>
+</head>
+<body>
+<div class="lab" id="lab" data-state="loading">
+  <header class="bar">
+    <p class="mark"><a class="home" href="/">Shoji Mori</a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span></p>
+    <div class="bar-end">
+      <button type="button" class="text-button" id="aboutOpen" aria-haspopup="dialog"><span class="en" lang="en">About this model</span><span class="ja" lang="ja">このモデルについて</span></button>
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button type="button" data-lang="en" lang="en" aria-pressed="true">EN</button><span aria-hidden="true">/</span><button type="button" data-lang="ja" lang="ja" aria-pressed="false">日本語</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <h1 class="sr-only"><span class="en" lang="en">Disk Lab: a model protoplanetary disk</span><span class="ja" lang="ja">Disk Lab:原始惑星系円盤のモデル</span></h1>
+    <div class="disk-panel" id="disk" data-mobile data-elevation="22" data-azimuth="-65" data-distance="90" data-fov="32" data-scale="0.5" data-scale-max="0.25" data-steps="150">
+      <img class="disk-static" id="poster" alt="" decoding="async">
+    </div>
+    <div class="temp-key" id="tempKey" aria-hidden="true">
+      <span class="temp-title"><span class="en" lang="en">Temperature</span><span class="ja" lang="ja">温度</span></span>
+      <span class="temp-bar" id="tempBar"></span>
+      <span class="temp-ticks"><span>30 K</span><span>160 K</span><span>2000 K</span></span>
+    </div>
+    <p class="stage-hint" id="stageHint" aria-hidden="true"></p>
+    <p class="stage-note" id="stageNote" role="status" aria-live="polite"></p>
+    <aside class="panel" id="panel" hidden aria-labelledby="panelTitle" tabindex="-1">
+      <div class="panel-head">
+        <h2 id="panelTitle"><span class="en" lang="en">Display</span><span class="ja" lang="ja">表示</span></h2>
+        <button type="button" class="icon-button" id="panelClose" data-aria-en="Close" data-aria-ja="閉じる"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
+      </div>
+      <div class="panel-body">
+        <section>
+          <h3><span class="en" lang="en">Show</span><span class="ja" lang="ja">見せるもの</span></h3>
+          <div class="toggles">
+            <button type="button" class="toggle" data-bit="1" aria-pressed="true"><span class="en" lang="en">Gas</span><span class="ja" lang="ja">ガス</span></button>
+            <button type="button" class="toggle" data-bit="2" aria-pressed="true"><span class="en" lang="en">Lit surface</span><span class="ja" lang="ja">表層</span></button>
+            <button type="button" class="toggle" data-bit="4" aria-pressed="true"><span class="en" lang="en">Pebbles</span><span class="ja" lang="ja">小石</span></button>
+            <button type="button" class="toggle" data-bit="8" aria-pressed="true"><span class="en" lang="en">Wind</span><span class="ja" lang="ja">円盤風</span></button>
+            <button type="button" class="toggle" data-bit="16" aria-pressed="true"><span class="en" lang="en">Planet</span><span class="ja" lang="ja">惑星</span></button>
+            <button type="button" class="toggle" data-bit="32" aria-pressed="true"><span class="en" lang="en">Envelope</span><span class="ja" lang="ja">エンベロープ</span></button>
+            <button type="button" class="toggle" data-opt="field" aria-pressed="false"><span class="en" lang="en">Field lines</span><span class="ja" lang="ja">磁力線</span></button>
+            <button type="button" class="toggle" data-opt="marks" aria-pressed="false"><span class="en" lang="en">Flow markers</span><span class="ja" lang="ja">流れの印</span></button>
+            <button type="button" class="toggle" data-opt="ann" aria-pressed="true"><span class="en" lang="en">Labels and scale</span><span class="ja" lang="ja">注釈と縮尺</span></button>
+          </div>
+          <p class="panel-note"><span class="en" lang="en">Some parts show only in some looks: field lines and flow markers in the model look, the envelope from afar.</span><span class="ja" lang="ja">見え方によって描かれないものがあります(磁力線と流れの印はモデルの見え方だけ、エンベロープは遠くからだけ)。</span></p>
+        </section>
+        <section>
+          <h3><span class="en" lang="en">Variants</span><span class="ja" lang="ja">別の形</span></h3>
+          <div class="toggles">
+            <button type="button" class="toggle" data-opt="sym" aria-pressed="false"><span class="en" lang="en">Symmetric wind</span><span class="ja" lang="ja">風を上下対称に</span></button>
+            <button type="button" class="toggle" data-opt="waves" aria-pressed="false"><span class="en" lang="en">Exaggerate the waves</span><span class="ja" lang="ja">惑星の波を強調</span></button>
+          </div>
+        </section>
+        <section>
+          <h3><span class="en" lang="en">Cut</span><span class="ja" lang="ja">断面</span></h3>
+          <div class="segmented small" role="group" id="cutGroup">
+            <button type="button" data-cut="0" aria-pressed="true"><span class="en" lang="en">None</span><span class="ja" lang="ja">なし</span></button>
+            <button type="button" data-cut="1" aria-pressed="false"><span class="en" lang="en">Half</span><span class="ja" lang="ja">1/2</span></button>
+            <button type="button" data-cut="2" aria-pressed="false"><span class="en" lang="en">Quarter</span><span class="ja" lang="ja">1/4</span></button>
+          </div>
+        </section>
+        <section>
+          <h3><span class="en" lang="en">Angle</span><span class="ja" lang="ja">角度</span></h3>
+          <div class="chips">
+            <button type="button" class="chip" data-angle="89,-65"><span class="en" lang="en">Face-on</span><span class="ja" lang="ja">真上</span></button>
+            <button type="button" class="chip" data-angle="22,-65"><span class="en" lang="en">Tilted</span><span class="ja" lang="ja">斜め</span></button>
+            <button type="button" class="chip" data-angle="10,-80"><span class="en" lang="en">Low</span><span class="ja" lang="ja">低く</span></button>
+            <button type="button" class="chip" data-angle="2,-80"><span class="en" lang="en">Edge-on</span><span class="ja" lang="ja">真横</span></button>
+            <button type="button" class="chip" data-angle="-14,-80"><span class="en" lang="en">From below</span><span class="ja" lang="ja">下から</span></button>
+          </div>
+          <div class="chips">
+            <button type="button" class="chip quiet" id="recentre"><span class="en" lang="en">Centre on the star</span><span class="ja" lang="ja">中心を星に戻す</span></button>
+            <button type="button" class="chip quiet" id="resetView"><span class="en" lang="en">Start again</span><span class="ja" lang="ja">最初の眺めへ</span></button>
+          </div>
+        </section>
+        <section id="timeSection">
+          <h3><span class="en" lang="en">Speed</span><span class="ja" lang="ja">時間の速さ</span></h3>
+          <div class="segmented small" role="group" id="speedGroup">
+            <button type="button" data-speed="0.3" aria-pressed="false">×0.3</button>
+            <button type="button" data-speed="1" aria-pressed="true">×1</button>
+            <button type="button" data-speed="3" aria-pressed="false">×3</button>
+          </div>
+          <p class="panel-note"><span class="en" lang="en">At ×1 an orbit at 1 au (one year) takes 12 seconds.</span><span class="ja" lang="ja">×1 では、1 au の公転(1 年)が 12 秒です。</span></p>
+          <p class="panel-note" id="reducedNote" hidden></p>
+        </section>
+        <section>
+          <h3><span class="en" lang="en">Save and share</span><span class="ja" lang="ja">保存と共有</span></h3>
+          <div class="chips">
+            <button type="button" class="chip" id="copyLink"><span class="en" lang="en">Copy a link to this view</span><span class="ja" lang="ja">この眺めのリンクをコピー</span></button>
+            <button type="button" class="chip" id="saveImage"><span class="en" lang="en">Save as an image</span><span class="ja" lang="ja">画像として保存</span></button>
+          </div>
+          <input class="link-field" id="linkField" type="text" readonly hidden data-aria-en="Link to this view" data-aria-ja="この眺めのリンク">
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <section class="dock" id="dock" aria-label="Places and views">
+    <div class="route-row">
+      <div class="steppers">
+        <button type="button" class="icon-button" id="prev"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
+        <button type="button" class="icon-button" id="next"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
+      </div>
+      <nav class="route" id="route"><ol id="routeList"></ol></nav>
+    </div>
+    <div class="card" id="card">
+      <h2 class="sr-only" id="placeTitle"></h2>
+      <p class="place-text" id="placeText" aria-live="polite"></p>
+      <div class="place-actions" id="placeActions"></div>
+      <p class="still-note" id="stillNote" hidden></p>
+    </div>
+    <div class="looks" id="looks">
+      <div class="segmented" role="group" id="lookGroup"></div>
+      <p class="look-note" id="lookNote"></p>
+    </div>
+    <div class="tools" id="tools">
+      <button type="button" class="tool" id="play"><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L12.6 8z"/></svg><span class="clock" id="clock">0.0 yr</span></button>
+      <button type="button" class="tool" id="panelOpen" aria-expanded="false" aria-controls="panel" data-aria-en="Display" data-aria-ja="表示"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5h7M12 4.5h2M2 11.5h2M7 11.5h7"/><circle cx="10.5" cy="4.5" r="1.6"/><circle cx="5.5" cy="11.5" r="1.6"/></svg><span class="en" lang="en">Display</span><span class="ja" lang="ja">表示</span></button>
+    </div>
+  </section>
+
+</div>
+
+<dialog class="about" id="about" aria-labelledby="aboutTitle">
+  <div class="about-inner">
+    <button type="button" class="icon-button about-close" id="aboutClose" data-aria-en="Close" data-aria-ja="閉じる"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
+    <h2 id="aboutTitle" tabindex="-1" autofocus><span class="en" lang="en">About this model</span><span class="ja" lang="ja">このモデルについて</span></h2>
+    <p class="lead"><span class="en" lang="en">A schematic model of a protoplanetary disk, assembled from physics. The equations and solutions come from the literature; strengths, colours and other settings are chosen so that the structure reads clearly. It is not the output of a simulation.</span><span class="ja" lang="ja">原始惑星系円盤を、物理にもとづいて組み立てた模式的なモデルです。式と解は文献のものを使い、強さや色などの値は構造が読み取りやすいように選んでいます。シミュレーションの結果そのものではありません。</span></p>
+    <p><span class="en" lang="en">It is drawn on your GPU: along each line of sight the light emitted and absorbed is added up (volume rendering). Field lines and labels are drawn over it as vector lines. Made by Shoji Mori.</span><span class="ja" lang="ja">ブラウザーの GPU で、視線に沿って光の放射と吸収を足し合わせて描いています(ボリュームレンダリング)。磁力線と注釈はベクトルの線で重ねています。作成:森 昇志。</span></p>
+
+    <h3><span class="en" lang="en">What is in it</span><span class="ja" lang="ja">入っているもの</span></h3>
+    <dl class="facts">
+      <dt><span class="en" lang="en">Disk</span><span class="ja" lang="ja">円盤</span></dt>
+      <dd><span class="en" lang="en">30 au in radius. Surface density falls as 1/R; the thickness, H/R = 0.03 (R/1 au)<sup>1/4</sup>, flares outward. The midplane is 150 K at 1 au.</span><span class="ja" lang="ja">半径 30 au。面密度は半径に反比例し、厚み H/R = 0.03 (R/1 au)<sup>1/4</sup> で外ほど反り返ります。赤道面の温度は 1 au で 150 K。</span></dd>
+      <dt><span class="en" lang="en">Lit surface</span><span class="ja" lang="ja">表層</span></dt>
+      <dd><span class="en" lang="en">The thin layer where grazing starlight is absorbed. Only it is hot and bright; its glow is integrated analytically.</span><span class="ja" lang="ja">斜めに当たる星の光が吸収される薄い層。ここだけが熱く明るくなります。光り方は解析的に積分しています。</span></dd>
+      <dt><span class="en" lang="en">Pebbles and the snow line</span><span class="ja" lang="ja">小石とスノーライン</span></dt>
+      <dd><span class="en" lang="en">Larger dust settles to the midplane and is coated in ice where it is colder than 160 K, beyond about 0.9 au.</span><span class="ja" lang="ja">大きめの塵は赤道面に沈み、160 K より冷たい所(約 0.9 au より外)で氷をまといます。</span></dd>
+      <dt><span class="en" lang="en">Field and wind</span><span class="ja" lang="ja">磁場と円盤風</span></dt>
+      <dd><span class="en" lang="en">A self-similar solution for a cold magnetocentrifugal wind of the Blandford &amp; Payne (1982) kind, with lever arm λ = 3. By default the wind is stronger on one side, as for a field aligned with the rotation (Mori, Bai &amp; Tomida 2025).</span><span class="ja" lang="ja">Blandford &amp; Payne (1982) 型の、冷たい磁気遠心風の自己相似解(レバーアーム λ = 3)。既定では片側が強い風です(磁場が回転と同じ向きの場合。Mori, Bai &amp; Tomida 2025)。</span></dd>
+      <dt><span class="en" lang="en">Field and gas</span><span class="ja" lang="ja">磁場とガスの結びつき</span></dt>
+      <dd><span class="en" lang="en">The gas is weakly ionized. Near the midplane, Ohmic diffusion leaves a dead zone (out to 7.5 au) where the field cannot act; inside 0.3 au the gas is ionized by heat and turbulent. The surface above is laminar (ambipolar diffusion), and accretion runs in a thin layer near it.</span><span class="ja" lang="ja">ガスの電離は弱く、赤道面付近はオーム散逸で磁場が効かないデッドゾーン(約 7.5 au まで)。0.3 au より内側は熱で電離して乱流になります。その上の表層は両極性拡散で層流で、降着は表層近くの薄い層を流れます。</span></dd>
+      <dt><span class="en" lang="en">Planet</span><span class="ja" lang="ja">惑星</span></dt>
+      <dd><span class="en" lang="en">A Jupiter-mass planet at 3 au: its gap, the ring of pebbles just outside, spiral waves (their decay from the global solution of Rafikov 2002) and a circumplanetary disk.</span><span class="ja" lang="ja">3 au に木星質量の惑星。ギャップ、そのすぐ外の小石の環、渦巻きの波(減衰は Rafikov 2002 の大域解)、周惑星円盤。</span></dd>
+      <dt><span class="en" lang="en">The star's magnetosphere</span><span class="ja" lang="ja">星の磁気圏</span></dt>
+      <dd><span class="en" lang="en">The star's dipole field truncates the disk at 0.05 au; inside, gas falls onto the star along closed field lines.</span><span class="ja" lang="ja">星の双極子磁場が 0.05 au で円盤を切り取り、その内側ではガスが閉じた磁力線に沿って星へ落ちます。</span></dd>
+      <dt><span class="en" lang="en">Envelope</span><span class="ja" lang="ja">エンベロープ</span></dt>
+      <dd><span class="en" lang="en">The rest of the parent cloud, falling in as it rotates (the solution of Ulrich 1976, landing within the disk's edge at 30 au), with a cavity cleared along the axis.</span><span class="ja" lang="ja">回転しながら落ちる母体の雲の名残(Ulrich 1976 の解。円盤の縁 30 au より内側に着地)。軸に沿って空洞が開いています。</span></dd>
+    </dl>
+
+    <h3><span class="en" lang="en">The looks</span><span class="ja" lang="ja">見え方</span></h3>
+    <dl class="facts">
+      <dt><span class="en" lang="en">Model</span><span class="ja" lang="ja">モデル</span></dt>
+      <dd><span class="en" lang="en">The model's own quantities: colour is temperature, brightness the starlight absorbed. The gas is drawn translucent so the midplane shows; a real disk is opaque in visible light.</span><span class="ja" lang="ja">モデルの量そのもの。色は温度、明るさは吸収した星の光です。赤道面が見えるよう、ガスは半透明に描いています(実際の円盤は可視光では不透明です)。</span></dd>
+      <dt><span class="en" lang="en">Scattered, Mid-IR, Millimetre</span><span class="ja" lang="ja">散乱光、中間赤外、ミリ波</span></dt>
+      <dd><span class="en" lang="en">The disk as a telescope at that wavelength would see it: starlight scattered by the surface and the wind; the warm surface's own glow; the pebbles' glow at the midplane.</span><span class="ja" lang="ja">その波長の望遠鏡に映る姿。表層と風が散らす星の光、暖かい表層が自ら出す光、赤道面の小石が出す光。</span></dd>
+      <dt>CO</dt>
+      <dd><span class="en" lang="en">The rotational line of carbon monoxide, as a channel map, the mean velocity (moment 1) or the integrated intensity (moment 0).</span><span class="ja" lang="ja">一酸化炭素の回転輝線。チャンネル図、平均速度(モーメント 1)、積分強度(モーメント 0)。</span></dd>
+    </dl>
+
+    <h3><span class="en" lang="en">Limits</span><span class="ja" lang="ja">限界</span></h3>
+    <ul>
+      <li><span class="en" lang="en">Compared with RADMC-3D for the same inputs, the millimetre look agrees; the CO line, the mid-infrared and scattered light keep differences from the approximations used here.</span><span class="ja" lang="ja">同じ入力の RADMC-3D の計算と比べると、ミリ波は一致し、CO、中間赤外、散乱光には近似による差が残ります。</span></li>
+      <li><span class="en" lang="en">Time is compressed: at ×1 an orbit at 1 au takes 12 seconds. An outburst fades in half a minute (real ones last decades); a planet grows in seconds (really hundreds of thousands of years or more).</span><span class="ja" lang="ja">時間は縮めています。×1 では 1 au の公転が 12 秒。増光は 30 秒ほどで収まり(実際は数十年)、惑星は数秒で育ちます(実際は数十万年以上)。</span></li>
+      <li><span class="en" lang="en">Scattering is single, with an approximate allowance for light that seeps below the surface.</span><span class="ja" lang="ja">散乱は一回だけで、表層の下へしみ込む光を近似で加えています。</span></li>
+    </ul>
+
+    <h3><span class="en" lang="en">Controls</span><span class="ja" lang="ja">操作</span></h3>
+    <ul>
+      <li><span class="en" lang="en">Drag to turn; scroll or pinch to zoom; Shift-drag (or the right button) moves the point you look at.</span><span class="ja" lang="ja">ドラッグで回転、スクロールかピンチで拡大・縮小、Shift+ドラッグ(または右ボタン)で見る中心を動かします。</span></li>
+      <li><span class="en" lang="en">On a touch screen, as on a map: one finger moves, two fingers zoom and turn, two fingers moved up or down tilt; double-tap to zoom in.</span><span class="ja" lang="ja">タッチでは地図と同じです。1 本指で移動、2 本指で拡大と回転、2 本そろえて上下に動かすと傾きが変わります。ダブルタップで拡大。</span></li>
+      <li><span class="en" lang="en">With the picture focused (Tab): arrows turn, + and − zoom, Home returns to the first view, space pauses, 1–5 set the angle, P goes to the planet, F field lines, S the cut, A labels.</span><span class="ja" lang="ja">図にフォーカスがあるとき(Tab):矢印で回転、+ と − で拡大・縮小、Home で最初の視点、スペースで一時停止、1〜5 で角度、P で惑星へ、F で磁力線、S で断面、A で注釈。</span></li>
+      <li><span class="en" lang="en">Click the star, or click the disk, and see what happens.</span><span class="ja" lang="ja">星や円盤をクリックすると、何かが起きます。</span></li>
+    </ul>
+
+    <h3><span class="en" lang="en">References</span><span class="ja" lang="ja">文献</span></h3>
+    <ul class="refs">
+      <li>Blandford, R. D. &amp; Payne, D. G. 1982, MNRAS, 199, 883</li>
+      <li>Ulrich, R. K. 1976, ApJ, 210, 377</li>
+      <li>Rafikov, R. R. 2002, ApJ, 569, 997</li>
+      <li>Mori, S., Bai, X.-N. &amp; Tomida, K. 2025, ApJ, 992, 85</li>
+      <li>Cieza, L. A. et al. 2016, Nature, 535, 258 <span class="en" lang="en">(the snow line of V883 Ori in outburst)</span><span class="ja" lang="ja">(増光中の V883 Ori のスノーライン)</span></li>
+    </ul>
+    <p class="colophon" id="colophon"></p>
+  </div>
+</dialog>
+</body>
+</html>
