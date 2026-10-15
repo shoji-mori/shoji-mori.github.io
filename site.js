@@ -73,9 +73,10 @@ function initializeSite() {
     });
     for(const section of filterSections) applyFilters(section);
     if(persist) {
+      // A new tab starts in English; an explicit choice lasts only for this tab.
       // Storage can be unavailable in private or restricted browser contexts.
       // The visible language still changes; only persistence is optional.
-      try{localStorage.setItem('lang',lang);}catch{}
+      try{sessionStorage.setItem('site-language',lang);}catch{}
     }
   }
   setLanguage((incomingParams.get('lang')||html.lang)==='ja'?'ja':'en',false);
@@ -99,7 +100,7 @@ function initializeSite() {
     language.value=params.get('lang')==='ja'?'ja':'en';
     range.value=params.get('range')==='filtered'?'filtered':'all';
     function updateExport() {
-      // Export preferences belong to this document, not the website's saved language.
+      // Export preferences belong to this document, not the current tab's site language.
       setLanguage(language.value,false);
       let count=0;
       for(const record of records) {
