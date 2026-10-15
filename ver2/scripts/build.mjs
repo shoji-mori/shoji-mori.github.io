@@ -166,7 +166,7 @@ export function build() {
   // Former pages redirect to where their content now lives.
   for (const [dir,target,title] of [['news','/talks/','Talks']]) {
     mkdirSync(path.join(dist,dir),{recursive:true});
-    writeFileSync(path.join(dist,dir,'index.html'),'<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url='+target+'"><link rel="canonical" href="https://shoji-mori.github.io'+target+'"><title>'+title+' | Shoji Mori</title><link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-wave-32.png?v=m-logo-all-pages-20261015"><link rel="icon" type="image/svg+xml" sizes="any" href="/images/favicon-wave.svg?v=m-logo-all-pages-20261015"><link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-wave.png?v=m-logo-all-pages-20261015"></head><body><p><a href="'+target+'">'+title+'</a></p></body></html>\n');
+    writeFileSync(path.join(dist,dir,'index.html'),'<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url='+target+'"><link rel="canonical" href="https://shoji-mori.github.io'+target+'"><title>'+title+' | Shoji Mori</title><link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-wave-32.png?v=a5-bold-20261015"><link rel="icon" type="image/svg+xml" sizes="any" href="/images/favicon-wave.svg?v=a5-bold-20261015"><link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-wave.png?v=a5-bold-20261015"></head><body><p><a href="'+target+'">'+title+'</a></p></body></html>\n');
   }
   return {pages:pages.length,printPages:2,publications:publications.length,presentations:presentations.length,materials:materials.length};
 }
