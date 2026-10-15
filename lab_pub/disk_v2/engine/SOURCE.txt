@@ -1,6 +1,6 @@
-source: lab/disk/disk3d.js
-commit: 9436767182acd621abc77cf5a47fef86fa0a590f
-sha256 of the source: 736b68fc62d25468757064d0628b715daed7d689a02bf2133287d35b50d8c32a
-patch: ver2/tools/disk-lab-v2/engine-patch.py (frames in flight; the exposure's readback at the start of a frame)
-sha256 of the patched copy: c78aeec7767d5cbff7d36e8aeb51675ddcb3b093b97903342368702330ed9151
-copied: 2026-10-15T11:41:12Z
+Disk Lab v2's own engine since 2026-10-16 (see CHANGES.md); not copied from lab/disk any more.
+base: lab/disk/disk3d.js
+base commit: 9436767182acd621abc77cf5a47fef86fa0a590f
+sha256 of the base: 736b68fc62d25468757064d0628b715daed7d689a02bf2133287d35b50d8c32a
+sha256 of this engine: e8aabb71e11515cc47cfc2fe8cfc79b5d6deed3f9307132aa93f8add2666afe8
+updated: 2026-10-16

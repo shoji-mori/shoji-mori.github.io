@@ -341,22 +341,34 @@ const float TILT_PITCH = 0.5;           // tan of the pitch of a structure when 
 // structure lives about LIFE/Ω and is then replaced, so the spirals keep a steady pitch at every
 // radius instead of winding up. Lifetimes come in bands four times apart (blended in radius), each
 // with two staggered generations (blended in time). fp is the pixel footprint in ln R: unresolved
-// detail fades out; time is the moment the structure is taken at (the model clock for the disk, the
-// launch for the gas of the wind); cells = (cells around, cells per unit ln R). Returns the relative
+// detail fades out; launchOffset is relative to the model clock (zero for the disk, -tau/Om for gas launched into the
+// wind); cells = (cells around, cells per unit ln R). Returns the relative
 // perturbation of the first octave and, with fine = true, that of both octaves and the slope along ln R
 // in units of the local wavenumber. (turbL: with a lifetime life/Ω of one's own.)
+// The generations' phase comes split from the script (uploadPhaseClock): the integer count of lifetimes and the fraction
+// of the current one, so that float32 keeps it exact however long the clock has run (from origin/main's dc55d44; a
+// shader that divided the clock by the period lost the phase after an hour or so for the fastest bands).
+uniform highp int uFpGeneration[16];
+uniform float uFpResidual[16];
+uniform float uFpPeriod[16];
+vec2 fpPhase(float band, int k, float launchOffset){
+  highp int i = int(band) + 5;
+  float x = uFpResidual[i] + .5 * float(k) + launchOffset / uFpPeriod[i];
+  highp int carry = int(floor(x));
+  return vec2(float(uFpGeneration[i] + carry), fract(x));
+}
 const float LIFE = 1.5, AGE0 = 0.25;
-vec3 turbL(float lnR, float phi, float Om, float fp, float seed, bool fine, float time, vec2 cells, float life){
+vec3 turbL(float lnR, float phi, float Om, float fp, float seed, bool fine, float launchOffset, vec2 cells, float life){
   float b = log(life / Om) * 0.7213475, bf = smoothstep(0.3, 0.7, fract(b));
   vec3 n = vec3(0.0); float w2 = 0.0;
   float tilt = cells.x / TAU / TILT_PITCH;
   for (int j = 0; j < 2; j++) {
     float wb = j == 0 ? 1.0 - bf : bf;
     if (wb <= 0.0) continue;
-    float band = floor(b) + float(j), T = exp2(2.0 * band);
+    float band = floor(b) + float(j), T = uFpPeriod[int(band) + 5];
     for (int k = 0; k < 2; k++) {
-      float c = time / T + 0.5 * float(k) + 0.37 * band;
-      float fc = fract(c), age = (AGE0 + fc) * T, w = wb * (1.0 - abs(2.0 * fc - 1.0));
+      vec2 clock = fpPhase(band, k, launchOffset); float c = clock.x;
+      float fc = clock.y, age = (AGE0 + fc) * T, w = wb * (1.0 - abs(2.0 * fc - 1.0));
       vec2 dq = vec2(cells.x / TAU * 1.5 * Om * age + tilt, cells.y);   // dq/dlnR after shearing
       float kr = length(dq);
       vec2 q = vec2(cells.x / TAU * (phi - Om * age) + tilt * lnR, cells.y * lnR + seed + 17.0 * floor(c) + 41.0 * float(k) + 29.0 * band);
@@ -374,7 +386,7 @@ vec3 turbL(float lnR, float phi, float Om, float fp, float seed, bool fine, floa
   }
   return n * inversesqrt(w2);
 }
-vec3 turb(float lnR, float phi, float Om, float fp, float seed, bool fine, float time, vec2 cells){ return turbL(lnR, phi, Om, fp, seed, fine, time, cells, LIFE); }
+vec3 turb(float lnR, float phi, float Om, float fp, float seed, bool fine, float launchOffset, vec2 cells){ return turbL(lnR, phi, Om, fp, seed, fine, launchOffset, cells, LIFE); }
 // Strength of the turbulent structure: only in the thermally ionized innermost disk (inside R_TI = 0.3 au), where the
 // magnetorotational instability works; elsewhere the disk is laminar (see NONIDEAL)
 float turbAmp(float R){ return 1.7 * mriAmp(R); }
@@ -481,9 +493,9 @@ float accTurb(float lnR, float phi, float Om, float fp, float drift, float seed)
   for (int j = 0; j < 2; j++) {
     float wb = j == 0 ? 1.0 - bf : bf;
     if (wb <= 0.0) continue;
-    float band = floor(b) + float(j), T = exp2(2.0 * band);
+    float band = floor(b) + float(j), T = uFpPeriod[int(band) + 5];
     for (int k = 0; k < 2; k++) {
-      float c = uTime / T + 0.5 * float(k) + 0.37 * band, fc = fract(c), age = (AGE0 + fc) * T, w = wb * (1.0 - abs(2.0 * fc - 1.0));
+      vec2 clock = fpPhase(band, k, 0.0); float c = clock.x, fc = clock.y, age = (AGE0 + fc) * T, w = wb * (1.0 - abs(2.0 * fc - 1.0));
       float kr = length(vec2(ACC_CELLS.x / TAU * 1.5 * Om * age + tilt, ACC_CELLS.y));
       vec2 q = vec2(ACC_CELLS.x / TAU * (phi - Om * age) + tilt * lnR,
                     ACC_CELLS.y * (lnR + drift * Om * age) + seed + 17.0 * floor(c) + 41.0 * float(k) + 29.0 * band);
@@ -505,7 +517,7 @@ void main(){
   float fp = dist * uPixA / R * (1.0 + (1.0 / max(abs(rd.z), 0.1) - 1.0) * abs(dot(P / R, normalize(rd.xy + 1e-6))));
   fp = max(fp, 3.0 * LNR_SPAN / uMapRes.x);
   // (the structure is only in the thermally ionized inner disk; its shadows reach out to twice its radius)
-  vec3 n = A > 0.0 ? turb(lnR, phi, Om, fp, uSeed, true, uTime, CELLS) * A : vec3(0.0);
+  vec3 n = A > 0.0 ? turb(lnR, phi, Om, fp, uSeed, true, 0.0, CELLS) * A : vec3(0.0);
   // cast shadows: the optical depth toward the star builds up mostly over the last part of the ray
   // (R' = t R, t from 0.5 to 1, weighted by the smooth profile), where the turbulence raises or lowers
   // the density. The surface behind a crest is shaded, behind a trough it is lit more strongly.
@@ -515,10 +527,10 @@ void main(){
     float t = 1.0 - 0.1 * float(k), tm = t + 0.05;
     float r = exp(-1.25 * log(t) - aR * (inversesqrt(t) - 1.0));          // tau*(t) / tau*(1) along the ray
     float At = turbAmp(R * tm);
-    float f = At > 0.0 ? exp(1.6 * At * turb(lnR + log(tm), phi, Om * pow(tm, -1.5), fp, uSeed, false, uTime, CELLS).x - 0.08 * At * At) : 1.0;
+    float f = At > 0.0 ? exp(1.6 * At * turb(lnR + log(tm), phi, Om * pow(tm, -1.5), fp, uSeed, false, 0.0, CELLS).x - 0.08 * At * At) : 1.0;
     dtau += (f - 1.0) * (rPrev - r); rPrev = r;
   }
-  float nd = A > 0.0 ? turb(lnR, phi, Om, fp, uSeed + 11.0, false, uTime, CELLS).x : 0.0;
+  float nd = A > 0.0 ? turb(lnR, phi, Om, fp, uSeed + 11.0, false, 0.0, CELLS).x : 0.0;
   // the planet's wake raises the gas, the pebbles (which collect in its pressure crests, a little less) and, more, the
   // surface that faces the star; the raised crest shades the surface just outside it, so each arm is a bright crest
   // with a darker trough beyond
@@ -598,7 +610,7 @@ void main(){
   float v[${nb}];
   for (int k = 0; k < ${nb}; k++) {
     float tau = WSTR_TAU * (uLayer0 + float(k) + 0.5) / uResW.z;
-    v[k] = turbL(lnr0, phi - tau, Om, 0.0, uSeed + 23.0, false, uTime - tau / Om, WIND_CELLS, WIND_LIFE * LIFE).x;
+    v[k] = turbL(lnr0, phi - tau, Om, 0.0, uSeed + 23.0, false, -tau / Om, WIND_CELLS, WIND_LIFE * LIFE).x;
   }
 ${Array.from({ length: nb }, (_, i) => `  o${i} = vec4(v[${i}]);`).join('\n')}
 }`;
@@ -637,10 +649,10 @@ void main(){
   for (int j = 0; j < 2; j++) {
     float wb = j == 0 ? 1.0 - bf : bf;
     if (wb <= 0.0) continue;
-    float band = floor(b) + float(j), T = exp2(2.0 * band);
+    float band = floor(b) + float(j), T = uFpPeriod[int(band) + 5];
     for (int g = 0; g < 2; g++) {
-      float c = uTime / T + 0.5 * float(g) + 0.37 * band;
-      float fc = fract(c), age = (AGE0 + fc) * T, w = wb * (1.0 - abs(2.0 * fc - 1.0));
+      vec2 clock = fpPhase(band, g, 0.0); float c = clock.x;
+      float fc = clock.y, age = (AGE0 + fc) * T, w = wb * (1.0 - abs(2.0 * fc - 1.0));
       float kr = length(vec2(CELLS3.x / TAU * 1.5 * Om * age + tilt, CELLS3.y));
       vec2 q = vec2(CELLS3.x / TAU * (phi - Om * age) + tilt * lnR, CELLS3.y * lnR + uSeed + 31.0 + 17.0 * floor(c) + 41.0 * float(g) + 29.0 * band);
       for (int k = 0; k < ${nb}; k++) {
@@ -1098,6 +1110,8 @@ float Eabs(float R, float lnR, float H){
   return beta / 0.022 * pow(1.0 + R, 0.9) / (0.66 * (R * R + 0.01)) * smoothstep(R_IN * 0.85, R_IN * 1.5, R) * pow(max(R / OUTER_R, 1.0), OUTER_E);
 }
 
+// (Disk Lab v2: the hot end turned from warm white to yellow through gold, and the ice's edge from cream to white, so
+// that 160 K and 2000 K no longer look alike: blue, white at the snow line, orange, gold, yellow.)
 // Temperature palette (linear RGB; the stops are chosen in display space): blue below the water-ice
 // temperature, pale at it, then amber, gold and warm white toward dust sublimation. Hue carries
 // temperature; brightness comes from the energy budget.
@@ -1105,11 +1119,11 @@ vec3 tcolor(float T){
   float l = log(T);
   vec3 c = vec3(0.023, 0.148, 0.893);                                     // 40 K
   c = mix(c, vec3(0.071, 0.325, 1.000), smoothstep(3.69, 4.50, l));      // 90 K
-  c = mix(c, vec3(0.485, 0.755, 1.000), smoothstep(4.50, 4.98, l));      // 145 K
-  c = mix(c, vec3(1.000, 0.852, 0.612), smoothstep(4.98, 5.16, l));      // 175 K
+  c = mix(c, vec3(0.560, 0.800, 1.000), smoothstep(4.50, 4.98, l));      // 145 K
+  c = mix(c, vec3(0.920, 0.900, 0.860), smoothstep(4.98, 5.16, l));      // 175 K (Disk Lab v2: white, the ice's edge)
   c = mix(c, vec3(1.000, 0.325, 0.047), smoothstep(5.16, 5.86, l));      // 350 K
-  c = mix(c, vec3(1.000, 0.682, 0.302), smoothstep(5.86, 6.68, l));      // 800 K
-  c = mix(c, vec3(1.000, 0.914, 0.793), smoothstep(6.68, 7.38, l));      // 1600 K
+  c = mix(c, vec3(1.000, 0.560, 0.120), smoothstep(5.86, 6.68, l));      // 800 K (Disk Lab v2: gold)
+  c = mix(c, vec3(1.000, 0.860, 0.240), smoothstep(6.68, 7.38, l));      // 1600 K (Disk Lab v2: yellow, not white)
   return c;
 }
 
@@ -1794,7 +1808,7 @@ vec3 coPicture(vec3 ro, vec3 rd, vec2 b, float tCross, float jitter){
 // ---- The star's magnetosphere (MAG in the script), close up ----
 const float MAG_R = ${G(MAG.RT * (1 + MAG.DL) * 1.03)};
 const float GM_V = 0.274156;            // G M in au^3 s^-2 on the model's clock (an orbit at 1 au takes 12 s)
-const int MAG_N = 48;                   // steps through the magnetosphere's sphere (about 2.5 ms at 0.15 au, at the usual resolution)
+const int MAG_N = 64;                   // samples through the magnetosphere's sphere, spaced as the distance from the star (see magLayer)
 const vec2 MAG_CELLS = vec2(10.0, 2.0); // the columns' fluctuations: cells around the axis and across the bundle of lines
 const float MAG_PULSE = 0.005, MAG_FL = 2.2;   // their time (s of the model's clock; the fall takes 0.024 s) and contrast
 // (the colours are a choice for the picture: the falling gas of several thousand K shines in hydrogen lines, red like
@@ -1849,9 +1863,13 @@ vec3 magGasDisk(float R, float cosi){
   return a > 0.0 ? MAG_GASB * tcolor(1500.0) * a * wall / max(cosi, 0.05) : vec3(0.0);
 }
 // The magnetosphere laid in at the star's distance, as the star's light is (the disk in front dims it): the columns
-// (optically thin; not in the part cut away), the gas disk inside the dust's edge where the ray crosses the midplane in
-// front of the star, and the star's surface (whole, also with the cutaway), which hides what lies behind it. As it fades in (uMag) it takes over from
-// the star's point-like glow.
+// (optically thin; not in the part cut away) and the star's surface (whole, also with the cutaway), which hides what lies
+// behind it. As it fades in (uMag) it takes over from the star's point-like glow.
+// (Disk Lab v2: the gas disk inside the dust's edge is laid in where the ray crosses the midplane, in midplaneAt. Laid
+// in here, at the ray's closest approach to the star, it came in front of the far side's dusty disk and behind the near
+// side's, so that it was cut along the line through the star across the view. The columns' samples are spaced as the
+// distance from the star, uniformly in asinh((t - tc) / b) about the closest approach tc at the impact parameter b: the
+// curtains narrow toward the star, and evenly spaced samples (48 across the sphere) aliased there into a mesh.)
 // (colC: the light kept through the automatic exposure, added to col and also gathered there, so that the measurement
 // leaves out the pixels it dominates)
 void magLayer(vec3 ro, vec3 rd, float jitter, vec3 starGlow, float tCut, vec2 tSkip, inout vec3 col, inout vec3 tr, inout vec3 colC){
@@ -1860,18 +1878,18 @@ void magLayer(vec3 ro, vec3 rd, float jitter, vec3 starGlow, float tCut, vec2 tS
   bool hit = bs.y > bs.x;   // (the star is not cut away)
   vec3 em = vec3(0.0);
   if (bm.y > bm.x) {
-    float t0 = max(bm.x, tCut), t1 = hit ? bs.x : bm.y, ds = (t1 - t0) / float(MAG_N);
-    if (ds > 0.0) {
+    float t0 = max(bm.x, tCut), t1 = hit ? bs.x : bm.y;
+    if (t1 > t0) {
+      float tc = -dot(ro, rd), bi = max(length(ro + rd * tc), 0.5 * MAG_RS);
+      float s0 = asinh((t0 - tc) / bi), dsn = (asinh((t1 - tc) / bi) - s0) / float(MAG_N);
       for (int i = 0; i < MAG_N; i++) {
-        float t = t0 + (float(i) + jitter) * ds;
+        float sn = s0 + (float(i) + jitter) * dsn, t = tc + bi * sinh(sn);
         if (t > tSkip.x && t < tSkip.y) continue;
-        em += magColumn(ro + rd * t);
+        em += magColumn(ro + rd * t) * (bi * cosh(sn) * dsn);
       }
-      em *= ds;
     }
   }
   float tz = abs(rd.z) > 1e-6 ? -ro.z / rd.z : -1.0;
-  if (tz > tCut && (!hit || tz < bs.x) && !(tz > tSkip.x && tz < tSkip.y)) em += magGasDisk(length((ro + rd * tz).xy), abs(rd.z));
   vec3 surf = hit ? magSurface(normalize(ro + rd * bs.x), rd) * uStarK : vec3(0.0);
   if (uLook > 1) em = vec3(0.0);   // (the columns and the gas disk glow in the model's look and in scattered light only)
   vec3 kept = tr * (uMag * (em * uStarK + surf) + (hit ? 1.0 - uMag : 1.0) * starGlow);   // (uStarK: the magnetosphere keeps its own light through the automatic exposure)
@@ -1879,6 +1897,14 @@ void magLayer(vec3 ro, vec3 rd, float jitter, vec3 starGlow, float tCut, vec2 tS
   if (hit) tr *= 1.0 - uMag;
 }
 #endif
+// The midplane where the ray crosses it: the dust-free gas disk inside the dust's edge (with the magnetosphere), then
+// the pebble sheet.
+void midplaneAt(vec3 ro, vec3 rd, float tz, inout vec3 col, inout vec3 tr, inout vec3 colC){
+#ifdef FULL
+  if (uMag > 0.0 && uLook <= 1) { vec3 e = tr * (uMag * uStarK) * magGasDisk(length((ro + rd * tz).xy), abs(rd.z)); col += e; colC += e; }
+#endif
+  sheet(ro + rd * tz, rd, col, tr);
+}
 #ifdef FULL
 // The cut face seen through the point fc (in pixels of uRes): premultiplied, with its fade (uSliceFace); none where the
 // ray does not leave the part cut away there. The face alone is drawn at the screen's resolution (faceT in the script,
@@ -2040,10 +2066,10 @@ void main(){
   bool sheetDone = tCross <= tCut || tCross >= tEnd || (tCross > tSkip.x && tCross < tSkip.y) || faceOpaque;
 #ifdef FULL
   // (a crossing in front of the cylinder, then the wind and the envelope in the part cut away in front of the part kept)
-  if (!sheetDone && cyl && tCross < b0.x) { sheet(ro + rd * tCross, rd, col, tr); sheetDone = true; }
+  if (!sheetDone && cyl && tCross < b0.x) { midplaneAt(ro, rd, tCross, col, tr, colC); sheetDone = true; }
   if (cyl && tCut > b0.x) cutWind(ro, rd, b0.x, min(tCut, b0.y), jitter, col, tr);
 #endif
-  if (!sheetDone && (!inside || tCross < b.x)) { sheet(ro + rd * tCross, rd, col, tr); sheetDone = true; }
+  if (!sheetDone && (!inside || tCross < b.x)) { midplaneAt(ro, rd, tCross, col, tr, colC); sheetDone = true; }
   if (inside) {
     float t = b.x;
     vec3 p = ro + rd * t;
@@ -2094,7 +2120,7 @@ void main(){
         continuumInterval(ro + rd * (t + ds), rd, xPrev, ds, wq, light, trans, x, wl);
         col += tr * light; tr *= trans;
         t = min(t + ds, end); p = ro + rd * t; xPrev = x;
-        if (!sheetDone && t >= tCross) { sheet(ro + rd * tCross, rd, col, tr); sheetDone = true; }
+        if (!sheetDone && t >= tCross) { midplaneAt(ro, rd, tCross, col, tr, colC); sheetDone = true; }
 #ifdef FULL
         if (!starDone && t >= tStar) { magLayer(ro, rd, jitter, starGlow, tCut, tSkip0, col, tr, colC); starDone = true; }
         if (t >= tPl) { vec4 pl = planetLight(ro, rd, aspect); col += tr * pl.rgb; tr *= exp(-pl.a); tPl = 1e9; }
@@ -2105,7 +2131,7 @@ void main(){
 #ifdef FULL
       if (t1 > tSkip.x) { cutWind(ro, rd, tSkip.x, min(tSkip.y, b.y), jitter, col, tr); t = tSkip.y; p = ro + rd * t; xPrev = lnTauStar(p); wq = vec3(99.0); tSkip = vec2(1e9); continue; }   // across the part cut away
 #endif
-      if (!sheetDone && t1 >= tCross) { sheet(ro + rd * tCross, rd, col, tr); sheetDone = true; }
+      if (!sheetDone && t1 >= tCross) { midplaneAt(ro, rd, tCross, col, tr, colC); sheetDone = true; }
 #ifdef FULL
       if (!starDone && t1 >= tStar) { magLayer(ro, rd, jitter, starGlow, tCut, tSkip0, col, tr, colC); starDone = true; }
 #else
@@ -2113,6 +2139,9 @@ void main(){
 #endif
 #ifdef FULL
       if (t1 >= tPl) { vec4 pl = planetLight(ro, rd, aspect); col += tr * pl.rgb; tr *= exp(-pl.a); tPl = 1e9; }
+      // (the millimetre look: the volume neither emits nor absorbs there, only the pebble sheet and the star; skip its
+      // samples. From origin/main's dc55d44)
+      if (uLook == 3) { t = t1; continue; }
 #endif
       p = ro + rd * t1;
       vec3 em, ex, sk; float x;
@@ -2124,7 +2153,7 @@ void main(){
       xPrev = x; t = t1;
     }
   }
-  if (!sheetDone) sheet(ro + rd * tCross, rd, col, tr);
+  if (!sheetDone) midplaneAt(ro, rd, tCross, col, tr, colC);
 #ifdef FULL
   if (!starDone && tCut < 1e8) magLayer(ro, rd, jitter, starGlow, tCut, tSkip0, col, tr, colC);
 #else
@@ -2183,9 +2212,10 @@ uniform sampler2D uAcc;
 uniform sampler2D uFace;
 uniform vec2 uDev;
 uniform int uFaceOn;
+uniform vec4 uAccPart;   // (the volume's part of accT, as fractions of it: its size, and the last texel centres)
 ${NOISE_GLSL}
 void main(){
-  vec3 c = texture(uAcc, gl_FragCoord.xy / uDev).rgb;
+  vec3 c = texture(uAcc, min(gl_FragCoord.xy / uDev * uAccPart.xy, uAccPart.zw)).rgb;
   if (uFaceOn != 0) { vec4 f = texelFetch(uFace, ivec2(gl_FragCoord.xy), 0); c = c * (1.0 - f.a) + f.rgb; }
   fragColor = vec4(c + (hash12(gl_FragCoord.xy + 17.0) - 0.5) / 255.0, 1.0);
 }`;
@@ -2358,7 +2388,7 @@ void main(){
   const ja = () => (document.documentElement.lang || '').toLowerCase().startsWith('ja');   // (ja, ja-JP, ...)
 
   // reuse: the canvas, when the model is built anew on it after its WebGL context was lost and restored
-  function init(box, reuse) {
+  function init(box, reuse, restoredTime = 0) {
     // data-static renders one frame (used for the fallback image and screenshots)
     const reduce = reduceOS || 'static' in box.dataset;
     const canvas = reuse || document.createElement('canvas');
@@ -2393,6 +2423,34 @@ void main(){
       if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
       return p;
     };
+    // The turbulence's phase clock (see fpPhase): per band of lifetimes 4^(i-5), the count of lifetimes elapsed and the
+    // fraction of the current one. The count wraps at 2^30 (the noise takes it as a seed: one jump after 2^30 lifetimes,
+    // some 30 years at x1 for the fastest band), so it never leaves int32.
+    const phaseGenerations = new Int32Array(16), phaseResiduals = new Float32Array(16);
+    const phasePeriods = Float32Array.from({ length: 16 }, (_, i) => 4 ** (i - 5));
+    const phasePrograms = new WeakMap();
+    let phaseClockTime = NaN;
+    function uploadPhaseClock(p) {
+      if (time !== phaseClockTime) {
+        for (let i = 0; i < 16; i++) {
+          const band = i - 5, q = Math.floor(time / phasePeriods[i]);
+          const r = time / phasePeriods[i] - q + Math.fround(Math.fround(0.37) * band), carry = Math.floor(r);
+          const g = q + carry, m = 2 ** 30;
+          phaseGenerations[i] = ((g % m) + m) % m; phaseResiduals[i] = r - carry;
+        }
+        phaseClockTime = time;
+      }
+      let cached = phasePrograms.get(p);
+      if (!cached) {
+        cached = { generation: gl.getUniformLocation(p, 'uFpGeneration'), residual: gl.getUniformLocation(p, 'uFpResidual'), period: gl.getUniformLocation(p, 'uFpPeriod'), time: NaN };
+        phasePrograms.set(p, cached);
+        gl.uniform1fv(cached.period, phasePeriods);
+      }
+      if (cached.time !== time) {
+        gl.uniform1iv(cached.generation, phaseGenerations); gl.uniform1fv(cached.residual, phaseResiduals);
+        cached.time = time;
+      }
+    }
     const uniforms = (p, names) => Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)]));
     const prog = link(FS), progDisk = link(DISKMAP_FS), progWind = link(WINDMAP_FS), progEnv = link(ENVMAP_FS);
     // the eddies' volume texture (TURB3_FS, then SHADE3_FS), NB3 layers per draw: 8 where the driver allows, else 4
@@ -2406,7 +2464,7 @@ void main(){
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS);
     gl.useProgram(progShow); gl.uniform1i(gl.getUniformLocation(progShow, 'uAcc'), 6); gl.uniform1i(gl.getUniformLocation(progShow, 'uFace'), 11);
-    const uShowDev = gl.getUniformLocation(progShow, 'uDev'), uShowFace = gl.getUniformLocation(progShow, 'uFaceOn');
+    const uShowDev = gl.getUniformLocation(progShow, 'uDev'), uShowFace = gl.getUniformLocation(progShow, 'uFaceOn'), uShowPart = gl.getUniformLocation(progShow, 'uAccPart');
     // (a texel of nothing on units 11 and 12 (the cut face, see faceT) until the face is first drawn, and on unit 12 while
     // faceA is drawn into: the samplers must not point at no texture)
     const noFace = gl.createTexture();
@@ -2544,7 +2602,9 @@ void main(){
     let diskMapT = null, accMapTex = null, t3a = null, t3b = null;
     const MAX3 = gl.getParameter(gl.MAX_3D_TEXTURE_SIZE);
     function diskTarget() {
-      const nx = Math.min(2048, Math.max(512, 2 ** Math.ceil(Math.log2(rW * 1.6))));
+      // (Disk Lab v2: from the canvas at a nominal render scale of one half, so that a change of the scale does not
+      // rebuild the maps and the eddies' volume: the scale moves with the frame time)
+      const nx = Math.min(2048, Math.max(512, 2 ** Math.ceil(Math.log2(canvas.width * 0.5 * 1.6))));
       if (diskMapT && diskMapT.w === nx) return;
       if (diskMapT) { gl.deleteFramebuffer(diskMapT.fb); gl.deleteTexture(diskMapT.tex); gl.deleteTexture(accMapTex); }
       diskMapT = target(nx, 256, gl.RGBA16F, gl.REPEAT);
@@ -2573,14 +2633,14 @@ void main(){
     gl.activeTexture(gl.TEXTURE8); gl.bindTexture(gl.TEXTURE_3D, wstrT.tex);
     function windPass() {
       gl.useProgram(progWS);
-      gl.uniform3f(UWS.uResW, wstrT.w, wstrT.h, wstrT.d); gl.uniform1f(UWS.uTime, time); gl.uniform1f(UWS.uSeed, opt.seed);
+      gl.uniform3f(UWS.uResW, wstrT.w, wstrT.h, wstrT.d); gl.uniform1f(UWS.uTime, time); uploadPhaseClock(progWS); gl.uniform1f(UWS.uSeed, opt.seed);
       gl.viewport(0, 0, wstrT.w, wstrT.h);
       for (const f of wstrT.fbs) { gl.bindFramebuffer(gl.FRAMEBUFFER, f.fb); gl.uniform1f(UWS.uLayer0, f.z0); gl.drawArrays(gl.TRIANGLES, 0, 3); }
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
     function eddyPass() {
       gl.useProgram(progT3);
-      gl.uniform3f(UT3.uRes3, t3a.w, t3a.h, t3a.d); gl.uniform1f(UT3.uTime, time); gl.uniform1f(UT3.uSeed, opt.seed);
+      gl.uniform3f(UT3.uRes3, t3a.w, t3a.h, t3a.d); gl.uniform1f(UT3.uTime, time); uploadPhaseClock(progT3); gl.uniform1f(UT3.uSeed, opt.seed);
       gl.uniform3fv(UT3.uCam, cam); gl.uniform1f(UT3.uPixA, 2 * Math.tan(opt.fov / 2) / rH);
       gl.viewport(0, 0, t3a.w, t3a.h);
       for (const f of t3a.fbs) { gl.bindFramebuffer(gl.FRAMEBUFFER, f.fb); gl.uniform1f(UT3.uLayer0, f.z0); gl.drawArrays(gl.TRIANGLES, 0, 3); }
@@ -3019,7 +3079,7 @@ void main(){
     };
     const clumps = Array.from({ length: 6 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0, crossed: true }));
     const vapor = Array.from({ length: 4 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0 }));
-    let W = 0, Hh = 0, rW = 1, rH = 1, faceT = null, faceA = null, cam, basis, time = 0, last = 0, running = false, dragging = false, touching = false, moved = false, px = 0, py = 0, azUser = opt.az, elUser = opt.el;
+    let W = 0, Hh = 0, rW = 1, rH = 1, faceT = null, faceA = null, cam, basis, time = restoredTime, last = 0, running = false, dragging = false, touching = false, moved = false, px = 0, py = 0, azUser = opt.az, elUser = opt.el;
     let paused = false, speed = 1, dirty = true, benching = false, fieldMs = 0;
     const Omega = (R) => 0.5236 * Math.pow(R, -1.5);
     // --- the planet: it fades in and out over about 1.5 s when it is turned on or off (planetAmp); the gap's depth is
@@ -3053,10 +3113,12 @@ void main(){
     // the luminosity of FU Ori objects rises a hundredfold or so). The midplane temperature follows L^1/4, so the snow
     // line moves out as L^1/2, here to about 5 au: the pebbles' ice sublimates inside it and freezes again as it comes
     // back (in V883 Ori, in outburst, ALMA found the snow line near 40 au; Cieza et al. 2016).
+    // (Disk Lab v2: the outburst keeps its own clock, burst.age, real seconds times the speed, since the model's clock
+    // slows as the view closes in: at the snow line's view it would have taken a quarter of an hour)
     let burst = null, rSn = opt.rSnow;
     const burstL = () => {
       if (!burst) return 1;
-      const dt = time - burst.t0;
+      const dt = burst.age;
       if (dt < 0 || dt > 60) { burst = null; return 1; }
       // (the decay tapered to nothing from 40 to 60 s, so that the exposure and the snow line do not step at its end)
       return 1 + 29 * ss(0, 1.5, dt) * (dt < 5.5 ? 1 : Math.exp(-(dt - 5.5) / 9)) * (1 - ss(40, 60, dt));
@@ -3104,8 +3166,8 @@ void main(){
     };
     toast.addEventListener('click', hush);
     const startBurst = () => {
-      if (reduce || (burst && time - burst.t0 < 8)) return;   // the clock does not run with reduced motion
-      burst = { t0: time };
+      if (reduce || (burst && burst.age < 8)) return;   // the clock does not run with reduced motion
+      burst = { age: 0 };
       say('FU オリオン型の増光:星への降着が一時的に急増して、星が約 30 倍明るくなりました。円盤が温まってスノーラインが約 5 au まで外へ動き、小石の氷が昇華します。降着が収まると暗くなり、水は再び凍ります(実際の増光は数十年続きます。オリオン座 V883 では、増光中のスノーラインが約 40 au にあります)。',
         'An FU Orionis outburst: accretion onto the star surges and it brightens about thirtyfold. The disk warms, the snow line moves out to about 5 au and the pebbles\u2019 ice sublimates; as the accretion calms down the star dims and the water freezes again (real outbursts last decades; in V883 Ori the snow line lies near 40 au during the outburst).', 14000,
         'FU オリオン型の増光:星が約 30 倍明るくなり、スノーラインが約 5 au まで外へ動きます(降着が収まると元に戻ります)。',
@@ -3433,8 +3495,8 @@ void main(){
     // a colour bar for the painted face (top left), from the same colour maps as the shader
     const smooth = (a, b, x) => ss(a, b, x);
     const tcolorJS = (T) => {
-      const l = Math.log(T), st = [[3.69, 4.50, [0.071, 0.325, 1.000]], [4.50, 4.98, [0.485, 0.755, 1.000]], [4.98, 5.16, [1.000, 0.852, 0.612]],
-        [5.16, 5.86, [1.000, 0.325, 0.047]], [5.86, 6.68, [1.000, 0.682, 0.302]], [6.68, 7.38, [1.000, 0.914, 0.793]]];
+      const l = Math.log(T), st = [[3.69, 4.50, [0.071, 0.325, 1.000]], [4.50, 4.98, [0.560, 0.800, 1.000]], [4.98, 5.16, [0.920, 0.900, 0.860]],
+        [5.16, 5.86, [1.000, 0.325, 0.047]], [5.86, 6.68, [1.000, 0.560, 0.120]], [6.68, 7.38, [1.000, 0.860, 0.240]]];
       let c = [0.023, 0.148, 0.893];
       for (const [a, b, k] of st) { const t = smooth(a, b, l); c = c.map((v, i) => v + (k[i] - v) * t); }
       return c.map((v) => 0.92 * Math.pow(v, 1 / 2.2));
@@ -3639,14 +3701,21 @@ void main(){
     // the quarter in front on the right cut away, its right face seen face-on and the other along the line of sight);
     // it turns over 0.9 s when the cut changes while open. cutN: the planes' normals, cutE: the faces' directions from
     // the axis (left, right), faceSeen: whether a face is seen (not edge-on), for this frame.
-    const SWEEP = RB_JS, CUT_A = { half: 0, quarter: Math.PI / 4 };
+    // (Disk Lab v2: the 1/4 cut's wedge is turned by CUT_TURN about the axis, toward the camera's side, so that the camera
+    // stays well inside the part cut away and the left face shows a little instead of edge-on; cutFn, cutFr: the turned
+    // frame, given to the shader as uSliceN, uSliceR. The 1/2 cut is not turned; the turn follows the cut's angle.)
+    const SWEEP = RB_JS, CUT_A = { half: 0, quarter: Math.PI / 4 }, CUT_TURN = -10.0 * Math.PI / 180;
     let sliceU = opt.slice ? 1 : 0, annAmp = opt.ann ? 1 : 0;   // annAmp: the annotations' fade (0.4 s)
     let cutA = CUT_A[opt.cut], cutN = [[1, 0, 0], [1, 0, 0]], cutE = [[0, -1, 0], [0, 1, 0]], faceSeen = [true, true];
+    let cutFn = [0, 1, 0], cutFr = [1, 0, 0];
     function cutFrame() {
-      const c = Math.cos(2 * cutA), s = Math.sin(2 * cutA), n = basis.n, r = basis.r;
+      const tq = CUT_TURN * (cutA / CUT_A.quarter), ct = Math.cos(tq), st = Math.sin(tq), n0 = basis.n, r0 = basis.r;
+      const n = cutFn = [ct * n0[0] + st * r0[0], ct * n0[1] + st * r0[1], 0], r = cutFr = [ct * r0[0] - st * n0[0], ct * r0[1] - st * n0[1], 0];
+      const c = Math.cos(2 * cutA), s = Math.sin(2 * cutA);
       cutN = [[c * n[0] + s * r[0], c * n[1] + s * r[1], 0], [n[0], n[1], 0]];
       cutE = [[s * n[0] - c * r[0], s * n[1] - c * r[1], 0], [r[0], r[1], 0]];
-      faceSeen = [c > 0.3, true];   // (the turned plane, seen more and more edge-on)
+      // (the turned plane, seen more and more edge-on as it turns toward the line of sight)
+      faceSeen = [Math.abs(cutN[0][0] * n0[0] + cutN[0][1] * n0[1]) > 0.2, true];
     }
     // A change of look dips the exposure for 0.6 s and takes effect at its darkest (lookNow), so the picture never
     // jumps; the model's own drawings (field lines, wind tracers, the envelope's streamlines) fade out in the observed
@@ -3658,16 +3727,19 @@ void main(){
     const COMP_BITS = [1, 2, 4, 8], compAmp = COMP_BITS.map((b) => (opt.mode & b ? 1 : 0));
     let modelAmp = opt.look === 'model' ? 1 : 0, sbLb = 0, sbOld = 0, sbT = -1e9, msAmp = opt.ms ? 1 : 0, asymAmp = opt.asym ? 1 : 0, marksAmp = opt.marks ? 1 : 0;
     const toward = (cur, want, dt, secs) => (reduce ? want : want > cur ? Math.min(want, cur + dt / secs) : Math.max(want, cur - dt / secs));
-    // Close to the star the model's clock runs slower, (d / MAG.SHOW)^1.5 within MAG.SHOW au (d the camera's distance from
-    // the star), so that the gas the camera frames turns at about the same rate on the screen: an orbit at the
-    // magnetosphere's edge takes 0.13 s at the usual rate, 12 s from 0.1 au. (A choice for the picture; the state's time
-    // is the model's.)
-    // (only close to the magnetosphere: from 0.3 au in, reaching (d / MAG.SHOW)^1.5 at 0.15 au, geometrically between, so
-    // that the planet's view, 2-4 au from the star, keeps the usual clock)
+    // Disk Lab v2: the model's clock follows the radius in view, as 1/Omega_K there: k = (r_view / CLOCK.R)^(3/2), at most
+    // 1, with r_view = |T| (+) CLOCK.K d (T the point looked at, d the camera's distance from it, both as the camera flies;
+    // CLOCK.K d is about the half-height of the view at T). CLOCK.R = 30 au is what the whole disk's view frames (d = 90 au,
+    // looking at the star), where the clock runs as before (x1). Every view then shows the gas it frames turning as the
+    // whole view shows the outer disk turning; the inner parts of a view turn faster, as in the whole view. Zoomed in to
+    // the snow line (9 au) the clock runs at 1/32, next to the star (0.15 au) at about 1/15000; wider views than the
+    // whole disk keep x1 (the envelope's infall has its own pace). (It replaces the engine's slowing within 0.3 au of the
+    // star, (d / 2 au)^1.5. A choice for the picture; the state's time is the model's.)
+    const CLOCK = { R: 30, K: 1 / 3 };
     const clockK = () => {
       if (!cam) return 1;
-      const d = Math.hypot(cam[0], cam[1], cam[2]);
-      return Math.exp(Math.log(Math.min(1, Math.pow(d / MAG.SHOW, 1.5))) * (1 - ss(0.15, 0.3, d)));
+      const rv = Math.hypot(Math.hypot(camT[0], camT[1], camT[2]), CLOCK.K * camD);
+      return Math.min(1, Math.pow(rv / CLOCK.R, 1.5));
     };
     let magFrame = { vis: 0, ax: [0, 0, 1], e1: [1, 0, 0] };
     // the accretion layers (see ACC): their strengths and inflow speeds (upper, lower) for the wind's asymmetry as it
@@ -3855,10 +3927,27 @@ void main(){
       diskTarget();
       if (accT) { gl.deleteFramebuffer(accT.fb); gl.deleteTexture(accT.tex); }
       accT = target(rW, rH, gl.RGBA16F, gl.CLAMP_TO_EDGE);
+      accFor = [cw, ch];
       if (faceT && (faceT.w !== cw || faceT.h !== ch)) { for (const t of [faceT, faceA]) { gl.deleteFramebuffer(t.fb); gl.deleteTexture(t.tex); } faceT = faceA = null; for (const u of [gl.TEXTURE11, gl.TEXTURE12]) { gl.activeTexture(u); gl.bindTexture(gl.TEXTURE_2D, noFace); } }
       accN = 0;   // (the new target is empty: a still starts over, else its next frame would be averaged with nothing)
       gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, accT.tex);
       draw();
+    }
+    // Disk Lab v2: a new render scale without new targets or a frame drawn at once (each cost 20-100 ms of script, and
+    // the page steps the scale with the frame time, also while the view moves). The volume is drawn into the lower left
+    // rW x rH of accT, which grows (only) to the largest picture asked for at this canvas size; the display reads that
+    // part (uAccPart). The next animation frame draws.
+    let accFor = null;
+    function rescale() {
+      if (lost || !accT || !accFor || accFor[0] !== canvas.width || accFor[1] !== canvas.height) { resize(); return; }
+      const dpr = Math.min(window.devicePixelRatio || 1, 2) * opt.scale;
+      rW = Math.max(1, Math.round(W * dpr)); rH = Math.max(1, Math.round(Hh * dpr));
+      if (rW > accT.w || rH > accT.h) {
+        gl.deleteFramebuffer(accT.fb); gl.deleteTexture(accT.tex);
+        accT = target(Math.max(rW, accT.w), Math.max(rH, accT.h), gl.RGBA16F, gl.CLAMP_TO_EDGE);
+        gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, accT.tex);
+      }
+      accN = 0; dirty = true;
     }
     // Still pictures are refined: while nothing that the volume depends on changes (paused, and no flight, fade or sweep
     // under way), each frame is drawn with a new offset of the ray within the pixel and of the march's jitter (low-
@@ -4059,7 +4148,7 @@ void main(){
         gl.uniform1f(UD.uPlanetPhi, planetPhi(time));
         gl.uniform1f(UD.uWake, wakeAmp);
         gl.uniform1f(UD.uWakeX, wavesAmp);
-        gl.uniform1f(UD.uTime, time);
+        gl.uniform1f(UD.uTime, time); uploadPhaseClock(progDisk);
         gl.uniform1f(UD.uSeed, opt.seed);
         gl.uniform3fv(UD.uCam, cam);
         gl.uniform1f(UD.uPixA, 2 * Math.tan(opt.fov / 2) / rH);
@@ -4114,8 +4203,8 @@ void main(){
       gl.uniform1f(U.uSliceOff, sliceOff());
       gl.uniform1f(U.uSliceFace, ss(0.82, 1, sliceU));
       gl.uniform1i(U.uSliceQ, SLICE_Q[opt.sliceQ] || 0);
-      gl.uniform3fv(U.uSliceN, basis.n);
-      gl.uniform3fv(U.uSliceR, basis.r);
+      gl.uniform3fv(U.uSliceN, cutFn);
+      gl.uniform3fv(U.uSliceR, cutFr);
       gl.uniform1f(U.uSliceZ, SZ);
       gl.uniform3fv(U.uPlanetPos, pPos);
       gl.uniform1f(U.uPlanetVis, pVis);
@@ -4151,6 +4240,7 @@ void main(){
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.useProgram(progShow);
       gl.uniform2f(uShowDev, canvas.width, canvas.height); gl.uniform1i(uShowFace, faceOn ? 1 : 0);
+      gl.uniform4f(uShowPart, rW / accT.w, rH / accT.h, (rW - 0.5) / accT.w, (rH - 0.5) / accT.h);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       // the automatic exposure's measurements, one at a time: started on a frame drawn at the exposure's goal, read on a
       // later frame once the GPU has done it (reduced motion measures in draw instead)
@@ -4245,8 +4335,9 @@ void main(){
       // scale bar: 1 au (or a round multiple) at the distance of the star (of the planet when following it)
       const o = project(camT), r1 = project(camT.map((v, i) => v + basis.r[i])), pxAu = o[2] > zN ? Math.hypot(r1[0] - o[0], r1[1] - o[1]) : 0;
       let Lb = 0.005; for (const c of [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]) if (c * pxAu <= 150) Lb = c;
-      // close to the star the clock runs slower (see clockK): said after the bar's length
-      const ck = clockK(), ckT = ck < 0.97 ? (ja() ? '  時計 ×1/' : '  clock ×1/') + (1 / ck < 9.95 ? (1 / ck).toFixed(1) : String(Math.round(1 / ck))) : '';
+      // zoomed in the clock runs slower (see clockK): said after the bar's length while the clock runs (paused, and in a
+      // still picture, the rate says nothing)
+      const ck = clockK(), ckT = ck < 0.97 && !paused && !reduce ? (ja() ? '  時計 ×1/' : '  clock ×1/') + (1 / ck < 9.95 ? (1 / ck).toFixed(1) : String(Math.round(1 / ck))) : '';
       if (Lb !== sbLb) { if (sbLb && !reduce) { sbOld = sbLb; sbT = performance.now(); } sbLb = Lb; }
       const sbU = Math.min(1, (performance.now() - sbT) / 250), x0 = 18, y0 = Hh - 18;
       const bar = (g, L, a) => {
@@ -4262,7 +4353,9 @@ void main(){
         const o1 = performance.now(); overlay.getBoundingClientRect(); const o2 = performance.now();
         fstats.draw.push(o1 - d0); fstats.over.push(o1 - o0); fstats.layout.push(o2 - o1);
       }
-      box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12 } }));
+      // (Disk Lab v2: acc, the frames of the still picture so far, and accMax, the frames that complete it: a page can tell
+      // a finished picture, and what one frame of it costs, from the frames it is made of)
+      box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12, acc: accN, accMax: ACC_MAX } }));
     }
     // a clump that crosses the snow line releases vapor
     function update() {
@@ -4297,12 +4390,16 @@ void main(){
       const n = box.dataset.flight == null ? 2 : Math.round(Number(box.dataset.flight));
       return n > 0 && flight.length >= n;
     };
+    // (one animation chain: the queued callback is owned, so that stop and start cannot leave a second one; from dc55d44)
+    let frameRequest = null;
+    const scheduleFrame = () => { if (frameRequest === null && running && !lost) frameRequest = requestAnimationFrame(frame); };
     function frame(t) {
+      frameRequest = null;
       if (!running) return;
-      if (benching) { last = 0; lastRaw = 0; requestAnimationFrame(frame); return; }   // diskBench draws on its own
+      if (benching) { last = 0; lastRaw = 0; scheduleFrame(); return; }   // diskBench draws on its own
       const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
       if (fstats) { dirty = true; if (t >= fstats.until) fsDone(); }
-      if (!paused) { time += dt * speed * clockK(); update(); dirty = true; }
+      if (!paused) { time += dt * speed * clockK(); if (burst) burst.age += dt * speed; update(); dirty = true; }
       if (busy()) dirty = true;   // flights, fades and the sweep run in real time (see draw)
       if (dirty || (accN && accN < ACC_MAX)) {
         if (!gpuBehind()) {
@@ -4312,9 +4409,9 @@ void main(){
           flight.push(gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)); gl.flush();
         }
       } else lastRaw = 0;   // (nothing to draw: the next drawn frame's interval starts afresh)
-      requestAnimationFrame(frame);
+      scheduleFrame();
     }
-    const start = () => { if (!reduce && !running && !lost) { running = true; last = 0; requestAnimationFrame(frame); } };
+    const start = () => { if (!reduce && !running && !lost) { running = true; last = 0; scheduleFrame(); } };
     // For measurements in a visible window (no animation frames come in a hidden one, nor with reduced motion):
     // diskFrameStats(seconds, { levelStep }) draws the model in every animation frame for that long (playing or
     // paused; the render scale held), and resolves with the intervals between frames (median, 95th percentile,
@@ -4348,7 +4445,10 @@ void main(){
     const idle = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 3000 }) : (f) => setTimeout(f, 300);
     const prefetch = () => { if (gapLight.prefetch()) idle(prefetch); else idle(makeEnv3); };
     idle(prefetch);
-    const stop = () => { running = false; };
+    const stop = () => {
+      running = false;
+      if (frameRequest !== null) { cancelAnimationFrame(frameRequest); frameRequest = null; }
+    };
     const addClump = (R, phi, age) => {
       const c = clumps.reduce((a, b) => (a.amp <= 0 ? a : b.amp <= 0 ? b : a.t0 < b.t0 ? a : b));
       c.R = R; c.phi = phi; c.t0 = time - (age || 0); c.amp = 1; c.crossed = R - 0.05 * (age || 0) < rSn;
@@ -4580,12 +4680,12 @@ void main(){
     let fEma = 16.7, fN = 0, raiseLock = 0, lastRaw = 0;
     function adapt(t) {
       const dtRaw = lastRaw ? t - lastRaw : 16.7; lastRaw = t;
-      if (paused) return;
+      if (paused || box.dataset.adapt === 'off') return;   // (Disk Lab v2: the page sets the scale, quality.js)
       fEma += (dtRaw - fEma) * 0.1;
       if (++fN < 90) return;
       fN = 0;
-      if (fEma > 24 && opt.scale > 0.4) { opt.scale = Math.max(0.4, opt.scale * 0.8); raiseLock = 20; resize(); }
-      else if (fEma < 17.5 && opt.scale < opt.scaleMax && raiseLock-- <= 0) { opt.scale = Math.min(opt.scaleMax, opt.scale * 1.15); resize(); }
+      if (fEma > 24 && opt.scale > 0.4) { opt.scale = Math.max(0.4, opt.scale * 0.8); raiseLock = 20; rescale(); }
+      else if (fEma < 17.5 && opt.scale < opt.scaleMax && raiseLock-- <= 0) { opt.scale = Math.min(opt.scaleMax, opt.scale * 1.15); rescale(); }
     }
     // resize writes the box's height. Do that in the next task, outside ResizeObserver's delivery, so a width change
     // does not resize the observed box again in that delivery (and produce an undelivered-notification error).
@@ -4606,14 +4706,15 @@ void main(){
     const lostEvent = (v) => box.dispatchEvent(new CustomEvent('disklost', { detail: { lost: v } }));
     canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();   // (so that the browser restores it)
-      lost = true; running = false; stopTour(true); hush(); stillShown(true); lostEvent(true);
+      lost = true; stop(); stopTour(true); hush(); stillShown(true); lostEvent(true);
     }, on);
     canvas.addEventListener('webglcontextrestored', () => {
-      const st = box.diskState();
+      // (the clock directly: diskSet would hold it within its limit for input from outside; from dc55d44)
+      const { time: restoredTime, ...st } = box.diskState();
       ac.abort(); watchers.forEach((w) => w.disconnect()); clearTimeout(resizeTimer); stopTour(true); hush(); clearTimeout(toastTimer);
       overlay.remove(); toast.remove(); hint.remove(); descEl.remove(); keysEl.remove(); clearTimeout(hintT); stillShown(false);
       try {
-        init(box, canvas);
+        init(box, canvas, restoredTime);
         box.diskSet({ ...st, fly: 0 });
         box.dispatchEvent(new CustomEvent('diskstate', { detail: box.diskState() }));
       } catch (err) {
@@ -4891,7 +4992,7 @@ void main(){
     };
     // The volume's render scale (the canvas has the screen's pixels), 0.1..1: at least a tenth of the resolution,
     // at most the full screen resolution so external input cannot request an unbounded framebuffer. No argument reads it.
-    box.diskScale = (sc) => { if (sc == null) return opt.scale; const n = finiteNumber(sc); if (isFinite(n) && n > 0) { opt.scale = Math.min(1, Math.max(0.1, n)); resize(); } return opt.scale; };
+    box.diskScale = (sc) => { if (sc == null) return opt.scale; const n = finiteNumber(sc); if (isFinite(n) && n > 0) { opt.scale = Math.min(1, Math.max(0.1, n)); rescale(); } return opt.scale; };
     // draws until every flight, fade and sweep has finished (at most maxMs): for scripts and tests, and it works in a
     // hidden page too, where no animation frames come. Each frame is waited for (a pixel read back), so that frames do
     // not pile up on the GPU when they are slow.
@@ -4927,7 +5028,7 @@ void main(){
     box.diskSnapshot = async (o = {}) => {
       if (lost) return null;   // (no picture without a context)
       const sc0 = opt.scale;
-      if (o.full && opt.scale < 1) { opt.scale = 1; resize(); }
+      if (o.full && opt.scale < 1) { opt.scale = 1; rescale(); }
       fullWait = true;
       for (let i = 0, n = o.frames || ACC_SNAP; i < n; i++) draw();
       fullWait = false;
@@ -4943,7 +5044,7 @@ void main(){
       const img = new Image();
       await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
       c2.drawImage(img, 0, 0, out.width, out.height); URL.revokeObjectURL(url);
-      if (opt.scale !== sc0) { opt.scale = sc0; resize(); }
+      if (opt.scale !== sc0) { opt.scale = sc0; rescale(); }
       if (o.canvas) return out;
       return new Promise((res) => out.toBlob(res, 'image/png'));
     };

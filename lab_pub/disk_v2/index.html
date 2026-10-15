@@ -10,7 +10,7 @@
 <link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
 <link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="disk-lab.css?v=20261015c">
+<link rel="stylesheet" href="disk-lab.css?v=20261016a">
 <script>
   // The language, chosen as the site chooses it: ?lang=, the visit's choice, then the browser's language.
   (() => {
@@ -24,7 +24,7 @@
     document.documentElement.classList.toggle('lang-ja', lang === 'ja');
   })();
 </script>
-<script type="module" src="app.js?v=20261015c"></script>
+<script type="module" src="app.js?v=20261016a"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
@@ -40,7 +40,7 @@
 
   <main class="stage" id="stage">
     <h1 class="sr-only"><span class="en" lang="en">Disk Lab: a model protoplanetary disk</span><span class="ja" lang="ja">Disk Lab:原始惑星系円盤のモデル</span></h1>
-    <div class="disk-panel" id="disk" data-mobile data-elevation="22" data-azimuth="-65" data-distance="90" data-fov="32" data-scale="0.5" data-scale-max="0.25" data-steps="150">
+    <div class="disk-panel" id="disk" data-mobile data-elevation="22" data-azimuth="-65" data-distance="90" data-fov="32" data-scale="0.5" data-scale-max="1" data-adapt="off" data-steps="150">
       <img class="disk-static" id="poster" alt="" decoding="async">
     </div>
     <div class="temp-key" id="tempKey" aria-hidden="true">
@@ -50,79 +50,92 @@
     </div>
     <p class="stage-hint" id="stageHint" aria-hidden="true"></p>
     <p class="stage-note" id="stageNote" role="status" aria-live="polite"></p>
-    <aside class="panel" id="panel" hidden aria-labelledby="panelTitle" tabindex="-1">
-      <div class="panel-head">
-        <h2 id="panelTitle"><span class="en" lang="en">Display</span><span class="ja" lang="ja">表示</span></h2>
-        <button type="button" class="icon-button" id="panelClose" data-aria-en="Close" data-aria-ja="閉じる"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
-      </div>
-      <div class="panel-body">
-        <section>
-          <h3><span class="en" lang="en">Show</span><span class="ja" lang="ja">見せるもの</span></h3>
-          <div class="toggles">
-            <button type="button" class="toggle" data-bit="1" aria-pressed="true"><span class="en" lang="en">Gas</span><span class="ja" lang="ja">ガス</span></button>
-            <button type="button" class="toggle" data-bit="2" aria-pressed="true"><span class="en" lang="en">Lit surface</span><span class="ja" lang="ja">表層</span></button>
-            <button type="button" class="toggle" data-bit="4" aria-pressed="true"><span class="en" lang="en">Pebbles</span><span class="ja" lang="ja">小石</span></button>
-            <button type="button" class="toggle" data-bit="8" aria-pressed="true"><span class="en" lang="en">Wind</span><span class="ja" lang="ja">円盤風</span></button>
-            <button type="button" class="toggle" data-bit="16" aria-pressed="true"><span class="en" lang="en">Planet</span><span class="ja" lang="ja">惑星</span></button>
-            <button type="button" class="toggle" data-bit="32" aria-pressed="true"><span class="en" lang="en">Envelope</span><span class="ja" lang="ja">エンベロープ</span></button>
-            <button type="button" class="toggle" data-opt="field" aria-pressed="false"><span class="en" lang="en">Field lines</span><span class="ja" lang="ja">磁力線</span></button>
-            <button type="button" class="toggle" data-opt="marks" aria-pressed="false"><span class="en" lang="en">Flow markers</span><span class="ja" lang="ja">流れの印</span></button>
-            <button type="button" class="toggle" data-opt="ann" aria-pressed="true"><span class="en" lang="en">Labels and scale</span><span class="ja" lang="ja">注釈と縮尺</span></button>
-          </div>
-          <p class="panel-note"><span class="en" lang="en">Some parts show only in some looks: field lines and flow markers in the model look, the envelope from afar.</span><span class="ja" lang="ja">見え方によって描かれないものがあります(磁力線と流れの印はモデルの見え方だけ、エンベロープは遠くからだけ)。</span></p>
-        </section>
-        <section>
-          <h3><span class="en" lang="en">Variants</span><span class="ja" lang="ja">別の形</span></h3>
-          <div class="toggles">
-            <button type="button" class="toggle" data-opt="sym" aria-pressed="false"><span class="en" lang="en">Symmetric wind</span><span class="ja" lang="ja">風を上下対称に</span></button>
-            <button type="button" class="toggle" data-opt="waves" aria-pressed="false"><span class="en" lang="en">Exaggerate the waves</span><span class="ja" lang="ja">惑星の波を強調</span></button>
-          </div>
-        </section>
-        <section>
-          <h3><span class="en" lang="en">Cut</span><span class="ja" lang="ja">断面</span></h3>
-          <div class="segmented small" role="group" id="cutGroup">
-            <button type="button" data-cut="0" aria-pressed="true"><span class="en" lang="en">None</span><span class="ja" lang="ja">なし</span></button>
-            <button type="button" data-cut="1" aria-pressed="false"><span class="en" lang="en">Half</span><span class="ja" lang="ja">1/2</span></button>
-            <button type="button" data-cut="2" aria-pressed="false"><span class="en" lang="en">Quarter</span><span class="ja" lang="ja">1/4</span></button>
-          </div>
-        </section>
-        <section>
-          <h3><span class="en" lang="en">Angle</span><span class="ja" lang="ja">角度</span></h3>
-          <div class="chips">
-            <button type="button" class="chip" data-angle="89,-65"><span class="en" lang="en">Face-on</span><span class="ja" lang="ja">真上</span></button>
-            <button type="button" class="chip" data-angle="22,-65"><span class="en" lang="en">Tilted</span><span class="ja" lang="ja">斜め</span></button>
-            <button type="button" class="chip" data-angle="10,-80"><span class="en" lang="en">Low</span><span class="ja" lang="ja">低く</span></button>
-            <button type="button" class="chip" data-angle="2,-80"><span class="en" lang="en">Edge-on</span><span class="ja" lang="ja">真横</span></button>
-            <button type="button" class="chip" data-angle="-14,-80"><span class="en" lang="en">From below</span><span class="ja" lang="ja">下から</span></button>
-          </div>
-          <div class="chips">
-            <button type="button" class="chip quiet" id="recentre"><span class="en" lang="en">Centre on the star</span><span class="ja" lang="ja">中心を星に戻す</span></button>
-            <button type="button" class="chip quiet" id="resetView"><span class="en" lang="en">Start again</span><span class="ja" lang="ja">最初の眺めへ</span></button>
-          </div>
-        </section>
-        <section id="timeSection">
-          <h3><span class="en" lang="en">Speed</span><span class="ja" lang="ja">時間の速さ</span></h3>
-          <div class="segmented small" role="group" id="speedGroup">
-            <button type="button" data-speed="0.3" aria-pressed="false">×0.3</button>
-            <button type="button" data-speed="1" aria-pressed="true">×1</button>
-            <button type="button" data-speed="3" aria-pressed="false">×3</button>
-          </div>
-          <p class="panel-note"><span class="en" lang="en">At ×1 an orbit at 1 au (one year) takes 12 seconds.</span><span class="ja" lang="ja">×1 では、1 au の公転(1 年)が 12 秒です。</span></p>
-          <p class="panel-note" id="reducedNote" hidden></p>
-        </section>
-        <section>
-          <h3><span class="en" lang="en">Save and share</span><span class="ja" lang="ja">保存と共有</span></h3>
-          <div class="chips">
-            <button type="button" class="chip" id="copyLink"><span class="en" lang="en">Copy a link to this view</span><span class="ja" lang="ja">この眺めのリンクをコピー</span></button>
-            <button type="button" class="chip" id="saveImage"><span class="en" lang="en">Save as an image</span><span class="ja" lang="ja">画像として保存</span></button>
-          </div>
-          <input class="link-field" id="linkField" type="text" readonly hidden data-aria-en="Link to this view" data-aria-ja="この眺めのリンク">
-        </section>
-      </div>
-    </aside>
   </main>
 
-  <section class="dock" id="dock" aria-label="Places and views">
+  <div class="tabs" role="tablist" id="tabs" data-aria-en="Explore or follow the highlights" data-aria-ja="自由に見るか、見どころをたどるか">
+    <button type="button" role="tab" id="tabExplore" aria-controls="rail" aria-selected="true"><span class="en" lang="en">Explore</span><span class="ja" lang="ja">自由に見る</span></button>
+    <button type="button" role="tab" id="tabTour" aria-controls="dock" aria-selected="false"><span class="en" lang="en">Highlights</span><span class="ja" lang="ja">見どころ</span></button>
+  </div>
+
+  <aside class="rail" id="rail" aria-labelledby="railTitle">
+    <h2 class="sr-only" id="railTitle"><span class="en" lang="en">Explore the model</span><span class="ja" lang="ja">モデルを自由に見る</span></h2>
+    <section class="rail-sec">
+      <h3><span class="en" lang="en">Look</span><span class="ja" lang="ja">見え方</span></h3>
+      <div class="segmented looks" role="group" id="lookGroup"></div>
+      <div class="rail-context" id="lookContext"></div>
+      <p class="rail-note" id="lookNote"></p>
+    </section>
+    <section class="rail-sec">
+      <h3><span class="en" lang="en">Show</span><span class="ja" lang="ja">見せるもの</span></h3>
+      <div class="toggles">
+        <button type="button" class="toggle" data-bit="1" aria-pressed="true"><span class="en" lang="en">Gas</span><span class="ja" lang="ja">ガス</span></button>
+        <button type="button" class="toggle" data-bit="2" aria-pressed="true"><span class="en" lang="en">Lit surface</span><span class="ja" lang="ja">表層</span></button>
+        <button type="button" class="toggle" data-bit="4" aria-pressed="true"><span class="en" lang="en">Pebbles</span><span class="ja" lang="ja">小石</span></button>
+        <button type="button" class="toggle" data-bit="8" aria-pressed="true"><span class="en" lang="en">Wind</span><span class="ja" lang="ja">円盤風</span></button>
+        <button type="button" class="toggle" data-opt="field" aria-pressed="false"><span class="en" lang="en">Field lines</span><span class="ja" lang="ja">磁力線</span></button>
+        <button type="button" class="toggle" data-bit="16" aria-pressed="true"><span class="en" lang="en">Planet</span><span class="ja" lang="ja">惑星</span></button>
+        <button type="button" class="toggle" data-bit="32" aria-pressed="false"><span class="en" lang="en">Envelope</span><span class="ja" lang="ja">エンベロープ</span></button>
+        <button type="button" class="toggle" data-opt="marks" aria-pressed="false"><span class="en" lang="en">Flow markers</span><span class="ja" lang="ja">流れの印</span></button>
+        <button type="button" class="toggle" data-opt="ann" aria-pressed="true"><span class="en" lang="en">Labels</span><span class="ja" lang="ja">注釈</span></button>
+      </div>
+      <p class="rail-note"><span class="en" lang="en">Field lines and flow markers show in the model look; the envelope from afar.</span><span class="ja" lang="ja">磁力線と流れの印はモデルの見え方で、エンベロープは遠くから見えます。</span></p>
+    </section>
+    <section class="rail-sec">
+      <h3><span class="en" lang="en">Cut</span><span class="ja" lang="ja">断面</span></h3>
+      <div class="segmented small" role="group" id="cutGroup">
+        <button type="button" data-cut="0" aria-pressed="true"><span class="en" lang="en">None</span><span class="ja" lang="ja">なし</span></button>
+        <button type="button" data-cut="1" aria-pressed="false"><span class="en" lang="en">Half</span><span class="ja" lang="ja">1/2</span></button>
+        <button type="button" data-cut="2" aria-pressed="false"><span class="en" lang="en">Quarter</span><span class="ja" lang="ja">1/4</span></button>
+      </div>
+      <div class="rail-context" id="cutContext"></div>
+    </section>
+    <section class="rail-sec" id="timeSection">
+      <h3><span class="en" lang="en">Time</span><span class="ja" lang="ja">時間</span></h3>
+      <div class="time-row">
+        <button type="button" class="tool" id="play"><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L12.6 8z"/></svg><span class="clock" id="clock">0.0 yr</span></button>
+        <div class="segmented small" role="group" id="speedGroup" data-aria-en="Speed" data-aria-ja="速さ">
+          <button type="button" data-speed="0.3" aria-pressed="false">×0.3</button>
+          <button type="button" data-speed="1" aria-pressed="true">×1</button>
+          <button type="button" data-speed="3" aria-pressed="false">×3</button>
+          <button type="button" data-speed="10" aria-pressed="false">×10</button>
+        </div>
+      </div>
+      <p class="rail-note"><span class="en" lang="en">The clock slows as you zoom in, as the orbital period at the radius in view.</span><span class="ja" lang="ja">寄るほど、見ている半径の公転周期に合わせて時計が遅くなります。</span></p>
+      <p class="rail-note" id="reducedNote" hidden></p>
+    </section>
+    <section class="rail-sec">
+      <h3><span class="en" lang="en">Variants</span><span class="ja" lang="ja">別の形</span></h3>
+      <div class="toggles">
+        <button type="button" class="toggle" data-opt="asym" aria-pressed="false"><span class="en" lang="en">One-sided wind</span><span class="ja" lang="ja">上下非対称の風</span></button>
+        <button type="button" class="toggle" data-opt="waves" aria-pressed="false"><span class="en" lang="en">Exaggerate the waves</span><span class="ja" lang="ja">惑星の波を強調</span></button>
+      </div>
+      <p class="rail-note"><span class="en" lang="en">One-sided: as for a field aligned with the rotation (Mori, Bai &amp; Tomida 2025).</span><span class="ja" lang="ja">上下非対称:磁場が回転と同じ向きの場合(Mori, Bai &amp; Tomida 2025)。</span></p>
+    </section>
+    <section class="rail-sec">
+      <h3><span class="en" lang="en">View</span><span class="ja" lang="ja">視点</span></h3>
+      <div class="chips">
+        <button type="button" class="chip" data-angle="89,-65"><span class="en" lang="en">Face-on</span><span class="ja" lang="ja">真上</span></button>
+        <button type="button" class="chip" data-angle="22,-65"><span class="en" lang="en">Tilted</span><span class="ja" lang="ja">斜め</span></button>
+        <button type="button" class="chip" data-angle="2,-80"><span class="en" lang="en">Edge-on</span><span class="ja" lang="ja">真横</span></button>
+        <button type="button" class="chip" data-angle="-14,-80"><span class="en" lang="en">Below</span><span class="ja" lang="ja">下から</span></button>
+      </div>
+      <div class="chips">
+        <button type="button" class="chip quiet" id="recentre"><span class="en" lang="en">Centre on the star</span><span class="ja" lang="ja">中心を星に</span></button>
+        <button type="button" class="chip quiet" id="resetView"><span class="en" lang="en">Start again</span><span class="ja" lang="ja">最初の眺めへ</span></button>
+      </div>
+    </section>
+    <section class="rail-sec">
+      <h3><span class="en" lang="en">Save and share</span><span class="ja" lang="ja">保存と共有</span></h3>
+      <div class="chips">
+        <button type="button" class="chip" id="copyLink"><span class="en" lang="en">Copy a link</span><span class="ja" lang="ja">リンクをコピー</span></button>
+        <button type="button" class="chip" id="saveImage"><span class="en" lang="en">Save an image</span><span class="ja" lang="ja">画像を保存</span></button>
+      </div>
+      <input class="link-field" id="linkField" type="text" readonly hidden data-aria-en="Link to this view" data-aria-ja="この眺めのリンク">
+    </section>
+  </aside>
+
+  <section class="dock" id="dock" aria-labelledby="dockTitle">
+    <h2 class="sr-only" id="dockTitle"><span class="en" lang="en">Highlights</span><span class="ja" lang="ja">見どころ</span></h2>
     <div class="route-row">
       <div class="steppers">
         <button type="button" class="icon-button" id="prev"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
@@ -131,18 +144,10 @@
       <nav class="route" id="route"><ol id="routeList"></ol></nav>
     </div>
     <div class="card" id="card">
-      <h2 class="sr-only" id="placeTitle"></h2>
+      <h3 class="sr-only" id="placeTitle"></h3>
       <p class="place-text" id="placeText" aria-live="polite"></p>
       <div class="place-actions" id="placeActions"></div>
       <p class="still-note" id="stillNote" hidden></p>
-    </div>
-    <div class="looks" id="looks">
-      <div class="segmented" role="group" id="lookGroup"></div>
-      <p class="look-note" id="lookNote"></p>
-    </div>
-    <div class="tools" id="tools">
-      <button type="button" class="tool" id="play"><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L12.6 8z"/></svg><span class="clock" id="clock">0.0 yr</span></button>
-      <button type="button" class="tool" id="panelOpen" aria-expanded="false" aria-controls="panel" data-aria-en="Display" data-aria-ja="表示"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5h7M12 4.5h2M2 11.5h2M7 11.5h7"/><circle cx="10.5" cy="4.5" r="1.6"/><circle cx="5.5" cy="11.5" r="1.6"/></svg><span class="en" lang="en">Display</span><span class="ja" lang="ja">表示</span></button>
     </div>
   </section>
 
@@ -164,7 +169,7 @@
       <dt><span class="en" lang="en">Pebbles and the snow line</span><span class="ja" lang="ja">小石とスノーライン</span></dt>
       <dd><span class="en" lang="en">Larger dust settles to the midplane and is coated in ice where it is colder than 160 K, beyond about 0.9 au.</span><span class="ja" lang="ja">大きめの塵は赤道面に沈み、160 K より冷たい所(約 0.9 au より外)で氷をまといます。</span></dd>
       <dt><span class="en" lang="en">Field and wind</span><span class="ja" lang="ja">磁場と円盤風</span></dt>
-      <dd><span class="en" lang="en">A self-similar solution for a cold magnetocentrifugal wind of the Blandford &amp; Payne (1982) kind, with lever arm λ = 3. By default the wind is stronger on one side, as for a field aligned with the rotation (Mori, Bai &amp; Tomida 2025).</span><span class="ja" lang="ja">Blandford &amp; Payne (1982) 型の、冷たい磁気遠心風の自己相似解(レバーアーム λ = 3)。既定では片側が強い風です(磁場が回転と同じ向きの場合。Mori, Bai &amp; Tomida 2025)。</span></dd>
+      <dd><span class="en" lang="en">A self-similar solution for a cold magnetocentrifugal wind of the Blandford &amp; Payne (1982) kind, with lever arm λ = 3. By default the wind is symmetric; as an option it is stronger on one side, as for a field aligned with the rotation (Mori, Bai &amp; Tomida 2025).</span><span class="ja" lang="ja">Blandford &amp; Payne (1982) 型の、冷たい磁気遠心風の自己相似解(レバーアーム λ = 3)。既定では上下対称の風です。選ぶと、片側が強い風になります(磁場が回転と同じ向きの場合。Mori, Bai &amp; Tomida 2025)。</span></dd>
       <dt><span class="en" lang="en">Field and gas</span><span class="ja" lang="ja">磁場とガスの結びつき</span></dt>
       <dd><span class="en" lang="en">The gas is weakly ionized. Near the midplane, Ohmic diffusion leaves a dead zone (out to 7.5 au) where the field cannot act; inside 0.3 au the gas is ionized by heat and turbulent. The surface above is laminar (ambipolar diffusion), and accretion runs in a thin layer near it.</span><span class="ja" lang="ja">ガスの電離は弱く、赤道面付近はオーム散逸で磁場が効かないデッドゾーン(約 7.5 au まで)。0.3 au より内側は熱で電離して乱流になります。その上の表層は両極性拡散で層流で、降着は表層近くの薄い層を流れます。</span></dd>
       <dt><span class="en" lang="en">Planet</span><span class="ja" lang="ja">惑星</span></dt>
@@ -188,7 +193,7 @@
     <h3><span class="en" lang="en">Limits</span><span class="ja" lang="ja">限界</span></h3>
     <ul>
       <li><span class="en" lang="en">Compared with RADMC-3D for the same inputs, the millimetre look agrees; the CO line, the mid-infrared and scattered light keep differences from the approximations used here.</span><span class="ja" lang="ja">同じ入力の RADMC-3D の計算と比べると、ミリ波は一致し、CO、中間赤外、散乱光には近似による差が残ります。</span></li>
-      <li><span class="en" lang="en">Time is compressed: at ×1 an orbit at 1 au takes 12 seconds. An outburst fades in half a minute (real ones last decades); a planet grows in seconds (really hundreds of thousands of years or more).</span><span class="ja" lang="ja">時間は縮めています。×1 では 1 au の公転が 12 秒。増光は 30 秒ほどで収まり(実際は数十年)、惑星は数秒で育ちます(実際は数十万年以上)。</span></li>
+      <li><span class="en" lang="en">Time is compressed, and follows the view: at ×1 an orbit at 1 au takes 12 seconds in the view of the whole disk, and closer in the clock slows with the orbital period at the radius in view (to about 1/30 at the snow line, 1/15000 next to the star). An outburst runs on its own clock and fades in about half a minute (real ones last decades); a planet grows in seconds (really hundreds of thousands of years or more).</span><span class="ja" lang="ja">時間は縮め、見ている範囲に合わせています。全体の眺めの ×1 で 1 au の公転が 12 秒、寄るほど見ている半径の公転周期に比例して遅くなります(スノーラインで約 1/30、星のそばで約 1/15000)。増光は別の時計で 30 秒ほどで収まり(実際は数十年)、惑星は数秒で育ちます(実際は数十万年以上)。</span></li>
       <li><span class="en" lang="en">Scattering is single, with an approximate allowance for light that seeps below the surface.</span><span class="ja" lang="ja">散乱は一回だけで、表層の下へしみ込む光を近似で加えています。</span></li>
     </ul>
 

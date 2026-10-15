@@ -11,9 +11,9 @@
 //   the mean interval above 22 ms) or up (both below 17.8 ms, three windows running), never back above a scale found
 //   too slow lately. Not the median: frames that miss the display's refresh come at twice its interval, and a median of
 //   16.7 ms hid 42% of frames at 33 ms in the first trial; the mean catches the long stalls between quick frames.
-// The engine's own adapt() steps 0.8x or 1.15x every 90 frames, from data-scale up to data-scale-max: the page starts
-// it with data-scale-max below every scale it sets, so that it never raises the scale on its own (it may still lower
-// it, above 0.4, when frames run late: a safety net in the same direction).
+// The engine's own adapt() (0.8x or 1.15x every 90 frames) is off (data-adapt="off"): two controllers fought, and each
+// of its steps rebuilt the targets. A step of the scale is cheap since v2's engine draws into part of a target that only
+// grows (rescale): the governor looks at half-second windows and follows a zoom as it happens.
 
 export const SOFTWARE = /swiftshader|llvmpipe|softpipe|lavapipe|software|basic render|mesa offscreen|gdi generic/i;
 
@@ -60,7 +60,7 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 // that grows as the pixels, that is as the square of the scale
 const FIXED = 0.12;
 const timeAt = (t0, s0, s) => t0 * (FIXED + (1 - FIXED) * (s / s0) ** 2);
-const scaleFor = (t0, s0, budget) => s0 * Math.sqrt(Math.max(0.01, (budget / t0 - FIXED) / (1 - FIXED)));
+export const scaleFor = (t0, s0, budget) => s0 * Math.sqrt(Math.max(0.01, (budget / t0 - FIXED) / (1 - FIXED)));
 
 // { scale, t0, s0, t1, s1, predictedAtMin, fullMs (a frame at scale 1), slow, timer }
 export async function calibrate(box, { budget = BUDGET } = {}) {
@@ -87,14 +87,15 @@ export async function calibrate(box, { budget = BUDGET } = {}) {
 
 // Steps the render scale with the intervals between drawn frames; returns { stop, state }.
 // base: the scale found at start (calibrate); far below it, the way back up is quicker (a burst of load, another tab, a
-// snapshot, may have pushed the scale to its floor).
-export function govern(box, { onChange, base = 0.5, running = () => true } = {}) {
-  const WINDOW_MS = 1500, MIN_FRAMES = 30, SLOW_MS = 22, FAST_MS = 17.8, AIM_MS = 16.7, IDLE_MS = 250, STALL_MS = 2000, RELAX_MS = 8000;
+// snapshot, may have pushed the scale to its floor). floor: the lowest scale for what is drawn now (MIN_SCALE, lower for
+// a look many times dearer than the model, as the CO line's).
+export function govern(box, { onChange, base = 0.5, running = () => true, floor = () => MIN_SCALE } = {}) {
+  const WINDOW_MS = 500, MIN_FRAMES = 10, SLOW_MS = 22, FAST_MS = 17.8, AIM_MS = 16.7, IDLE_MS = 250, STALL_MS = 2000, RELAX_MS = 6000;
   let iv = [], last = 0, since = performance.now(), fastRuns = 0, ceiling = 1, ceilingT = 0, paused = false;
   const log = [];
   const quartile = (a) => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(0.75 * (s.length - 1))]; };
   const set = (s, why, m) => {
-    const now = box.diskScale(), next = Math.round(clamp(s, MIN_SCALE, 1) * 1000) / 1000;
+    const now = box.diskScale(), next = Math.round(clamp(s, floor(), 1) * 1000) / 1000;
     if (Math.abs(next - now) < 0.01) return;
     box.diskScale(next);
     log.push({ t: Math.round(performance.now()), from: now, to: next, why, ms: Math.round(m * 10) / 10 });
@@ -116,7 +117,7 @@ export function govern(box, { onChange, base = 0.5, running = () => true } = {})
     // stall: the quartile stays low while a third of the time is lost. The lower the scale, the shorter the queue.
     const q75 = quartile(iv), mean = iv.reduce((a, b) => a + b, 0) / iv.length, m = Math.max(q75, mean), s = box.diskScale();
     iv = []; since = now;
-    if (m > SLOW_MS && s > MIN_SCALE) {
+    if (m > SLOW_MS && s > floor()) {
       ceiling = Math.min(ceiling, s * 0.92); ceilingT = now; fastRuns = 0;
       set(s * clamp(Math.sqrt(AIM_MS / m), 0.6, 0.92), 'slow', m);
     } else if (m < FAST_MS) {

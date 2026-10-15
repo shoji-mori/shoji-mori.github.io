@@ -30,12 +30,12 @@ URL parameters:
 | --- | --- |
 | `index.html` | markup and the fixed text in both languages (`.en` / `.ja` spans) |
 | `disk-lab.css` | all styles |
-| `app.js` | the page: places, looks, panel, links, stills, the full-resolution still picture |
+| `app.js` | the page: the sandbox (rail), the highlights (places), links, stills, the full-resolution still picture |
 | `places.js` | the nine places (view, look, components, control) and the distance fitted to the stage |
 | `words.js` | the text that changes with the state, in both languages |
 | `quality.js` | whether the live model can run, the start-up calibration and the render-scale governor |
 | `capture.js` | saving a picture (works around `drawImage` reading nothing from the engine's canvas in Chrome) |
-| `engine/disk3d.js` | a copy of `lab/disk/disk3d.js` with a small patch (`ver2/tools/disk-lab-v2/engine-patch.py`: frames in flight, the exposure's readback at the start of a frame; the rendering is unchanged); `engine/SOURCE.txt` gives the commit and both SHA-256s |
+| `engine/disk3d.js` | v2's own GPU engine, begun as a copy of `lab/disk/disk3d.js` (9436767); `engine/CHANGES.md` records what changed and what was taken from or left in the other lines, `engine/SOURCE.txt` the base and the SHA-256s |
 | `stills/` | 36 WebP stills: `<place>-<lang>-wide.webp` (2400 × 1200), `<place>-<lang>-tall.webp` (1200 × 1500) |
 
 ## Check it
@@ -43,30 +43,31 @@ URL parameters:
 In the page's console (a visible window gives frame times too):
 
     const c = await import('/ver2/tools/disk-lab-v2/check.js');
-    const r = await c.run();          // 28 checks, about a minute
+    const r = await c.run();          // the page's checks, about two minutes
     console.table(r.rows)
 
-`await c.stalls()` measures, in a visible window, the stalls of the engine's exposure readback near the star, and
-`await c.pacing({ scale: 0.4, flight: 2 })` the frame rate, the readbacks and the drag latency at a fixed scale (DESIGN.md,
-section 7). `ver2/tools/disk-lab-v2/frame.html?w=390&h=760&src=/lab_pub/disk_v2/%3Flang%3Dja` shows the page at a phone's size in
+`await c.stalls()` measures, in a visible window, the stalls of the engine's exposure readback near the star,
+`await c.pacing({ scale: 0.4, flight: 2 })` the frame rate, the readbacks and the drag latency at a fixed scale, and
+`await c.zoomPacing()` the frame intervals while the wheel zooms in and out (DESIGN.md, section 7).
+`ver2/tools/disk-lab-v2/frame.html?w=390&h=760&src=/lab_pub/disk_v2/%3Flang%3Dja` shows the page at a phone's size in
 a desktop window. With `serve.py --save-dir DIR`, `c.run({ save: 'check.json' })` writes the results there.
 
-## Update the engine
+The engine's own checks (ver2/tools/disk-check's state matrix, on v2's engine, with the states close to the star):
 
-    sh ver2/tools/disk-lab-v2/sync-engine.sh        # copies lab/disk/disk3d.js, applies engine-patch.py, writes engine/SOURCE.txt
+    const e = await import('/ver2/tools/disk-lab-v2/engine-check.js');
+    const m = await e.run();          // 346 states, about 9 minutes; m.problems
 
-Then set `ENGINE_SRC`'s `?v=` in `app.js` to the patched copy's first ten characters (the script prints them), run the
-checks, and remake the stills if the picture changed. The page uses only the engine's public API and events. If
-`engine-patch.py` refuses because the engine changed around it, review the patch; if `lab/disk/` has taken the same fix,
-drop it.
+## The engine
 
-The patch (DESIGN.md, section 7, "GPU の待ち行列"): animation frames came faster than the GPU finished them, so Chrome
-queued several frames of GPU work; every readback of the automatic exposure (getBufferSubData, within 12 au of the star)
-waited behind the whole queue (30-100 ms), and a drag reached the GPU 60-120 ms late. The patched loop fences each frame
-it draws and draws only while fewer than `data-flight` (default 2) are unfinished, and the exposure's copy moves to the
-start of a frame. At a fixed scale: the same frame rate (whole disk 92 vs 94 frames/s, snow line 58 vs 59), frames over
-33 ms at the snow line 19.6 → 0.9 %, longest readback 68 → 17 ms, drag latency about halved (60 → 28 ms for the whole
-disk). The same diff can go into `lab/disk/disk3d.js`.
+The engine is v2's own (`engine/CHANGES.md`). To see what the upstream engine (`lab/disk/disk3d.js`) has changed since
+v2's base:
+
+    sh ver2/tools/disk-lab-v2/sync-engine.sh          # writes nothing; -p for the full diffs
+
+A change worth taking is applied by hand and recorded in `engine/CHANGES.md`; then `engine/SOURCE.txt` and `ENGINE_SRC`'s
+`?v=` in `app.js` take the new SHA-256, the checks run, and the stills are remade if the picture changed.
+`ver2/tools/disk-lab-v2/engine-patch.py` is the record of the first round's patch (frames in flight, the exposure's
+readback at the start of a frame; DESIGN.md, section 7, "GPU の待ち行列"), which the engine carries.
 
 ## Remake the stills
 
@@ -77,4 +78,6 @@ disk). The same diff can go into `lab/disk/disk3d.js`.
 ## Publishing
 
 Copy `lab_pub/disk_v2/` as it is. It needs `/fonts/` and `/images/favicon.svg` at the site's root. Bump the `?v=` of
-`disk-lab.css` and `app.js` in `index.html` when they change (the page is served with the site's caching).
+`disk-lab.css` and `app.js` in `index.html`, and of the modules `app.js` imports (`places.js`, `words.js`, `quality.js`,
+`capture.js`), when they change (the page is served with the site's caching, and a new `app.js` with an old module
+cached would fail).

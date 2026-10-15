@@ -1,4 +1,5 @@
-/* Disk Lab v2. A night stage for looking, a dock and a paper dialog for reading (DESIGN.md, section 2).
+/* Disk Lab v2. A night stage for looking, the sandbox beside it (the rail), the highlights below it, and a paper dialog
+   for reading (DESIGN.md, section 2).
    Self-contained: the site's /styles.css is written for light pages; only its fonts and its paper colours are shared. */
 @font-face{font-family:Inter;font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/inter-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:Inter;font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/inter-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
@@ -42,9 +43,9 @@ p,h1,h2,h3{margin:0}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
 
-/* ---- the frame: header, stage, dock ---- */
-.lab{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100vh;height:100dvh;position:relative}
-.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;height:52px;padding:0 var(--gx);border-bottom:1px solid var(--line)}
+/* ---- the frame: header; the stage with the sandbox (rail) beside it and the highlights (dock) below ---- */
+.lab{--rail:300px;display:grid;grid-template-columns:minmax(0,1fr) var(--rail);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"bar bar" "stage rail" "dock rail";height:100vh;height:100dvh;position:relative}
+.bar{grid-area:bar;display:flex;align-items:center;justify-content:space-between;gap:16px;height:52px;padding:0 var(--gx);border-bottom:1px solid var(--line)}
 .mark{display:flex;align-items:baseline;gap:10px;font-size:15px;letter-spacing:-.01em;white-space:nowrap}
 .mark .home{color:var(--text-2);text-decoration:none;font-weight:500}
 .mark .home:hover{color:var(--text)}
@@ -58,7 +59,7 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .lang-switch button[aria-pressed=true]{color:var(--text);font-weight:600}
 .lang-switch button:hover{color:var(--text)}
 
-.stage{position:relative;min-height:0;overflow:hidden;background:var(--night)}
+.stage{grid-area:stage;position:relative;min-height:0;overflow:hidden;background:var(--night)}
 .disk-panel{position:relative;width:100%;height:100%;background:var(--night);overflow:hidden}
 .disk-panel canvas{position:absolute;inset:0;display:block;width:100%;height:100%;cursor:grab;touch-action:none;z-index:0}
 .disk-panel canvas:active{cursor:grabbing}
@@ -91,9 +92,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .stage-note{white-space:normal;text-align:center;color:var(--text)}
 .lab[data-state=loading] .stage-note.on{bottom:50%;transform:translate(-50%,50%);background:none;border:0;color:var(--text-2)}
 
-/* ---- the dock ---- */
-.dock{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"route route" "card looks" "card tools";column-gap:clamp(24px,4vw,64px);row-gap:6px;padding:12px var(--gx) 18px;border-top:1px solid var(--line);background:var(--night)}
-.route-row{grid-area:route;display:flex;align-items:center;gap:10px;min-width:0}
+/* ---- the highlights (the dock, below the stage) ---- */
+.dock{grid-area:dock;display:grid;row-gap:6px;padding:10px var(--gx) 16px;border-top:1px solid var(--line);background:var(--night);min-width:0}
+.route-row{display:flex;align-items:center;gap:10px;min-width:0}
 .steppers{display:flex;gap:2px;flex:none}
 .icon-button{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:999px;color:var(--text-2)}
 .icon-button:hover:not(:disabled){background:var(--wash);color:var(--text)}
@@ -106,19 +107,28 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .route button:hover{color:var(--text-2);background:var(--wash)}
 .route button[aria-current=true]{color:var(--text);font-weight:600}
 .route button[aria-current=true] .n{color:var(--accent);opacity:1}
-.card{grid-area:card;min-width:0;max-width:calc(70ch + 76px);padding-left:76px}
+.card{min-width:0;max-width:calc(72ch + 76px);padding-left:76px}
 .place-text{font-size:14.5px;line-height:1.7;color:var(--text-2);min-height:calc(3 * 1.7em);text-wrap:pretty}
 .lang-ja .place-text{font-size:14px;line-height:1.8;letter-spacing:.01em;min-height:calc(3 * 1.8em)}
-.place-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;min-height:34px}
+.place-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;min-height:34px}
 .still-note{margin-top:10px;font-size:13px;color:var(--text-3);max-width:60ch}
 .still-note button{margin-left:8px}
 
-.looks{grid-area:looks;display:grid;align-content:start;gap:8px;justify-items:start;min-width:0;width:min-content}
-.tools{grid-area:tools;display:flex;align-items:center;justify-content:space-between;gap:4px;margin:4px -12px 0}
-.tool{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:999px;font-size:13px;color:var(--text-2)}
+/* ---- the sandbox (the rail, beside the stage) ---- */
+.rail{grid-area:rail;min-height:0;overflow-y:auto;border-left:1px solid var(--line);padding:2px 18px 30px;background:var(--night);scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent;
+  /* (a rail taller than the window fades out at the bottom, so that more is seen to follow; at the end the fade lies over the padding) */
+  -webkit-mask-image:linear-gradient(#000 calc(100% - 28px),transparent);mask-image:linear-gradient(#000 calc(100% - 28px),transparent)}
+.rail-sec{padding:10px 0 11px;border-top:1px solid var(--line)}
+.rail-sec:first-of-type{border-top:0}
+.rail h3{font-size:11px;font-weight:500;color:var(--text-3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+.lang-ja .rail h3{font-size:12px;letter-spacing:.1em;text-transform:none}
+.rail-note{font-size:12px;line-height:1.5;color:var(--text-3);margin-top:7px}
+.rail-context:not(:empty){margin-top:8px;display:grid;gap:8px;justify-items:start}
+.time-row{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.time-row .segmented.small button{padding:4px 8px}
+.tool{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 8px;border-radius:999px;font-size:12.5px;color:var(--text-2);border:1px solid var(--line-2)}
 .tool:hover{background:var(--wash);color:var(--text)}
-.tool[aria-expanded=true]{background:var(--wash-2);color:var(--text)}
-.clock{font-variant-numeric:tabular-nums;min-width:4.6em;text-align:left}
+.clock{font-variant-numeric:tabular-nums;min-width:3.6em;text-align:left}
 #play .i-play{display:none}
 #play[data-paused] .i-play{display:block}
 #play[data-paused] .i-pause{display:none}
@@ -126,50 +136,46 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 
 /* segmented controls (the looks, the cut, the speed, the CO maps, the cut's quantities) */
 .segmented{display:inline-flex;flex-wrap:nowrap;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;max-width:100%}
-.segmented button{padding:6px 13px;border-radius:999px;font-size:13px;color:var(--text-2);white-space:nowrap;transition:background-color .2s,color .2s}
+.segmented button{padding:6px 12px;border-radius:999px;font-size:13px;color:var(--text-2);white-space:nowrap;transition:background-color .2s,color .2s}
 .segmented button:hover{color:var(--text);background:var(--wash)}
 .segmented button[aria-pressed=true]{background:var(--selected);color:var(--on-selected);font-weight:500}
 .segmented button:disabled{opacity:.35;cursor:default}
-.segmented.small button{padding:5px 11px;font-size:12.5px}
-.place-actions .segmented{flex-wrap:wrap;border-radius:16px}
-.look-note{font-size:12.5px;line-height:1.6;color:var(--text-3);min-height:3.2em;padding-left:4px}
+.segmented.small button{padding:4px 10px;font-size:12.5px}
+.segmented.looks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-radius:12px;width:100%}
+.segmented.looks button{border-radius:9px;padding:6px 4px;font-size:12.5px}
+.rail-context .segmented{flex-wrap:wrap;border-radius:14px}
 .velocity{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2)}
-.velocity input{width:150px;accent-color:var(--accent)}
+.velocity input{width:120px;accent-color:var(--accent)}
 .velocity output{font-variant-numeric:tabular-nums;min-width:6.6em;color:var(--text)}
 
-/* actions of a place, and the chips and toggles of the panel */
-.action,.chip,.toggle{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:5px 13px;border:1px solid var(--line-2);border-radius:999px;font-size:13px;color:var(--text);transition:background-color .2s,border-color .2s}
+/* the places' actions, the rail's toggles and chips */
+.action,.chip,.toggle{display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:3px 10px;border:1px solid var(--line-2);border-radius:999px;font-size:12.5px;color:var(--text);transition:background-color .2s,border-color .2s;text-align:left}
+.action{min-height:32px;padding:5px 13px;font-size:13px}
 .action:hover,.chip:hover,.toggle:hover{background:var(--wash);border-color:rgba(255,255,255,.28)}
 .action:disabled{opacity:.4;cursor:default}
 .action[aria-pressed]::before,.toggle::before{content:'';width:8px;height:8px;border-radius:50%;border:1.5px solid var(--text-3);flex:none;transition:background-color .2s,border-color .2s}
 .action[aria-pressed=true]::before,.toggle[aria-pressed=true]::before{background:var(--accent);border-color:var(--accent)}
+.toggle[aria-pressed=false]{color:var(--text-2)}
 .action.quiet,.chip.quiet{border-color:transparent;color:var(--text-2)}
 .action.quiet:hover,.chip.quiet:hover{border-color:var(--line-2);color:var(--text)}
 .action svg{width:14px;height:14px}
 .action.next svg{width:12px;height:12px;margin-right:-2px}
 .place-actions>.quiet:first-child{margin-left:-13px}
-
-/* ---- the display panel ---- */
-.panel{position:absolute;right:12px;top:12px;bottom:12px;z-index:20;width:min(360px,calc(100% - 24px));display:flex;flex-direction:column;background:rgba(16,20,30,.9);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border:1px solid var(--line-2);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.45);overflow:hidden}
-.panel:focus{outline:none}
-.panel-head{display:flex;align-items:center;justify-content:space-between;padding:12px 10px 8px 18px}
-.panel-head h2{font-size:15px;font-weight:600}
-.panel-body{overflow-y:auto;padding:0 18px 18px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent}
-.panel section{padding:14px 0;border-top:1px solid var(--line)}
-.panel section:first-child{border-top:0;padding-top:4px}
-.panel h3{font-size:12px;font-weight:500;color:var(--text-3);letter-spacing:.02em;margin-bottom:10px}
-.toggles,.chips{display:flex;flex-wrap:wrap;gap:6px}
+.toggles,.chips{display:flex;flex-wrap:wrap;gap:5px}
 .chips+.chips{margin-top:6px}
-.panel-note{font-size:12px;line-height:1.6;color:var(--text-3);margin-top:10px}
+.chip.quiet{padding-left:4px;padding-right:8px}
 .link-field{display:block;width:100%;margin-top:10px;padding:8px 10px;border-radius:8px;border:1px solid var(--line-2);background:rgba(0,0,0,.25);color:var(--text);font:12px/1.4 var(--sans)}
 
+/* ---- the two halves as tabs, on a narrow screen only ---- */
+.tabs{display:none}
+
 /* ---- states ---- */
-.lab[data-state=loading] .looks,.lab[data-state=loading] .tools,.lab[data-state=loading] .place-actions{visibility:hidden}
-.lab[data-state=still] .looks,.lab[data-state=still] .tools,.lab[data-state=still] .place-actions{display:none}
+.lab[data-state=loading] .rail,.lab[data-state=loading] .place-actions{visibility:hidden}
+.lab[data-state=still]{grid-template-columns:minmax(0,1fr);grid-template-areas:"bar" "stage" "dock";grid-template-rows:auto auto minmax(0,1fr)}
+.lab[data-state=still] .rail,.lab[data-state=still] .tabs,.lab[data-state=still] .place-actions{display:none!important}
+.lab[data-state=still] .dock{display:grid!important}
 .lab[data-state=still] .disk-static{opacity:1}
 .lab[data-state=still] .disk-panel canvas,.lab[data-state=still] .disk-overlay{visibility:hidden}
-.lab[data-state=still] .dock{grid-template-areas:"route route" "card card" "card card"}
-.lab[data-state=still]{grid-template-rows:auto auto minmax(0,1fr)}
 .lab[data-state=still] .stage{width:min(100%,calc((100vh - 260px) * var(--still-ar,2)));width:min(100%,calc((100dvh - 260px) * var(--still-ar,2)));aspect-ratio:var(--still-ar,2);justify-self:center}
 .lab[data-state=still] .disk-panel{height:100%!important}
 
@@ -195,26 +201,26 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .refs{font-size:13.5px;color:var(--ink-2)}
 .colophon{margin-top:28px;padding-top:14px;border-top:1px solid var(--paper-line);font-size:12px;color:#6a6f75}
 
-/* ---- narrow screens: the stage above, the dock below, nothing laid over the disk ---- */
+/* ---- narrow screens: the stage above; below it, the sandbox or the highlights, as two tabs; nothing over the disk ---- */
 @media (max-width:860px){
+  .lab{--panel:min(36vh,290px);grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto var(--panel);grid-template-areas:"bar" "stage" "tabs" "panel"}
   .bar{height:48px}
   .mark .home,.mark .slash{display:none}
   .bar-end{gap:16px}
-  .dock{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"route tools" "card card" "looks looks";padding:6px var(--gx) calc(12px + env(safe-area-inset-bottom));row-gap:8px;column-gap:4px}
+  .tabs{grid-area:tabs;display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);padding:0 var(--gx)}
+  .tabs button{padding:10px 0 9px;font-size:13px;color:var(--text-3);border-bottom:2px solid transparent}
+  .tabs button[aria-selected=true]{color:var(--text);border-bottom-color:var(--accent);font-weight:500}
+  .rail{grid-area:panel;border-left:0;padding:2px var(--gx) calc(30px + env(safe-area-inset-bottom))}
+  .dock{grid-area:panel;border-top:0;overflow-y:auto;align-content:start;padding:8px var(--gx) calc(12px + env(safe-area-inset-bottom))}
+  .lab[data-tab=explore] .dock{display:none}
+  .lab[data-tab=tour] .rail{display:none}
+  .segmented.looks{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .segmented.looks button{padding:7px 2px;text-overflow:ellipsis;overflow:hidden}
   .route-row{gap:4px;margin-left:-8px}
-  .tools{margin:0 -8px 0 0;gap:0;justify-content:flex-end}
-  .tool{padding:0 9px}
-  .tool .clock,#panelOpen span{display:none!important}
   .card{padding-left:0;max-width:none}
   .place-text{font-size:14px;line-height:1.6;min-height:0}
   .lang-ja .place-text{font-size:13.5px;line-height:1.7;min-height:0}
   .place-actions{margin-top:8px;min-height:40px}
-  .looks{width:auto;justify-items:stretch;gap:6px}
-  .segmented#lookGroup{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-radius:12px}
-  .segmented#lookGroup button{padding:8px 2px;border-radius:9px;font-size:12.5px;text-overflow:ellipsis;overflow:hidden}
-  .look-note{display:none}
-  .panel{position:fixed;left:0;right:0;top:auto;bottom:0;width:auto;max-height:58vh;max-height:58dvh;border-radius:16px 16px 0 0;border-bottom:0}
-  .panel-body{padding-bottom:calc(18px + env(safe-area-inset-bottom))}
   .facts{grid-template-columns:minmax(0,1fr);gap:2px}
   .facts dd{margin-bottom:10px}
   .about{width:100%;max-width:100%;max-height:100%;height:100%;border-radius:0;margin:0}
@@ -222,17 +228,19 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   .stage-hint{bottom:12px;left:auto;right:10px;transform:none}
   .stage-note{top:8px;bottom:auto;left:8px;right:8px;transform:none;max-width:none;border-radius:10px;text-align:left;font-size:12.5px;line-height:1.55;padding:8px 12px}
   .lab[data-state=loading] .stage-note.on{top:auto;left:50%;right:auto;transform:translate(-50%,50%)}
+  .lab[data-state=still]{grid-template-rows:auto auto minmax(0,1fr)}
 }
 @media (pointer:coarse){
   .icon-button{width:40px;height:40px}
   .tool,.action,.chip,.toggle{min-height:40px}
+  .tool{height:40px}
   .route button{padding:9px 12px}
   .segmented button{padding-top:9px;padding-bottom:9px}
 }
 /* a short phone (or a phone on its side): let the page scroll so that the stage keeps its size */
 @media (max-height:560px){
   body{overflow:auto}
-  .lab{height:auto;min-height:100dvh;grid-template-rows:auto 78vh auto}
+  .lab{height:auto;min-height:100dvh;grid-template-rows:auto 78vh auto auto}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before{transition:none!important;animation:none!important}

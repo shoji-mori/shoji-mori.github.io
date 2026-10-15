@@ -1,13 +1,14 @@
-// Disk Lab v2: the page around the GPU engine (engine/disk3d.js, an unmodified copy of lab/disk/disk3d.js).
-// The page decides whether the live model can run (quality.js), loads the engine, takes the visitor to places
-// (places.js) and looks, and keeps its controls in step with the engine through the engine's public API and events.
+// Disk Lab v2: the page around the GPU engine (engine/disk3d.js, v2's own engine: see engine/CHANGES.md).
+// The page decides whether the live model can run (quality.js), loads the engine, lays out the sandbox (the rail: look,
+// what is shown, cut, variants, time, view) and the highlights (places.js), and keeps its controls in step with the
+// engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
-import { PLACES, placeById, placeState, fitDistance } from './places.js';
-import { WORDS } from './words.js';
-import { probe, calibrate, govern } from './quality.js';
-import { snapshot, toPng } from './capture.js';
+import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016a';
+import { WORDS } from './words.js?v=20261016a';
+import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016a';
+import { snapshot, toPng } from './capture.js?v=20261016a';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=c78aeec776';   // ?v= the first ten characters of the copy's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=e8aabb71e1';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 const VERSION = '2026-10-15';
 
 const html = document.documentElement;
@@ -20,8 +21,8 @@ const T = () => WORDS[L()];
 
 const lab = $('lab'), stage = $('stage'), box = $('disk'), poster = $('poster');
 const routeList = $('routeList'), placeText = $('placeText'), placeTitle = $('placeTitle'), placeActions = $('placeActions');
-const lookGroup = $('lookGroup'), lookNote = $('lookNote');
-const playBtn = $('play'), clock = $('clock'), panel = $('panel'), panelOpen = $('panelOpen');
+const lookGroup = $('lookGroup'), lookNote = $('lookNote'), lookContext = $('lookContext'), cutContext = $('cutContext');
+const playBtn = $('play'), clock = $('clock'), rail = $('rail');
 const stageHint = $('stageHint'), stageNote = $('stageNote'), stillNote = $('stillNote'), tempKey = $('tempKey');
 const LOOKS = ['model', 'optical', 'mir', 'mm', 'co'];
 const SPIN_DEG = 0.004 * 180 / Math.PI;   // the engine's slow turn of the view (data-spin, rad per second of the clock)
@@ -87,8 +88,8 @@ function setPoster(id) {
 (function drawTempKey() {
   const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   const tcolor = (T_) => {
-    const l = Math.log(T_), st = [[3.69, 4.50, [0.071, 0.325, 1.000]], [4.50, 4.98, [0.485, 0.755, 1.000]], [4.98, 5.16, [1.000, 0.852, 0.612]],
-      [5.16, 5.86, [1.000, 0.325, 0.047]], [5.86, 6.68, [1.000, 0.682, 0.302]], [6.68, 7.38, [1.000, 0.914, 0.793]]];
+    const l = Math.log(T_), st = [[3.69, 4.50, [0.071, 0.325, 1.000]], [4.50, 4.98, [0.560, 0.800, 1.000]], [4.98, 5.16, [0.920, 0.900, 0.860]],
+      [5.16, 5.86, [1.000, 0.325, 0.047]], [5.86, 6.68, [1.000, 0.560, 0.120]], [6.68, 7.38, [1.000, 0.860, 0.240]]];
     let c = [0.023, 0.148, 0.893];
     for (const [a, b, k] of st) { const t = ss(a, b, l); c = c.map((v, i) => v + (k[i] - v) * t); }
     return c.map((v) => Math.round(255 * 0.92 * Math.pow(v, 1 / 2.2)));
@@ -162,7 +163,6 @@ function renderAll() {
   document.querySelectorAll('[data-aria-en]').forEach((e) => e.setAttribute('aria-label', e.dataset[L() === 'ja' ? 'ariaJa' : 'ariaEn']));
   $('prev').setAttribute('aria-label', w.prev); $('next').setAttribute('aria-label', w.next);
   $('route').setAttribute('aria-label', w.ariaRoute);
-  $('dock').setAttribute('aria-label', L() === 'ja' ? '行き先と見え方' : 'Places and looks');
   lookGroup.setAttribute('aria-label', L() === 'ja' ? '見え方' : 'Look');
   stageHint.textContent = coarse ? w.hintTouch : w.hintMouse;
   document.querySelectorAll('.lang-switch [data-lang]').forEach((b) => pressed(b, b.dataset.lang === L()));
@@ -187,47 +187,27 @@ function setLook(k) {
   // does when the look alone is changed)
   if (s.slice && k !== 'model') box.diskSet({ slice: 0, look: k }); else box.diskSet({ look: k });
   sync();
-  // (a narrow dock has no room for the look's note: it shows on the stage for a moment)
-  if (narrow.matches) note(lookNote.textContent, 3800);
 }
-const narrow = matchMedia('(max-width: 860px)');
 
-// ---------- the controls that depend on the state: the place's action, the cut's quantities, the CO maps ----------
+// ---------- the controls that depend on the state: the place's action; in the rail, the CO maps and the cut's quantities ----------
 const CUT_Q = ['T', 'rho', 'tau', 'layers', 'none'];
 function segmented(items, current, onPick, label, cls = 'segmented small') {
   const g = el('div', { class: cls, role: 'group', 'aria-label': label });
   for (const [key, text] of items) g.append(el('button', { type: 'button', 'aria-pressed': String(key === current), onclick: () => onPick(key) }, text));
   return g;
 }
-let actionsKey = '';
-// The row under the text holds one thing at a time, so that the dock keeps its height (a taller dock would shrink the
-// stage, and the engine would resize): the CO line's maps in that look, else the cut's quantities when a cut is open,
-// else the place's own control; and the way back when the view has left the place.
+let actionsKey = '', lookKey = '', cutKey = '';
+// The row under a highlight's text: the place's own control, the way back when the view has left the place, or the way
+// on (the next place).
 function renderActions(s) {
   const w = T(), pl = PLACES[placeI];
   const showBack = away();
-  const co = s.look === 'co', cutOpen = !co && s.slice > 0 && s.look === 'model';
-  const key = [L(), pl.id, co ? s.coMode : '', cutOpen ? s.sq : '', s.asym, s.waves, s.mode & 16, showBack, Date.now() < burstUntil].join('|');
-  if (key === actionsKey) {
-    // (only the velocity can change under an unchanged row: keep its slider in step unless it is being dragged)
-    const input = co && placeActions.querySelector('input');
-    if (input && document.activeElement !== input && Number(input.value) !== s.coV) { input.value = String(s.coV); placeActions.querySelector('output').textContent = kms(s.coV); }
-    return;
-  }
+  const key = [L(), pl.id, s.asym, s.waves, s.mode & 16, showBack, Date.now() < burstUntil].join('|');
+  if (key === actionsKey) return;
   actionsKey = key;
   const kids = [];
-  if (co) {
-    kids.push(segmented(['chan', 'm1', 'm0'].map((k) => [k, w.coModes[k]]), s.coMode, (k) => { box.diskSet({ coMode: k }); sync(); }, L() === 'ja' ? 'CO の表示' : 'CO map'));
-    if (s.coMode === 'chan') {
-      const out = el('output', {}, kms(s.coV));
-      const input = el('input', { type: 'range', min: '-12', max: '12', step: '0.25', value: String(s.coV), 'aria-label': w.velocity + ' (km/s)',
-        oninput: (e) => { box.diskSet({ coV: Number(e.target.value) }); out.textContent = kms(Number(e.target.value)); } });
-      kids.push(el('label', { class: 'velocity' }, w.velocity, input, out));
-    }
-  } else if (cutOpen) {
-    kids.push(segmented(CUT_Q.map((k) => [k, w.cutQ[k]]), s.sq, (k) => { box.diskSet({ sq: k }); sync(); }, L() === 'ja' ? '断面に描く量' : 'Quantity on the cut'));
-  } else if (pl.action === 'asym') {
-    kids.push(el('button', { type: 'button', class: 'action', 'aria-pressed': String(!s.asym), onclick: () => { box.diskSet({ asym: S().asym ? 0 : 1 }); sync(); } }, w.actions.asym));
+  if (pl.action === 'asym') {
+    kids.push(el('button', { type: 'button', class: 'action', 'aria-pressed': String(!!s.asym), onclick: () => { box.diskSet({ asym: S().asym ? 0 : 1 }); sync(); } }, w.actions.asym));
   } else if (pl.action === 'burst' && !reduce) {
     kids.push(el('button', { type: 'button', class: 'action', disabled: Date.now() < burstUntil, onclick: () => {
       box.diskBurst(); burstUntil = Date.now() + 8000; sync(); setTimeout(sync, 8100);
@@ -253,30 +233,68 @@ function svgIcon(d) {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true');
   const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', d); s.append(p); return s;
 }
-function renderNote(s) {
-  const w = T();
-  lookNote.textContent = s.look === 'co' ? w.coNotes[s.coMode] : s.slice && s.look === 'model' ? w.cutNotes[s.sq] : w.looks[s.look].note;
+// The rail's controls that come and go: the CO line's maps and velocity under the looks, the cut's quantities under the
+// cut; and the note under the looks (the look's, the CO map's, or the cut face's).
+function renderRail(s) {
+  const w = T(), co = s.look === 'co', cutOpen = s.slice > 0 && s.look === 'model';
+  const lk = [L(), co, s.coMode].join('|');
+  if (lk !== lookKey) {
+    lookKey = lk;
+    const kids = [];
+    if (co) {
+      kids.push(segmented(['chan', 'm1', 'm0'].map((k) => [k, w.coModes[k]]), s.coMode, (k) => { box.diskSet({ coMode: k }); sync(); }, L() === 'ja' ? 'CO の表示' : 'CO map'));
+      if (s.coMode === 'chan') {
+        const out = el('output', {}, kms(s.coV));
+        const input = el('input', { type: 'range', min: '-12', max: '12', step: '0.25', value: String(s.coV), 'aria-label': w.velocity + ' (km/s)',
+          oninput: (e) => { box.diskSet({ coV: Number(e.target.value) }); out.textContent = kms(Number(e.target.value)); } });
+        kids.push(el('label', { class: 'velocity' }, w.velocity, input, out));
+      }
+    }
+    lookContext.replaceChildren(...kids);
+  } else if (co && s.coMode === 'chan') {
+    // (keep the velocity's slider in step unless it is being dragged)
+    const input = lookContext.querySelector('input');
+    if (input && document.activeElement !== input && Number(input.value) !== s.coV) { input.value = String(s.coV); lookContext.querySelector('output').textContent = kms(s.coV); }
+  }
+  const ck = [L(), cutOpen, s.sq].join('|');
+  if (ck !== cutKey) {
+    cutKey = ck;
+    cutContext.replaceChildren(...(cutOpen ? [segmented(CUT_Q.map((k) => [k, w.cutQ[k]]), s.sq, (k) => { box.diskSet({ sq: k }); sync(); }, L() === 'ja' ? '断面に描く量' : 'Quantity on the cut')] : []));
+  }
+  lookNote.textContent = co ? w.coNotes[s.coMode] : cutOpen ? w.cutNotes[s.sq] : w.looks[s.look].note;
 }
 const kms = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' km/s';
 
 // ---------- keeping every control in step with the engine ----------
+// The CO line costs 7 (a channel) to 35 (its moments) times the model's look per frame: the governor's floor is lower
+// there (CO_FLOOR), and the scale starts from it, so that the first frames do not take a second each (the governor
+// climbs from there while the clock runs; a still picture is sharpened when complete). Leaving the CO line, the model
+// takes back the calibrated scale at once rather than climbing to it.
+const CO_FLOOR = 0.12;
+let wasCo = false;
 function sync() {
   if (!live()) return;
   const s = S();
+  // (a still picture's scale is for that picture: the clock started, or another look, by any way, ends it)
+  if (sharpFrom && ((!s.paused && !reduce) || s.look + s.coMode !== sharpWhat)) unsharpen();
+  const base = diag.calibration && diag.calibration.scale, co = s.look === 'co';
+  if (co && !wasCo && !sharpFrom && !holdSharp) { box.diskScale(CO_FLOOR); runScale = CO_FLOOR; }
+  if (!co && wasCo && !sharpFrom && !holdSharp && base) { box.diskScale(base); runScale = base; }
+  wasCo = co;
   lookButtons.forEach((b) => pressed(b, b.dataset.look === s.look));
   renderActions(s);
-  renderNote(s);
+  renderRail(s);
   // (not next to the star, where the magnetosphere's columns and curtains have colours of their own)
   tempKey.classList.toggle('on', s.look === 'model' && !s.slice && !!s.ann && (s.p || s.d >= 2));
   playBtn.toggleAttribute('data-paused', !!s.paused);
   playBtn.setAttribute('aria-label', s.paused ? T().play : T().pause);
   setClock(s.time);
-  // the panel
-  panel.querySelectorAll('[data-bit]').forEach((b) => pressed(b, s.mode & Number(b.dataset.bit)));
-  const opt = { field: s.field, marks: s.marks, ann: s.ann, sym: !s.asym, waves: s.waves };
-  panel.querySelectorAll('[data-opt]').forEach((b) => pressed(b, opt[b.dataset.opt]));
-  panel.querySelectorAll('[data-cut]').forEach((b) => pressed(b, Number(b.dataset.cut) === s.slice));
-  panel.querySelectorAll('[data-speed]').forEach((b) => pressed(b, Math.abs(Number(b.dataset.speed) - s.speed) < 1e-6));
+  // the rail
+  rail.querySelectorAll('[data-bit]').forEach((b) => pressed(b, s.mode & Number(b.dataset.bit)));
+  const opt = { field: s.field, marks: s.marks, ann: s.ann, asym: s.asym, waves: s.waves };
+  rail.querySelectorAll('[data-opt]').forEach((b) => pressed(b, opt[b.dataset.opt]));
+  rail.querySelectorAll('[data-cut]').forEach((b) => pressed(b, Number(b.dataset.cut) === s.slice));
+  rail.querySelectorAll('[data-speed]').forEach((b) => pressed(b, Math.abs(Number(b.dataset.speed) - s.speed) < 1e-6));
 }
 let clockShown = -1;
 function setClock(time) {
@@ -284,23 +302,15 @@ function setClock(time) {
   if (y !== clockShown) { clockShown = y; clock.textContent = T().clock(y); }
 }
 
-// ---------- the panel ----------
-function openPanel(on) {
-  panel.hidden = !on; panelOpen.setAttribute('aria-expanded', String(on));
-  if (on) { sync(); panel.focus({ preventScroll: true }); }
-  else if (panel.contains(document.activeElement) || document.activeElement === document.body) panelOpen.focus({ preventScroll: true });
-}
-panelOpen.addEventListener('click', () => openPanel(panel.hidden));
-$('panelClose').addEventListener('click', () => openPanel(false));
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden && !$('about').open) { openPanel(false); } });
-panel.addEventListener('click', (e) => {
+// ---------- the rail (the sandbox) ----------
+rail.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b || !live()) return;
   const s = S();
   if (b.dataset.bit) box.diskSet({ mode: s.mode ^ Number(b.dataset.bit) });
   else if (b.dataset.opt === 'field') box.diskField(!s.field);
   else if (b.dataset.opt === 'marks') box.diskSet({ marks: s.marks ? 0 : 1 });
   else if (b.dataset.opt === 'ann') box.diskAnnotations(!s.ann);
-  else if (b.dataset.opt === 'sym') box.diskSet({ asym: s.asym ? 0 : 1 });
+  else if (b.dataset.opt === 'asym') box.diskSet({ asym: s.asym ? 0 : 1 });
   else if (b.dataset.opt === 'waves') box.diskSet({ waves: s.waves ? 0 : 1 });
   else if (b.dataset.cut) { const k = Number(b.dataset.cut); if (k === 0) box.diskSlice(false); else box.diskSlice(true, null, k === 2 ? 'quarter' : 'half'); }
   else if (b.dataset.angle) { const [elv, az] = b.dataset.angle.split(',').map(Number); box.diskSet({ slice: 0, p: 0, el: elv, az, fly: reduce ? 0 : 1 }); }
@@ -366,11 +376,34 @@ function stateFromLink() {
   return Object.keys(st).length ? st : null;
 }
 
+// ---------- the two halves on a narrow screen: the sandbox (default) and the highlights ----------
+function setTab(t) {
+  lab.dataset.tab = t === 'tour' ? 'tour' : 'explore';
+  pressedTab();
+}
+function pressedTab() {
+  const tour = lab.dataset.tab === 'tour';
+  $('tabExplore').setAttribute('aria-selected', String(!tour)); $('tabTour').setAttribute('aria-selected', String(tour));
+  $('tabExplore').tabIndex = tour ? -1 : 0; $('tabTour').tabIndex = tour ? 0 : -1;
+}
+$('tabExplore').addEventListener('click', () => setTab('explore'));
+$('tabTour').addEventListener('click', () => setTab('tour'));
+$('tabs').addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  e.preventDefault(); setTab(lab.dataset.tab === 'tour' ? 'explore' : 'tour'); $(lab.dataset.tab === 'tour' ? 'tabTour' : 'tabExplore').focus();
+});
+lab.dataset.tab = q.get('place') ? 'tour' : 'explore';
+pressedTab();
+// (the two halves are tab panels only where they are tabs)
+const narrow = matchMedia('(max-width: 860px)');
+const tabRoles = () => { for (const id of ['rail', 'dock']) { if (narrow.matches) $(id).setAttribute('role', 'tabpanel'); else $(id).removeAttribute('role'); } };
+narrow.addEventListener('change', tabRoles); tabRoles();
+
 // ---------- language ----------
 function setLang(l) {
   html.lang = l; html.classList.toggle('lang-ja', l === 'ja');
   try { sessionStorage.setItem('site-language', l); } catch { /* the choice still applies to this page */ }
-  actionsKey = ''; clockShown = -1;
+  actionsKey = lookKey = cutKey = ''; clockShown = -1;
   if (mode !== 'live' || 'lost' in lab.dataset) setPoster(PLACES[placeI].id);   // (the stills carry their labels)
   renderAll();
 }
@@ -404,26 +437,29 @@ stage.addEventListener('wheel', () => hint(false), { capture: true, passive: tru
 
 // ---------- a still picture at the screen's full resolution ----------
 // While the model is paused (or the clock is stopped for reduced motion) and nothing moves, the engine averages jittered
-// frames into one picture (its accumulation). The page lets it draw them at the screen's full resolution (render scale
-// 1), since no frame rate is at stake; the first touch, key or wheel on the page brings back the running scale before
-// the engine sees the event. Only where a full-resolution frame is predicted under 150 ms (calibrate's fullMs).
-let sharpFrom = 0, sharpTimer = 0, runScale = 0;   // runScale: the scale the model runs at (calibrated, then governed)
+// frames into one picture (its accumulation, accMax frames). When that picture is complete, the page has it drawn again
+// at a higher render scale, up to the screen's full resolution (1), since no frame rate is at stake; the first touch, key
+// or wheel on the page brings back the running scale before the engine sees the event. The scale is the one whose frame
+// is predicted at SHARP_MS from the accumulation's own frames (what is drawn now: the CO line's moments cost some 30
+// times the model, next to the star a frame costs 4 times the whole disk's; at scale 1 a frame of the moments took
+// seconds, and the GPU dropped the WebGL context).
+const SHARP_MS = 150;
+let sharpFrom = 0, runScale = 0;   // runScale: the scale the model runs at (calibrated, then governed)
+let lastFrame = 0, holdSharp = false, sharpWhat = '';   // sharpWhat: the look sharpened
+const recent = [];                 // the intervals between the accumulation's frames (ms; the last 12)
 function unsharpen() {
-  clearTimeout(sharpTimer);
   if (!sharpFrom) return;
-  box.diskScale(sharpFrom); sharpFrom = 0;
+  box.diskScale(sharpFrom); sharpFrom = 0; recent.length = 0;
   if (gov) gov.pause(false);
 }
-function scheduleSharpen() {
-  clearTimeout(sharpTimer);
-  if (!live() || sharpFrom || !(diag.calibration && diag.calibration.fullMs < 150)) return;
-  sharpTimer = setTimeout(() => {
-    if (!live() || 'lost' in lab.dataset || !(S().paused || reduce) || saving) return;
-    sharpFrom = box.diskScale();
-    if (sharpFrom >= 1) { sharpFrom = 0; return; }
-    if (gov) gov.pause(true);
-    box.diskScale(1);
-  }, 700);
+function onAccumulated() {
+  if (!live() || sharpFrom || holdSharp || 'lost' in lab.dataset || !(S().paused || reduce) || saving || recent.length < 4) return;
+  // (the mean, not the median: with two frames in flight they come in pairs, a long interval and a short one)
+  const mean = recent.reduce((a, b) => a + b, 0) / recent.length, s = box.diskScale(), to = Math.min(1, scaleFor(mean, s, SHARP_MS));
+  if (to < 1.15 * s) return;
+  sharpFrom = s; recent.length = 0; sharpWhat = S().look + S().coMode;
+  if (gov) gov.pause(true);
+  box.diskScale(to);
 }
 for (const type of ['pointerdown', 'keydown']) lab.addEventListener(type, unsharpen, { capture: true });
 stage.addEventListener('wheel', unsharpen, { capture: true, passive: true });
@@ -472,6 +508,8 @@ async function start() {
   Object.assign(box.dataset, { elevation: String(first.view.el), azimuth: String(first.view.az), distance: String(Math.round(fitDistance(whole, aspect()) * 1000) / 1000) });
   if (!first.field) box.dataset.nofield = '';
   if (q.get('motion') === 'reduce') box.dataset.static = '';
+  // (the wind symmetric by default, as the client asked; the one-sided wind of Mori, Bai & Tomida 2025 is a control)
+  box.dataset.asym = 'off';
   box.setAttribute('data-disk3d', '');
   try { await loadEngine(); } catch { return enterStill('failed'); }
   diag.timings.engine = Math.round(performance.now() - t0);
@@ -489,8 +527,9 @@ async function start() {
   lab.dataset.state = 'live';
   note('', 0);
   runScale = box.diskScale();
-  if (!reduce) gov = govern(box, { base: diag.calibration && diag.calibration.scale || 0.5, running: () => !S().paused, onChange: (sc) => { runScale = sc; } });
-  if (reduce) { const r = $('reducedNote'); r.textContent = T().reduced; r.hidden = false; playBtn.hidden = true; }
+  if (!reduce) gov = govern(box, { base: diag.calibration && diag.calibration.scale || 0.5, running: () => !S().paused,
+    floor: () => (S().look === 'co' ? CO_FLOOR : MIN_SCALE), onChange: (sc) => { runScale = sc; } });
+  if (reduce) { const r = $('reducedNote'); r.textContent = T().reduced; r.hidden = false; playBtn.hidden = true; $('speedGroup').hidden = true; }
   sync();
   hint(true);
   diag.timings.live = Math.round(performance.now() - t0);
@@ -502,15 +541,19 @@ box.addEventListener('diskmode', () => sync());
 box.addEventListener('diskframe', (e) => {
   if (mode !== 'live') return;
   setClock(e.detail.time);
-  // (each drawn frame puts the sharpening off: it comes 0.7 s after the last one, when the picture is still)
-  if (!sharpFrom && lab.dataset.state === 'live') scheduleSharpen();
+  // (the intervals between frames of one still picture, at one scale, are what a frame of it costs; a complete picture
+  // may be sharpened)
+  const now = performance.now(), { acc = 0, accMax = 0 } = e.detail;
+  if (acc >= 2 && lastFrame) { recent.push(now - lastFrame); if (recent.length > 12) recent.shift(); }
+  lastFrame = now;
+  if (accMax && acc >= accMax && lab.dataset.state === 'live') onAccumulated();
 });
 box.addEventListener('disklost', (e) => {
   if (e.detail.lost) { lab.dataset.lost = ''; posterKey = ''; setPoster(PLACES[placeI].id); note(T().still.lost, 0); }
   else {
     // (the engine is built anew from its data attributes: give it back the scale it ran at)
     delete lab.dataset.lost; note('', 0);
-    clearTimeout(sharpTimer); sharpFrom = 0; if (gov) gov.pause(false);
+    sharpFrom = 0; recent.length = 0; if (gov) gov.pause(false);
     if (runScale) box.diskScale(runScale);
     sync();
   }
@@ -521,8 +564,9 @@ window.diskLab = {
   state: () => ({ mode, stillReason, place: PLACES[placeI].id, away: away(), sharpened: !!sharpFrom, governor: gov ? gov.state() : null }),
   goPlace: (id, opts) => goPlace(typeof id === 'number' ? id : PLACES.findIndex((p) => p.id === id), opts),
   // (for measurements: frames drawn by diskBench would otherwise reach the governor)
-  pauseGovernor: (on) => { if (gov) gov.pause(on); },
-  setLook, setLang, openPanel, link: () => (live() ? linkFor(S()) : null), snapshot: (opts) => shot(opts)
+  // (for measurements: also holds the sharpening of a still picture and the CO line's own scale; the scale is the caller's)
+  pauseGovernor: (on) => { holdSharp = !!on; if (on) unsharpen(); if (gov) gov.pause(on); },
+  setLook, setLang, setTab: (t) => setTab(t), link: () => (live() ? linkFor(S()) : null), snapshot: (opts) => shot(opts)
 };
 $('colophon').textContent = `Disk Lab ${VERSION} · engine ${ENGINE_SRC.split('v=')[1]}`;
 start();

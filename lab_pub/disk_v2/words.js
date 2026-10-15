@@ -7,7 +7,7 @@ export const WORDS = {
       whole: { short: '全体', title: '円盤の全体',
         text: '若い星を回るガスと塵の円盤(半径 30 au)。惑星はこうした円盤で生まれます。星の光は反り返った表層を温め、赤道面は冷たいまま。上に淡く光るのは円盤風です。' },
       wind: { short: '磁場と風', title: '磁場と円盤風',
-        text: '円盤を貫く磁力線は、回転にねじられながら外へ開きます。ガスはこの線に沿って加速し、風となって吹き出します。ここでは上側が強い形です(磁場が回転と同じ向きの場合)。' },
+        text: '円盤を貫く磁力線は、回転にねじられながら外へ開きます。ガスはこの線に沿って加速し、風となって上下に吹き出します。磁場が回転と同じ向きなら、片側が強くなります。' },
       snow: { short: 'スノーライン', title: 'スノーライン',
         text: '約 0.9 au の破線がスノーライン。その外では、赤道面の小石が氷をまといます。3 au では木星質量の惑星がギャップを開けています。' },
       planet: { short: '惑星', title: '惑星',
@@ -17,14 +17,14 @@ export const WORDS = {
       heat: { short: '温度', title: '円盤の中の温度',
         text: '星を通る面で手前の半分を切り取り、切り口を温度で塗りました。白い線(τ* = 1)より上は星の光で熱く、その下は冷たいままです。' },
       deadzone: { short: 'デッドゾーン', title: 'デッドゾーン',
-        text: '右手前の 4 分の 1 を切り取り、磁場とガスの結びつきで塗り分けました。紺のデッドゾーンでは磁場がガスをつかめず、乱流も起きません。降着は片側の薄い層(琥珀色)を流れます。' },
+        text: '右手前の 4 分の 1 を切り取り、磁場とガスの結びつきで塗り分けました。紺のデッドゾーンでは磁場がガスをつかめず、乱流も起きません。降着は、その上下の薄い層(琥珀色)を流れます。' },
       star: { short: '星のそば', title: '星のすぐそば',
-        text: '星から 0.15 au。星の磁場が円盤を 0.05 au で切り取り、ガスは磁力線に沿う弧状のカーテン(桃色)となって星へ落ちます(秒速約 400 km)。ここでは時計を遅くしています。' },
+        text: '星から 0.15 au。星の磁場が円盤を 0.05 au で切り取り、ガスは磁力線に沿う弧状のカーテン(桃色)となって星へ落ちます(秒速約 400 km)。' },
       afar: { short: '遠くから', title: '遠くから',
         text: '340 au から。母体の雲の名残(エンベロープ)が回転しながら円盤へ落ち、軸に沿って開いた空洞の壁が、星の光で明るく見えます。' }
     },
     looks: {
-      model: { label: 'モデル', note: '色は温度(青は冷たく、琥珀は熱い)、明るさは吸収した星の光です。' },
+      model: { label: 'モデル', note: '色は温度(青は冷たく、白はスノーライン、橙から黄は熱い)、明るさは吸収した星の光です。' },
       optical: { label: '散乱光', note: '可視光・近赤外線の散乱光。星の光を散らす表層と風が見えます。' },
       mir: { label: '中間赤外', note: '中間赤外線。暖かい表層が自ら光り、内側ほど明るく見えます。' },
       mm: { label: 'ミリ波', note: 'ミリ波。赤道面に沈んだ小石の熱放射です。' },
@@ -46,7 +46,7 @@ export const WORDS = {
       none: '切り口をそのまま見せ、奥のガスは薄くしています。白い線は円盤の縁、細い線は密度の等高線です。'
     },
     actions: {
-      asym: '風を上下対称に',
+      asym: '上下非対称に(Mori, Bai & Tomida 2025)',
       burst: '星を増光させる',
       waves: '惑星の波を強調',
       noplanet: '惑星を消す'
@@ -83,7 +83,7 @@ export const WORDS = {
       whole: { short: 'Whole disk', title: 'The whole disk',
         text: 'A disk of gas and dust around a young star, 30 au in radius: the kind of disk in which planets form. Starlight warms its flared surface; the midplane stays cold. The faint glow above is a wind.' },
       wind: { short: 'Field & wind', title: 'Field and wind',
-        text: 'Field lines threading the disk are wound up by its rotation and open outward. Gas speeds up along them and leaves as a wind, here stronger on the upper side (for a field aligned with the rotation).' },
+        text: 'Field lines threading the disk are wound up by its rotation and open outward. Gas speeds up along them and leaves both faces as a wind; with the field aligned with the rotation, one side blows harder.' },
       snow: { short: 'Snow line', title: 'The snow line',
         text: 'The dashed ring near 0.9 au is the snow line: beyond it, the pebbles at the midplane are coated in ice. A Jupiter-mass planet at 3 au opens a gap.' },
       planet: { short: 'Planet', title: 'The planet',
@@ -93,14 +93,14 @@ export const WORDS = {
       heat: { short: 'Heat', title: 'Heat inside the disk',
         text: 'The near half cut away through the star, the face coloured by temperature. Above the white line (\u03c4* = 1) starlight heats the gas; below it the disk stays cold.' },
       deadzone: { short: 'Dead zone', title: 'The dead zone',
-        text: 'A quarter cut away, coloured by how well the magnetic field grips the gas. In the navy dead zone it cannot, and nothing stirs; accretion runs through a thin layer on one side (amber).' },
+        text: 'A quarter cut away, coloured by how well the magnetic field grips the gas. In the navy dead zone it cannot, and nothing stirs; accretion runs through thin layers above and below it (amber).' },
       star: { short: 'The star', title: 'Next to the star',
-        text: 'At 0.15 au, the star\u2019s magnetic field holds the disk off at 0.05 au. Gas falls onto the star along the field lines in arc-shaped curtains (pink), at about 400 km/s. The clock runs slower here.' },
+        text: 'At 0.15 au, the star\u2019s magnetic field holds the disk off at 0.05 au. Gas falls onto the star along the field lines in arc-shaped curtains (pink), at about 400 km/s.' },
       afar: { short: 'Afar', title: 'From afar',
         text: 'From 340 au: the remains of the parent cloud (the envelope) fall onto the disk as they rotate, and starlight lights the walls of a cavity along the axis.' }
     },
     looks: {
-      model: { label: 'Model', note: 'Colour is temperature (blue cold, amber hot); brightness is the starlight absorbed.' },
+      model: { label: 'Model', note: 'Colour is temperature (blue cold, white at the snow line, orange to yellow hot); brightness is the starlight absorbed.' },
       optical: { label: 'Scattered', note: 'Visible and near-infrared light, scattered by the surface and the wind.' },
       mir: { label: 'Mid-IR', note: 'Mid-infrared: the warm surface glows, brightest close in.' },
       mm: { label: 'Millimetre', note: 'Millimetre: the thermal glow of the pebbles at the midplane.' },
@@ -122,7 +122,7 @@ export const WORDS = {
       none: 'The cut face as it is, with the gas behind it thinned; the white line is the disk\u2019s edge, the thin lines density contours.'
     },
     actions: {
-      asym: 'Symmetric wind',
+      asym: 'One-sided (Mori, Bai & Tomida 2025)',
       burst: 'Make the star flare',
       waves: 'Exaggerate the waves',
       noplanet: 'Remove the planet'
