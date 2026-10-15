@@ -73,13 +73,14 @@ function initializeSite() {
     });
     for(const section of filterSections) applyFilters(section);
     if(persist) {
-      // A new tab starts in English; an explicit choice lasts only for this tab.
+      // The browser language is the default; an explicit choice lasts only for this tab.
       // Storage can be unavailable in private or restricted browser contexts.
       // The visible language still changes; only persistence is optional.
       try{sessionStorage.setItem('site-language',lang);}catch{}
     }
   }
-  setLanguage((incomingParams.get('lang')||html.lang)==='ja'?'ja':'en',false);
+  const requestedLanguage=incomingParams.get('lang');
+  setLanguage(['en','ja'].includes(requestedLanguage)?requestedLanguage:html.lang,false);
   document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>setLanguage(button.dataset.lang)));
 
   const exportSheet=document.querySelector('[data-print-document]');
