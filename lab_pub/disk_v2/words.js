@@ -9,7 +9,7 @@ export const WORDS = {
       wind: { short: '磁場と風', title: '磁場と円盤風',
         text: '円盤を貫く磁力線は、回転にねじられながら外へ開きます。ガスはこの線に沿って加速し、風となって上下に吹き出します。磁場が回転と同じ向きなら、片側が強くなります。' },
       snow: { short: 'スノーライン', title: 'スノーライン',
-        text: '約 0.9 au の破線がスノーライン。その外では、赤道面の小石が氷をまといます。3 au では木星質量の惑星がギャップを開けています。' },
+        text: '約 0.9 au の破線がスノーライン。その外では、赤道面の小石が氷をまといます。すぐ外に小石が少したまり、内側では氷が昇華して岩の粒になります。' },
       planet: { short: '惑星', title: '惑星',
         text: '3 au を回る木星質量の惑星。ガスを押しのけてギャップを開け、自分の小さな円盤を持ちます。奥で明るいのは、星に照らされたギャップの外壁です。' },
       mm: { short: 'ミリ波', title: 'ミリ波で見る',
@@ -24,7 +24,7 @@ export const WORDS = {
         text: '340 au から。母体の雲の名残(エンベロープ)が回転しながら円盤へ落ち、軸に沿って開いた空洞の壁が、星の光で明るく見えます。' }
     },
     looks: {
-      model: { label: 'モデル', note: '色は温度(青は冷たく、白はスノーライン、橙から黄は熱い)、明るさは吸収した星の光です。' },
+      model: { label: 'モデル', note: '色は温度(青は冷たく、白はスノーライン、橙から黄は熱い)、明るさはそこにあるガスと塵の量です。' },
       optical: { label: '散乱光', note: '可視光・近赤外線の散乱光。星の光を散らす表層と風が見えます。' },
       mir: { label: '中間赤外', note: '中間赤外線。暖かい表層が自ら光り、内側ほど明るく見えます。' },
       mm: { label: 'ミリ波', note: 'ミリ波。赤道面に沈んだ小石の熱放射です。' },
@@ -76,7 +76,27 @@ export const WORDS = {
       tryLive: 'それでも動かす'
     },
     ariaStage: '円盤のモデル',
-    ariaRoute: '行き先'
+    ariaRoute: '行き先',
+    show: {
+      gas: 'ガス', dust: '塵', pebbles: '小石', wind: '円盤風', field: '磁力線', planet: '惑星', envelope: 'エンベロープ', labels: '注釈',
+      amount: '濃さ', amountNote: '見た目の倍率(1 がモデルの量)',
+      asym: '上下非対称(Mori, Bai & Tomida 2025)', marks: '流れの印', waves: '波を強調',
+      planetRow: (i, a) => `${i}  ${a} au`, orbit: (i) => `惑星 ${i} の軌道半径`, remove: '外す',
+      addPlanet: '惑星を置く', picking: '円盤をクリックした半径に惑星を置きます(Esc でやめる)。', placed: (a) => `${a} au に惑星を置きました。`,
+      noRoom: 'そこには置けません(1〜20 au、隣の惑星と半径の比 1.4 以上)。', full: '惑星は 4 つまでです。',
+      planetsNote: '木星質量。軌道半径 1〜20 au、隣どうしは半径の比 1.4 以上(近すぎる軌道は不安定です)。絵の中の惑星をクリックしても動かせます。'
+    },
+    quality: {
+      label: '画質', auto: '自動', low: '低', mid: '中', high: '高', full: '最高',
+      autoNote: '自動:端末の速さに合わせて解像度を変え、止まった絵は細かく描き直します。',
+      fixedNote: (pct) => `固定:画面の解像度の ${pct} % で描きます(自動の調整は止まります)。`,
+      capped: (pct) => `この眺めでは重すぎるため、${pct} % に下げています(描画が止まらないように)。`
+    },
+    cite: {
+      lead: '研究や発表での利用は自由です。出典として、このページを引用してください。',
+      line: (y, url) => `森 昇志 (${y})「Disk Lab:原始惑星系円盤のモデル」${url}`,
+      copy: '引用をコピー', copied: '引用をコピーしました。'
+    }
   },
   en: {
     places: {
@@ -85,7 +105,7 @@ export const WORDS = {
       wind: { short: 'Field & wind', title: 'Field and wind',
         text: 'Field lines threading the disk are wound up by its rotation and open outward. Gas speeds up along them and leaves both faces as a wind; with the field aligned with the rotation, one side blows harder.' },
       snow: { short: 'Snow line', title: 'The snow line',
-        text: 'The dashed ring near 0.9 au is the snow line: beyond it, the pebbles at the midplane are coated in ice. A Jupiter-mass planet at 3 au opens a gap.' },
+        text: 'The dashed ring near 0.9 au is the snow line: beyond it, the pebbles at the midplane are coated in ice. They pile up a little just outside it; inside, the ice sublimates and the grains are bare rock.' },
       planet: { short: 'Planet', title: 'The planet',
         text: 'A Jupiter-mass planet at 3 au pushes the gas aside into a gap and keeps a small disk of its own. Behind it, starlight catches the outer wall of the gap.' },
       mm: { short: 'Millimetre', title: 'In millimetre light',
@@ -100,7 +120,7 @@ export const WORDS = {
         text: 'From 340 au: the remains of the parent cloud (the envelope) fall onto the disk as they rotate, and starlight lights the walls of a cavity along the axis.' }
     },
     looks: {
-      model: { label: 'Model', note: 'Colour is temperature (blue cold, white at the snow line, orange to yellow hot); brightness is the starlight absorbed.' },
+      model: { label: 'Model', note: 'Colour is temperature (blue cold, white at the snow line, orange to yellow hot); brightness is how much gas and dust is there.' },
       optical: { label: 'Scattered', note: 'Visible and near-infrared light, scattered by the surface and the wind.' },
       mir: { label: 'Mid-IR', note: 'Mid-infrared: the warm surface glows, brightest close in.' },
       mm: { label: 'Millimetre', note: 'Millimetre: the thermal glow of the pebbles at the midplane.' },
@@ -152,6 +172,26 @@ export const WORDS = {
       tryLive: 'Run the live model anyway'
     },
     ariaStage: 'Model of a protoplanetary disk',
-    ariaRoute: 'Places'
+    ariaRoute: 'Places',
+    show: {
+      gas: 'Gas', dust: 'Dust', pebbles: 'Pebbles', wind: 'Wind', field: 'Field lines', planet: 'Planets', envelope: 'Envelope', labels: 'Labels',
+      amount: 'Amount', amountNote: 'a display factor (1: the model’s amount)',
+      asym: 'One-sided (Mori, Bai & Tomida 2025)', marks: 'Flow markers', waves: 'Exaggerate the waves',
+      planetRow: (i, a) => `${i}  ${a} au`, orbit: (i) => `Planet ${i}: orbital radius`, remove: 'Remove',
+      addPlanet: 'Place a planet', picking: 'Click the disk where the planet should orbit (Esc to stop).', placed: (a) => `A planet placed at ${a} au.`,
+      noRoom: 'No room there (1 to 20 au, and at least 1.4 times the radius of a neighbour).', full: 'Four planets at most.',
+      planetsNote: 'Jupiter-mass, on orbits of 1 to 20 au, neighbours at least 1.4 apart in radius (closer orbits are unstable). A planet in the picture can be clicked to move it too.'
+    },
+    quality: {
+      label: 'Quality', auto: 'Auto', low: 'Low', mid: 'Medium', high: 'High', full: 'Best',
+      autoNote: 'Auto: the resolution follows the device’s speed, and a still picture is drawn again more finely.',
+      fixedNote: (pct) => `Fixed: drawn at ${pct}% of the screen’s resolution (the automatic steps stop).`,
+      capped: (pct) => `Too heavy in this view: held at ${pct}% so that drawing does not stall.`
+    },
+    cite: {
+      lead: 'Free to use in research and talks; please cite this page as the source.',
+      line: (y, url) => `Mori, S. (${y}). Disk Lab: a model protoplanetary disk. ${url}`,
+      copy: 'Copy the citation', copied: 'Citation copied.'
+    }
   }
 };

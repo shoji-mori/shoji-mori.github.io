@@ -20,6 +20,8 @@ URL parameters:
 | `lang=en` / `lang=ja` | language (otherwise the visit's choice, `sessionStorage['site-language']`, then the browser's) |
 | `place=whole` … `afar` | start at a place (`whole wind snow planet mm heat deadzone star afar`) |
 | `el az d look mode field ann asym marks waves slice sq p tx ty tz speed paused t com cov ms` | a view, as "Copy a link" writes it (the same keys as the preview page `lab/disk/`) |
+| `pl=3:1,8:0` | the planets: orbital radius (au) and on (1) or off (0), up to four |
+| `g=1,1,1,1` | the display amount of the gas, the dust, the pebbles and the wind (0.25 to 3) |
 | `still=1` | show the still pictures (as without WebGL2) |
 | `gl=force` | skip the check for software rendering and slow devices |
 | `motion=reduce` | behave as with the system's reduced-motion setting |
@@ -36,6 +38,7 @@ URL parameters:
 | `quality.js` | whether the live model can run, the start-up calibration and the render-scale governor |
 | `capture.js` | saving a picture (works around `drawImage` reading nothing from the engine's canvas in Chrome) |
 | `engine/disk3d.js` | v2's own GPU engine, begun as a copy of `lab/disk/disk3d.js` (9436767); `engine/CHANGES.md` records what changed and what was taken from or left in the other lines, `engine/SOURCE.txt` the base and the SHA-256s |
+| `logo-white.svg` | the site's header mark (`/images/logo-mark.svg` on origin/main) in white: the faint watermark on the stage and in saved pictures |
 | `stills/` | 36 WebP stills: `<place>-<lang>-wide.webp` (2400 × 1200), `<place>-<lang>-tall.webp` (1200 × 1500) |
 
 ## Check it
@@ -81,3 +84,8 @@ Copy `lab_pub/disk_v2/` as it is. It needs `/fonts/` and `/images/favicon.svg` a
 `disk-lab.css` and `app.js` in `index.html`, and of the modules `app.js` imports (`places.js`, `words.js`, `quality.js`,
 `capture.js`), when they change (the page is served with the site's caching, and a new `app.js` with an old module
 cached would fail).
+
+## Citation and quality
+
+The suggested citation is built from `CITE_URL` and `CITE_YEAR` at the top of `app.js`: change the URL there when the
+page moves from its hidden address. The quality levels (render scale of a fixed level) are `QUALITY` beside them.

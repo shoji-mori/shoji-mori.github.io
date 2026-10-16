@@ -10,7 +10,7 @@
 <link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
 <link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="disk-lab.css?v=20261016a">
+<link rel="stylesheet" href="disk-lab.css?v=20261016b">
 <script>
   // The language, chosen as the site chooses it: ?lang=, the visit's choice, then the browser's language.
   (() => {
@@ -24,7 +24,7 @@
     document.documentElement.classList.toggle('lang-ja', lang === 'ja');
   })();
 </script>
-<script type="module" src="app.js?v=20261016a"></script>
+<script type="module" src="app.js?v=20261016b"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
@@ -40,7 +40,7 @@
 
   <main class="stage" id="stage">
     <h1 class="sr-only"><span class="en" lang="en">Disk Lab: a model protoplanetary disk</span><span class="ja" lang="ja">Disk Lab:原始惑星系円盤のモデル</span></h1>
-    <div class="disk-panel" id="disk" data-mobile data-elevation="22" data-azimuth="-65" data-distance="90" data-fov="32" data-scale="0.5" data-scale-max="1" data-adapt="off" data-steps="150">
+    <div class="disk-panel" id="disk" data-mobile data-elevation="22" data-azimuth="-65" data-distance="90" data-fov="32" data-scale="0.5" data-scale-max="1" data-adapt="off" data-steps="150" data-mode="47">
       <img class="disk-static" id="poster" alt="" decoding="async">
     </div>
     <div class="temp-key" id="tempKey" aria-hidden="true">
@@ -48,7 +48,9 @@
       <span class="temp-bar" id="tempBar"></span>
       <span class="temp-ticks"><span>30 K</span><span>160 K</span><span>2000 K</span></span>
     </div>
+    <img class="watermark" id="watermark" src="logo-white.svg" alt="" aria-hidden="true" width="88" height="32">
     <p class="stage-hint" id="stageHint" aria-hidden="true"></p>
+    <div class="planet-pop" id="planetPop" hidden></div>
     <p class="stage-note" id="stageNote" role="status" aria-live="polite"></p>
   </main>
 
@@ -67,18 +69,8 @@
     </section>
     <section class="rail-sec">
       <h3><span class="en" lang="en">Show</span><span class="ja" lang="ja">見せるもの</span></h3>
-      <div class="toggles">
-        <button type="button" class="toggle" data-bit="1" aria-pressed="true"><span class="en" lang="en">Gas</span><span class="ja" lang="ja">ガス</span></button>
-        <button type="button" class="toggle" data-bit="2" aria-pressed="true"><span class="en" lang="en">Lit surface</span><span class="ja" lang="ja">表層</span></button>
-        <button type="button" class="toggle" data-bit="4" aria-pressed="true"><span class="en" lang="en">Pebbles</span><span class="ja" lang="ja">小石</span></button>
-        <button type="button" class="toggle" data-bit="8" aria-pressed="true"><span class="en" lang="en">Wind</span><span class="ja" lang="ja">円盤風</span></button>
-        <button type="button" class="toggle" data-opt="field" aria-pressed="false"><span class="en" lang="en">Field lines</span><span class="ja" lang="ja">磁力線</span></button>
-        <button type="button" class="toggle" data-bit="16" aria-pressed="true"><span class="en" lang="en">Planet</span><span class="ja" lang="ja">惑星</span></button>
-        <button type="button" class="toggle" data-bit="32" aria-pressed="false"><span class="en" lang="en">Envelope</span><span class="ja" lang="ja">エンベロープ</span></button>
-        <button type="button" class="toggle" data-opt="marks" aria-pressed="false"><span class="en" lang="en">Flow markers</span><span class="ja" lang="ja">流れの印</span></button>
-        <button type="button" class="toggle" data-opt="ann" aria-pressed="true"><span class="en" lang="en">Labels</span><span class="ja" lang="ja">注釈</span></button>
-      </div>
-      <p class="rail-note"><span class="en" lang="en">Field lines and flow markers show in the model look; the envelope from afar.</span><span class="ja" lang="ja">磁力線と流れの印はモデルの見え方で、エンベロープは遠くから見えます。</span></p>
+      <div class="comps" id="comps"></div>
+      <p class="rail-note"><span class="en" lang="en">Turned on, each shows its settings below it. Field lines and flow markers show in the model look; the envelope from afar.</span><span class="ja" lang="ja">オンにすると、その下に設定が開きます。磁力線と流れの印はモデルの見え方で、エンベロープは遠くから見えます。</span></p>
     </section>
     <section class="rail-sec">
       <h3><span class="en" lang="en">Cut</span><span class="ja" lang="ja">断面</span></h3>
@@ -103,13 +95,10 @@
       <p class="rail-note"><span class="en" lang="en">The clock slows as you zoom in, as the orbital period at the radius in view.</span><span class="ja" lang="ja">寄るほど、見ている半径の公転周期に合わせて時計が遅くなります。</span></p>
       <p class="rail-note" id="reducedNote" hidden></p>
     </section>
-    <section class="rail-sec">
-      <h3><span class="en" lang="en">Variants</span><span class="ja" lang="ja">別の形</span></h3>
-      <div class="toggles">
-        <button type="button" class="toggle" data-opt="asym" aria-pressed="false"><span class="en" lang="en">One-sided wind</span><span class="ja" lang="ja">上下非対称の風</span></button>
-        <button type="button" class="toggle" data-opt="waves" aria-pressed="false"><span class="en" lang="en">Exaggerate the waves</span><span class="ja" lang="ja">惑星の波を強調</span></button>
-      </div>
-      <p class="rail-note"><span class="en" lang="en">One-sided: as for a field aligned with the rotation (Mori, Bai &amp; Tomida 2025).</span><span class="ja" lang="ja">上下非対称:磁場が回転と同じ向きの場合(Mori, Bai &amp; Tomida 2025)。</span></p>
+    <section class="rail-sec" id="qualitySection">
+      <h3><span class="en" lang="en">Quality</span><span class="ja" lang="ja">画質</span></h3>
+      <div class="segmented small" role="group" id="qualityGroup"></div>
+      <p class="rail-note" id="qualityNote"></p>
     </section>
     <section class="rail-sec">
       <h3><span class="en" lang="en">View</span><span class="ja" lang="ja">視点</span></h3>
@@ -131,6 +120,7 @@
         <button type="button" class="chip" id="saveImage"><span class="en" lang="en">Save an image</span><span class="ja" lang="ja">画像を保存</span></button>
       </div>
       <input class="link-field" id="linkField" type="text" readonly hidden data-aria-en="Link to this view" data-aria-ja="この眺めのリンク">
+      <p class="rail-note cite" id="citeRail"></p>
     </section>
   </aside>
 
@@ -164,14 +154,14 @@
     <dl class="facts">
       <dt><span class="en" lang="en">Disk</span><span class="ja" lang="ja">円盤</span></dt>
       <dd><span class="en" lang="en">30 au in radius. Surface density falls as 1/R; the thickness, H/R = 0.03 (R/1 au)<sup>1/4</sup>, flares outward. The midplane is 150 K at 1 au.</span><span class="ja" lang="ja">半径 30 au。面密度は半径に反比例し、厚み H/R = 0.03 (R/1 au)<sup>1/4</sup> で外ほど反り返ります。赤道面の温度は 1 au で 150 K。</span></dd>
-      <dt><span class="en" lang="en">Lit surface</span><span class="ja" lang="ja">表層</span></dt>
-      <dd><span class="en" lang="en">The thin layer where grazing starlight is absorbed. Only it is hot and bright; its glow is integrated analytically.</span><span class="ja" lang="ja">斜めに当たる星の光が吸収される薄い層。ここだけが熱く明るくなります。光り方は解析的に積分しています。</span></dd>
+      <dt><span class="en" lang="en">Dust and the lit surface</span><span class="ja" lang="ja">塵と表層</span></dt>
+      <dd><span class="en" lang="en">Small grains, mixed with the gas and absent inside about 0.08 au where they evaporate, absorb the grazing starlight in a thin layer a few scale heights up, which is heated to about three times the midplane's temperature. In the model look it shows as the warmer colour of the thin gas there; in the scattered-light and mid-infrared looks this lit surface is what you see (its light is integrated analytically).</span><span class="ja" lang="ja">小さな塵はガスとよく混ざり、約 0.08 au より内側では蒸発してありません。斜めに当たる星の光は、数スケールハイト上の薄い層で塵に吸収され、そこは赤道面の約 3 倍の温度になります。モデルの見え方では、その薄いガスの暖かい色として現れ、散乱光と中間赤外の見え方では、この照らされた表層が見えます(光り方は解析的に積分しています)。</span></dd>
       <dt><span class="en" lang="en">Pebbles and the snow line</span><span class="ja" lang="ja">小石とスノーライン</span></dt>
       <dd><span class="en" lang="en">Larger dust settles to the midplane and is coated in ice where it is colder than 160 K, beyond about 0.9 au.</span><span class="ja" lang="ja">大きめの塵は赤道面に沈み、160 K より冷たい所(約 0.9 au より外)で氷をまといます。</span></dd>
       <dt><span class="en" lang="en">Field and wind</span><span class="ja" lang="ja">磁場と円盤風</span></dt>
       <dd><span class="en" lang="en">A self-similar solution for a cold magnetocentrifugal wind of the Blandford &amp; Payne (1982) kind, with lever arm λ = 3. By default the wind is symmetric; as an option it is stronger on one side, as for a field aligned with the rotation (Mori, Bai &amp; Tomida 2025).</span><span class="ja" lang="ja">Blandford &amp; Payne (1982) 型の、冷たい磁気遠心風の自己相似解(レバーアーム λ = 3)。既定では上下対称の風です。選ぶと、片側が強い風になります(磁場が回転と同じ向きの場合。Mori, Bai &amp; Tomida 2025)。</span></dd>
       <dt><span class="en" lang="en">Field and gas</span><span class="ja" lang="ja">磁場とガスの結びつき</span></dt>
-      <dd><span class="en" lang="en">The gas is weakly ionized. Near the midplane, Ohmic diffusion leaves a dead zone (out to 7.5 au) where the field cannot act; inside 0.3 au the gas is ionized by heat and turbulent. The surface above is laminar (ambipolar diffusion), and accretion runs in a thin layer near it.</span><span class="ja" lang="ja">ガスの電離は弱く、赤道面付近はオーム散逸で磁場が効かないデッドゾーン(約 7.5 au まで)。0.3 au より内側は熱で電離して乱流になります。その上の表層は両極性拡散で層流で、降着は表層近くの薄い層を流れます。</span></dd>
+      <dd><span class="en" lang="en">The gas is weakly ionized. Near the midplane, Ohmic diffusion leaves a dead zone (out to 7.5 au) where the field cannot act; inside 0.3 au the gas is ionized by heat and turbulent (where models with accretion heating pass about 1000 K; the colours here show the starlight's heating only). Elsewhere the disk is nearly laminar: the surface above the dead zone by ambipolar diffusion, with accretion in a thin, smooth layer near it; beyond about 10 au, where the whole column is ionized, a weak turbulence.</span><span class="ja" lang="ja">ガスの電離は弱く、赤道面付近はオーム散逸で磁場が効かないデッドゾーン(約 7.5 au まで)。0.3 au より内側は熱で電離して乱流になります(降着の加熱を入れたモデルで約 1000 K を超える範囲。このモデルの色は星の光による加熱だけを表します)。それ以外はほぼ層流で、デッドゾーンの上の表層は両極性拡散で層流、降着は表層近くの薄い層を静かに流れます。約 10 au より外側は柱全体が電離し、弱い乱流があります。</span></dd>
       <dt><span class="en" lang="en">Planet</span><span class="ja" lang="ja">惑星</span></dt>
       <dd><span class="en" lang="en">A Jupiter-mass planet at 3 au: its gap, the ring of pebbles just outside, spiral waves (their decay from the global solution of Rafikov 2002) and a circumplanetary disk.</span><span class="ja" lang="ja">3 au に木星質量の惑星。ギャップ、そのすぐ外の小石の環、渦巻きの波(減衰は Rafikov 2002 の大域解)、周惑星円盤。</span></dd>
       <dt><span class="en" lang="en">The star's magnetosphere</span><span class="ja" lang="ja">星の磁気圏</span></dt>
@@ -183,7 +173,7 @@
     <h3><span class="en" lang="en">The looks</span><span class="ja" lang="ja">見え方</span></h3>
     <dl class="facts">
       <dt><span class="en" lang="en">Model</span><span class="ja" lang="ja">モデル</span></dt>
-      <dd><span class="en" lang="en">The model's own quantities: colour is temperature, brightness the starlight absorbed. The gas is drawn translucent so the midplane shows; a real disk is opaque in visible light.</span><span class="ja" lang="ja">モデルの量そのもの。色は温度、明るさは吸収した星の光です。赤道面が見えるよう、ガスは半透明に描いています(実際の円盤は可視光では不透明です)。</span></dd>
+      <dd><span class="en" lang="en">The model's own quantities, only what is there: colour is temperature, brightness how much gas and dust is there (the surface heated by the star is not drawn as a sheet; it shows as a warmer colour). The disk is drawn translucent so the midplane shows; a real disk is opaque in visible light.</span><span class="ja" lang="ja">モデルの量そのもの。そこにあるものだけを描き、色は温度、明るさはガスと塵の量です(星に温められた表層は面としては描かず、暖かい色として現れます)。赤道面が見えるよう、円盤は半透明に描いています(実際の円盤は可視光では不透明です)。</span></dd>
       <dt><span class="en" lang="en">Scattered, Mid-IR, Millimetre</span><span class="ja" lang="ja">散乱光、中間赤外、ミリ波</span></dt>
       <dd><span class="en" lang="en">The disk as a telescope at that wavelength would see it: starlight scattered by the surface and the wind; the warm surface's own glow; the pebbles' glow at the midplane.</span><span class="ja" lang="ja">その波長の望遠鏡に映る姿。表層と風が散らす星の光、暖かい表層が自ら出す光、赤道面の小石が出す光。</span></dd>
       <dt>CO</dt>
@@ -202,8 +192,13 @@
       <li><span class="en" lang="en">Drag to turn; scroll or pinch to zoom; Shift-drag (or the right button) moves the point you look at.</span><span class="ja" lang="ja">ドラッグで回転、スクロールかピンチで拡大・縮小、Shift+ドラッグ(または右ボタン)で見る中心を動かします。</span></li>
       <li><span class="en" lang="en">On a touch screen, as on a map: one finger moves, two fingers zoom and turn, two fingers moved up or down tilt; double-tap to zoom in.</span><span class="ja" lang="ja">タッチでは地図と同じです。1 本指で移動、2 本指で拡大と回転、2 本そろえて上下に動かすと傾きが変わります。ダブルタップで拡大。</span></li>
       <li><span class="en" lang="en">With the picture focused (Tab): arrows turn, + and − zoom, Home returns to the first view, space pauses, 1–5 set the angle, P goes to the planet, F field lines, S the cut, A labels.</span><span class="ja" lang="ja">図にフォーカスがあるとき(Tab):矢印で回転、+ と − で拡大・縮小、Home で最初の視点、スペースで一時停止、1〜5 で角度、P で惑星へ、F で磁力線、S で断面、A で注釈。</span></li>
+      <li><span class="en" lang="en">Planets: turn them on under Show; click a planet in the picture to move its orbit, or place more with “Place a planet” (up to four).</span><span class="ja" lang="ja">惑星:「見せるもの」でオンにします。絵の中の惑星をクリックすると軌道半径を動かせ、「惑星を置く」で増やせます(4 つまで)。</span></li>
       <li><span class="en" lang="en">Click the star, or click the disk, and see what happens.</span><span class="ja" lang="ja">星や円盤をクリックすると、何かが起きます。</span></li>
     </ul>
+
+    <h3><span class="en" lang="en">Using it</span><span class="ja" lang="ja">利用について</span></h3>
+    <p id="citeAbout"></p>
+    <p class="cite-line" id="citeLine"></p>
 
     <h3><span class="en" lang="en">References</span><span class="ja" lang="ja">文献</span></h3>
     <ul class="refs">

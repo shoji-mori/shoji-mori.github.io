@@ -3,13 +3,18 @@
 // what is shown, cut, variants, time, view) and the highlights (places.js), and keeps its controls in step with the
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
-import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016a';
-import { WORDS } from './words.js?v=20261016a';
-import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016a';
-import { snapshot, toPng } from './capture.js?v=20261016a';
+import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016b';
+import { WORDS } from './words.js?v=20261016b';
+import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
+import { snapshot, toPng } from './capture.js?v=20261016b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=e8aabb71e1';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
-const VERSION = '2026-10-15';
+const ENGINE_SRC = 'engine/disk3d.js?v=d017e77ff1';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const VERSION = '2026-10-16';
+// The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
+// moves from its hidden address to its public one.
+const CITE_URL = 'https://shoji-mori.github.io/lab_pub/disk_v2/', CITE_YEAR = 2026;
+// The quality the viewer may fix (render scale; Auto: the governor, and the sharpening of still pictures)
+const QUALITY = { low: 0.35, mid: 0.55, high: 0.8, full: 1 };
 
 const html = document.documentElement;
 const $ = (id) => document.getElementById(id);
@@ -119,6 +124,9 @@ function goPlace(i, { fly = true } = {}) {
   const pl = PLACES[placeI];
   if (live()) {
     const st = placeState(pl, S().mode, aspect());
+    // (the planet's place shows the first planet at 3 au, as its text says; others are kept)
+    if (pl.id === 'planet') { const ps = S().planets.filter((p, j) => j > 0 && roomFor([[3, 1]], p[0], -1)); st.planets = [[3, 1], ...ps].slice(0, 4); st.pi = 0; }
+    else if ((pl.needs & 16) && !S().planets.some((p) => p[1])) st.planets = [[3, 1]];
     box.diskSet({ ...st, fly: fly && !reduce ? 1 : 0 });
     target = { ...st, time: S().time };
   } else setPoster(pl.id);
@@ -169,6 +177,9 @@ function renderAll() {
   document.title = 'Disk Lab | ' + (L() === 'ja' ? '森 昇志' : 'Shoji Mori');
   renderPlace();
   renderLooks();
+  renderComps();
+  renderQuality();
+  renderCite();
   renderStillNote();
   sync();
 }
@@ -278,8 +289,9 @@ function sync() {
   // (a still picture's scale is for that picture: the clock started, or another look, by any way, ends it)
   if (sharpFrom && ((!s.paused && !reduce) || s.look + s.coMode !== sharpWhat)) unsharpen();
   const base = diag.calibration && diag.calibration.scale, co = s.look === 'co';
-  if (co && !wasCo && !sharpFrom && !holdSharp) { box.diskScale(CO_FLOOR); runScale = CO_FLOOR; }
-  if (!co && wasCo && !sharpFrom && !holdSharp && base) { box.diskScale(base); runScale = base; }
+  if (co !== wasCo && quality !== 'auto' && !holdSharp) { qCap = co ? CO_FLOOR : 1; costs.length = 0; box.diskScale(fixedScale()); }
+  else if (co && !wasCo && !sharpFrom && !holdSharp) { box.diskScale(CO_FLOOR); runScale = CO_FLOOR; }
+  else if (!co && wasCo && !sharpFrom && !holdSharp && base) { box.diskScale(base); runScale = base; }
   wasCo = co;
   lookButtons.forEach((b) => pressed(b, b.dataset.look === s.look));
   renderActions(s);
@@ -289,6 +301,8 @@ function sync() {
   playBtn.toggleAttribute('data-paused', !!s.paused);
   playBtn.setAttribute('aria-label', s.paused ? T().play : T().pause);
   setClock(s.time);
+  syncComps(s);
+  syncQuality(s);
   // the rail
   rail.querySelectorAll('[data-bit]').forEach((b) => pressed(b, s.mode & Number(b.dataset.bit)));
   const opt = { field: s.field, marks: s.marks, ann: s.ann, asym: s.asym, waves: s.waves };
@@ -306,7 +320,7 @@ function setClock(time) {
 rail.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b || !live()) return;
   const s = S();
-  if (b.dataset.bit) box.diskSet({ mode: s.mode ^ Number(b.dataset.bit) });
+  if (b.dataset.bit) { const m = s.mode ^ Number(b.dataset.bit); box.diskSet({ mode: m, ...((m & 16) && !s.planets.some((p) => p[1]) ? { planets: [...s.planets.filter((p) => roomFor([[3, 1]], p[0], -1) || !p[1]), [3, 1]].slice(-4) } : {}) }); }
   else if (b.dataset.opt === 'field') box.diskField(!s.field);
   else if (b.dataset.opt === 'marks') box.diskSet({ marks: s.marks ? 0 : 1 });
   else if (b.dataset.opt === 'ann') box.diskAnnotations(!s.ann);
@@ -319,8 +333,196 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.speed) box.diskSpeed(Number(b.dataset.speed));
   else if (b.id === 'copyLink') copyLink();
   else if (b.id === 'saveImage') saveImage(b);
+  else if (b.dataset.quality) setQuality(b.dataset.quality);
+  else if (b.id === 'citeCopy') copyCite();
+  else if (b.dataset.planetOn != null) { const pl = S().planets; const i = Number(b.dataset.planetOn); if (pl[i]) { pl[i][1] = pl[i][1] ? 0 : 1; if (pl[i][1] && !roomFor(pl, pl[i][0], i)) pl[i][1] = 0; box.diskSet({ planets: pl }); } }
+  else if (b.dataset.planetRemove != null) { const pl = S().planets; pl.splice(Number(b.dataset.planetRemove), 1); box.diskSet({ planets: pl }); }
+  else if (b.id === 'addPlanet') setPick(box.dataset.pick !== 'planet');
   sync();
 });
+rail.addEventListener('input', (e) => {
+  const t = e.target; if (!live()) return;
+  if (t.dataset.gain != null) { const g = S().gain; g[Number(t.dataset.gain)] = gainOf(t.value); box.diskSet({ gain: g }); t.nextElementSibling.textContent = '×' + gainOf(t.value).toFixed(2); }
+  else if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value));
+});
+
+// ---------- the components (Show): each a toggle; turned on, its settings open below it ----------
+// gain: the engine's display factor for the component (gas, small grains, pebbles, wind: 0.25 to 3, a log slider);
+// opts: the engine's options that belong to it (the wind's asymmetry and its flow markers, the planets' waves); planets:
+// the list of planets. The field lines, the envelope and the labels have no settings of their own.
+const COMPS = [
+  { key: 'gas', bit: 1, gain: 0 }, { key: 'dust', bit: 2, gain: 1 }, { key: 'pebbles', bit: 4, gain: 2 },
+  { key: 'wind', bit: 8, gain: 3, opts: ['asym', 'marks'] }, { key: 'field', opt: 'field' },
+  { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32 }, { key: 'labels', opt: 'ann' }
+];
+const gainOf = (v) => Math.round(Math.pow(3, Number(v) / 100) * 100) / 100;   // (slider -126..100: 0.25 to 3)
+const sliderOfGain = (g) => String(Math.round(100 * Math.log(g) / Math.log(3)));
+const compEls = COMPS.map((c) => {
+  const btn = el('button', { type: 'button', class: 'toggle', 'aria-pressed': 'false', ...(c.bit ? { 'data-bit': String(c.bit) } : { 'data-opt': c.opt }) });
+  // (the amount beside the toggle, on its row; the other settings below it)
+  const gain = c.gain == null ? null : el('label', { class: 'gain', hidden: true }, el('span', { class: 'sr-only gain-name' }),
+    el('input', { type: 'range', min: '-126', max: '100', step: '1', value: '0', 'data-gain': String(c.gain) }), el('output', {}, '×1.00'));
+  const box_ = c.opts || c.planets ? el('div', { class: 'comp-opts', hidden: true }) : null;
+  if (c.planets) box_.append(el('div', { class: 'planet-list' }), el('button', { type: 'button', class: 'chip quiet', id: 'addPlanet', 'aria-pressed': 'false' }));
+  for (const o of c.opts || []) box_.append(el('button', { type: 'button', class: 'toggle small', 'data-opt': o, 'aria-pressed': 'false' }));
+  if (c.planets) box_.append(el('p', { class: 'rail-note planets-note' }));
+  const row = el('div', { class: 'comp', 'data-comp': c.key }, btn, gain, box_);
+  $('comps').append(row);
+  return { c, row, btn, gain, opts: box_ };
+});
+function renderComps() {
+  const w = T().show;
+  for (const { c, btn, gain, opts } of compEls) {
+    btn.textContent = w[c.key];
+    if (gain) { gain.querySelector('.gain-name').textContent = w.amount; gain.title = w.amount + ': ' + w.amountNote; gain.querySelector('input').setAttribute('aria-label', w[c.key] + ': ' + w.amount); }
+    if (!opts) continue;
+    opts.querySelectorAll('[data-opt]').forEach((b) => { b.textContent = w[b.dataset.opt]; });
+    const add = opts.querySelector('#addPlanet'); if (add) add.textContent = '+ ' + w.addPlanet;
+    const nt = opts.querySelector('.planets-note'); if (nt) nt.textContent = w.planetsNote;
+  }
+  planetsKey = '';
+}
+let planetsKey = '';
+// a planet's slider: 1 to 20 au on a log scale (0 to 1000)
+const aOf = (v) => { const a = Math.pow(20, Number(v) / 1000); return Math.round(a * (a < 10 ? 10 : 2)) / (a < 10 ? 10 : 2); };
+const sliderOfA = (a) => String(Math.round(1000 * Math.log(a) / Math.log(20)));
+const fmtA = (a) => (a < 10 ? a.toFixed(1) : String(Math.round(a)));
+// is there room for a planet at a (within 1 to 20 au, at least 1.4 in the ratio of radii from the other shown planets)?
+const roomFor = (list, a, skip) => a >= 1 && a <= 20 && list.every((p, i) => i === skip || !p[1] || Math.max(a, p[0]) / Math.min(a, p[0]) >= 1.4);
+// a planet moved by a slider: held between its shown neighbours (1.4 in the ratio of radii)
+function movePlanet(i, a) {
+  const pl = S().planets; if (!pl[i]) return;
+  let lo = 1, hi = 20;
+  pl.forEach((p, j) => { if (j === i || !p[1]) return; if (p[0] <= pl[i][0]) lo = Math.max(lo, p[0] * 1.4); else hi = Math.min(hi, p[0] / 1.4); });
+  pl[i][0] = Math.min(hi, Math.max(lo, a));
+  box.diskSet({ planets: pl });
+  planetsKey = ''; syncComps(S());
+  popSync();
+}
+function syncComps(s) {
+  const opt = { field: s.field, ann: s.ann };
+  for (const { c, gain, opts } of compEls) {
+    const on = c.bit ? !!(s.mode & c.bit) : !!opt[c.opt];
+    if (opts) opts.hidden = !on;
+    if (!gain) continue;
+    gain.hidden = !on;
+    const r = gain.querySelector('input');
+    if (document.activeElement !== r) { r.value = sliderOfGain(s.gain[c.gain]); r.nextElementSibling.textContent = '×' + s.gain[c.gain].toFixed(2); }
+  }
+  // the planets' rows (rebuilt when the list changes)
+  const key = L() + JSON.stringify(s.planets);
+  const list = $('comps').querySelector('.planet-list');
+  pressed($('addPlanet'), box.dataset.pick === 'planet');
+  if (!list || key === planetsKey) return;
+  planetsKey = key;
+  const w = T().show;
+  list.replaceChildren(...s.planets.map(([a, on], i) => el('div', { class: 'planet-row' },
+    el('button', { type: 'button', class: 'toggle small', 'data-planet-on': String(i), 'aria-pressed': String(!!on) }, w.planetRow(i + 1, fmtA(a))),
+    el('input', { type: 'range', min: '0', max: '1000', step: '1', value: sliderOfA(a), 'data-planet-a': String(i), 'aria-label': w.orbit(i + 1) }),
+    el('button', { type: 'button', class: 'icon-x', 'data-planet-remove': String(i), 'aria-label': w.remove, title: w.remove }, '×'))));
+}
+
+// placing a planet: a click on the disk (the engine sends diskpick instead of dropping pebbles)
+function setPick(on) {
+  if (on) box.dataset.pick = 'planet'; else delete box.dataset.pick;
+  lab.classList.toggle('picking', !!on);
+  if (on) note(T().show.picking, 0); else note('', 0);
+  sync();
+}
+box.addEventListener('diskpick', (e) => {
+  const w = T().show, pl = S().planets, a = Math.round(Math.min(20, Math.max(1, e.detail.R)) * 10) / 10;
+  if (!roomFor(pl, a, -1)) { note(w.noRoom, 3500); return; }
+  const i = pl.findIndex((p) => !p[1]);
+  if (i >= 0) pl[i] = [a, 1]; else if (pl.length < 4) pl.push([a, 1]); else { note(w.full, 3500); return; }
+  box.diskSet({ planets: pl, mode: S().mode | 16 });
+  setPick(false);
+  note(w.placed(fmtA(a)), 3000);
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (box.dataset.pick === 'planet') setPick(false); popClose(); } });
+
+// a click on a planet in the picture: its orbit's slider, beside it
+const pop = $('planetPop');
+let popI = -1;
+box.addEventListener('diskplanet', (e) => {
+  popI = e.detail.i;
+  const w = T().show, a = S().planets[popI][0];
+  const input = el('input', { type: 'range', min: '0', max: '1000', step: '1', value: sliderOfA(a), 'aria-label': w.orbit(popI + 1),
+    oninput: (ev) => movePlanet(popI, aOf(ev.target.value)) });
+  pop.replaceChildren(el('span', { class: 'pop-name' }, w.planetRow(popI + 1, fmtA(a))), input,
+    el('button', { type: 'button', class: 'icon-x', 'aria-label': 'close', onclick: popClose }, '×'));
+  pop.hidden = false;
+  const x = Math.min(stage.clientWidth - 230, Math.max(8, e.detail.x + 18)), y = Math.min(stage.clientHeight - 60, Math.max(8, e.detail.y - 22));
+  pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  input.focus({ preventScroll: true });
+});
+function popSync() {
+  if (pop.hidden || popI < 0) return;
+  const a = S().planets[popI] && S().planets[popI][0];
+  if (a == null) { popClose(); return; }
+  pop.querySelector('.pop-name').textContent = T().show.planetRow(popI + 1, fmtA(a));
+}
+function popClose() { pop.hidden = true; popI = -1; }
+stage.addEventListener('pointerdown', (e) => { if (!pop.hidden && !pop.contains(e.target)) popClose(); }, { capture: true });
+
+// ---------- quality ----------
+// Auto: the governor and the sharpening of still pictures. A fixed level holds the render scale, with the governor and
+// the sharpening at rest, unless the frames grow too long: then the scale is lowered so that a frame takes about 150 ms
+// (a frame of seconds can make the GPU drop the WebGL context; the CO line's moments at full resolution did), and the
+// note says so. In the CO look a fixed level starts from CO_FLOOR, as Auto does.
+let quality = 'auto', qCap = 1;
+try { const k = sessionStorage.getItem('disk-lab-quality'); if (k && (k === 'auto' || QUALITY[k])) quality = k; } catch { /* default */ }
+const qualityButtons = ['auto', 'low', 'mid', 'high', 'full'].map((k) => {
+  const b = el('button', { type: 'button', 'data-quality': k, 'aria-pressed': String(k === quality) });
+  $('qualityGroup').append(b);
+  return b;
+});
+function renderQuality() {
+  const w = T().quality;
+  qualityButtons.forEach((b) => { b.textContent = w[b.dataset.quality]; });
+  $('qualityGroup').setAttribute('aria-label', w.label);
+}
+const govRest = () => { if (gov) gov.pause(quality !== 'auto' || holdSharp); };
+const fixedScale = () => Math.min(QUALITY[quality] || 1, qCap);
+function setQuality(k) {
+  quality = k; qCap = 1; costs.length = 0;
+  try { sessionStorage.setItem('disk-lab-quality', k); } catch { /* for this view only */ }
+  unsharpen();
+  if (live()) {
+    if (k === 'auto') { const base = diag.calibration && diag.calibration.scale || 0.5; box.diskScale(S().look === 'co' ? CO_FLOOR : base); runScale = box.diskScale(); }
+    else { qCap = S().look === 'co' ? CO_FLOOR : 1; box.diskScale(fixedScale()); }
+  }
+  govRest();
+  sync();
+}
+function syncQuality() {
+  qualityButtons.forEach((b) => pressed(b, b.dataset.quality === quality));
+  const w = T().quality, n = $('qualityNote');
+  if (quality === 'auto') n.textContent = w.autoNote;
+  else if (qCap < (QUALITY[quality] || 1)) n.textContent = w.capped(Math.round(100 * fixedScale()));
+  else n.textContent = w.fixedNote(Math.round(100 * (QUALITY[quality] || 1)));
+}
+// the frames' intervals at a fixed level (consecutive frames: the clock running or a picture being averaged)
+const costs = [];
+function guardFixed(dt, acc, accMax) {
+  if (quality === 'auto' || !live() || holdSharp) return;
+  if (!(dt > 0) || (S().paused && !(acc >= 2 && acc <= accMax))) return;
+  costs.push(dt); if (costs.length > 6) costs.shift();
+  const mean = costs.reduce((a, b) => a + b, 0) / costs.length, s = box.diskScale();
+  if ((dt > 600 || (costs.length >= 4 && mean > 220)) && s > CO_FLOOR + 0.005) {
+    qCap = Math.max(CO_FLOOR, Math.min(s * 0.85, scaleFor(Math.max(dt, mean), s, 150)));
+    box.diskScale(fixedScale()); costs.length = 0; sync();
+  }
+}
+
+// ---------- the citation ----------
+function renderCite() {
+  const w = T().cite, line = w.line(CITE_YEAR, CITE_URL);
+  $('citeRail').replaceChildren(document.createTextNode(w.lead + ' '), el('span', { class: 'cite-line' }, line), ' ', el('button', { type: 'button', class: 'chip quiet', id: 'citeCopy' }, w.copy));
+  $('citeAbout').textContent = w.lead; $('citeLine').textContent = line;
+}
+async function copyCite() {
+  try { await navigator.clipboard.writeText(T().cite.line(CITE_YEAR, CITE_URL)); note(T().cite.copied); } catch { note(T().cite.line(CITE_YEAR, CITE_URL), 6000); }
+}
 
 // ---------- time ----------
 playBtn.addEventListener('click', () => { if (!live()) return; box.diskPlay(!!S().paused); sync(); });
@@ -334,6 +536,8 @@ function linkFor(s) {
   if (s.tx || s.ty || s.tz) for (const k of ['tx', 'ty', 'tz']) u.searchParams.set(k, String(s[k]));
   if (s.look === 'co') { u.searchParams.set('com', s.coMode); u.searchParams.set('cov', String(s.coV)); }
   if (!s.ms) u.searchParams.set('ms', '0');
+  if (s.planets.length) u.searchParams.set('pl', s.planets.map(([a, on]) => a + ':' + on).join(','));
+  if (s.gain.some((g) => g !== 1)) u.searchParams.set('g', s.gain.join(','));
   u.searchParams.set('t', String(Math.round(s.time * 1000) / 1000));
   u.searchParams.set('lang', L());
   return u.href;
@@ -348,7 +552,11 @@ async function saveImage(btn) {
   if (saving) return;
   saving = true; btn.disabled = true; note(T().imageBusy, 0);
   try {
-    const c = await shot({ full: true });
+    // (at the screen's resolution where a frame there is predicted under 400 ms from the frames just drawn, else at the
+    // scale that keeps it so: a saved picture of the CO line's moments at full resolution took seconds a frame)
+    const sc = box.diskScale(), to = frameMs ? Math.min(1, Math.max(sc, scaleFor(frameMs, sc, 400))) : (diag.calibration && diag.calibration.fullMs < 400 ? 1 : sc);
+    const c = await shot({ scale: to });
+    if (c) await watermark(c);
     const blob = c && await toPng(c);
     if (!blob) throw new Error('no picture');
     const a = el('a', { href: URL.createObjectURL(blob), download: `disk-lab-${PLACES[placeI].id}.png` });
@@ -361,7 +569,15 @@ async function saveImage(btn) {
 // a picture of the model, with the governor resting meanwhile
 async function shot(opts) {
   if (gov) gov.pause(true);
-  try { return await snapshot(box, opts); } finally { if (gov) gov.pause(false); }
+  try { return await snapshot(box, opts); } finally { govRest(); }
+}
+// the site's mark, white and faint, in the lower right of a saved picture (as on the stage): a help to whoever cites it
+let markImg = null;
+async function watermark(c) {
+  if (!markImg) { markImg = new Image(); markImg.src = 'logo-white.svg'; }
+  try { await markImg.decode(); } catch { return; }
+  const g = c.getContext('2d'), w = Math.round(c.width * 0.06), h = Math.round(w * 677 / 1874), m = Math.round(c.width * 0.012);
+  g.save(); g.globalAlpha = 0.2; g.drawImage(markImg, c.width - w - m, c.height - h - m, w, h); g.restore();
 }
 // a link's state: the place first, then any of the engine's keys (diskSet checks every value)
 function stateFromLink() {
@@ -373,6 +589,8 @@ function stateFromLink() {
   if (q.has('com')) st.coMode = q.get('com');
   if (q.has('cov')) st.coV = q.get('cov');
   if (q.has('t')) st.time = q.get('t');
+  if (q.has('pl')) st.planets = q.get('pl').split(',').filter(Boolean).map((t) => t.split(':').map(Number));
+  if (q.has('g')) st.gain = q.get('g').split(',').map(Number);
   return Object.keys(st).length ? st : null;
 }
 
@@ -445,15 +663,15 @@ stage.addEventListener('wheel', () => hint(false), { capture: true, passive: tru
 // seconds, and the GPU dropped the WebGL context).
 const SHARP_MS = 150;
 let sharpFrom = 0, runScale = 0;   // runScale: the scale the model runs at (calibrated, then governed)
-let lastFrame = 0, holdSharp = false, sharpWhat = '';   // sharpWhat: the look sharpened
+let lastFrame = 0, holdSharp = false, sharpWhat = '', frameMs = 0;   // sharpWhat: the look sharpened
 const recent = [];                 // the intervals between the accumulation's frames (ms; the last 12)
 function unsharpen() {
   if (!sharpFrom) return;
   box.diskScale(sharpFrom); sharpFrom = 0; recent.length = 0;
-  if (gov) gov.pause(false);
+  govRest();
 }
 function onAccumulated() {
-  if (!live() || sharpFrom || holdSharp || 'lost' in lab.dataset || !(S().paused || reduce) || saving || recent.length < 4) return;
+  if (!live() || sharpFrom || holdSharp || quality !== 'auto' || 'lost' in lab.dataset || !(S().paused || reduce) || saving || recent.length < 4) return;
   // (the mean, not the median: with two frames in flight they come in pairs, a long interval and a short one)
   const mean = recent.reduce((a, b) => a + b, 0) / recent.length, s = box.diskScale(), to = Math.min(1, scaleFor(mean, s, SHARP_MS));
   if (to < 1.15 * s) return;
@@ -529,6 +747,7 @@ async function start() {
   runScale = box.diskScale();
   if (!reduce) gov = govern(box, { base: diag.calibration && diag.calibration.scale || 0.5, running: () => !S().paused,
     floor: () => (S().look === 'co' ? CO_FLOOR : MIN_SCALE), onChange: (sc) => { runScale = sc; } });
+  if (quality !== 'auto') setQuality(quality);
   if (reduce) { const r = $('reducedNote'); r.textContent = T().reduced; r.hidden = false; playBtn.hidden = true; $('speedGroup').hidden = true; }
   sync();
   hint(true);
@@ -544,6 +763,9 @@ box.addEventListener('diskframe', (e) => {
   // (the intervals between frames of one still picture, at one scale, are what a frame of it costs; a complete picture
   // may be sharpened)
   const now = performance.now(), { acc = 0, accMax = 0 } = e.detail;
+  guardFixed(lastFrame ? now - lastFrame : 0, acc, accMax);
+  // (what a frame costs now: consecutive frames, the clock running or a picture being averaged)
+  if (lastFrame && now - lastFrame < 3000 && (!S().paused || acc >= 2)) frameMs = frameMs ? 0.7 * frameMs + 0.3 * (now - lastFrame) : now - lastFrame;
   if (acc >= 2 && lastFrame) { recent.push(now - lastFrame); if (recent.length > 12) recent.shift(); }
   lastFrame = now;
   if (accMax && acc >= accMax && lab.dataset.state === 'live') onAccumulated();
@@ -553,7 +775,7 @@ box.addEventListener('disklost', (e) => {
   else {
     // (the engine is built anew from its data attributes: give it back the scale it ran at)
     delete lab.dataset.lost; note('', 0);
-    sharpFrom = 0; recent.length = 0; if (gov) gov.pause(false);
+    sharpFrom = 0; recent.length = 0; govRest();
     if (runScale) box.diskScale(runScale);
     sync();
   }
@@ -565,7 +787,10 @@ window.diskLab = {
   goPlace: (id, opts) => goPlace(typeof id === 'number' ? id : PLACES.findIndex((p) => p.id === id), opts),
   // (for measurements: frames drawn by diskBench would otherwise reach the governor)
   // (for measurements: also holds the sharpening of a still picture and the CO line's own scale; the scale is the caller's)
-  pauseGovernor: (on) => { holdSharp = !!on; if (on) unsharpen(); if (gov) gov.pause(on); },
+  pauseGovernor: (on) => { holdSharp = !!on; if (on) unsharpen(); govRest(); },
+  setQuality: (k) => setQuality(k),
+  // (for checks: a picture with the mark, as saved)
+  stamped: async () => { const c = await shot({}); if (c) await watermark(c); return c; },
   setLook, setLang, setTab: (t) => setTab(t), link: () => (live() ? linkFor(S()) : null), snapshot: (opts) => shot(opts)
 };
 $('colophon').textContent = `Disk Lab ${VERSION} · engine ${ENGINE_SRC.split('v=')[1]}`;

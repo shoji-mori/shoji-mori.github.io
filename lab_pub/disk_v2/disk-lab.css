@@ -81,7 +81,7 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .stage>.disk-toast{position:absolute!important;top:10px!important;left:10px!important;right:10px!important;width:auto!important;margin:0!important;z-index:6!important}
 .disk-hint{background:rgba(12,15,23,.84)!important;color:var(--text)!important;border-radius:999px!important;font-family:var(--sans)!important;font-size:12.5px!important;padding:6px 14px!important}
 
-.temp-key{position:absolute;right:calc(var(--gx) - 10px);bottom:10px;z-index:3;display:grid;gap:4px;width:188px;padding:7px 10px 4px;border-radius:8px;background:rgba(12,15,23,.62);font-size:11px;color:var(--text-2);pointer-events:none;opacity:0;transition:opacity .4s}
+.temp-key{position:absolute;right:calc(var(--gx) + 66px);bottom:10px;z-index:3;display:grid;gap:4px;width:188px;padding:7px 10px 4px;border-radius:8px;background:rgba(12,15,23,.62);font-size:11px;color:var(--text-2);pointer-events:none;opacity:0;transition:opacity .4s}
 .temp-key.on{opacity:1}
 .temp-title{letter-spacing:.02em}
 .temp-bar{height:6px;border-radius:3px;box-shadow:0 0 0 .5px rgba(255,255,255,.25)}
@@ -166,6 +166,32 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .chip.quiet{padding-left:4px;padding-right:8px}
 .link-field{display:block;width:100%;margin-top:10px;padding:8px 10px;border-radius:8px;border:1px solid var(--line-2);background:rgba(0,0,0,.25);color:var(--text);font:12px/1.4 var(--sans)}
 
+/* the components (Show): a toggle each; turned on, its settings below it */
+.comps{display:grid;gap:5px}
+.comp{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:10px;row-gap:5px}
+.comp>.toggle{justify-self:start}
+.comp-opts{grid-column:1/-1;display:grid;gap:6px;justify-items:start;width:100%;margin:0 0 4px;padding:6px 0 7px 12px;border-left:1px solid var(--line-2)}
+.toggle.small{min-height:26px;padding:2px 9px;font-size:12px}
+.gain{display:flex;align-items:center;gap:6px;width:100%;font-size:12px;color:var(--text-2)}
+.gain input{flex:1;min-width:0;accent-color:var(--accent)}
+.gain output{font-variant-numeric:tabular-nums;min-width:3.4em;text-align:right;color:var(--text)}
+.planet-list{display:grid;gap:4px;width:100%}
+.planet-row{display:flex;align-items:center;gap:6px;width:100%}
+.planet-row .toggle{min-width:6.6em;font-variant-numeric:tabular-nums;white-space:pre}
+.planet-row input{flex:1;min-width:0;accent-color:var(--accent)}
+.icon-x{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;color:var(--text-3);font-size:15px;line-height:1}
+.icon-x:hover{background:var(--wash);color:var(--text)}
+#addPlanet[aria-pressed=true]{border-color:var(--accent);color:var(--text)}
+.lab.picking .disk-panel canvas{cursor:crosshair}
+.planet-pop{position:absolute;z-index:7;display:flex;align-items:center;gap:8px;width:220px;padding:6px 6px 6px 12px;border-radius:12px;background:rgba(16,20,30,.92);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:12px;color:var(--text);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.planet-pop input{flex:1;min-width:0;accent-color:var(--accent)}
+.pop-name{font-variant-numeric:tabular-nums;white-space:pre}
+/* the site's mark, white and faint, in the lower right of the stage (the saved pictures carry it too) */
+.watermark{position:absolute;right:14px;bottom:12px;z-index:3;width:56px;height:auto;opacity:.13;pointer-events:none;user-select:none}
+.rail-note.cite{line-height:1.55}
+.cite-line{color:var(--text-2)}
+.about .cite-line{font-size:13.5px;color:var(--ink-2)}
+
 /* ---- the two halves as tabs, on a narrow screen only ---- */
 .tabs{display:none}
 
@@ -225,7 +251,8 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   .facts dd{margin-bottom:10px}
   .about{width:100%;max-width:100%;max-height:100%;height:100%;border-radius:0;margin:0}
   .temp-key{top:8px;bottom:auto;right:8px;width:132px;padding:6px 8px 3px;font-size:10.5px}
-  .stage-hint{bottom:12px;left:auto;right:10px;transform:none}
+  .stage-hint{bottom:40px;left:auto;right:10px;transform:none}
+  .watermark{width:44px;right:10px;bottom:10px}
   .stage-note{top:8px;bottom:auto;left:8px;right:8px;transform:none;max-width:none;border-radius:10px;text-align:left;font-size:12.5px;line-height:1.55;padding:8px 12px}
   .lab[data-state=loading] .stage-note.on{top:auto;left:50%;right:auto;transform:translate(-50%,50%)}
   .lab[data-state=still]{grid-template-rows:auto auto minmax(0,1fr)}
