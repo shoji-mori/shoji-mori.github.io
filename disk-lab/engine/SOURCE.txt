@@ -2,5 +2,5 @@ Disk Lab v2's own engine since 2026-10-16 (see CHANGES.md); not copied from lab/
 base: lab/disk/disk3d.js
 base commit: 9436767182acd621abc77cf5a47fef86fa0a590f
 sha256 of the base: 736b68fc62d25468757064d0628b715daed7d689a02bf2133287d35b50d8c32a
-sha256 of this engine: 9b5eaefdac0ec3ab2c9bd5b0e8e10bd019dfb86c45558fa0f0f71a745e788145
+sha256 of this engine: b3666e03cd88b7fe84a9a4f9bb835255d694f15d0629c412f11ea824e1b69605
 updated: 2026-10-16

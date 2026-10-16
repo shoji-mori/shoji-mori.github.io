@@ -4,11 +4,11 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016b';
-import { WORDS } from './words.js?v=20261016b';
+import { WORDS } from './words.js?v=20261016e';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=9b5eaefdac';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=b3666e03cd';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 const VERSION = '2026-10-16';
 // The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
 // moves from its hidden address to its public one.
@@ -303,6 +303,7 @@ function sync() {
   setClock(s.time);
   syncComps(s);
   syncQuality(s);
+  if (s.paused) setClockRate(0);   // (paused, no frames come to clear the clock's rate)
   // the rail
   rail.querySelectorAll('[data-bit]').forEach((b) => pressed(b, s.mode & Number(b.dataset.bit)));
   const opt = { field: s.field, marks: s.marks, ann: s.ann, asym: s.asym, waves: s.waves };
@@ -314,6 +315,13 @@ let clockShown = -1;
 function setClock(time) {
   const y = Math.floor(time / 12 * 10) / 10;
   if (y !== clockShown) { clockShown = y; clock.textContent = T().clock(y); }
+}
+// the clock's rate for the view (the engine's clockK, slower zoomed in), told at the end of the time section's note
+// while the clock runs, not on the picture (the owner, 2026-10-16)
+let rateShown = '';
+function setClockRate(k) {
+  const n = 1 / (k || 1), t = k && k < 0.97 && !S().paused && !reduce ? T().clockRate(n < 9.95 ? n.toFixed(1) : String(Math.round(n))) : '';
+  if (t !== rateShown) { rateShown = t; $('clockRate').textContent = t; }
 }
 
 // ---------- the rail (the sandbox) ----------
@@ -348,11 +356,12 @@ rail.addEventListener('input', (e) => {
 
 // ---------- the components (Show): each a toggle; turned on, its settings open below it ----------
 // gain: the engine's display factor for the component (gas, small grains, pebbles, wind: 0.25 to 3, a log slider);
-// opts: the engine's options that belong to it (the wind's asymmetry and its flow markers, the planets' waves); planets:
-// the list of planets. The field lines, the envelope and the labels have no settings of their own.
+// opts: the engine's options that belong to it (the wind's asymmetry, the field lines' flow markers, the planets' waves);
+// planets: the list of planets. The envelope and the labels have no settings of their own. (The flow markers move along
+// the field lines, and the engine draws them only with the lines: the owner put them there, 2026-10-16.)
 const COMPS = [
   { key: 'gas', bit: 1, gain: 0 }, { key: 'dust', bit: 2, gain: 1 }, { key: 'pebbles', bit: 4, gain: 2 },
-  { key: 'wind', bit: 8, gain: 3, opts: ['asym', 'marks'] }, { key: 'field', opt: 'field' },
+  { key: 'wind', bit: 8, gain: 3, opts: ['asym'] }, { key: 'field', opt: 'field', opts: ['marks'] },
   { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32 }, { key: 'labels', opt: 'ann' }
 ];
 const gainOf = (v) => Math.round(Math.pow(3, Number(v) / 100) * 100) / 100;   // (slider -126..100: 0.25 to 3)
@@ -773,6 +782,7 @@ box.addEventListener('diskmode', () => sync());
 box.addEventListener('diskframe', (e) => {
   if (mode !== 'live') return;
   setClock(e.detail.time);
+  setClockRate(e.detail.clock);
   // (the intervals between frames of one still picture, at one scale, are what a frame of it costs; a complete picture
   // may be sharpened)
   const now = performance.now(), { acc = 0, accMax = 0 } = e.detail;

@@ -3920,7 +3920,9 @@ void main(){
     // the model's drawings of the envelope between looks (modelAmp, 0.4 s), the scale bar when it changes its length
     // (the old bar fades out as the new one fades in, 0.25 s; both are true to scale)
     const COMP_BITS = [1, 2, 4, 8], compAmp = COMP_BITS.map((b) => (opt.mode & b ? 1 : 0));
-    let modelAmp = opt.look === 'model' ? 1 : 0, sbLb = 0, sbOld = 0, sbT = -1e9, msAmp = opt.ms ? 1 : 0, asymAmp = opt.asym ? 1 : 0, marksAmp = opt.marks ? 1 : 0;
+    let modelAmp = opt.look === 'model' ? 1 : 0, sbLb = 0, sbOld = 0, sbT = -1e9, msAmp = opt.ms ? 1 : 0, asymAmp = opt.asym ? 1 : 0, marksAmp = opt.marks && showField ? 1 : 0;
+    // (Disk Lab v2: the flow markers belong to the field lines, as their option on the page: none while the lines are off)
+    const marksOn = () => opt.marks && showField;
     const toward = (cur, want, dt, secs) => (reduce ? want : want > cur ? Math.min(want, cur + dt / secs) : Math.max(want, cur - dt / secs));
     // Disk Lab v2: the model's clock follows the radius in view, as 1/Omega_K there: k = (r_view / CLOCK.R)^(3/2), at most
     // 1, with r_view = |T| (+) CLOCK.K d (T the point looked at, d the camera's distance from it, both as the camera flies;
@@ -3947,7 +3949,7 @@ void main(){
     // moment 1's range: the line-of-sight speeds for the inclination, and faster closer in (the gas the camera frames
     // turns faster: up to twice as fast, as the square root of 30 au over the distance)
     const coRange = () => Math.max(2, 12 * Math.sqrt(Math.max(0, 1 - basis.f[2] * basis.f[2]))) * Math.min(2, Math.max(1, Math.sqrt(30 / camD)));
-    const fadesDone = () => COMP_BITS.every((b, i) => compAmp[i] === (opt.mode & b ? 1 : 0)) && modelAmp === (lookNow === 'model' ? 1 : 0) && performance.now() - sbT >= 250 && msAmp === (opt.ms ? 1 : 0) && asymAmp === (opt.asym ? 1 : 0) && marksAmp === (opt.marks ? 1 : 0) && wavesAmp === (opt.waves ? 1 : 0);
+    const fadesDone = () => COMP_BITS.every((b, i) => compAmp[i] === (opt.mode & b ? 1 : 0)) && modelAmp === (lookNow === 'model' ? 1 : 0) && performance.now() - sbT >= 250 && msAmp === (opt.ms ? 1 : 0) && asymAmp === (opt.asym ? 1 : 0) && marksAmp === (marksOn() ? 1 : 0) && wavesAmp === (opt.waves ? 1 : 0);
     const lookDip = () => { const u = (performance.now() - lookT0) / 600; return reduce || u >= 1 || u <= 0 ? 1 : 1 - 0.92 * Math.sin(Math.PI * u); };
     const sliceOff = () => { const u = sliceU; return (1 - u * u * (3 - 2 * u)) * Math.min(Math.max(Math.hypot(cam[0], cam[1]), 2), SWEEP); };
     // the part of space kept by the cutaway: outside the part between the planes toward the camera
@@ -3981,7 +3983,7 @@ void main(){
       let dF = '', dA = '';
       shapePlaneLines(Math.round(ASYM_F_JS * asymSm() * 100) / 100);
       if (showField) for (const L of planeLines) dF += pathOf(L.up.pts, UPPER) + pathOf(L.low.pts, LOWER);
-      if ((opt.mode & 8) && opt.marks) for (const L0 of planeLines) for (const [sr, sz] of ALL) {
+      if ((opt.mode & 8) && marksOn()) for (const L0 of planeLines) for (const [sr, sz] of ALL) {
         if (!faceSeen[sr > 0 ? 1 : 0]) continue;
         let acc = 0, prev = null;
         const gap = sz > 0 || !opt.asym ? 64 : 110, L = sz > 0 ? L0.up : L0.low;
@@ -4010,7 +4012,7 @@ void main(){
       // (the inflow is a few km/s, ten times slower than the wind), with the gas
       let dAcc = '';
       const aw = accW(), ak = accK();
-      if ((opt.mode & 1) && opt.marks) for (const R of [0.55, 0.8, 1.15, 1.65, 2.4, 3.5, 5]) for (const [sr, sz] of ALL) {
+      if ((opt.mode & 1) && marksOn()) for (const R of [0.55, 0.8, 1.15, 1.65, 2.4, 3.5, 5]) for (const [sr, sz] of ALL) {
         if (!faceSeen[sr > 0 ? 1 : 0]) continue;
         if ((sz > 0 ? aw[0] : aw[1]) < 0.5 || accAmpJS(R) < 0.5) continue;
         const v = (sz > 0 ? ak[0] : ak[1]) * MODEL.H0 * Math.pow(R, 0.25) * vK(R), len = Math.min(40, ACC_PX * v);
@@ -4292,7 +4294,7 @@ void main(){
       modelAmp = toward(modelAmp, lookNow === 'model' ? 1 : 0, dtR, 0.4);
       msAmp = toward(msAmp, opt.ms ? 1 : 0, dtR, 0.6);
       asymAmp = toward(asymAmp, opt.asym ? 1 : 0, dtR, 0.6);
-      marksAmp = toward(marksAmp, opt.marks ? 1 : 0, dtR, 0.4);
+      marksAmp = toward(marksAmp, marksOn() ? 1 : 0, dtR, 0.4);
       wavesAmp = toward(wavesAmp, opt.waves ? 1 : 0, dtR, 0.6);
       snowNow();
       const wantE = (opt.mode & 32) ? 1 : 0;
@@ -4509,7 +4511,8 @@ void main(){
       // (on a painted face the ice boundary is drawn instead)
       // (the label goes where the field lines leave room: of the ring's points on the screen, the one whose label box
       // covers fewest of the lines' visible samples, the lowest of those; the ring and its label go when the ring is
-      // under 30 px across, or off the screen, and while the camera is inside the ring or just above it, within 1.25 of
+      // under 40 px across (Disk Lab v2: fading in to 70 px; its name only from 110 to 160 px, once the ring is wider than
+      // the name: smaller, the name came before the ring could be seen), or off the screen, and while the camera is inside the ring or just above it, within 1.25 of
       // its radius from the axis: its points beside the camera would be thrown far off the screen. The path is cut where
       // a point lies off the picture by more than the picture's size, or a step on the screen spans more than half of
       // it (the ring is sampled too coarsely there to be drawn straight); its points come back to the first, so it is
@@ -4528,7 +4531,8 @@ void main(){
         x0r = Math.min(x0r, q[0]); x1r = Math.max(x1r, q[0]);
         if (i < 72 && i % 3 === 0) pts.push(q);
       }
-      const lt = ja() ? 'スノーライン' : 'snow line', lw = textW(lt), shown = x1r - x0r >= 30;
+      const lt = ja() ? 'スノーライン' : 'snow line', lw = textW(lt), ringW = x1r - x0r, shown = ringW >= 40;
+      const ringF = ss(40, 70, ringW), labF = ss(110, 160, ringW);
       let best = null, bestS = Infinity;
       for (const q of shown ? pts : []) {
         const bx = q[0] + 8, by = q[1] + 14;
@@ -4539,9 +4543,9 @@ void main(){
         if (sc < bestS) { bestS = sc; best = q; }
       }
       ring.setAttribute('d', shown ? d : '');
-      label.textContent = best ? lt : '';
+      label.textContent = best && labF > 0 ? lt : '';
       const aop = annAmp.toFixed(3);
-      ring.setAttribute('opacity', ringA.toFixed(3)); label.setAttribute('opacity', ringA.toFixed(3));
+      ring.setAttribute('opacity', (ringA * ringF).toFixed(3)); label.setAttribute('opacity', (ringA * labF).toFixed(3));
       if (best) { label.setAttribute('x', best[0] + 8); label.setAttribute('y', best[1] + 14); }
       // the planet, named when it shows (close up)
       const pq = project(pPos), pa = ss(0.3, 0.6, pVis) * (kept(pPos) ? 1 : 0);
@@ -4573,16 +4577,15 @@ void main(){
       // scale bar: 1 au (or a round multiple) at the distance of the star (of the planet when following it)
       const o = project(camT), r1 = project(camT.map((v, i) => v + basis.r[i])), pxAu = o[2] > zN ? Math.hypot(r1[0] - o[0], r1[1] - o[1]) : 0;
       let Lb = 0.005; for (const c of [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]) if (c * pxAu <= 150) Lb = c;
-      // zoomed in the clock runs slower (see clockK): said after the bar's length while the clock runs (paused, and in a
-      // still picture, the rate says nothing)
-      const ck = clockK(), ckT = ck < 0.97 && !paused && !reduce ? (ja() ? '  時計 ×1/' : '  clock ×1/') + (1 / ck < 9.95 ? (1 / ck).toFixed(1) : String(Math.round(1 / ck))) : '';
+      // (the clock's rate, slower zoomed in (clockK), is not written on the picture: Disk Lab says it beside its clock,
+      // from diskframe's detail.clock)
       if (Lb !== sbLb) { if (sbLb && !reduce) { sbOld = sbLb; sbT = performance.now(); } sbLb = Lb; }
       const sbU = Math.min(1, (performance.now() - sbT) / 250), x0 = 18, y0 = Hh - 18;
       const bar = (g, L, a) => {
         const [hl, ln, tx] = g.children;
         if (L * pxAu > 320) a = 0;   // (the bar fading out after a big zoom would be drawn across the panel: not at all)
         for (const e of [hl, ln]) { e.setAttribute('x1', x0); e.setAttribute('x2', x0 + L * pxAu); e.setAttribute('y1', y0); e.setAttribute('y2', y0); }
-        tx.textContent = pxAu > 0 && a > 0 ? L + ' au' + ckT : ''; tx.setAttribute('x', x0); tx.setAttribute('y', y0 - 6);
+        tx.textContent = pxAu > 0 && a > 0 ? L + ' au' : ''; tx.setAttribute('x', x0); tx.setAttribute('y', y0 - 6);
         g.setAttribute('opacity', (a * annAmp).toFixed(3));
       };
       bar(sgroup, Lb, sbU * sbU * (3 - 2 * sbU)); bar(sgroup2, sbOld, sbU < 1 ? 1 - sbU * sbU * (3 - 2 * sbU) : 0);
@@ -4593,8 +4596,9 @@ void main(){
       }
       // (Disk Lab v2: acc, the frames of the still picture so far, and accMax, the frames that complete it: a page can tell
       // a finished picture, and what one frame of it costs, from the frames it is made of. moving: the view is being
-      // moved, a flight, a drag or a touch (viewMoving), which the state alone does not tell: it gives a flight's end)
-      box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12, acc: accN, accMax: ACC_MAX, moving: viewMoving() ? 1 : 0 } }));
+      // moved, a flight, a drag or a touch (viewMoving), which the state alone does not tell: it gives a flight's end.
+      // clock: the clock's rate for the view, clockK, 1 far out and slower zoomed in)
+      box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12, acc: accN, accMax: ACC_MAX, moving: viewMoving() ? 1 : 0, clock: clockK() } }));
     }
     // a clump that crosses the snow line releases vapor
     function update() {
