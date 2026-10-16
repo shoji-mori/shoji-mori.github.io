@@ -87,5 +87,8 @@ cached would fail).
 
 ## Citation and quality
 
-The suggested citation is built from `CITE_URL` (the public address) and `CITE_YEAR` at the top of `app.js`: change the URL there if the
-page ever moves. The quality levels (render scale of a fixed level) are `QUALITY` beside them.
+The suggested citation is built from `CITE_URL` (the public address) and `CITE_YEAR` at the top of `app.js`: change the
+URL there if the page ever moves. The quality levels (render scale of a fixed level) are `QUALITY` beside them. While the
+view moves, the volume is drawn at a lower scale and the scale comes back 0.2 s after it stops (`MOVE_K`, `MOVE_FIXED`,
+`MOVE_REST` in `app.js`; DESIGN.md, section 13); `data-move="off"` on `#disk` turns this off, to compare
+(`check.js`'s `zoomPacing` and `dragPacing`).

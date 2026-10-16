@@ -233,9 +233,18 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 @media (prefers-reduced-motion:no-preference){
   @view-transition{navigation:auto}
 }
+/* (the page goes down into the night and the other comes up out of it, rather than the two crossfading: the text of
+   both is never seen at once). data-leaving: on the way out the stage is captured with its poster in place of the live
+   canvas (index.html, pageswap) */
+::view-transition{background:#0c0f17}
+.lab[data-leaving] .disk-static{opacity:1;transition:none}
+.lab[data-leaving] .disk-panel>:not(.disk-static),.lab[data-leaving] .temp-key,.lab[data-leaving] .stage-hint,.lab[data-leaving] .planet-pop{visibility:hidden}
 ::view-transition-group(disk-lab){animation-duration:.56s;animation-timing-function:cubic-bezier(.2,.7,.2,1)}
 ::view-transition-old(disk-lab),::view-transition-new(disk-lab){height:100%;object-fit:cover;animation-duration:.3s}
-::view-transition-old(root),::view-transition-new(root){animation-duration:.46s}
+::view-transition-old(root){animation:disk-lab-out .26s ease-in both}
+::view-transition-new(root){animation:disk-lab-in .32s .2s ease-out both}
+@keyframes disk-lab-out{to{opacity:0}}
+@keyframes disk-lab-in{from{opacity:0}}
 
 /* ---- narrow screens: the stage above; below it, the sandbox or the highlights, as two tabs; nothing over the disk ---- */
 @media (max-width:860px){

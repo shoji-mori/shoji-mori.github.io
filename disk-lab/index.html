@@ -53,7 +53,9 @@
     if (!('onpagereveal' in window)) arrived();
     setTimeout(() => arrived(), 3000);   // (the engine is never held longer than this)
     addEventListener('pagereveal', (e) => {
-      const vt = e.viewTransition, stage = document.getElementById('stage');
+      const vt = e.viewTransition, stage = document.getElementById('stage'), lab = document.getElementById('lab');
+      if (lab) delete lab.dataset.leaving;   // (back from the back/forward cache)
+      if (stage) stage.style.viewTransitionName = '';
       if (!vt) { arrived(); return; }
       const nav = window.navigation, from = nav && nav.activation && nav.activation.from ? nav.activation.from.url : document.referrer;
       if (!stage || !carded(from)) { vt.skipTransition(); arrived(); return; }
@@ -74,6 +76,9 @@
       const to = e.activation && e.activation.entry ? e.activation.entry.url : null;
       if (!stage || (to !== null && !carded(to))) { vt.skipTransition(); return; }
       stage.style.viewTransitionName = 'disk-lab';
+      // (with the live WebGL canvas in it, Chrome captures the whole page as white: for the capture the stage shows its
+      // poster, the still it opened with, in the canvas's place; disk-lab.css, data-leaving)
+      document.getElementById('lab').dataset.leaving = '';
     });
   })();
 </script>
