@@ -1,6 +1,7 @@
 // The places of Disk Lab: where the camera goes, in which look, and what must be shown there for the text to be true.
-// The views come from the GPU page's tour and presets (lab/disk/disk3d.js, TOUR and VIEWS); distances are for a wide
-// stage and are lengthened on narrow ones (see fitDistance). The text of each place is in words.js under the same id.
+// The views come from the (now archived) preview page's tour and presets (its disk3d.js, TOUR and VIEWS); distances are
+// for a wide stage and are lengthened on narrow ones (see fitDistance). The text of each place is in words.js under the
+// same id.
 //
 //   view    el, az (degrees), d (au); p: 1 follows the planet (az is then measured from the planet)
 //   fitW    half-width (au) that must stay in view across the stage; 0 when the subject sits at the centre

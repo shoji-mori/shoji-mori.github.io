@@ -3,14 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0c0f17">
 <title>Disk Lab | Shoji Mori</title>
 <meta name="description" content="An interactive, physically based model of a protoplanetary disk, drawn on the GPU in the browser.">
-<link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+<link rel="canonical" href="https://shoji-mori.github.io/disk-lab/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Shoji Mori">
+<meta property="og:title" content="Disk Lab | Shoji Mori">
+<meta property="og:description" content="An interactive, physically based model of a protoplanetary disk, drawn on the GPU in the browser.">
+<meta property="og:url" content="https://shoji-mori.github.io/disk-lab/">
+<meta property="og:image" content="https://shoji-mori.github.io/disk-lab/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A model protoplanetary disk seen from above its plane: a bright star, the disk, and a magnetic wind rising from it.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-wave-32.png?v=a5-bold-20261015">
+<link rel="icon" type="image/svg+xml" sizes="any" href="/images/favicon-wave.svg?v=a5-bold-20261015">
+<link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-wave.png?v=a5-bold-20261015">
 <link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="disk-lab.css?v=20261016b">
+<link rel="stylesheet" href="disk-lab.css?v=20261016c">
 <script>
   // The language, chosen as the site chooses it: ?lang=, the visit's choice, then the browser's language.
   (() => {
@@ -24,7 +37,48 @@
     document.documentElement.classList.toggle('lang-ja', lang === 'ja');
   })();
 </script>
-<script type="module" src="app.js?v=20261016b"></script>
+<script>
+  // The way in from the site and back out (DESIGN.md, section 12): a cross-document view transition between the site's
+  // pages that carry the Disk Lab card (home, research) and this page. The card's picture grows into the stage, the
+  // paper turns to night; going back, the reverse. Both ends are named "disk-lab" for these moves only, and every other
+  // move to or from this page is left instant. With motion allowed only (the CSS's @view-transition), and where the
+  // browser has these events; elsewhere the page simply loads.
+  // window.diskLabArrival settles when the page is shown and a transition into it has ended: app.js starts the engine
+  // after it, so that compiling the shaders does not stall the transition.
+  (() => {
+    const CARD_PAGES = ['/', '/research/'];
+    const carded = (url) => { try { const u = new URL(url, location.href); return u.origin === location.origin && CARD_PAGES.includes(u.pathname); } catch { return false; } };
+    let arrived;
+    window.diskLabArrival = new Promise((resolve) => { arrived = resolve; });
+    if (!('onpagereveal' in window)) arrived();
+    setTimeout(() => arrived(), 3000);   // (the engine is never held longer than this)
+    addEventListener('pagereveal', (e) => {
+      const vt = e.viewTransition, stage = document.getElementById('stage');
+      if (!vt) { arrived(); return; }
+      const nav = window.navigation, from = nav && nav.activation && nav.activation.from ? nav.activation.from.url : document.referrer;
+      if (!stage || !carded(from)) { vt.skipTransition(); arrived(); return; }
+      stage.style.viewTransitionName = 'disk-lab';
+      vt.finished.catch(() => {}).then(() => { stage.style.viewTransitionName = ''; arrived(); });
+      // (the stage's poster is the card's picture: if it is not decoded yet, hold the first frame for it, 0.4 s at most)
+      const poster = document.getElementById('poster');
+      vt.ready.then(() => {
+        if (!poster.getAttribute('src') || poster.complete) return;
+        const held = document.getAnimations().filter((a) => a.effect && String(a.effect.pseudoElement || '').startsWith('::view-transition'));
+        held.forEach((a) => a.pause());
+        Promise.race([poster.decode().catch(() => {}), new Promise((r) => setTimeout(r, 400))]).then(() => held.forEach((a) => a.play()));
+      }, () => {});
+    });
+    addEventListener('pageswap', (e) => {
+      const vt = e.viewTransition, stage = document.getElementById('stage');
+      if (!vt) return;
+      const to = e.activation && e.activation.entry ? e.activation.entry.url : null;
+      if (!stage || (to !== null && !carded(to))) { vt.skipTransition(); return; }
+      stage.style.viewTransitionName = 'disk-lab';
+    });
+  })();
+</script>
+<link rel="expect" href="#posterFirst" blocking="render">
+<script type="module" src="app.js?v=20261016c"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
@@ -211,5 +265,18 @@
     <p class="colophon" id="colophon"></p>
   </div>
 </dialog>
+<script id="posterFirst">
+  // The poster in the page's first picture (the way in from the site grows its card into it; app.js keeps it): the whole
+  // disk, in the frame that app.js would choose for the stage (setPoster). Other places, and the still pictures, are
+  // left to app.js. The first render waits for this script (the link rel="expect" in the head).
+  (() => {
+    const q = new URLSearchParams(location.search), place = q.get('place');
+    if ((place && place !== 'whole') || q.get('still') === '1') return;
+    const stage = document.getElementById('stage'), ar = stage.clientWidth && stage.clientHeight ? stage.clientWidth / stage.clientHeight : 16 / 9;
+    const frame = ar >= 1.2 ? 'wide' : 'tall';
+    document.getElementById('lab').style.setProperty('--still-ar', frame === 'wide' ? '2' : '0.8');
+    document.getElementById('poster').src = 'stills/whole-' + (document.documentElement.lang === 'ja' ? 'ja' : 'en') + '-' + frame + '.webp';
+  })();
+</script>
 </body>
 </html>

@@ -227,6 +227,16 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .refs{font-size:13.5px;color:var(--ink-2)}
 .colophon{margin-top:28px;padding-top:14px;border-top:1px solid var(--paper-line);font-size:12px;color:#6a6f75}
 
+/* ---- the way in from the site and back (DESIGN.md, section 12): the card's picture grows into the stage while the paper
+   turns to night, and the reverse going back. The two ends are named in index.html for these moves only (the site's
+   styles.css has the same rules, for the way back); with reduced motion there is no transition. ---- */
+@media (prefers-reduced-motion:no-preference){
+  @view-transition{navigation:auto}
+}
+::view-transition-group(disk-lab){animation-duration:.56s;animation-timing-function:cubic-bezier(.2,.7,.2,1)}
+::view-transition-old(disk-lab),::view-transition-new(disk-lab){height:100%;object-fit:cover;animation-duration:.3s}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.46s}
+
 /* ---- narrow screens: the stage above; below it, the sandbox or the highlights, as two tabs; nothing over the disk ---- */
 @media (max-width:860px){
   .lab{--panel:min(36vh,290px);grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto var(--panel);grid-template-areas:"bar" "stage" "tabs" "panel"}

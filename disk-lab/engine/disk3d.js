@@ -4592,8 +4592,9 @@ void main(){
         fstats.draw.push(o1 - d0); fstats.over.push(o1 - o0); fstats.layout.push(o2 - o1);
       }
       // (Disk Lab v2: acc, the frames of the still picture so far, and accMax, the frames that complete it: a page can tell
-      // a finished picture, and what one frame of it costs, from the frames it is made of)
-      box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12, acc: accN, accMax: ACC_MAX } }));
+      // a finished picture, and what one frame of it costs, from the frames it is made of. moving: the view is being
+      // moved, a flight, a drag or a touch (viewMoving), which the state alone does not tell: it gives a flight's end)
+      box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12, acc: accN, accMax: ACC_MAX, moving: viewMoving() ? 1 : 0 } }));
     }
     // a clump that crosses the snow line releases vapor
     function update() {

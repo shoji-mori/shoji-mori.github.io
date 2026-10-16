@@ -8,11 +8,11 @@ import { WORDS } from './words.js?v=20261016b';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=d017e77ff1';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=9b5eaefdac';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 const VERSION = '2026-10-16';
 // The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
 // moves from its hidden address to its public one.
-const CITE_URL = 'https://shoji-mori.github.io/lab_pub/disk_v2/', CITE_YEAR = 2026;
+const CITE_URL = 'https://shoji-mori.github.io/disk-lab/', CITE_YEAR = 2026;
 // The quality the viewer may fix (render scale; Auto: the governor, and the sharpening of still pictures)
 const QUALITY = { low: 0.35, mid: 0.55, high: 0.8, full: 1 };
 
@@ -73,7 +73,7 @@ function fitStage() {
 new ResizeObserver(fitStage).observe(stage);
 
 // ---------- still pictures (the poster while loading, the pictures when the live model cannot run) ----------
-let posterKey = '';
+let posterKey = poster.getAttribute('src') || '';   // (index.html puts up the whole disk's before the first render)
 // (stills/<place>-<lang>-wide.webp is 2400 x 1200, -tall.webp 1200 x 1500, both with the annotations in that language;
 // made by ver2/tools/disk-lab-v2/stills.html. Shown with object-fit: cover, so a frame of another shape crops the sides
 // or the top and bottom of the same composition.)
@@ -504,7 +504,7 @@ function syncQuality() {
 // the frames' intervals at a fixed level (consecutive frames: the clock running or a picture being averaged)
 const costs = [];
 function guardFixed(dt, acc, accMax) {
-  if (quality === 'auto' || !live() || holdSharp) return;
+  if (quality === 'auto' || !live() || holdSharp || moveFrom) return;
   if (!(dt > 0) || (S().paused && !(acc >= 2 && acc <= accMax))) return;
   costs.push(dt); if (costs.length > 6) costs.shift();
   const mean = costs.reduce((a, b) => a + b, 0) / costs.length, s = box.diskScale();
@@ -627,6 +627,17 @@ function setLang(l) {
 }
 document.querySelectorAll('.lang-switch [data-lang]').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
 
+// ---------- the way home ----------
+// When the page before this one in the tab is the site's home page (the visitor came in by its card), the bar's link
+// goes back to it rather than loading it anew: the home page comes back as it was left, scrolled to the card, and the
+// stage returns into the card (index.html, the view transition). Elsewhere the link is an ordinary link.
+lab.querySelector('.mark .home').addEventListener('click', (e) => {
+  const nav = window.navigation;
+  if (!nav || !nav.currentEntry || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const prev = nav.entries()[nav.currentEntry.index - 1], u = prev && prev.url ? new URL(prev.url) : null;
+  if (u && u.origin === location.origin && u.pathname === '/') { e.preventDefault(); nav.back(); }
+});
+
 // ---------- the dialog ----------
 const about = $('about');
 $('aboutOpen').addEventListener('click', () => { about.showModal(); });
@@ -671,7 +682,7 @@ function unsharpen() {
   govRest();
 }
 function onAccumulated() {
-  if (!live() || sharpFrom || holdSharp || quality !== 'auto' || 'lost' in lab.dataset || !(S().paused || reduce) || saving || recent.length < 4) return;
+  if (!live() || sharpFrom || moveFrom || holdSharp || quality !== 'auto' || 'lost' in lab.dataset || !(S().paused || reduce) || saving || recent.length < 4) return;
   // (the mean, not the median: with two frames in flight they come in pairs, a long interval and a short one)
   const mean = recent.reduce((a, b) => a + b, 0) / recent.length, s = box.diskScale(), to = Math.min(1, scaleFor(mean, s, SHARP_MS));
   if (to < 1.15 * s) return;
@@ -720,6 +731,8 @@ async function start() {
   if (q.get('still') === '1') return enterStill('forced');
   diag.probe = probe();
   if (!diag.probe.ok && q.get('gl') !== 'force') return enterStill(diag.probe.reason);
+  // (after the way in from the site, if the page was entered by it: index.html, window.diskLabArrival)
+  if (window.diskLabArrival) await window.diskLabArrival;
   note(T().loading, 0);
   // (the engine reads these when it starts: the first frame is the place's, the Home key goes to the fitted whole disk)
   const whole = PLACES[0];
@@ -769,7 +782,56 @@ box.addEventListener('diskframe', (e) => {
   if (acc >= 2 && lastFrame) { recent.push(now - lastFrame); if (recent.length > 12) recent.shift(); }
   lastFrame = now;
   if (accMax && acc >= accMax && lab.dataset.state === 'live') onAccumulated();
+  watchMoving(e.detail);
 });
+
+// ---------- a lighter picture while the view moves ----------
+// While the view moves (a drag, the wheel, a pinch, a flight, the keys), the volume is drawn at a lower render scale, so
+// that the picture answers at once; MOVE_REST after it stops, the scale it had comes back (and a paused picture is then
+// sharpened as before, onAccumulated). Auto: MOVE_K of the running scale (0.42 of the pixels), not below the look's
+// floor. A fixed level: High and Best move at Medium (MOVE_FIXED), Low and Medium as they are (the level is what a still
+// picture is drawn at; moving, the frame rate comes first). A drag or the wheel lowers the scale before the engine draws
+// the moved view; a flight, a drag or a touch is in the engine's frames (detail.moving), and a key's step in its state
+// from frame to frame (the azimuth less the slow turn of the clock). data-move="off" on the disk turns it off, to compare.
+const MOVE_K = 0.65, MOVE_REST = 200, MOVE_FIXED = 0.55;
+let moveFrom = 0, moveTimer = 0, lastView = null;
+function moving() {
+  if (holdSharp || box.dataset.move === 'off' || !live() || 'lost' in lab.dataset) return;
+  if (!moveFrom) {
+    unsharpen();
+    moveFrom = box.diskScale();
+    const floor = S().look === 'co' ? CO_FLOOR : MIN_SCALE;
+    const to = quality === 'auto' ? Math.max(floor, Math.min(moveFrom, MOVE_K * runScale)) : Math.min(moveFrom, MOVE_FIXED);
+    if (gov) gov.pause(true);
+    if (to < moveFrom - 0.005) box.diskScale(Math.round(to * 1000) / 1000);
+  }
+  clearTimeout(moveTimer);
+  // (at least one frame and a half: where a frame is slow, a flight's frames keep it moving)
+  moveTimer = setTimeout(endMoving, Math.max(MOVE_REST, 1.5 * frameMs));
+}
+function viewNow(time) {
+  const s = S(), az = s.p || reduce ? s.az : s.az - SPIN_DEG * time;
+  return [s.el, Math.log(s.d), s.tx / s.d, s.ty / s.d, s.tz / s.d, az, s.p];
+}
+function watchMoving({ time, moving: flying }) {
+  if (!live()) { lastView = null; return; }
+  if (flying) moving();
+  const v = viewNow(time), was = lastView;
+  lastView = v;
+  if (!was) return;
+  // (the state is rounded to 0.01 degree and 0.001 au: these are well above its steps)
+  const daz = Math.abs(((v[5] - was[5]) % 360 + 540) % 360 - 180);
+  if (Math.abs(v[0] - was[0]) > 0.02 || daz > 0.02 || Math.abs(v[1] - was[1]) > 1e-4 || v[6] !== was[6] ||
+    Math.abs(v[2] - was[2]) + Math.abs(v[3] - was[3]) + Math.abs(v[4] - was[4]) > 1e-4) moving();
+}
+stage.addEventListener('pointermove', (e) => { if (e.buttons && e.target === box.querySelector(':scope > canvas')) moving(); }, { capture: true, passive: true });
+stage.addEventListener('wheel', moving, { capture: true, passive: true });
+function endMoving() {
+  if (!moveFrom) return;
+  moveFrom = 0;
+  if (live()) box.diskScale(quality === 'auto' ? runScale : fixedScale());
+  govRest();
+}
 box.addEventListener('disklost', (e) => {
   if (e.detail.lost) { lab.dataset.lost = ''; posterKey = ''; setPoster(PLACES[placeI].id); note(T().still.lost, 0); }
   else {
