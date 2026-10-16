@@ -47,14 +47,18 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .lab{--rail:300px;display:grid;grid-template-columns:minmax(0,1fr) var(--rail);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"bar bar" "stage rail" "dock rail";height:100vh;height:100dvh;position:relative}
 .bar{grid-area:bar;display:flex;align-items:center;justify-content:space-between;gap:16px;height:52px;padding:0 var(--gx);border-bottom:1px solid var(--line)}
 .mark{display:flex;align-items:baseline;gap:10px;font-size:15px;letter-spacing:-.01em;white-space:nowrap}
-.mark .home{color:var(--text-2);text-decoration:none;font-weight:500}
+.mark .home{display:inline-flex;align-items:center;gap:9px;align-self:center;color:var(--text-2);text-decoration:none;font-weight:500}
 .mark .home:hover{color:var(--text)}
+/* the site's mark leads home; on narrow screens it stands alone for the name */
+.home-logo{display:block;width:auto;height:15px;opacity:.72;transition:opacity .2s}
+.mark .home:hover .home-logo{opacity:1}
 .mark .slash{color:var(--text-3)}
 .mark .title{font-weight:600;color:var(--text)}
-.bar-end{display:flex;align-items:center;gap:22px}
-.text-button{font-size:13px;color:var(--text-2);padding:6px 0}
+.bar-end{display:flex;align-items:center;gap:22px;flex:none}
+.text-button{font-size:13px;color:var(--text-2);padding:6px 0;white-space:nowrap}
+.text-button .short{display:none}
 .text-button:hover{color:var(--text)}
-.lang-switch{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-3)}
+.lang-switch{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-3);white-space:nowrap}
 .lang-switch button{padding:6px 2px;color:var(--text-3)}
 .lang-switch button[aria-pressed=true]{color:var(--text);font-weight:600}
 .lang-switch button:hover{color:var(--text)}
@@ -250,7 +254,7 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 @media (max-width:860px){
   .lab{--panel:min(36vh,290px);grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto var(--panel);grid-template-areas:"bar" "stage" "tabs" "panel"}
   .bar{height:48px}
-  .mark .home,.mark .slash{display:none}
+  .mark .home-name,.mark .slash{display:none}
   .bar-end{gap:16px}
   .tabs{grid-area:tabs;display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);padding:0 var(--gx)}
   .tabs button{padding:10px 0 9px;font-size:13px;color:var(--text-3);border-bottom:2px solid transparent}
@@ -275,7 +279,16 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   .stage-note{top:8px;bottom:auto;left:8px;right:8px;transform:none;max-width:none;border-radius:10px;text-align:left;font-size:12.5px;line-height:1.55;padding:8px 12px}
   .lab[data-state=loading] .stage-note.on{top:auto;left:50%;right:auto;transform:translate(-50%,50%)}
   .lab[data-state=still]{grid-template-rows:auto auto minmax(0,1fr)}
+  /* (the still layout has no "panel" area: placed there, the dock would make the grid add unnamed columns and
+     squeeze the bar into one of zero width) */
+  .lab[data-state=still] .dock{grid-area:dock}
 }
+/* phones: the dialog's button by its short name, so that the mark, the title and the languages fit on one line */
+@media (max-width:400px){
+  .text-button .long{display:none}
+  .text-button .short{display:inline}
+}
+
 @media (pointer:coarse){
   .icon-button{width:40px;height:40px}
   .tool,.action,.chip,.toggle{min-height:40px}
