@@ -34,11 +34,11 @@
     })();
   </script>
   <script>
-    // Disk Lab's way in and back (disk-lab/DESIGN.md, section 12). Between a page with Disk Lab's card and Disk Lab, the
-    // card's picture and Disk Lab's stage are named as one element of a cross-document view transition, so that the
-    // picture grows into the stage (and back). Every other move between pages stays instant, as before; with reduced
-    // motion there is none (the @view-transition below; only these pages opt in, not the print pages); a browser without
-    // these events simply loads the page.
+    // Disk Lab's way in and back (disk-lab/DESIGN.md, sections 12 and 16). Between any page and Disk Lab (by its card or
+    // the navigation's link) the paper turns to night; where the card is on screen, its picture and Disk Lab's stage are
+    // named as one element of a cross-document view transition, so that the picture grows into the stage (and back).
+    // Every other move between pages stays instant, as before; with reduced motion there is none (the @view-transition
+    // below; only these pages opt in, not the print pages); a browser without these events simply loads the page.
     (() => {
       const toLab = url => { try { const u = new URL(url, location.href); return u.origin === location.origin && u.pathname.startsWith('/disk-lab/'); } catch { return false; } };
       const card = () => document.querySelector('[data-disk-lab-card]');
@@ -73,7 +73,7 @@
   <header class="site-header">
     <div class="header-inner">
       <a class="wordmark" href="/" aria-label="Shoji Mori — Home"><img class="wordmark-symbol" src="/images/logo-mark.svg?v=gray-green-sharp" width="88" height="32" alt=""><span class="wordmark-name">Shoji Mori</span></a>
-      <nav class="desktop-nav" aria-label="Main navigation"><a href="/research/"><span class="en" lang="en">Research</span><span class="ja" lang="ja">研究</span></a><a href="/publications/" aria-current="page"><span class="en" lang="en">Publications</span><span class="ja" lang="ja">論文</span></a><a href="/talks/"><span class="en" lang="en">Talks &amp; materials</span><span class="ja" lang="ja">発表・資料</span></a><a href="/cv/"><span class="en" lang="en">CV</span><span class="ja" lang="ja">CV</span></a></nav>
+      <nav class="desktop-nav" aria-label="Main navigation"><a href="/research/"><span class="en" lang="en">Research</span><span class="ja" lang="ja">研究</span></a><a href="/publications/" aria-current="page"><span class="en" lang="en">Publications</span><span class="ja" lang="ja">論文</span></a><a href="/talks/"><span class="en" lang="en">Talks &amp; materials</span><span class="ja" lang="ja">発表・資料</span></a><a href="/cv/"><span class="en" lang="en">CV</span><span class="ja" lang="ja">CV</span></a><a href="/disk-lab/">Disk Lab</a></nav>
       <div class="header-controls">
         <div class="language-switch" role="group" aria-label="Language">
           <button type="button" data-lang="en" aria-pressed="true" lang="en">EN</button>
@@ -83,7 +83,7 @@
         <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Navigation menu"><span></span><span></span></button>
       </div>
     </div>
-    <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation" hidden><a href="/research/"><span class="en" lang="en">Research</span><span class="ja" lang="ja">研究</span></a><a href="/publications/" aria-current="page"><span class="en" lang="en">Publications</span><span class="ja" lang="ja">論文</span></a><a href="/talks/"><span class="en" lang="en">Talks &amp; materials</span><span class="ja" lang="ja">発表・資料</span></a><a href="/cv/"><span class="en" lang="en">CV</span><span class="ja" lang="ja">CV</span></a></nav>
+    <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation" hidden><a href="/research/"><span class="en" lang="en">Research</span><span class="ja" lang="ja">研究</span></a><a href="/publications/" aria-current="page"><span class="en" lang="en">Publications</span><span class="ja" lang="ja">論文</span></a><a href="/talks/"><span class="en" lang="en">Talks &amp; materials</span><span class="ja" lang="ja">発表・資料</span></a><a href="/cv/"><span class="en" lang="en">CV</span><span class="ja" lang="ja">CV</span></a><a href="/disk-lab/">Disk Lab</a></nav>
   </header>
   <main id="main" tabindex="-1"><section class="container page-heading">
   <h1><span class="en" lang="en">Publications</span><span class="ja" lang="ja">論文・解説</span></h1>

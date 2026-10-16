@@ -136,7 +136,9 @@ export function build() {
     cvSections:cv.map(s=>'<section class="cv-section" id="'+s.id+'"><h2>'+bi(s.titleEn,s.titleJa)+'</h2>'+s.items.map(item=>'<article class="cv-entry"><div class="cv-date">'+cvDate(item.date)+'</div><div>'+(item.titleEn?'<h3>'+bi(item.titleEn,item.titleJa)+'</h3>':'')+paragraphs(item)+(item.links.length?'<div class="paper-links">'+links(item.links)+'</div>':'')+'</div></article>').join('')+'</section>').join('')
   };
 
-  const navigation = (current) => pages.slice(1).map(([page,href,label,labelJa])=>'<a href="/'+href+'"'+(page===current?' aria-current="page"':'')+'>'+bi(label,labelJa)+'</a>').join('');
+  // The site's sections, then Disk Lab (at the owner's request, round 6 of Disk Lab: a work rather than a section, last;
+  // the same name in both languages). Moving to it goes through the night as from its cards (base.html's script).
+  const navigation = (current) => pages.slice(1).map(([page,href,label,labelJa])=>'<a href="/'+href+'"'+(page===current?' aria-current="page"':'')+'>'+bi(label,labelJa)+'</a>').join('')+'<a href="/disk-lab/">Disk Lab</a>';
   for (const [file,url,en] of pages) {
     const pageSource = readFileSync(path.join(root,'src/pages',file+'.html'),'utf8');
     const canonical = 'https://shoji-mori.github.io/'+url;

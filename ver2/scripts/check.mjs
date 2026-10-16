@@ -59,5 +59,13 @@ for(const page of ['index.html','research/index.html']){
   assert(html.includes('<link rel="expect" href="#disk-lab-card" blocking="render">'),page+': the render waits for the card');
 }
 assert(readFileSync(path.join(dist,'sitemap.xml'),'utf8').includes('<loc>https://shoji-mori.github.io/disk-lab/</loc>'));
+// Disk Lab in the header's navigation, on the desktop and in the mobile menu, of every page with the site's header.
+for(const [page,html] of documents){
+  if(!html.includes('class="desktop-nav"')) continue;
+  for(const nav of ['class="desktop-nav"','id="mobile-nav"']){
+    const at=html.indexOf(nav), part=html.slice(at,html.indexOf('</nav>',at));
+    assert(part.includes('<a href="/disk-lab/">Disk Lab</a>'),page+': Disk Lab in the navigation ('+nav+')');
+  }
+}
 assert(documents.get('index.html').includes('@view-transition')&&!documents.get('publications/print/index.html').includes('@view-transition'));
 console.log('Validated '+pages.length+' pages, '+localReferences+' local references, all migrated records, image dimensions, document metadata, and citation downloads.');

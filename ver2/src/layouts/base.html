@@ -34,11 +34,11 @@
     })();
   </script>
   <script>
-    // Disk Lab's way in and back (disk-lab/DESIGN.md, section 12). Between a page with Disk Lab's card and Disk Lab, the
-    // card's picture and Disk Lab's stage are named as one element of a cross-document view transition, so that the
-    // picture grows into the stage (and back). Every other move between pages stays instant, as before; with reduced
-    // motion there is none (the @view-transition below; only these pages opt in, not the print pages); a browser without
-    // these events simply loads the page.
+    // Disk Lab's way in and back (disk-lab/DESIGN.md, sections 12 and 16). Between any page and Disk Lab (by its card or
+    // the navigation's link) the paper turns to night; where the card is on screen, its picture and Disk Lab's stage are
+    // named as one element of a cross-document view transition, so that the picture grows into the stage (and back).
+    // Every other move between pages stays instant, as before; with reduced motion there is none (the @view-transition
+    // below; only these pages opt in, not the print pages); a browser without these events simply loads the page.
     (() => {
       const toLab = url => { try { const u = new URL(url, location.href); return u.origin === location.origin && u.pathname.startsWith('/disk-lab/'); } catch { return false; } };
       const card = () => document.querySelector('[data-disk-lab-card]');
