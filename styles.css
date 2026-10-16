@@ -263,6 +263,28 @@ h3{font-size:24px;letter-spacing:-.015em}
 .list-links{margin-left:14px}
 .list-links a{margin-right:12px;border-bottom:1px solid var(--line)}
 .list-thumb{width:150px;height:94px;object-fit:cover;border-radius:3px;border:1px solid var(--line);background:#fff}
+/* Disk Lab's card (home, research). The picture is the still Disk Lab shows first; on the way in it grows into Disk Lab's
+   stage and the paper turns to night, and the reverse on the way back (view-transition-name set by base.html's script for
+   these moves only; disk-lab/disk-lab.css has the same rules, for the way in). */
+.lab-card{display:grid;grid-template-columns:minmax(0,232px) minmax(0,1fr);gap:22px;align-items:center;margin-top:24px;padding:10px 18px 10px 10px;border:1px solid var(--line);border-radius:8px;background:var(--white);color:var(--ink);transition:border-color .2s}
+.lab-card:hover{color:var(--ink);border-color:#cfcec8}
+.lab-card-picture{position:relative;display:block;aspect-ratio:2/1;border-radius:4px;overflow:hidden;background:#0c0f17}
+.lab-card-picture img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.lab-card-body{display:block;min-width:0}
+.lab-card-title{display:block;font-size:16.5px;line-height:1.45;font-weight:600;letter-spacing:-.01em}
+.lab-card-text{display:block;font-size:14.5px;line-height:1.6;color:#33383d;margin-top:3px}
+.lab-card-go{display:inline-flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;font-weight:500;color:var(--accent)}
+.lab-card-arrow{transition:transform .2s}
+.lab-card:hover .lab-card-arrow{transform:translateX(3px)}
+.page-heading .lab-card{max-width:720px;margin-top:32px}
+/* (the page goes down into Disk Lab's night and the other comes up out of it, rather than the two crossfading) */
+::view-transition{background:#0c0f17}
+::view-transition-group(disk-lab){animation-duration:.56s;animation-timing-function:cubic-bezier(.2,.7,.2,1)}
+::view-transition-old(disk-lab),::view-transition-new(disk-lab){height:100%;object-fit:cover;animation-duration:.3s}
+::view-transition-old(root){animation:disk-lab-out .26s ease-in both}
+::view-transition-new(root){animation:disk-lab-in .32s .2s ease-out both}
+@keyframes disk-lab-out{to{opacity:0}}
+@keyframes disk-lab-in{from{opacity:0}}
 
 /* Footer and contact. */
 .site-footer{border-top:1px solid var(--line);padding-block:28px 40px;font-size:13px;color:var(--muted)}
@@ -498,5 +520,5 @@ a{color:inherit!important}
 }
 
 @media(max-width:900px){.home{grid-template-columns:1fr;gap:36px;padding-block:40px 64px}.home-main{max-width:none}.lead{margin-bottom:40px}.profile{display:grid;grid-template-columns:132px 1fr;gap:20px;align-items:start}.profile-photo{aspect-ratio:1}.profile h1{margin-top:0;font-size:26px}.profile-links{grid-column:1/-1}.contact-grid{grid-template-columns:1fr;gap:36px}}
-@media(max-width:560px){.lead{font-size:20px}.talk-compact{grid-template-columns:1fr;gap:2px}.list li{grid-template-columns:1fr;gap:4px}.list-with-thumbs li{grid-template-columns:1fr 96px;gap:6px 14px}.list-with-thumbs li>.list-date{grid-column:1/-1}.list-thumb{width:96px;height:60px}.list-links{display:block;margin:4px 0 0}.footer-row{flex-direction:column}}
-@media print{.profile{position:static}.list-thumb{display:none}.site-footer{display:none}.older-talks>summary{display:none}.cv-date,.research-period,.page-index a{color:#000}.home-section-head a{display:none}}
+@media(max-width:560px){.lab-card{grid-template-columns:1fr;gap:12px;padding:8px 8px 14px}.lab-card-body{padding-inline:6px}.lead{font-size:20px}.talk-compact{grid-template-columns:1fr;gap:2px}.list li{grid-template-columns:1fr;gap:4px}.list-with-thumbs li{grid-template-columns:1fr 96px;gap:6px 14px}.list-with-thumbs li>.list-date{grid-column:1/-1}.list-thumb{width:96px;height:60px}.list-links{display:block;margin:4px 0 0}.footer-row{flex-direction:column}}
+@media print{.profile{position:static}.list-thumb,.lab-card{display:none}.site-footer{display:none}.older-talks>summary{display:none}.cv-date,.research-period,.page-index a{color:#000}.home-section-head a{display:none}}

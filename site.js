@@ -82,6 +82,15 @@ function initializeSite() {
   const requestedLanguage=incomingParams.get('lang');
   setLanguage(['en','ja'].includes(requestedLanguage)?requestedLanguage:html.lang,false);
   document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>setLanguage(button.dataset.lang)));
+  // A page restored from the back/forward cache shows the language it was left in; the tab's choice may have changed
+  // since (on another page, or in Disk Lab, which shares it), so it is applied again before the page is shown. (Not on
+  // the print pages, whose language is the export's own.)
+  addEventListener('pageshow',event=>{
+    if(!event.persisted||document.getElementById('export-language'))return;
+    let selected;
+    try{selected=sessionStorage.getItem('site-language');}catch{}
+    if(['en','ja'].includes(selected)&&selected!==html.lang)setLanguage(selected,false);
+  });
 
   const exportSheet=document.querySelector('[data-print-document]');
   if(exportSheet) {

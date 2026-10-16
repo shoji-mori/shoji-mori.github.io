@@ -20,7 +20,7 @@
   <link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/outfit-latin-500-700-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/styles.css?v=logo-outflow-20261015">
+  <link rel="stylesheet" href="/styles.css?v=disk-lab-20261016">
   <script>
     (() => {
       const requested = new URLSearchParams(location.search).get('lang');
@@ -33,8 +33,39 @@
       document.documentElement.classList.toggle('lang-ja', lang === 'ja');
     })();
   </script>
+  <script>
+    // Disk Lab's way in and back (disk-lab/DESIGN.md, section 12). Between a page with Disk Lab's card and Disk Lab, the
+    // card's picture and Disk Lab's stage are named as one element of a cross-document view transition, so that the
+    // picture grows into the stage (and back). Every other move between pages stays instant, as before; with reduced
+    // motion there is none (the @view-transition below; only these pages opt in, not the print pages); a browser without
+    // these events simply loads the page.
+    (() => {
+      const toLab = url => { try { const u = new URL(url, location.href); return u.origin === location.origin && u.pathname.startsWith('/disk-lab/'); } catch { return false; } };
+      const card = () => document.querySelector('[data-disk-lab-card]');
+      const shown = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.top < innerHeight; };
+      let clickedLab = false;   // (where the browser does not say where a move goes: the card was followed)
+      addEventListener('click', e => { if (e.target.closest && e.target.closest('a[href^="/disk-lab/"]')) clickedLab = true; }, true);
+      addEventListener('pageswap', e => {
+        const vt = e.viewTransition, c = card();
+        if (!vt) return;
+        if (!(e.activation && e.activation.entry ? toLab(e.activation.entry.url) : clickedLab)) { vt.skipTransition(); return; }
+        if (c && shown(c)) c.style.viewTransitionName = 'disk-lab';
+      });
+      addEventListener('pagereveal', e => {
+        const vt = e.viewTransition, c = card(), nav = window.navigation;
+        clickedLab = false;
+        if (c) c.style.viewTransitionName = '';
+        if (!vt) return;
+        const from = nav && nav.activation && nav.activation.from ? nav.activation.from.url : document.referrer;
+        if (!toLab(from)) { vt.skipTransition(); return; }
+        if (c && shown(c)) { c.style.viewTransitionName = 'disk-lab'; vt.finished.finally(() => { c.style.viewTransitionName = ''; }); }
+      });
+    })();
+  </script>
+  <style>@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}}</style>
+  
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"https://shoji-mori.github.io/#person","name":"Shoji Mori","alternateName":"森 昇志","url":"https://shoji-mori.github.io/","jobTitle":"Shuimu Fellow","worksFor":{"@type":"CollegeOrUniversity","name":"Tsinghua University"},"sameAs":["https://scholar.google.com/citations?user=XUF28swAAAAJ","https://ui.adsabs.harvard.edu/search/q=orcid%3A0000-0002-7002-939X&sort=date%20desc","https://orcid.org/0000-0002-7002-939X","https://researchmap.jp/mori_shoji","https://github.com/shoji-mori","https://www.researchgate.net/profile/Shoji-Mori-3","https://www.scopus.com/authid/detail.uri?authorId=57075536200","https://www.webofscience.com/wos/author/record/CAG-1288-2022"]},{"@type":"WebPage","name":"CV | Shoji Mori","url":"https://shoji-mori.github.io/cv/","description":"Shoji Mori: academic experience, education, grants, awards, teaching, mentoring, and professional service.","about":{"@id":"https://shoji-mori.github.io/#person"}}]}</script>
-  <script src="/site.js?v=environment-language-20261015" type="module"></script>
+  <script src="/site.js?v=disk-lab-20261016" type="module"></script>
   <noscript><style>.filters,.clear-filters,[data-bibtex],[data-print],.language-switch,.contact-disclosure,.menu-toggle{display:none!important}.mobile-nav[hidden]{display:flex!important;flex-wrap:wrap;gap:0 20px}</style></noscript>
 </head>
 <body class="cv-page">

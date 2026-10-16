@@ -17,6 +17,8 @@ Open http://127.0.0.1:4321/. The server binds only to the local machine, watches
 
 The build produces dist/ with five main routes, two print-preview routes, a 404 page, a redirect from the former /news/ page to /talks/, a sitemap, a bibliography download, and copies of the existing public PDFs. dist/ is ignored. The checker validates document structure, internal links and fragments, local assets, citation exports, and record counts.
 
+Disk Lab (/disk-lab/) is not built here: it is static files kept at the repository root (disk-lab/, its notes in disk-lab/README.md and disk-lab/DESIGN.md). The build copies it into dist/ so that the preview serves it and the checker finds what the home and research pages' Disk Lab card links to; release leaves it alone. The card's picture grows into Disk Lab's stage through a cross-document view transition (the script in src/layouts/base.html; disk-lab/DESIGN.md, section 12).
+
 ## Updating the site
 
 All content is in src/data/*.json (site.json: profile, contact, home statement and representative papers; publications.seed.json; presentations.json; research.json; cv.json; materials.json). To publish a change:

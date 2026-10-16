@@ -19,6 +19,9 @@ export function build() {
   mkdirSync(dist,{recursive:true});
   cpSync(path.join(root,'public'),dist,{recursive:true});
   for (const file of ['files','me.webp','me.jpg',data('site').cvPdf.replace(/^\//,''),'google382eb4ad681ea1fc.html','robots.txt','.nojekyll']) cpSync(path.join(root,'..',file),path.join(dist,file),{recursive:true});
+  // Disk Lab (/disk-lab/) is static files kept at the repository root, not built here; it is copied into dist only so
+  // that the preview serves it and the checks find what the site's card links to. release.mjs leaves it alone.
+  cpSync(path.join(root,'..','disk-lab'),path.join(dist,'disk-lab'),{recursive:true});
   cpSync(path.join(root,'src/styles/styles.css'),path.join(dist,'styles.css'));
   cpSync(path.join(root,'src/scripts/site.js'),path.join(dist,'site.js'));
   writeFileSync(path.join(dist,'publications.bib'),publications.map(bibtex).join('\n\n') + '\n');
@@ -66,7 +69,14 @@ export function build() {
   for (const id of homePapers) if (!publications.some(p=>p.id===id)) throw new Error('Unknown representative paper in site.json: '+id);
   const listRow = (date,body,aside='') => '<li><span class="list-date">'+date+'</span><div>'+body+'</div>'+aside+'</li>';
   const monthLabel = (t) => { const m = String(t.date).match(/^(\d{4})\/\s*(\d{1,2})/); return m ? bi(months[+m[2]-1]+' '+m[1], m[1]+'年'+(+m[2])+'月') : escape(t.year); };
+  // Disk Lab's card (home, research). Its picture is the whole disk's still, the same file Disk Lab shows first (wide, or
+  // tall on a portrait screen, as its stage is there), so that on the way in the picture grows into Disk Lab's stage: a
+  // cross-document view transition, named in base.html's script for these moves only (disk-lab/DESIGN.md, section 12).
+  const labStill = (lang,frame) => '/disk-lab/stills/whole-'+lang+'-'+frame+'.webp';
+  const labPicture = (lang) => '<picture class="'+lang+'" lang="'+lang+'"><source media="(orientation: portrait)" srcset="'+labStill(lang,'tall')+'" width="1200" height="1500"><img src="'+labStill(lang,'wide')+'" alt="" width="2400" height="1200" loading="lazy" decoding="async"></picture>';
+  const diskLabCard = '<a class="lab-card" id="disk-lab-card" href="/disk-lab/"><span class="lab-card-picture" data-disk-lab-card>'+labPicture('en')+labPicture('ja')+'</span><span class="lab-card-body"><span class="lab-card-title">Disk Lab</span><span class="lab-card-text">'+bi('A model protoplanetary disk to explore in the browser: fly in to the snow line and the young star, follow the magnetic wind, and see the disk as telescopes do.','原始惑星系円盤のモデルを、ブラウザーの中で見て回れます。スノーラインや若い星のそばへ寄り、磁気風をたどり、望遠鏡で見たときの姿も確かめられます。')+'</span><span class="lab-card-go">'+bi('Open Disk Lab','Disk Lab を開く')+'<span class="lab-card-arrow" aria-hidden="true">→</span></span></span></a>';
   const components = {
+    diskLabCard,
     // Home: recent talks, research themes and representative papers as dated lists.
     // Papers appear only under representative papers, so nothing is listed twice.
     homeRecent:presentations.slice(0,4).map(t=>listRow(monthLabel(t)+(upcoming(t)?'<span class="upcoming-label">'+bi('Upcoming','予定')+'</span>':''),'<a class="list-title" href="/talks/#'+t.id+'">'+bi(t.titleEn,t.titleJa)+'</a><p class="list-meta">'+talkFormat(t)+' · '+bi(t.confEn,t.confJa)+'</p>')).join(''),
@@ -143,6 +153,9 @@ export function build() {
       pageClass:file+'-page',
       content:fill(pageSource,components),
       navigation:navigation(file),
+      // (the pages with Disk Lab's card: their first render waits until the card is parsed, so that a transition back from
+      // Disk Lab finds it)
+      renderExpect:pageSource.includes('{{diskLabCard}}')?'<link rel="expect" href="#disk-lab-card" blocking="render">':'',
       year:new Date().getFullYear(),
       updated,
       siteEmail:escape(site.email)
@@ -160,9 +173,9 @@ export function build() {
     mkdirSync(target,{recursive:true});
     writeFileSync(path.join(target,'index.html'),fill(exportTemplate,{kind,title:bi(en,ja),pageTitle:en+' | Shoji Mori',rows}));
   }
-  writeFileSync(path.join(dist,'sitemap.xml'),'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+pages.map(([,url])=>'<url><loc>https://shoji-mori.github.io/'+url+'</loc></url>').join('')+'</urlset>\n');
+  writeFileSync(path.join(dist,'sitemap.xml'),'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+[...pages.map(([,url])=>url),'disk-lab/'].map(url=>'<url><loc>https://shoji-mori.github.io/'+url+'</loc></url>').join('')+'</urlset>\n');
   const notFound = '<section class="container page-heading"><h1>'+bi('Page not found.','ページが見つかりません。')+'</h1><p class="page-lead">'+bi('The page may have moved. Browse the research or publications below.','ページが移動した可能性があります。以下から研究内容や論文をご覧ください。')+'</p><div class="page-actions" style="margin-top:28px"><a class="text-link" href="/">'+bi('Home','ホーム')+'</a><a class="text-link" href="/research/">'+bi('Research','研究内容')+'</a><a class="text-link" href="/publications/">'+bi('Publications','論文一覧')+'</a></div></section>';
-  writeFileSync(path.join(dist,'404.html'),fill(template,{pageTitle:'Page not found | Shoji Mori',description:'The requested page could not be found.',canonical:'https://shoji-mori.github.io/404.html',structuredData:'{}',pageClass:'not-found-page',content:notFound,navigation:navigation(''),year:new Date().getFullYear(),updated,siteEmail:escape(site.email)}));
+  writeFileSync(path.join(dist,'404.html'),fill(template,{pageTitle:'Page not found | Shoji Mori',description:'The requested page could not be found.',canonical:'https://shoji-mori.github.io/404.html',structuredData:'{}',pageClass:'not-found-page',content:notFound,navigation:navigation(''),renderExpect:'',year:new Date().getFullYear(),updated,siteEmail:escape(site.email)}));
   // Former pages redirect to where their content now lives.
   for (const [dir,target,title] of [['news','/talks/','Talks']]) {
     mkdirSync(path.join(dist,dir),{recursive:true});

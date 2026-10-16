@@ -51,4 +51,13 @@ assert.equal((documents.get('cv/index.html').match(/class="cv-entry"/g)||[]).len
 assert.equal((readFileSync(path.join(dist,'publications.bib'),'utf8').match(/@article{/g)||[]).length,data('publications.seed').length);
 assert(readFileSync(path.join(dist,'styles.css'),'utf8').includes('@media print'));
 assert(readFileSync(path.join(dist,'styles.css'),'utf8').includes('prefers-reduced-motion'));
+// Disk Lab's card on home and research, with the render waiting for it (the way back from Disk Lab), and /disk-lab/ in
+// the sitemap. Only the regular pages opt in to view transitions: the print pages stay as they were.
+for(const page of ['index.html','research/index.html']){
+  const html=documents.get(page);
+  assert(html.includes('href="/disk-lab/"')&&html.includes('data-disk-lab-card'),page+': Disk Lab card');
+  assert(html.includes('<link rel="expect" href="#disk-lab-card" blocking="render">'),page+': the render waits for the card');
+}
+assert(readFileSync(path.join(dist,'sitemap.xml'),'utf8').includes('<loc>https://shoji-mori.github.io/disk-lab/</loc>'));
+assert(documents.get('index.html').includes('@view-transition')&&!documents.get('publications/print/index.html').includes('@view-transition'));
 console.log('Validated '+pages.length+' pages, '+localReferences+' local references, all migrated records, image dimensions, document metadata, and citation downloads.');
