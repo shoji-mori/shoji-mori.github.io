@@ -1,7 +1,7 @@
 # Disk Lab
 
 The public disk model, at https://shoji-mori.github.io/disk-lab/: a protoplanetary disk drawn on the GPU (WebGL2) in the
-browser, with nine places to visit, five looks (model, scattered light, mid-infrared, millimetre, CO), and still pictures
+browser, with nine places to visit, five looks (model, visible, mid-infrared, millimetre, CO), and still pictures
 where the live model cannot run. Static files only: no build, no dependencies. This folder is both where it is developed
 and what is published (it was `lab_pub/disk_v2/`, hidden, until round 4). The site links to it from the home and research
 pages, with a view transition (DESIGN.md, section 12). Why it is built this way: [DESIGN.md](DESIGN.md) (in Japanese).
@@ -20,9 +20,9 @@ URL parameters:
 | --- | --- |
 | `lang=en` / `lang=ja` | language (otherwise the visit's choice, `sessionStorage['site-language']`, then the browser's) |
 | `place=whole` … `afar` | start at a place (`whole wind snow planet mm heat deadzone star afar`) |
-| `el az d look mode field ann asym marks waves slice sq p tx ty tz speed paused t com cov ms` | a view, as "Copy a link" writes it (the same keys as the archived preview page's links) |
+| `el az d look mode field ann asym marks waves slice sq p tx ty tz speed paused t com cov ms` | a view, as "Copy a link" writes it (the same keys as the archived preview page's links). `sq` is `T`, `rho` or `layers` (the Regions); an old link's `tau` opens the temperature, `none` the density. A `mode` with one of the bits 1 and 2 turns on both (the gas with its dust) |
 | `pl=3:1,8:0` | the planets: orbital radius (au) and on (1) or off (0), up to four |
-| `g=1,1,1,1` | the display amount of the gas, the dust, the pebbles and the wind (0.25 to 3) |
+| `g=1,1,1,1` | (until round 6: the display amounts; read past now, the model's own amounts are shown) |
 | `still=1` | show the still pictures (as without WebGL2) |
 | `gl=force` | skip the check for software rendering and slow devices |
 | `motion=reduce` | behave as with the system's reduced-motion setting |
@@ -59,7 +59,7 @@ a desktop window. With `serve.py --save-dir DIR`, `c.run({ save: 'check.json' })
 The engine's own checks (ver2/tools/disk-check's state matrix, on v2's engine, with the states close to the star):
 
     const e = await import('/ver2/tools/disk-lab-v2/engine-check.js');
-    const m = await e.run();          // 346 states, about 9 minutes; m.problems
+    const m = await e.run();          // 300 states (346 until round 6, when the cut lost two quantities), about 8 minutes; m.problems
 
 ## The engine
 
@@ -88,7 +88,10 @@ cached would fail).
 ## Citation and quality
 
 The suggested citation is built from `CITE_URL` (the public address) and `CITE_YEAR` at the top of `app.js`: change the
-URL there if the page ever moves. The quality levels (render scale of a fixed level) are `QUALITY` beside them. While the
+URL there if the page ever moves. The quality levels (render scale of a fixed level) are `QUALITY` beside them. Best is
+the default (round 6): not chosen by the visitor, it steps down quietly where a view is too heavy (`BEST_SLOW`, `BEST_AIM`,
+`BEST_UP`, `BEST_STEPS` in `app.js`; DESIGN.md, section 16); a choice is kept for the visit (sessionStorage
+`disk-lab-quality`). While the
 view moves, the volume is drawn at a lower scale and the scale comes back 0.2 s after it stops (`MOVE_K`, `MOVE_FIXED`,
 `MOVE_REST` in `app.js`; DESIGN.md, section 13); `data-move="off"` on `#disk` turns this off, to compare
 (`check.js`'s `zoomPacing` and `dragPacing`).

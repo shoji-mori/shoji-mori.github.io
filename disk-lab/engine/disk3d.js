@@ -1,4 +1,4 @@
-// Volume rendering of a model protoplanetary disk (out to its edge at 30 au), drawn on the GPU.
+// Volume rendering of a model of a protoplanetary disk (out to its edge at 30 au), drawn on the GPU.
 //
 // The structure follows an irradiated, magnetically accreting disk:
 //   gas        Σ ∝ R^-1 out to a density cutoff at 30 au, vertically Gaussian with H/R = 0.03 (R/au)^1/4
@@ -137,38 +137,38 @@
   const MAG = { RS: 0.0093, RT: 0.05, TILT: 10 * Math.PI / 180, P_DAYS: 8, DL: 0.3, SHOW: 2, DMIN: 0.04 };
   MAG.SPIN = 2 * Math.PI / (12 * MAG.P_DAYS / 365.25);   // rad per second of the model's clock (a year at 1 au is 12 s)
   // A planet of Jupiter's mass (mass ratio q = 1e-3) on a circular orbit at 3 au, beyond the snow line. Its Hill radius
-  // is a (q/3)^1/3 = 0.21 au. It opens a gap in the gas, a Gaussian dip in Σ, Σ (1 - depth e^-x²) with x = (R - a)/W,
-  // of width (sigma) W = 1.8 Hill radii (FWHM 0.88 au = 4.2 Hill radii). Its depth is a choice for the picture and
-  // depends on how close the camera is (DEPTH): 0.3 from afar, so that the usual view is not dominated by a dark ring,
-  // and 0.98 close up, nearer what a Jupiter would clear in a disk this thin (H/R = 0.04 at 3 au: Σ_min/Σ_0 ~ 0.003 and
-  // a width of ~0.8 a for alpha = 1e-3; Kanagawa et al. 2015, 2016). Everything that follows from the gap takes the
+  // is a (q/3)^1/3 = 0.21 au. It opens a gap in the gas with the profile of Kanagawa et al. (2017) for alpha = GAP_ALPHA
+  // (see gapK; round 6): at 3 au (H/R = 0.04) Σ_min/Σ_0 = 0.0024, the floor from 2.5 to 3.5 au, the walls out to 1.0 and
+  // 5.0 au (half depth at 1.8 and 4.2 au, a width of 0.82 a). (Before round 6 a Gaussian of width (sigma) 1.8 Hill radii,
+  // 0.3 deep from afar and 0.98 close up, a choice for the picture.) Everything that follows from the gap takes the
   // same depth: the starlight on it, the pebbles (filtered out of the gap, and collected at the pressure maximum just
   // outside it once the gap is deep enough to make one, see trapOf), the wind launched from it, the wake and the slice.
   // The wake, the spiral density wave the planet launches, follows Rafikov (2002) in shape; its amplitude is the
   // physical one (WAKE_P at WAKE_X0 from the orbit, decaying away from it), or exaggerated on demand (WAKE_A, WAKE_L:
-  // the waves' emphasis, opt.waves; see wake in the disk map), and, like the gap, drawn weaker from afar
-  // (DEPTH.WAKE_FAR). Close up, the planet and its circumplanetary disk (out to 0.4 Hill radii) show.
+  // the waves' emphasis, opt.waves; see wake in the disk map), and drawn weaker from afar (DEPTH.WAKE_FAR). Close up,
+  // the planet and its circumplanetary disk (out to 0.4 Hill radii) show.
   const PLANET = (() => {
-    const A = 3.0, Q = 1e-3, RH = A * Math.cbrt(Q / 3), W = 1.8 * RH;
-    return { A, Q, RH, W, HP: MODEL.H0 * Math.pow(A, 0.25), PHI0: 2.4, WAKE_A: 3.5, WAKE_L: 0.6, WAKE_P: 1, WAKE_X0: 0.1, WAKE_NI: 0.82, WAKE_NO: 0.69 };
+    const A = 3.0, Q = 1e-3, RH = A * Math.cbrt(Q / 3);
+    return { A, Q, RH, HP: MODEL.H0 * Math.pow(A, 0.25), PHI0: 2.4, WAKE_A: 3.5, WAKE_L: 0.6, WAKE_P: 1, WAKE_X0: 0.1, WAKE_NI: 0.82, WAKE_NO: 0.69 };
   })();
   // (Disk Lab v2) Several planets: up to MAX, each a Jupiter as above on its own orbit of radius a (au), within RANGE,
   // neighbours at least SPACING apart in the ratio of their radii. Everything above scales with a: the Hill radius
-  // RH = a (Q/3)^1/3, the gap's width W = 1.8 RH, the planet's own disk 0.4 RH, h_p = H0 a^1/4; the starlight on a gap is
-  // the table made for a = 3 au, at R 3/a (see gapLight). RANGE: inside 1 au the gap (W = 0.13 au there) is no wider
-  // than a few pixels of the usual view and lies in the inner disk; beyond 20 au it would run into the disk's tapered
-  // edge (from about 25 au). SPACING 1.4: two Jupiters closer than about 3.5 mutual Hill radii (a ratio of 1.3) are not
-  // stable (Gladman 1993), and their gaps would overlap. PHI0: the planets' azimuths at time 0, a golden angle apart.
+  // RH = a (Q/3)^1/3, the planet's own disk 0.4 RH, h_p = H0 a^1/4; the gap's profile is gapK(a)'s (its width relative to
+  // a goes as h_p^-3/4, a^-3/16) and the starlight on it is traced for each a (see gapLight). RANGE: 1 to 20 au (with the
+  // profile of round 6 a planet at 1 au clears 0.2 to 1.8 au, beyond the formula's tested h of 1/30 to 2/15 a little, and
+  // one at 20 au reaches the disk's tapered edge with its outer wall: kept, and said so in the notes). SPACING 1.4: two
+  // Jupiters closer than about 3.5 mutual Hill radii (a ratio of 1.3) are not stable (Gladman 1993); at 1.4 their gaps
+  // join into a common one, as in simulations of pairs of giant planets. PHI0: the planets' azimuths at time 0, a golden
+  // angle apart.
   const PLANETS = { MAX: 4, RANGE: [1, 20], SPACING: 1.4, PHI0: (i) => PLANET.PHI0 + 2.39996 * i };
   const GT_N = 2048;   // radii of the gaps' table (see gapT)
-  // the gap's depth: FAR when the camera is beyond D1 au from the planet's orbit (the circle R = a in the midplane;
-  // the usual view is at 23 au), NEAR within D0, eased in between. The distance to the orbit rather than to the planet,
-  // so that the depth does not change as the planet goes round (seen from near the star, as in the slice). The wake's
-  // strength follows the same function, from WAKE_FAR of its amplitude afar to all of it near, so that from the usual
-  // view its arms do not stand out as rings (made for the exaggerated amplitude, and kept with the physical one). Both
-  // are choices for the picture.
-  const DEPTH = { FAR: 0.3, NEAR: 0.98, D0: 4, D1: 18, WAKE_FAR: 0.2 };
-  const GL_R0 = 1.8, GL_DR = 7.6 / 127;   // radii of the table of starlight on the gap (see gapLightTables)
+  // the wake's strength: WAKE_FAR of its amplitude when the camera is beyond D1 au from the planet's orbit (the circle
+  // R = a in the midplane; the usual view is at 23 au), all of it within D0, eased in between, so that from the usual view
+  // its arms do not stand out as rings (made for the exaggerated amplitude, and kept with the physical one): a choice for
+  // the picture. The distance to the orbit rather than to the planet, so that it does not change as the planet goes round.
+  // (Until round 6 the gap's depth followed the same function, 0.3 afar to 0.98 close up; it is the profile's now.)
+  const DEPTH = { D0: 4, D1: 18, WAKE_FAR: 0.2 };
+  const GL_R0 = 0.9, GL_DR = 8.7 / 127;   // radii of the table of starlight on the gap, in units of a / A_REF (see gapLight)
   const WIND_LOW_JS = 0.1;                // the weaker side of the wind relative to the stronger, with the asymmetry (see uWindLow)
   const ASYM_F_JS = 0.5;                  // the dead zone's horizontal field with the asymmetry, as a share of the wind's (see bendQ)
   const PUFF = { P: 2 };                  // the wind's puffs: a bundle's launch period (s of the model's clock; see puffFactor)
@@ -191,7 +191,9 @@
   // which the cloud is static, rho ∝ r^-2) the cloud is not modelled. Its particles start at 225 au and move SPEED times
   // faster than the disk's clock (the fall from 225 au to the disk takes some 600 of the disk's years). r_c was 8 au until
   // the seventh round, 30 au since, with the disk; the distances above scaled with it.
-  const ENV = { R: 560, TH_CAV: Math.PI / 6, SPEED: 220, NS: 18 };
+  // (Disk Lab v2, round 6: r_c is the disk's outer radius by definition, ENV.RC = MODEL.R_OUT, one constant for both:
+  // the owner, "Ulrich の rc は円盤外縁にセットして". Everything of the envelope that depends on r_c takes it from here.)
+  const ENV = { R: 560, TH_CAV: Math.PI / 6, SPEED: 220, NS: 18, RC: MODEL.R_OUT };
   const BP = {
     C0: 0.25, SMAX: 5.484797, CHIMAX: 60.0, A0: 2.0570, B0: -3.9977,   // table grid; dR/dz and B_phi/B_z at the surface
     XI: [1, 1.0459, 1.094, 1.1445, 1.1974, 1.253, 1.3114, 1.3727, 1.4372, 1.5049, 1.5762, 1.6512, 1.73, 1.813, 1.9003, 1.9921, 2.0887, 2.1904, 2.2973, 2.4097, 2.5279, 2.6521, 2.7827, 2.9198, 3.0638, 3.215, 3.3736, 3.5398, 3.714, 3.8963, 4.0871, 4.2865, 4.4948, 4.712, 4.9383, 5.1739, 5.4186, 5.6726, 5.9356, 6.2076, 6.4881, 6.7769, 7.0733, 7.3768, 7.6864, 8.0012, 8.3199, 8.6411, 8.963, 9.2838, 9.601, 9.9122, 10.214, 10.505, 10.779, 11.034, 11.265, 11.469, 11.64, 11.775, 11.869, 11.919, 11.919, 11.868],
@@ -304,12 +306,18 @@ float accAmp(float R){ return smoothstep(0.4, 1.0, zKinkH(R)); }
 uniform int uNP;            // how many of uPl act now (they come first: the loops stop there)
 uniform vec4 uPl[MAXP];
 uniform vec4 uPlTrap[MAXP];
+uniform vec4 uPlGap[MAXP];  // (round 6) each gap's profile (Kanagawa et al. 2017, see gapK in the script): dR1, dR2, K'^1/4 a, Sigma_min / Sigma_0
 uniform vec4 uPlRim[MAXP];
 uniform vec4 uPlV;
 uniform float uPlVa;
 uniform float uWakeX;       // the waves' emphasis (0: the wake's physical amplitude, 1: exaggerated; eased), see wake
-const float RH_K = ${G(+Math.cbrt(PLANET.Q / 3).toFixed(6))}, GAPW_K = 1.8 * RH_K;   // the Hill radius and the gap's width per au of a
-float gapW(float a){ return GAPW_K * a; }
+const float RH_K = ${G(+Math.cbrt(PLANET.Q / 3).toFixed(6))};   // the Hill radius per au of a
+// the share of planet i's gap depth at R: 1 in its floor, falling linearly across its walls to 0 (as gapShape in the script)
+float gapShape(int i, float R){
+  vec4 g = uPlGap[i];
+  float y = abs(R - uPl[i].x);
+  return y >= g.y ? 0.0 : y <= g.x ? 1.0 : (1.32 - 4.0 * y / g.z) / (1.0 - g.w);
+}
 float rCPD(float a){ return 0.4 * RH_K * a; }   // radius of the planet's disk, 0.4 Hill radii
 float hP(float a){ return ${G(MODEL.H0)} * pow(a, 0.25); }
 const float WAKE_A = ${G(PLANET.WAKE_A)}, WAKE_L = ${G(PLANET.WAKE_L)}, WAKE_P = ${G(PLANET.WAKE_P)}, WAKE_X0 = ${G(PLANET.WAKE_X0)}, WAKE_NI = ${G(PLANET.WAKE_NI)}, WAKE_NO = ${G(PLANET.WAKE_NO)};
@@ -624,7 +632,9 @@ void main(){
   // last row is 51.4)
   const WSTR_GLSL = `
 const vec2 WIND_CELLS = vec2(5.0, 1.6);
-const float WIND_TURB = 3.0, WIND_LIFE = 3.0, WSTR_TAU = 52.0;
+// (Disk Lab v2, round 6: the contrast WIND_TURB 3.0 to 2.4, the owner's "a little calmer": the streamers' ln-density
+// spread 1.03 to 0.82, one sigma a factor 2.8 to 2.3; the mean stays 1)
+const float WIND_TURB = 2.4, WIND_LIFE = 3.0, WSTR_TAU = 52.0;
 `;
   // The wind's streamers for this moment, drawn every frame into a volume texture on (ln r0, the azimuth of the foot
   // now, the travel time tau in 1/Omega(r0)), nb layers (travel times) per draw: the pattern turbL gives at the launch
@@ -754,12 +764,13 @@ ${Array.from({ length: nb }, (_, i) => `  o${i} = vec4(o[${i}], 0.0, 0.0);`).joi
   // its column from the star (from 0.5 au) out to this point along the same direction, which dims the starlight.
   const ENV_GLSL = `
 const float TH_CAV = ${G(+ENV.TH_CAV.toFixed(5))}, ENV_R = ${G(ENV.R)};
+const float R_C = ${G(ENV.RC)};   // the centrifugal radius r_c: the disk's outer radius (ENV.RC = MODEL.R_OUT)
 float cbrt(float v){ return sign(v) * pow(abs(v), 1.0 / 3.0); }
 // cos theta0 of the streamline through the point at r (au), mu = cos of the polar angle: the root in [mu, 1] of
 // m^3 + (x - 1) m - x mu = 0 with x = r / r_c (one real root for x > 1, Cardano; three for x < 1, the largest; then two
 // Newton steps)
 float envMu0(float r, float mu){
-  float x = r / R_OUT;
+  float x = r / R_C;
   float pp = x - 1.0, q = -x * mu, D = 0.25 * q * q + pp * pp * pp / 27.0, m;
   if (D > 0.0) { float sD = sqrt(D); m = cbrt(-0.5 * q + sD) + cbrt(-0.5 * q - sD); }
   else { float pn = min(pp, -1e-6); m = 2.0 * sqrt(-pn / 3.0) * cos(acos(clamp(1.5 * q / pn * sqrt(-3.0 / pn), -1.0, 1.0)) / 3.0); }
@@ -768,7 +779,7 @@ float envMu0(float r, float mu){
 }
 // ln of the density at r (au), mu = cos of the polar angle
 float envLnRho(float r, float mu){
-  float x = r / R_OUT, mu0 = envMu0(r, mu);   // x: r in units of r_c
+  float x = r / R_C, mu0 = envMu0(r, mu);   // x: r in units of r_c
   // density, with the pile-up where the streamlines meet at r_c on the midplane held finite
   float lnrho = -1.5 * log(x) - 0.5 * log(1.0 + mu / mu0) - log(max(mu / mu0 + 2.0 * mu0 * mu0 / x, 0.05));
   // the cavity: streamlines that start within TH_CAV of the axis are emptied (a little gas is left in it)
@@ -981,8 +992,8 @@ uniform vec3 uMagAxis;   // the dipole's axis now: tilted by MAG.TILT toward the
 uniform vec3 uMagE1;     // the zero of the magnetic azimuth: toward the tilt, perpendicular to the axis
 uniform float uMagT;     // the model's clock (modulo 600 s), for the columns' fluctuations
 // The cutaway: the part of space toward the camera between two vertical planes through the star (containing the
-// axis) is cut away, and the cut faces show a quantity in false colour (uSliceQ: 0 none, only the cut, 1 temperature,
-// 2 gas density, 3 optical depth toward the star). One plane faces the camera (its normal the camera's horizontal
+// axis) is cut away, and the cut faces show a quantity in false colour (uSliceQ: 1 temperature, 2 gas density, 4 the
+// regions of the coupling; Disk Lab v2, round 6: 0, the cut alone, and 3, the optical depth toward the star, are gone). One plane faces the camera (its normal the camera's horizontal
 // direction uSliceN; uSliceR the horizontal direction to the right), the other is turned from it toward the right by
 // 2 uCutA: with uCutA = 0 they coincide and half of space is cut away (the 1/2 cut, one face facing the viewer); with 45
 // degrees the quarter in front on the right (the 1/4 cut: its right face seen face-on, the other along the line of
@@ -1106,7 +1117,9 @@ const vec3 MM_COL = vec3(1.0, 0.42, 0.12);
 // is: its density is scaled by ENV_RHO relative to the gas density unit of the disk (the midplane at 1 au) and it
 // absorbs little. envLight returns the emission and the extinction per unit length, the same inside the marched
 // cylinder and outside it.
-const float ENV_RHO = 1.07e-4, G_ENV = 70.0, ENV_KSTAR = 0.133;   // (the map's column is in au, so both scale as 1 / r_c: 8 au to the sixth round, 30 au since)
+// (the map's column is in au, so both scale as 1 / r_c: 8 au to the sixth round, 30 au since; with r_c = 30 au, 1.07e-4
+// and 0.133, written here as the products with r_c so that they follow it, ENV.RC)
+const float ENV_RHO = ${G(3.21e-3 / ENV.RC)}, G_ENV = 70.0, ENV_KSTAR = ${G(3.99 / ENV.RC)};
 const vec3 ENV_COL = vec3(0.55, 0.66, 0.95);
 const int ENV_N = 40;                   // samples of the envelope in front of and behind the marched cylinder
 void envLight(vec3 p, vec3 rd, out vec3 em, out vec3 ex){
@@ -1164,6 +1177,20 @@ vec3 tcolor(float T){
   c = mix(c, vec3(1.000, 0.560, 0.120), smoothstep(5.86, 6.68, l));      // 800 K (Disk Lab v2: gold)
   c = mix(c, vec3(1.000, 0.860, 0.240), smoothstep(6.68, 7.38, l));      // 1600 K (Disk Lab v2: yellow, not white)
   return c;
+}
+// (Disk Lab v2, round 6) The gas's temperature at height zh (in H) where ln tau* at the midplane below is a: from the
+// midplane's Tm to the lit surface's 2.8 Tm at the irradiation surface z_s = H sqrt(2a) and above, rising as in the
+// vertical profile of Dartois et al. (2003), T = Ts + (Tm - Ts) cos^(2 delta)(pi z / 2 z_q), with delta = 2 and z_q = z_s
+// (Williams & Best 2014 take z_q = 4 H; z_s is 3.6-4.5 H across the disk here). Before, the interior was at Tm up to the
+// surface and stepped to Ts within an e-fold of tau* (the two layers of Chiang & Goldreich 1997), so that the warm gas
+// was too thin to show: the owner, "the same gas has a structure in temperature: show it, the surface hotter". Where the
+// midplane itself is lit (a below 0.5: beyond the disk's cutoff), the whole column is at Ts. The colour of the model's
+// look and the temperature's cut face take it; the snow line on the face is its 160 K isotherm (the snow surface).
+float tVert(float Tm, float a, float zh){
+  if (a <= 0.5) return 2.8 * Tm;
+  float u = min(abs(zh) * inversesqrt(2.0 * a), 1.0), c = cos(1.5707963 * u);
+  c *= c;
+  return mix(2.8 * Tm, Tm, c * c);
 }
 
 vec2 boundsCyl(vec3 ro, vec3 rd){
@@ -1231,8 +1258,9 @@ const float WIND_KR = length(vec2(WIND_CELLS.x / TAU * (1.125 * WIND_LIFE * LIFE
 // (Tried in the eighth round, see the notes: shells in step across the disk, arcs, pulses on the streamers, puffs of
 // other sizes, contrasts and speeds; this form is the one that reads as an outflow in the usual and edge-on views.)
 const vec2 PUFF_CELLS = vec2(10.0, 4.0);
-// Keep the outward motion visible with gentler brightness changes (PUFF_A 5 to 3.5).
-const float PUFF_P = ${G(PUFF.P)}, PUFF_DUTY = 0.25, PUFF_A = 3.5, PUFF_KEEP = 0.3, PUFF_TAU = 30.0, PUFF_SHARE = 0.2;
+// Keep the outward motion visible with gentler brightness changes (PUFF_A 5 to 3.5; Disk Lab v2, round 6: to 2.8, the
+// owner's "a little calmer", a puff 3.8 times the wind around it at its base instead of 4.5).
+const float PUFF_P = ${G(PUFF.P)}, PUFF_DUTY = 0.25, PUFF_A = 2.8, PUFF_KEEP = 0.3, PUFF_TAU = 30.0, PUFF_SHARE = 0.2;
 const float PUFF_K = 3.0, PUFF_KMAX = 60.0;
 float puffFactor(vec3 q, vec3 dq, float lr, float pc){
   if (uPuff <= 0.0) return 1.0;
@@ -1280,10 +1308,6 @@ float accColumn(float z0, float z1, float za, float ds, float dzh){
   return ds / abs(dzh) * ACC_W * 1.2533141 * abs(erfA(u1 * 0.70710678) - erfA(u0 * 0.70710678));
 }
 #ifdef FULL
-// the cutaway (the quantity 'none'): along the rays that enter the part kept through the disk's cut, the gas behind the
-// cut is drawn thinner (set per ray in main; see sampleDisk); the part left whole (the 1/4 cut's left half), and what is
-// seen past the part cut away above or below the disk, keep their look
-float gThin = 1.0;
 // in the part cut away the disk is left out (gDiskOff, see cutWind): its gas, its lit surface, the accretion layers and
 // the vapour; the wind and the envelope stay
 bool gDiskOff = false;
@@ -1357,23 +1381,16 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     // midplane; warm only inside the snow line)
     float rho0 = exp(-lnR - cut + gl) * smoothstep(R_IN * 0.8, R_IN * 1.3, R) / (2.5066 * H);   // Sigma / (sqrt(2 pi) H)
     float rho = rho0 * exp(-0.5 * zh * zh) * dm.r * ed.x;   // ... e^(-z²/2H²)
-    // in the cutaway (the quantity 'none') the gas behind the cut is drawn four times thinner, its glow and its extinction
-    // alike, so that the eye sees past the cut into the volume behind it (the depth, the inner disk's warm core, the far
-    // layers) instead of the glow of the first stretch behind the face; only along the rays through the part cut away
-    // (gThin), so that what is left whole keeps its look
-    float thin = 1.0;
-#ifdef FULL
-    thin = gThin;
-#endif
     // (Disk Lab v2) the absorption is the small grains' (bit 2); the glow is shared, half the gas's (bit 1), half the
     // small grains' (bit 2: well mixed with the gas, absent inside R_IN where they sublimate, as rho0 is), in the colour of
-    // the temperature here: the midplane's below the irradiation surface (x = ln tau* > 0), the surface layer's,
-    // 2.8 times hotter, above it, as on the cut's face (sliceQuantities), changing across about one e-fold of tau*
+    // the temperature here (tVert: rising from the midplane's to the lit surface's, 2.8 times hotter, at the irradiation
+    // surface, as on the cut's face; round 6, before a step there). The page shows bits 1 and 2 as one, the gas with its
+    // dust (round 6: "treat the gas as a mixture with its dust")
     float dustOn = (uMode & 2) != 0 ? uComp.y : 0.0, gasOn = (uMode & 1) != 0 ? uComp.x : 0.0;
-    ex = thin * K_G * rho * EXT * dustOn;
-    float Tz = mix(Tm, Ts, smoothstep(0.5, -0.5, x));
+    ex = K_G * rho * EXT * dustOn;
+    float Tz = tVert(Tm, LNTAU1 - 1.25 * lnR - cut + gl, zh);
     // (beyond OUTER_R the glow is raised as the column thins, by R / OUTER_R, a picture of where the gas is)
-    if (gasOn + dustOn > 0.0) em = thin * G_GAS * K_G * rho * tcolor(Tz) * 0.5 * (gasOn + dustOn) * max(R / OUTER_R, 1.0);
+    if (gasOn + dustOn > 0.0) em = G_GAS * K_G * rho * tcolor(Tz) * 0.5 * (gasOn + dustOn) * max(R / OUTER_R, 1.0);
     // the surface accretion layer(s) (see ACC): a column ACC_SIG of the local surface density, in its streaks, across a
     // Gaussian in height ACC_W H wide. The layer is thinner than a step, so its column over the step is integrated
     // across that profile (the height changes by rd.z ds over the step) and spread over the step as a mean density.
@@ -1387,7 +1404,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       vec2 col = vec2(accColumn(z0, zh, za, ds, dzh), accColumn(z0, zh, -za, ds, dzh)) * uAcc;
       if (col.x + col.y > 1e-4) {
         vec2 st = texture(uAccMap, vec2((lnR - LNR_MIN) / LNR_SPAN, phi / TAU + 0.5)).rg;
-        float rA = thin * aa * ACC_SIG * rho0 / ACC_W * dot(col, st) / ds;   // (rho0 = Σ / sqrt(2π) H)
+        float rA = aa * ACC_SIG * rho0 / ACC_W * dot(col, st) / ds;   // (rho0 = Σ / sqrt(2π) H)
         ex += K_G * rA * EXT;
         em += G_ACC * K_G * rA * ACC_COL;
       }
@@ -1506,10 +1523,13 @@ void cutWind(vec3 ro, vec3 rd, float t0, float t1, float jitter, inout vec3 col,
     // enough to reach t1 in the steps left)
     float ds = clamp(max(0.4 * Hs, (fine ? WIND_DS : 0.25) * max(az, 4.0 * Hs)), 0.004, fine ? max(WIND_DSMAX, 0.03 * rr) : max(0.4, 0.05 * rr));
     ds = max(ds, (t1 - t) / float(32 - i));
-    if (i == 0) ds *= 0.25 + jitter;
     float t2 = min(t + ds, t1);
     ds = t2 - t;
-    p = ro + rd * t2;
+    // (Disk Lab v2, round 6: the sample at the jitter's place within every step. The jitter used to shorten the first
+    // step only, and the steps after it share out what is left of the stretch evenly, so its shift died away toward the
+    // stretch's end: next to the cut, where these rays cross the wind's bright base under the disk, the samples stood
+    // at the same places in every frame, and the base showed as fine concentric ripples that no still picture smoothed)
+    p = ro + rd * (t + jitter * ds);
     vec3 em, ex, sk; float x;
     sampleDisk(p, rd, xPrev, ds, wq, em, ex, sk, x, wl);
     vec3 a = exp(-ex * ds);
@@ -1549,8 +1569,9 @@ void sheet(vec3 p, vec3 rd, inout vec3 col, inout vec3 tr){
   for (int i = 0; i < MAXP; i++) {
     if (i >= uNP) break;
     if (uPl[i].y <= 0.0) continue;
-    float GW = gapW(uPl[i].x), xg = (R - uPl[i].x) / (1.15 * GW), xt = (R - uPlTrap[i].x) / (0.28 * GW);
-    trap *= (1.0 - uPlTrap[i].y * exp(-xg * xg)) * (1.0 + 2.2 * uPlTrap[i].z * exp(-xt * xt));
+    // (round 6: filtered out of the gas's gap a tenth wider, the ring half a scale height wide, uPlTrap.w)
+    float sg = gapShape(i, uPl[i].x + (R - uPl[i].x) / 1.1), xt = (R - uPlTrap[i].x) / uPlTrap[i].w;
+    trap *= (1.0 - uPlTrap[i].y * sg) * (1.0 + 2.2 * uPlTrap[i].z * exp(-xt * xt));
   }
   trap /= gapFactor(R);
 #ifdef FULL
@@ -1612,12 +1633,15 @@ float cloud(vec3 q, vec3 rd, float s, float zeta){
   float dd = dot(ds, ds), qd = dot(qs, ds), b2 = max(dot(qs, qs) - qd * qd / dd, 0.0);
   return s / (zeta * sqrt(dd)) * exp(-0.5 * b2 / (s * s));
 }
-// three nested clouds (widths in units of the disk's radius, 0.4 Hill radii; thickness 0.15 of the width, a flared disk),
-// with their vertical optical depths and their glow, hotter inside (heated by accretion onto the planet)
+// three nested clouds (widths in units of the disk's radius, 0.4 Hill radii; thickness CPD_HR of the width, a disk of
+// aspect ratio H/R = 0.1), with their vertical optical depths and their glow, hotter inside (heated by accretion onto the
+// planet). (Disk Lab v2, round 6: CPD_HR 0.1 for all three, the owner's "H/R about 0.1"; before 0.133, 0.15 and 0.164, a
+// lens whose isophotes had an aspect of 0.135 to 0.158. Simulations give 0.1 to 0.3, e.g. Ayliffe & Bate 2009 about 0.2)
+const float CPD_HR = 0.1;
 vec4 planetLight(vec3 ro, vec3 rd, float aspect){
   vec3 q = ro - uPlV.xyz;
   float R_CPD = rCPD(uPlVa);
-  float t1 = 0.5 * cloud(q, rd, 0.12 * R_CPD, 0.016 * R_CPD), t2 = 0.6 * cloud(q, rd, 0.3 * R_CPD, 0.045 * R_CPD), t3 = 0.5 * cloud(q, rd, 0.55 * R_CPD, 0.09 * R_CPD);
+  float t1 = 0.5 * cloud(q, rd, 0.12 * R_CPD, CPD_HR * 0.12 * R_CPD), t2 = 0.6 * cloud(q, rd, 0.3 * R_CPD, CPD_HR * 0.3 * R_CPD), t3 = 0.5 * cloud(q, rd, 0.55 * R_CPD, CPD_HR * 0.55 * R_CPD);
   float tt = t1 + t2 + t3;
   vec3 em = (t1 * 2.2 * tcolor(1000.0) + t2 * 0.7 * tcolor(400.0) + t3 * 0.22 * tcolor(190.0)) * transferWeight(tt);
   // the planet, a point (its radius, 1.5 Jupiter radii, is below a pixel unless the camera is within about 0.3 au)
@@ -1644,9 +1668,14 @@ vec3 sliceQuantities(float Rs, float z, float phi){
   vec4 w = windMap(R, z);
   // (close to the star, uMag, the gas disk reaches the magnetosphere's edge, inside the dust's: see MAG)
   float gasIn = uMag * max(smoothstep(MAG_RT * 0.95, MAG_RT * 1.08, R) - smoothstep(R_IN * 0.8, R_IN * 1.3, R), 0.0);
+  // (Disk Lab v2, round 6: the wind map carries the volume's fade toward the top and the side of the marched cylinder,
+  // a choice for the picture (see WINDMAP_FS); the face shows the solution, so the soft part of that fade, which took
+  // the wind's density down by up to 2.4 dex in the outer quarter of the cylinder, is taken back out here. The last 15 %
+  // of the fade remains, at the cylinder's edge, where the face ends.)
+  float wEdge = 5.0 * smoothstep(0.55 * ZB, ZB, abs(z)) + 5.0 * smoothstep(0.55 * RB, RB, R);
   float rho = (Sigma(R, lnR) + gasIn * exp(-lnR - cutOut(R))) / (2.5066 * H) * exp(-0.5 * zh * zh) * diskMap(lnR, phi).r * eddies(lnR, phi, zh).x
-            + exp(w.w + gapLn(exp(w.x))) * (z > 0.0 ? 1.0 : uWindLow);
-  return vec3(x > 0.0 ? Tm : 2.8 * Tm, log(max(rho, 1e-30) * ${G(Math.sqrt(2 * Math.PI) * MODEL.H0)}) / LN10, x);
+            + exp(w.w + wEdge + gapLn(exp(w.x))) * (z > 0.0 ? 1.0 : uWindLow);
+  return vec3(tVert(Tm, LNTAU1 - 1.25 * lnR - cutOut(R) + gapLn(R), zh), log(max(rho, 1e-30) * ${G(Math.sqrt(2 * Math.PI) * MODEL.H0)}) / LN10, x);
 }
 // The stretch (tIn, tOut) of the ray in the part cut away (empty when tIn >= tOut): the intersection of the two
 // half-spaces dot(p, n_i) > uSliceOff, so a single stretch, as the part is convex. (A camera within 1e-5 of its distance
@@ -1677,10 +1706,14 @@ vec3 cmap(float t, bool inferno){
   t = clamp(t, 0.0, 1.0) * 10.0; int i = min(int(t), 9);
   return inferno ? mix(INFERNO[i], INFERNO[i + 1], t - float(i)) : mix(VIRIDIS[i], VIRIDIS[i + 1], t - float(i));
 }
-// The layers of the coupling (quantity 4; see NONIDEAL and ACC), as regions in flat colours: below the wind's base (the
-// irradiation surface, tau* = 1) the turbulent, thermally ionized inner disk, the dead zone (below z_k), the laminar
-// surface above it and the accretion layer(s) in it (within 1.2 ACC_W of their centres, on the side(s) that accrete);
-// above the base the wind, translucent, fading with its density. The disk's edge ends the face as the temperature's does.
+// The regions of the coupling (quantity 4, 'layers'; see NONIDEAL and ACC), in flat colours: below the wind's base (the
+// irradiation surface, tau* = 1) the strongly turbulent, thermally ionized inner disk, the dead zone (below z_k), the
+// laminar gas above it (and beyond it, the whole column) and the accretion layer(s) in it (within 1.2 ACC_W of their
+// centres, on the side(s) that accrete), the weakly turbulent outer disk; above the base the wind, translucent. The disk's
+// edge ends the face as the temperature's does. (Disk Lab v2, round 6: each point in one region, the legend's (the owner
+// asked for categories that neither overlap nor leave gaps): the wind is one translucent colour wherever the model has
+// wind (it faded with its density, so that a thin part was neither wind nor anything else), and clear only where the
+// model has no gas, the tube along the axis that no field line of the model fills, as the hole inside the inner edge is)
 const vec3 LAY_MRI = vec3(0.88, 0.47, 0.27), LAY_DEAD = vec3(0.15, 0.19, 0.34), LAY_SURF = vec3(0.44, 0.58, 0.76), LAY_ACC = vec3(1.0, 0.71, 0.28), LAY_WIND = vec3(0.64, 0.85, 0.95);
 const vec3 LAY_WEAK = vec3(0.73, 0.56, 0.60);   // (Disk Lab v2: the weakly turbulent outer disk, outerAmp)
 // Close to the star (uMag), the magnetosphere's regions (see MAG) at p3 (alpha 0 elsewhere): the region of the
@@ -1689,18 +1722,20 @@ const vec3 LAY_WEAK = vec3(0.73, 0.56, 0.60);   // (Disk Lab v2: the weakly turb
 // and (gas) the dust-free gas disk between the magnetosphere's edge and the dust's (within 2 H of the midplane); inside
 // the dust's edge nothing else (the face is open there, as from afar). On every quantity's face, so that the curtains
 // are not taken for the disk's own flows: labelled in the overlay.
-const vec3 LAY_MAG = vec3(0.60, 0.48, 0.86), LAY_STREAM = vec3(1.0, 0.36, 0.50), LAY_GAS = vec3(0.98, 0.64, 0.52);
+const vec3 LAY_MAG = vec3(0.60, 0.48, 0.86), LAY_STREAM = vec3(1.0, 0.36, 0.50);
 vec4 magFace(float R, float z, vec3 p3, bool gas){
   float r = length(p3), cz = dot(p3, uMagAxis) / max(r, 1e-6), L = r / max(1.0 - cz * cz, 1e-5), u = (L / MAG_RT - 1.0) / MAG_DL;
   if (u < 0.0) return vec4(LAY_MAG, 0.6);
   float phm = atan(dot(p3, cross(uMagAxis, uMagE1)), dot(p3, uMagE1)), dph = cz > 0.0 ? phm : PI - abs(phm);
   if (u < 1.0 && magAz(dph) * smoothstep(0.08, 0.3, abs(cz)) > 0.3) return vec4(LAY_STREAM, 0.9);
-  if (gas && R > MAG_RT && R < R_IN * 1.05 && abs(z) < 2.0 * H0 * pow(R, 1.25)) return vec4(LAY_GAS, 1.0);
+  // (the dust-free gas disk on the regions' face: thermally ionized and turbulent, the inner disk's region, not one of its
+  // own; round 6, as the legend's categories are by the coupling, not by the dust)
+  if (gas && R > MAG_RT && R < R_IN * 1.05 && abs(z) < 2.0 * H0 * pow(R, 1.25)) return vec4(LAY_MRI, 1.0);
   return vec4(0.0);
 }
 vec4 layersFace(float R, float z, vec3 q){
   float H = H0 * pow(R, 1.25), zh = abs(z) / H, zb = zBase(R) / H, zk = zKinkH(R);
-  if (zh > zb || q.z < -4.0) return vec4(LAY_WIND, 0.5 * smoothstep(-8.0, -5.0, q.y));
+  if (zh > zb || q.z < -4.0) return vec4(LAY_WIND, 0.5 * smoothstep(-11.5, -10.5, q.y));
   vec3 c = zh < zk ? LAY_DEAD : LAY_SURF;
   if (mriAmp(R) > 0.5) c = LAY_MRI;
   else if (outerAmp(R) > 0.5) c = LAY_WEAK;
@@ -1724,7 +1759,6 @@ vec4 sliceFace(vec3 pc){
   if (m.a > 0.0) return m;
   if (uSliceQ == 1) return vec4(0.92 * pow(tcolor(q.x), vec3(1.0 / 2.2)), smoothstep(-6.0, -4.5, q.z) * holeG);
   if (uSliceQ == 2) return vec4(cmap((q.y + 10.0) / 12.5, false), smoothstep(-10.5, -9.5, q.y));
-  if (uSliceQ == 3) return vec4(cmap((q.z / LN10 + 4.0) / 9.0, true), smoothstep(-4.5, -3.5, q.z / LN10) * hole);
   if (uSliceQ == 4) return layersFace(R, z, q) * vec4(1.0, 1.0, 1.0, hole);
   return vec4(0.0);
 }
@@ -2081,14 +2115,6 @@ void main(){
       } else if (cs.y > 1e8) tEnd = cs.x;
       else tSkip = cs;
     }
-    // (the cutaway's thinner gas, along the rays that enter the part kept through the disk's cut, within 3-5 scale
-    // heights of the midplane there: those that pass the part cut away above or below the disk see what lies behind as
-    // the rest of the picture does)
-    if (uSliceQ == 0 && (tCut > 0.0 || tSkip.x < 1e8)) {
-      vec3 pIn = ro + rd * min(tCut > 0.0 ? tCut : tSkip.y, 1e4);
-      float zhIn = abs(pIn.z) / (H0 * pow(max(length(pIn.xy), 0.05), 1.25));
-      gThin = mix(1.0, 0.25, uSliceFace * (1.0 - smoothstep(3.0, 5.0, zhIn)));
-    }
   }
 #endif
 
@@ -2311,55 +2337,87 @@ void main(){
   const mriAmpJS = (R) => 1 - ss(0.75 * NONIDEAL.R_TI, 1.15 * NONIDEAL.R_TI, R);
   const zKinkHJS = (R) => Math.sqrt(2 * Math.max(NONIDEAL.Q * Math.log(NONIDEAL.R_DZ / R) - 0.5 * cutOut(R) - NONIDEAL.TI * mriAmpJS(R), 0));
   const accAmpJS = (R) => ss(0.4, 1, zKinkHJS(R));   // where there is an accretion layer (as accAmp in the GLSL)
-  // ln of a planet's gap at depth d, the planet at a (as gapLn in PLANET_GLSL)
-  const plW = (a) => 1.8 * a * Math.cbrt(PLANET.Q / 3);
-  const gapLnJS = (R, d, a = PLANET.A) => { const x = (R - a) / plW(a); return d <= 0 || Math.abs(x) > 3.5 ? 0 : Math.log(1 - d * Math.exp(-x * x)); };
-  // The pebbles' response to a gap of depth d: the fraction filtered out of it (1.08 d, at most 0.99), and the pressure
-  // maximum just outside it (P ∝ Σ R^-7/4 at the midplane, with the edge cutoff), where they collect. The maximum appears
-  // when the depth exceeds about 0.33 (3.36 au; 3.571 au at depth 0.9, 3.585 au at 0.98); the trap's strength grows from
-  // there to depth 0.9. Remembered per depth (to 1e-3).
+  // (Disk Lab v2, round 6) A planet's gap: the profile of Kanagawa et al. (2017, eqs. 10-14), from the fits to
+  // two-dimensional simulations of Kanagawa et al. (2015, 2016): with K' = q^2 h^-3 / alpha and K = K' / h^2 (h = H/R at the
+  // planet), Sigma / Sigma_0 is Sigma_min / Sigma_0 = 1 / (1 + 0.04 K) within dR1 = (Sigma_min / 4 Sigma_0 + 0.08) K'^1/4 a
+  // of the orbit, climbs linearly as 4 K'^-1/4 |R - a| / a - 0.32 to 1 at dR2 = 0.33 K'^1/4 a, and is 1 beyond. Its full
+  // width at half depth is then 0.41 K'^1/4 a, Kanagawa et al. (2016). GAP_ALPHA is the viscosity it assumes: 1e-3, the
+  // upper end of what the outer disk's weak turbulence gives (1e-4 to 1e-3) and the usual value of the literature; the dead
+  // zone where the planets mostly orbit is laminar, and a lower alpha (as in the wind-driven disks of Aoyama & Bai 2023)
+  // would make the gap wider and deeper still (1e-4: 0.8 to 5.2 au for a Jupiter at 3 au). Before round 6 the gap was a
+  // Gaussian of width (sigma) 1.8 Hill radii, half-depth width 0.2 a, three to five times narrower than this at any alpha
+  // of 1e-4 to 1e-2, and 0.98 deep close up, 0.3 afar (now the depth is the profile's, from every distance).
+  // gapK(a): { depth (1 - Sigma_min/Sigma_0), smin, k4 (K'^1/4), dR1, dR2 } for a Jupiter at a; gapShape: the share of
+  // the depth at R (1 in the floor, 0 outside the walls); gapLnJS: ln of the factor on Sigma at depth d (as gapLn in
+  // PLANET_GLSL, through the table).
+  const GAP_ALPHA = 1e-3;
+  const gapKMemo = new Map();
+  const gapK = (a) => {
+    let k = gapKMemo.get(a);
+    if (k) return k;
+    const h = MODEL.H0 * Math.pow(a, 0.25), Kp = PLANET.Q * PLANET.Q / (h * h * h * GAP_ALPHA), k4 = Math.pow(Kp, 0.25), smin = 1 / (1 + 0.04 * Kp / (h * h));
+    k = { h, Kp, k4, smin, depth: 1 - smin, dR1: (smin / 4 + 0.08) * k4 * a, dR2: 0.33 * k4 * a };
+    if (gapKMemo.size > 400) gapKMemo.clear();
+    gapKMemo.set(a, k);
+    return k;
+  };
+  const gapShape = (R, a) => {
+    const k = gapK(a), y = Math.abs(R - a);
+    return y >= k.dR2 ? 0 : y <= k.dR1 ? 1 : (1.32 - 4 * y / (a * k.k4)) / (1 - k.smin);
+  };
+  const gapLnJS = (R, d, a = PLANET.A) => (d > 0 ? Math.log(1 - d * gapShape(R, a)) : 0);
+  // The pebbles' response to a gap of depth d: the fraction filtered out of it (1.08 d, at most 0.99), in the gas's gap a
+  // tenth wider, and the pressure maximum outside it (P ∝ Σ R^-7/4 at the midplane, with the edge cutoff and the other
+  // planets' gaps, others: [{ a, d }]), where they collect, a ring half a scale height wide. With this profile the maximum
+  // lies at the outer wall's top, dR2 beyond the orbit (5.0 au for a Jupiter at 3 au); there is none where a neighbour's
+  // gap joins this one (a common gap: the pebbles are not held between them). The trap's strength grows with the depth from
+  // 0.33 to 0.9. Remembered per depth (to 1e-3), radius and neighbours.
   const trapMemo = new Map();
-  function trapOf(d, a = PLANET.A) {
-    const key = Math.round(d * 1000) + ':' + a.toFixed(3);
+  function trapOf(d, a = PLANET.A, others = []) {
+    const key = Math.round(d * 1000) + ':' + a.toFixed(3) + others.map((o) => ':' + o.a.toFixed(3) + '/' + Math.round(o.d * 1000)).join('');
     let t = trapMemo.get(key);
     if (t) return t;
-    // (Disk Lab v2: for a planet at a; the step follows the gap's width, as 1e-3 au did at 3 au)
-    const W = plW(a), dR = 1e-3 * a / PLANET.A;
-    let prev = null, rising = false, Rt = a + 0.2 * a, found = false;
-    for (let R = a; R < a + 4 * W && !found; R += dR) {
-      const x = (R - a) / W, v = -2.75 * Math.log(R) - cutOut(R) + Math.log(1 - d * Math.exp(-x * x));
+    const k = gapK(a), dR = 1e-3 * a / PLANET.A;
+    let prev = null, rising = false, Rt = a + k.dR2, found = false;
+    for (let R = a + 0.5 * k.dR1; R < a + 1.6 * k.dR2 && !found; R += dR) {
+      const v = -2.75 * Math.log(R) - cutOut(R) + gapLnJS(R, d, a) + others.reduce((sum, o) => sum + gapLnJS(R, o.d, o.a), 0);
       if (prev !== null) { if (v > prev) rising = true; else if (rising) { Rt = R - dR; found = true; } }
       prev = v;
     }
-    t = { R: Rt, filt: Math.min(0.99, 1.08 * d), s: found ? ss(0.33, 0.9, d) : 0 };
+    t = { R: Rt, filt: Math.min(0.99, 1.08 * d), s: found ? ss(0.33, 0.9, d) : 0, w: 0.5 * Hof(Rt) };
+    if (trapMemo.size > 400) trapMemo.clear();
     trapMemo.set(key, t);
     return t;
   }
-  // the pebbles relative to the smooth disk (as in sheet)
-  const pebbleJS = (R, d, a = PLANET.A) => {
-    if (d <= 0 || Math.abs(R - a) > 1.6 * a / PLANET.A) return 1;
-    const W = plW(a), t = trapOf(d, a), xg = (R - a) / (1.15 * W), xt = (R - t.R) / (0.28 * W);
-    return (1 - t.filt * Math.exp(-xg * xg)) * (1 + 2.2 * t.s * Math.exp(-xt * xt));
+  // the pebbles relative to the smooth disk (as in sheet), with the planet's trap t
+  const pebbleJS = (R, d, a = PLANET.A, t = trapOf(d, a)) => {
+    if (d <= 0 || Math.abs(R - a) > 1.8 * gapK(a).dR2) return 1;
+    const xt = (R - t.R) / t.w;
+    return (1 - t.filt * gapShape(a + (R - a) / 1.1, a)) * (1 + 2.2 * t.s * Math.exp(-xt * xt));
   };
   // Starlight absorbed per unit area with the gap, relative to the smooth disk. Rays leave the star at angles th = 0.09
-  // to 0.26 above the midplane (every 0.002; 0.001 gives the same ratio to 1e-4), start at 1.5 au (inside the gap's reach) with the optical depth of the
-  // local formula, and cross the gas outward in steps of 0.01 au, depositing e^-tau dtau on the way. The gas is that of
-  // the volume (Σ with the gap, Gaussian in height); its opacity k makes dtau/dR agree with the local formula at the
-  // surface at 2 au. The ratio of the deposits with and without the gap, on 128 radii from GL_R0 (it eases to 1 toward
-  // the end of the table, where the disk lies in its own shadow). A finer trace (from 0.3 au, 2201 rays, steps of
-  // 0.0005 au) agrees within 3%. Tabulated at the depths GL_LEVELS, each when first needed (about 2 ms), and
-  // interpolated in g = -ln(1 - depth) between neighbours (within 0.008 of a direct trace). gapLight(d, out) fills out.
-  // Depth 0.3: 0.75 of the light at the gap's floor, up to 1.09 beyond it; 0.9: 0.13 and 1.35; 0.98: 0.026 and 1.40.
-  const GL_LEVELS = [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.85, 0.92, 0.96, 0.98];
-  const gapLight = (() => {
-    const R0 = 1.5, dR = 0.01, n = Math.round((9.6 - R0) / dR) + 1;
+  // to 0.26 above the midplane (every 0.002), start at 0.2 a (inside the gap's reach) with the optical depth of the local
+  // formula, and cross the gas outward in steps of 0.01 a / 3, depositing e^-tau dtau on the way. The gas is that of the
+  // volume (Σ with the gap, Gaussian in height); its opacity k makes dtau/dR agree with the local formula at the surface
+  // at 2 au. The ratio of the deposits with and without the gap, on 128 radii (GL_R0 + j GL_DR) a / A_REF, from 0.3 a to
+  // 3.2 a (it eases to 1 toward the end of the table). Tabulated at the depths GL_LEVELS, each when first needed (under
+  // 2 ms), and interpolated in g = -ln(1 - depth) between neighbours. (Round 6: traced for each planet's radius, as the
+  // gap's width relative to a changes with h, as a^-3/16; before, the table made for 3 au was stretched with a.)
+  // gapLight(a)(d, out) fills out.
+  const GL_LEVELS = [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.85, 0.92, 0.96, 0.98, 0.995];
+  const gapLightMemo = new Map();
+  const gapLight = (aIn) => {
+    const a = Math.round(aIn * 100) / 100;
+    let fill = gapLightMemo.get(a);
+    if (fill) return fill;
+    const sc = a / PLANET.A, R0 = 0.6 * sc, dR = 0.01 * sc, n = Math.round((9.6 - 0.6) / 0.01) + 1;
     const Rg = new Float64Array(n), lnS = new Float64Array(n), ih2 = new Float64Array(n);
     for (let i = 0; i < n; i++) { const R = R0 + i * dR; Rg[i] = R; lnS[i] = -Math.log(R) - cutOut(R) - Math.log(Hof(R)); ih2[i] = 0.5 / (Hof(R) * Hof(R)); }
     const R2 = 2, H2 = Hof(R2), a2 = MODEL.LNTAU1 - 1.25 * Math.log(R2) - cutOut(R2), th2 = H2 * Math.sqrt(2 * a2) / R2;
     const k = (-1.25 / R2 - MODEL.P_OUT * cutOut(R2) / R2 + 0.25 * th2 * th2 * R2 / (H2 * H2)) / Math.exp(-Math.log(R2) - cutOut(R2) - Math.log(H2) - a2);
     const a0 = MODEL.LNTAU1 - 1.25 * Math.log(R0) - cutOut(R0), H0s = Hof(R0);
     const deposit = (d) => {
-      const lg = Rg.map((R) => gapLnJS(R, d)), out = new Float64Array(n);
+      const lg = Rg.map((R) => gapLnJS(R, d, a)), out = new Float64Array(n);
       for (let th = 0.09; th < 0.2605; th += 0.002) {
         let tau = Math.exp(a0 - 0.5 * th * R0 * th * R0 / (H0s * H0s)), rPrev = 0;
         for (let i = 0; i < n; i++) {
@@ -2377,22 +2435,24 @@ void main(){
       base = base || deposit(0);
       const dep = deposit(GL_LEVELS[l]);
       return (tables[l] = Float32Array.from({ length: 128 }, (_, j) => {
-        const R = GL_R0 + j * GL_DR, f = (R - R0) / dR, i = Math.min(n - 2, Math.floor(f)), u = f - i;
+        const x = GL_R0 + j * GL_DR, f = (x * sc - R0) / dR, i = Math.min(n - 2, Math.max(0, Math.floor(f))), u = Math.min(1, Math.max(0, f - i));
         const q = (dep[i] + (dep[i + 1] - dep[i]) * u) / (base[i] + (base[i + 1] - base[i]) * u);
-        return 1 + (q - 1) * (1 - ss(8.6, 9.4, R));
+        return 1 + (q - 1) * (1 - ss(8.6, 9.4, x));
       }));
     };
-    const fill = (d, out) => {
+    fill = (d, out) => {
       const g = gOf(Math.min(Math.max(d, 0), GL_LEVELS[GL_LEVELS.length - 1]));
       let l = 0;
       while (l < GL_LEVELS.length - 2 && gOf(GL_LEVELS[l + 1]) <= g) l++;
-      const g0 = gOf(GL_LEVELS[l]), u = Math.min(1, (g - g0) / (gOf(GL_LEVELS[l + 1]) - g0)), a = table(l), b = table(l + 1);
-      for (let j = 0; j < 128; j++) out[j] = a[j] + (b[j] - a[j]) * u;
+      const g0 = gOf(GL_LEVELS[l]), u = Math.min(1, (g - g0) / (gOf(GL_LEVELS[l + 1]) - g0)), ta = table(l), tb = table(l + 1);
+      for (let j = 0; j < 128; j++) out[j] = ta[j] + (tb[j] - ta[j]) * u;
     };
     // makes the next table not yet made (false when all are): for idle time
     fill.prefetch = () => { const l = GL_LEVELS.findIndex((_, i) => !tables[i]); if (l < 0) return false; table(l); return true; };
+    if (gapLightMemo.size > 24) gapLightMemo.clear();
+    gapLightMemo.set(a, fill);
     return fill;
-  })();
+  };
   const NT = BP.XI.length;
   if (NT !== 64) throw new Error('the wind table must have 64 rows');
   const tabF = (arr, f) => { f = Math.min(Math.max(f, 0), NT - 1.001); const i = Math.floor(f); return arr[i] + (arr[i + 1] - arr[i]) * (f - i); };
@@ -2548,7 +2608,7 @@ void main(){
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
     const UNAMES = ['uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
-      'uNP', 'uPl', 'uPlTrap', 'uPlRim', 'uPlV', 'uPlVa', 'uGapT', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK'];
+      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uGapT', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK'];
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS);
     gl.useProgram(progShow); gl.uniform1i(gl.getUniformLocation(progShow, 'uAcc'), 6); gl.uniform1i(gl.getUniformLocation(progShow, 'uFace'), 11);
@@ -3162,7 +3222,7 @@ void main(){
       // data-slice-q picks the quantity on the cut faces
       slice: 'slice' in box.dataset,
       cut: box.dataset.cut === 'quarter' ? 'quarter' : 'half',
-      sliceQ: box.dataset.sliceQ || 'T',
+      sliceQ: { T: 'T', rho: 'rho', layers: 'layers', none: 'rho', tau: 'T' }[box.dataset.sliceQ] || 'T',
       // the annotations laid over the picture (the snow line and its label, the scale bar, the planet's label, the
       // lines, labels and colour bar on the slice's face): data-annotations="off" starts without them
       ann: box.dataset.annotations !== 'off',
@@ -3221,23 +3281,22 @@ void main(){
     let wavesAmp = opt.waves ? 1 : 0;
     // ln of the gaps at R, and the pebbles there relative to the smooth disk, with every planet's gap as it is now
     const gapLnAll = (R) => planets.reduce((s, p) => s + gapLnJS(R, p.d, p.a), 0);
-    const pebbleAll = (R) => planets.reduce((f, p) => f * pebbleJS(R, p.d, p.a), 1);
+    const pebbleAll = (R) => planets.reduce((f, p) => f * pebbleJS(R, p.d, p.a, p.trap), 1);
     const planetsKey = () => planets.map((p) => p.a + '/' + Math.round(p.d * 50)).join(',');
     // how near the camera is to a planet's orbit: 0 beyond D1, 1 within D0 (in units of a / 3 au: the distances were
     // chosen for the planet at 3 au)
     const nearOf = (c, a = PLANET.A) => { const k = a / PLANET.A; return 1 - ss(DEPTH.D0 * k, DEPTH.D1 * k, Math.hypot(Math.hypot(c[0], c[1]) - a, c[2])); };
-    const depthFor = (c, a) => DEPTH.FAR + (DEPTH.NEAR - DEPTH.FAR) * nearOf(c, a);
     const wakeFor = (c, a) => DEPTH.WAKE_FAR + (1 - DEPTH.WAKE_FAR) * nearOf(c, a);
     // the inner rim of a gap: where z_s/R, the surface's angle seen from the star, peaks inside the gap; its shadow
     // ends where the outer wall climbs above that angle again (null when the gap is too shallow to cast one)
     function gapRim(d, a = PLANET.A) {
-      const W = plW(a), sA = (R) => Hof(R) * Math.sqrt(2 * Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnJS(R, d, a), 1)) / R;
+      const W = 1.1 * gapK(a).dR2, sA = (R) => Hof(R) * Math.sqrt(2 * Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnJS(R, d, a), 1)) / R;
       const dR = 0.0005 * a / PLANET.A;
-      let R = a - 3.5 * W, prev = sA(R);
+      let R = Math.max(a - W, 0.5 * MODEL.R_IN), prev = sA(R);
       for (; R < a; R += dR) { const v = sA(R + dR); if (v < prev) break; prev = v; }
       if (R >= a) return null;
       const out = { R, th: prev, h: Hof(R) / R };
-      for (R += dR; R < a + 3.5 * W && sA(R) < out.th; R += dR);
+      for (R += dR; R < a + 1.5 * W && sA(R) < out.th; R += dR);
       out.end = R;
       return out;
     }
@@ -3349,7 +3408,7 @@ void main(){
     const envLines = [];
     for (let i = 0; i < ENV.NS; i++) {
       const [u1, u2] = sobol2(i + 37);
-      const th0 = ENV.TH_CAV + 0.08 + (1.38 - ENV.TH_CAV - 0.08) * u1, c0 = Math.cos(th0), s0 = Math.sin(th0), RC = MODEL.R_OUT;
+      const th0 = ENV.TH_CAV + 0.08 + (1.38 - ENV.TH_CAV - 0.08) * u1, c0 = Math.cos(th0), s0 = Math.sin(th0), RC = ENV.RC;
       let th = Math.acos(c0 * (1 - RC * s0 * s0 / 225)), t = 0, ph = 0;
       const dth = (Math.PI / 2 - th) / 800, raw = [];
       for (let k = 0; k <= 800; k++) {
@@ -3371,23 +3430,28 @@ void main(){
       envLines.push({ phi0: 2 * Math.PI * u2, side: i % 2 ? -1 : 1, T, pts, line });
     }
     // each planet's depth for this view (to 1e-3), the starlight on its gap, its rim and pebble trap; its wake's strength
-    const plData = new Float32Array(4 * PLANETS.MAX), plTrapD = new Float32Array(4 * PLANETS.MAX), plRimD = new Float32Array(4 * PLANETS.MAX);
+    const plData = new Float32Array(4 * PLANETS.MAX), plTrapD = new Float32Array(4 * PLANETS.MAX), plRimD = new Float32Array(4 * PLANETS.MAX), plGapD = new Float32Array(4 * PLANETS.MAX);
     // (the planets that act now, a gap or a wake, are packed into the first plNP places, so that the shaders' loops
     // stop after them: with one planet they cost about what the single planet did)
     let plNP = 0, plRows = '', gapR = [1e9, 0];
     const plLightAll = new Float32Array(128 * PLANETS.MAX);
     function planetUniforms() {
       planets.forEach((p) => {
-        const d = Math.round(p.amp * (lookNow === 'model' ? depthFor(cam, p.a) : DEPTH.NEAR) * 1000) / 1000;
-        if (d !== p.dSet) { p.dSet = p.d = d; gapLight(d, p.light); p.rim = d > 0 ? gapRim(d, p.a) : null; p.trap = trapOf(d, p.a); }
+        // (round 6: the gap's depth is its profile's, 1 - Sigma_min / Sigma_0, from every distance and in every look)
+        const d = Math.round(p.amp * gapK(p.a).depth * 10000) / 10000;
+        if (d !== p.dSet || p.a !== p.aSet) { p.dSet = p.d = d; p.aSet = p.a; gapLight(p.a)(d, p.light); p.rim = d > 0 ? gapRim(d, p.a) : null; }
         p.wake = p.amp * (lookNow === 'model' ? wakeFor(cam, p.a) : 1);
       });
+      // (the pebbles' traps, each with the other planets' gaps: neighbours' gaps may join and leave no maximum between)
+      planets.forEach((p) => { p.trap = trapOf(p.d, p.a, planets.filter((o) => o !== p && o.d > 0).map((o) => ({ a: o.a, d: o.d }))); });
       const act = planets.filter((p) => p.d > 0 || p.wake > 0);
       plNP = act.length;
       for (let i = 0; i < PLANETS.MAX; i++) {
         const p = act[i];
         plData.set(p ? [p.a, p.d, planetPhiOf(p, time) % (2 * Math.PI), p.wake] : [PLANET.A, 0, 0, 0], 4 * i);
-        plTrapD.set(p ? [p.trap.R, p.trap.filt, p.trap.s, 0] : [0, 0, 0, 0], 4 * i);
+        plTrapD.set(p ? [p.trap.R, p.trap.filt, p.trap.s, p.trap.w] : [0, 0, 0, 1], 4 * i);
+        const gk = p ? gapK(p.a) : null;
+        plGapD.set(gk ? [gk.dR1, gk.dR2, gk.k4 * p.a, gk.smin] : [0, 0, 1, 1], 4 * i);
         plRimD.set(p && p.rim ? [p.rim.R, p.rim.th, p.rim.end, p.rim.h] : [1e9, 0, 0, 1], 4 * i);
       }
       // the gap-light rows, in the same places, and the gaps' table (again when a depth or the packing changes)
@@ -3396,16 +3460,18 @@ void main(){
         plRows = key;
         act.forEach((p, i) => plLightAll.set(p.light, 128 * i));
         const on = act.filter((p) => p.d > 0);
-        gapR = on.length ? [Math.min(...on.map((p) => p.a - 3.5 * plW(p.a))), Math.max(...on.map((p) => p.a + 3.5 * plW(p.a)))] : [1e9, 0];
+        gapR = on.length ? [Math.min(...on.map((p) => p.a - 1.02 * gapK(p.a).dR2)), Math.max(...on.map((p) => p.a + 1.02 * gapK(p.a).dR2))] : [1e9, 0];
         const dln = Math.log(2000) / (GT_N - 1), ln0 = Math.log(0.02);
         for (let j = 0; j < GT_N; j++) {
           const R = Math.exp(ln0 + j * dln);
           let lf = 0, sl = 0;
           for (const p of act) {
-            const W = plW(p.a), x = (R - p.a) / W;
-            if (p.d <= 0 || Math.abs(x) > 3.5) continue;
-            const e = Math.exp(-x * x);
-            lf += Math.log(1 - p.d * e); sl += R * 2 * p.d * x * e / (W * (1 - p.d * e));
+            // (the factor 1 - d s(R) and its share of d ln Sigma / d ln R, -R d s'(R) / (1 - d s); s' is -/+ 4 / (k4 a (1 - smin))
+            // on the walls outside and inside the orbit, 0 elsewhere)
+            const k = gapK(p.a), y = Math.abs(R - p.a);
+            if (p.d <= 0 || y >= k.dR2) continue;
+            const sh = gapShape(R, p.a), ds = y <= k.dR1 ? 0 : -Math.sign(R - p.a) * 4 / (k.k4 * p.a * (1 - k.smin));
+            lf += Math.log(1 - p.d * sh); sl += -R * p.d * ds / (1 - p.d * sh);
           }
           gapTD[2 * j] = lf; gapTD[2 * j + 1] = sl;
         }
@@ -3518,7 +3584,12 @@ void main(){
     // same expressions as the volume; the quantities none (the gas itself), T, rho, tau and layers (of the coupling,
     // see layersFace) ---
     const SZ = 1;                        // vertical scale of the face (uSliceZ); 1: true proportions
-    const SLICE_Q = { none: 0, T: 1, rho: 2, tau: 3, layers: 4 };
+    // (Disk Lab v2, round 6: the quantities 'none' (the cut as it is, the gas behind it thinned) and 'tau' (the optical
+    // depth toward the star) are gone, the owner's choice; a link or a script that asks for them gets the nearest that
+    // is left, SQ_OLD: the density for 'none', whose contours it showed, the temperature for 'tau', whose line tau* = 1
+    // it keeps)
+    const SLICE_Q = { T: 1, rho: 2, layers: 4 }, SQ_OLD = { none: 'rho', tau: 'T' };
+    const sqOf = (v) => (own(SLICE_Q, v) ? v : own(SQ_OLD, v) ? SQ_OLD[v] : null);
     const sliceG = overlay.querySelector('.disk-slice');
     // the CO look's colour bar and channel velocity (top left; the cut, whose bar sits there, is closed in the observed
     // looks)
@@ -3587,27 +3658,25 @@ void main(){
     }
     const logspace = (a, b, n) => Array.from({ length: n }, (_, i) => a * Math.pow(b / a, i / (n - 1)));
     function buildSlice(q) {
-      const key = q + ':' + planetsKey() + ':' + rSn.toFixed(3) + ':' + (opt.asym ? 1 : 0) + ':' + (q === 'none' ? ja() : '');
+      const key = q + ':' + planetsKey() + ':' + rSn.toFixed(3) + ':' + (opt.asym ? 1 : 0);
       if (sliceGeom.key === key) return sliceGeom.g;
       const g = { lines: [], labels: [] };
       const curve = (f, R0, R1) => logspace(R0, R1, 160).map((R) => [R, f(R)]).filter((pt) => !isNaN(pt[1]));
-      if (q === 'T') {
-        // isotherms: vertical in each layer (T_mid in the interior, 2.8 T_mid above the irradiation surface)
-        for (const T of [1000, 300, 100]) {
-          const Ri = rSn * Math.pow(MODEL.TICE / T, 2), Rs = rSn * Math.pow(2.8 * MODEL.TICE / T, 2);
-          if (Ri > MODEL.R_IN && Ri < 10) { g.lines.push([[Ri, 0], [Ri, zOfTau(Ri, 0)]]); g.labels.push({ R: Ri, z: 0.5 * zOfTau(Ri, 0), t: T + ' K', side: 1 }); }
-          if (Rs > MODEL.R_IN && Rs < 10) { g.lines.push([[Rs, zOfTau(Rs, 0)], [Rs, zOfTau(Rs, -4.6)]]); g.labels.push({ R: Rs, z: zOfTau(Rs, -4.6), t: T + ' K', side: 1 }); }
-        }
-      } else if (q === 'rho') {
-        // the disk (above 10^-3 of the midplane at 1 au) and, along the field lines, the wind (10^-5 to 10^-7); with the
-        // planet, the disk's contours are drawn each frame instead, across the arms of its wake (wakeContours)
-        for (const lr of [1, -1, -3]) {
+      // (Disk Lab v2, round 6: no isotherms on the temperature's face, whose colour is its value; there the snow line is
+      // the 160 K isotherm. No labels on the lines: the page's key says what each line is, the owner's "the labels on the
+      // thin lines and the narrow layers say which one they mean poorly")
+      if (q === 'rho') {
+        // the density's contours, at the colour bar's ticks (10^0, 10^-3, 10^-6, 10^-9 of the midplane at 1 au), so that the
+        // bar is their key: the disk's (10^0, 10^-3) and, along the field lines, the wind's (10^-6, 10^-9, where the
+        // marched cylinder reaches them); with the planet, the disk's contours are drawn each frame instead, across the
+        // arms of its wake (wakeContours)
+        for (const lr of [0, -3]) {
           const c = curve((R) => zOfRho(R, lr), MODEL.R_IN * 1.05, RB_JS - 1);
-          if (c.length > 2) { g.lines.push({ pts: c, quads: ALL, lr }); g.labels.push({ pts: c, t: '10' + sup(lr) }); }
+          if (c.length > 2) g.lines.push({ pts: c, quads: ALL, lr });
         }
         // (the lower side has its own contours, at 0.1 of the upper with the wind's asymmetry, and its lines' own bases)
         const lowW = opt.asym ? WIND_LOW_JS : 1, sideS = opt.asym ? ASYM_F_JS : 0;
-        for (const [lr, low, lower] of [[-5, 1, 0], [-6, 1, 0], [-7, 1, 0], [-5, lowW, 1], [-6, lowW, 1], [-7, lowW, 1]]) {
+        for (const [lr, low, lower] of [[-6, 1, 0], [-9, 1, 0], [-6, lowW, 1], [-9, lowW, 1]]) {
           const c = [];
           for (const Rf of logspace(0.07, 30, 180)) {
             const zb = zBase(Rf), r0 = r0Of(Rf, lower ? -sideS : sideS);
@@ -3619,27 +3688,14 @@ void main(){
             const chi = chiOfS(0.5 * (lo + hi)), z = zb + r0 * chi;
             if (z < ZB_JS) c.push([r0 * tabF(BP.XI, tabS(chi)), z]);
           }
-          if (c.length > 2) { g.lines.push({ pts: c, quads: lower ? LOWER : UPPER }); if (!lower) g.labels.push({ pts: c, t: '10' + sup(lr) }); }
-        }
-      } else if (q === 'none') {
-        // the cutaway: a thin outline of the disk where the cut passes through it (10^-3 of the midplane at 1 au, as the
-        // density's face shows the disk) and two contours inside it (10^1, 10^-1), so that the open cut reads as a
-        // cross-section; with the planet, across the arms of its wake (as the density's)
-        for (const lr of [1, -1, -3]) {
-          const c = curve((R) => zOfRho(R, lr), MODEL.R_IN * 1.05, RB_JS - 1);
-          if (c.length < 3) continue;
-          (lr === -3 ? (g.outline = []) : g.lines).push({ pts: c, quads: ALL, lr });
-          g.labels.push({ pts: c, t: lr === -3 ? (ja() ? '円盤の縁(密度 10' + sup(lr) + ')' : 'edge of the disk (density 10' + sup(lr) + ')') : '10' + sup(lr) });
-        }
-      } else if (q === 'tau') {
-        for (const k of [-3, -2, -1, 1, 2, 3, 4]) {
-          const c = curve((R) => zOfTau(R, k * LN10), MODEL.R_IN * 1.05, RB_JS - 1);
-          if (c.length > 2) { g.lines.push(c); g.labels.push({ pts: c, t: 'τ* = 10' + sup(k) }); }
+          if (c.length > 2) g.lines.push({ pts: c, quads: lower ? LOWER : UPPER });
         }
       }
       sliceGeom.key = key; sliceGeom.g = g;
       g.tau1 = logspace(MODEL.R_IN, RB_JS - 1, 300).map((R) => [R, zOfTau(R, 0)]).filter((pt) => !isNaN(pt[1]));
-      g.ice = [[rSn, 0], ...logspace(rSn, rIceS(), 80).map((R) => [R, zOfTau(R, 0)]), [rIceS(), zOfTau(rIceS(), -4.6)]];
+      // (the snow line on the faces: the 160 K isotherm of tVert, the snow surface, from the midplane at the snow line up
+      // to the irradiation surface where 2.8 T_mid = 160 K, and up along that radius to the top of the painted face)
+      g.ice = [[rSn, 0], ...logspace(rSn * 1.001, rIceS(), 120).map((R) => [R, zIce(R)]).filter((pt) => !isNaN(pt[1])), [rIceS(), zOfTau(rIceS(), -4.6)]];
       return g;
     }
     const sup = (k) => String(k).replace('-', '⁻').replace(/\d/g, (d) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]);
@@ -3647,6 +3703,13 @@ void main(){
     // the interior and along the irradiation surface out to where 2.8 T_mid = 160 K; the pebble layer; the
     // field lines in the plane (the R-z shape of the solution) with points for the wind velocity
     const rIceS = () => rSn * 2.8 * 2.8;
+    // the height of the 160 K isotherm of tVert at R (rSn < R < rIceS): cos^4(pi u / 2) = (Ts - TICE) / (Ts - Tm), z = u z_s
+    const zIce = (R) => {
+      const Tm = MODEL.TICE * Math.sqrt(rSn / R), Ts = 2.8 * Tm, zs = zOfTau(R, 0);
+      if (!(Ts > MODEL.TICE) || isNaN(zs)) return NaN;
+      const c = Math.pow(Math.min(1, Math.max(0, (Ts - MODEL.TICE) / (Ts - Tm))), 0.25);
+      return Math.acos(c) / (Math.PI / 2) * zs;
+    };
     // (per side, for the asymmetry's share: made again when it changes)
     let planeLines = [], planeS = null;
     function shapePlaneLines(sNow) {
@@ -3668,11 +3731,13 @@ void main(){
     const mkS = (tag, attrs) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in attrs) e.setAttribute(k, attrs[k]); sliceG.appendChild(e); return e; };
     const sP = {
       contour: mkS('path', { fill: 'none', stroke: '#ffffff', 'stroke-opacity': 0.55, 'stroke-width': 0.9 }),
-      outline: mkS('path', { fill: 'none', stroke: '#ffffff', 'stroke-opacity': 0.8, 'stroke-width': 1.2 }),
       flines: mkS('path', { fill: 'none', stroke: '#cfe3ff', 'stroke-opacity': 0.5, 'stroke-width': 0.8 }),
       arrows: mkS('path', { fill: 'none', stroke: '#e8f4ff', 'stroke-opacity': 0.85, 'stroke-width': 1, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
       tau1: mkS('path', { fill: 'none', stroke: '#fff3df', 'stroke-opacity': 0.95, 'stroke-width': 1.5 }),
-      ice: mkS('path', { fill: 'none', stroke: '#9fe0ff', 'stroke-width': 1.6, 'stroke-dasharray': '4 4' }),
+      // (round 6: the snow line thicker and more opaque, on a dark halo, so that it reads over the white of 160 K and over
+      // the blue of the cold disk alike: the owner could not see it)
+      iceHalo: mkS('path', { fill: 'none', stroke: '#0a0d18', 'stroke-opacity': 0.5, 'stroke-width': 5, 'stroke-linejoin': 'round' }),
+      ice: mkS('path', { fill: 'none', stroke: '#6fd0ff', 'stroke-width': 2.6, 'stroke-dasharray': '7 4', 'stroke-linejoin': 'round' }),
       rock: mkS('path', { fill: 'none', stroke: '#b07a52', 'stroke-width': 2.2 }),
       icy: mkS('path', { fill: 'none', stroke: '#e3f1ff', 'stroke-width': 2.2 }),
       pile: mkS('path', { fill: 'none', stroke: '#f2f8ff', 'stroke-width': 4 }),
@@ -3707,18 +3772,22 @@ void main(){
     const T0 = 30, T1 = 2000, uT = (T) => Math.log(T / T0) / Math.log(T1 / T0);
     const CBAR = {
       T: { col: (u) => tcolorJS(T0 * Math.pow(T1 / T0, u)), ticks: [50, 160, 300, 1000].map((T) => [uT(T), String(T)]), title: ['温度 (K)', 'temperature (K)'], units: 'K', min: T0, max: T1,
-        description: ['色は温度を対数の尺度で示します。白い線は τ* = 1、水色の破線は氷の境界です。', 'Colour shows temperature on a logarithmic scale. The white line is tau* = 1; the dashed blue line is the ice boundary.'] },
+        description: ['色は温度を対数の尺度で示します。白い線は星の光が届く深さ(τ* = 1)、水色の破線はスノーライン(160 K)です。', 'Colour shows temperature on a logarithmic scale. The white line is where starlight reaches (tau* = 1); the dashed blue line is the snow line (160 K).'] },
       rho: { col: (u) => cmapJS(u, 'viridis'), ticks: [-9, -6, -3, 0].map((l) => [(l + 10) / 12.5, '10' + sup(l)]), title: ['ガスの密度(1 au の赤道面に対する比)', 'gas density (relative to the midplane at 1 au)'], units: '', min: 1e-10, max: Math.pow(10, 2.5),
-        description: ['密度は 1 au の赤道面に対する比で、色は対数の尺度です。', 'Density is relative to the midplane at 1 au; the colour scale is logarithmic.'] },
-      tau: { col: (u) => cmapJS(u, 'inferno'), ticks: [-3, 0, 3].map((l) => [(l + 4) / 9, '10' + sup(l)]), title: ['星の方向の光学的厚さ τ*', 'optical depth toward the star τ*'], units: '', min: 1e-4, max: 1e5,
-        description: ['星へ向かう光学的厚さを対数の尺度で示します。白い線は τ* = 1 です。', 'Colour shows optical depth toward the star on a logarithmic scale. The white line is tau* = 1.'] },
+        description: ['密度は 1 au の赤道面に対する比で、色は対数の尺度です。細い線は目盛りの値の等密度線です。', 'Density is relative to the midplane at 1 au; the colour scale is logarithmic. The thin lines are contours at the ticks\u2019 values.'] },
       // the layers of the coupling: swatches (the colours of layersFace)
-      layers: { swatches: [['#e0784a', '乱流', 'turbulent'], ['#273157', 'デッドゾーン', 'dead zone'], ['#7094c2', '層流の表層', 'laminar surface'], ['#ffb547', '降着層', 'accretion'], ['#ba8f99', '弱い乱流', 'weakly turbulent'], ['#a3d9f2', '風', 'wind']],
-        title: ['磁場とガスの結合(非理想 MHD)', 'coupling of field and gas (non-ideal MHD)'], units: '', min: null, max: null,
-        description: ['色は磁場とガスの結合の領域を示します。', 'Colours identify regions of coupling between the field and the gas.'] }
+      // (round 6: one region for each point of the face, and names that do not overlap: the strong turbulence of the hot
+      // inner disk and the weak one of the outer disk; the laminar gas and the accretion layer, the part of it that flows
+      // in. The dust-free gas close to the star is in the strong turbulence's region, as its coupling is)
+      layers: { swatches: [['#e0784a', '強い乱流', 'strong turbulence'], ['#273157', 'デッドゾーン', 'dead zone'], ['#7094c2', '層流', 'laminar'], ['#ffb547', '降着層', 'accretion layer'], ['#ba8f99', '弱い乱流', 'weak turbulence'], ['#a3d9f2', '風', 'wind']],
+        title: ['領域(磁場とガスの結びつき)', 'regions (how the field couples to the gas)'], units: '', min: null, max: null,
+        description: ['色は、磁場とガスの結びつきで分けた領域を示します。', 'Colours mark the regions, divided by how the field couples to the gas.'] }
     };
-    // The painted face and its text counterpart use the same swatches, including the close stellar regions.
-    const layerSwatches = (c) => magFrame.vis > 0.5 ? [...c.swatches, ['#9a7adb', '磁気圏', 'magnetosphere'], ['#ff5c80', '降着カーテン', 'accretion curtain'], ['#faa385', 'ダストのないガス', 'dust-free gas']] : c.swatches;
+    // The painted face and its text counterpart use the same swatches, including the close stellar regions (round 6: on
+    // every face, under the bar too, since their names on the face are gone; the gas falling onto the star is not the
+    // accretion layer's, hence not called accretion)
+    const MAG_SW = [['#9a7adb', '磁気圏', 'magnetosphere'], ['#ff5c80', '星へ落ちるガス', 'infall onto the star']];
+    const layerSwatches = (c) => (c.swatches || []).concat(magFrame.vis > 0.5 ? MAG_SW : []);
     const cbarId = 'disk-cbar-' + Math.random().toString(36).slice(2, 9);
     const cbarDefs = mkS('defs', {});
     cbarDefs.innerHTML = '<linearGradient id="' + cbarId + '" x1="0" x2="1" y1="0" y2="0"></linearGradient>';
@@ -3765,7 +3834,19 @@ void main(){
       for (const [u, t] of c.ticks) { const x = 18 + CBW * u; d += 'M' + x.toFixed(1) + ' 32L' + x.toFixed(1) + ' 36'; sLabel(li++, x, 47, t, 'middle'); }
       cbarTicks.setAttribute('d', d);
       sLabel(li++, 18, 18, title);
-      backTo(cbarBack, Math.max(18 + CBW + 14, 18 + textW(title)), 53);
+      // (close to the star, the magnetosphere's two regions under the bar)
+      let right = Math.max(18 + CBW + 14, 18 + textW(title)), bottom = 53;
+      if (magFrame.vis > 0.5) {
+        let x = 18;
+        MAG_SW.forEach(([col, ja_, en], i) => {
+          const t = ja() ? ja_ : en, w = 14 + textW(t);
+          if (!swatchRects[i]) swatchRects[i] = mkS('rect', { width: 10, height: 10, stroke: 'rgba(190,215,240,0.5)', 'stroke-width': 0.6 });
+          const e = swatchRects[i]; e.setAttribute('x', x); e.setAttribute('y', 57); e.setAttribute('fill', col); e.setAttribute('visibility', 'visible');
+          sLabel(li++, x + 14, 66, t); right = Math.max(right, x + w); x += w + 12;
+        });
+        bottom = 72;
+      }
+      backTo(cbarBack, right, bottom);
       return li;
     }
     const coE = {};
@@ -3869,7 +3950,7 @@ void main(){
     // opacity of the face where the segment from the camera to P leaves the part cut away (P kept): hides the field
     // lines and particles behind it (the density face covers the wind as well)
     function faceAlpha(P) {
-      if (sliceU < 0.82 || opt.sliceQ === 'none') return 0;
+      if (sliceU < 0.82) return 0;
       const off = sliceOff();
       let lo = -Infinity, t = Infinity;
       for (const n of cutN) {
@@ -3882,9 +3963,11 @@ void main(){
       if (!(lo < t && t > 0 && t < 1)) return 0;
       const C = [cam[0] + (P[0] - cam[0]) * t, cam[1] + (P[1] - cam[1]) * t, cam[2] + (P[2] - cam[2]) * t];
       const R = Math.hypot(C[0], C[1]), z = C[2] / SZ;
-      if (opt.sliceQ === 'rho') return R < RB_JS - 1 && Math.abs(z) < ZB_JS - 1 ? ss(0.82, 1, sliceU) : 0;
+      // (Disk Lab v2, round 6: the density's face is clear in the tube along the axis, where no field line of the model
+      // carries gas (those from inside the disk's inner edge, R_IN, are empty), as in the shader)
+      if (opt.sliceQ === 'rho') return R < RB_JS - 1 && Math.abs(z) < ZB_JS - 1 && !(Math.abs(z) > zBase(MODEL.R_IN) && R < fieldRP(MODEL.R_IN, Math.abs(z))[0]) ? ss(0.82, 1, sliceU) : 0;
       const x = lnTauJS(Math.max(R, 1e-3), z), hole = ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, R);
-      return (opt.sliceQ === 'T' ? ss(-6, -4.5, x) : opt.sliceQ === 'layers' ? (Math.abs(z) <= zBase(R) ? 1 : 0) : ss(-4.5, -3.5, x / LN10)) * hole * ss(0.82, 1, sliceU);
+      return (opt.sliceQ === 'layers' ? (Math.abs(z) <= zBase(R) ? 1 : 0) : ss(-6, -4.5, x)) * hole * ss(0.82, 1, sliceU);
     }
     // The cutaway opens and closes as a sweep: sliceU goes from 0 (closed) to 1 (open) in 1.5 s, as the fades do, and
     // the planes move from the camera, or SWEEP au in front of the star when the camera is farther (nothing cut), to the
@@ -3965,17 +4048,18 @@ void main(){
       let li = 0;
       const lines = (ls) => ls.map((c) => (Array.isArray(c) ? pathOf(c, ALL) : c.lr != null && anyWake() ? wakeContours(c.lr) : pathOf(c.pts, c.quads))).join('');
       sP.contour.setAttribute('d', lines(g.lines));
-      sP.outline.setAttribute('d', lines(g.outline || []));
       sP.tau1.setAttribute('d', pathOf(g.tau1, ALL));
-      sP.ice.setAttribute('d', pathOf(g.ice, ALL));
+      sP.ice.setAttribute('d', pathOf(g.ice, ALL)); sP.iceHalo.setAttribute('d', sP.ice.getAttribute('d'));
       // the pebble layer: rock inside the snow line, ice outside, thick where it piles up (just outside the snow line,
       // and at the planet's pressure maximum); broken across the planet's gap
       const spans = (R0, R1, ok) => { const out = []; let a = null; for (let R = R0; R <= R1 + 1e-9; R += 0.01) { if (ok(R)) { if (a === null) a = R; } else if (a !== null) { out.push([a, R]); a = null; } } if (a !== null) out.push([a, R1]); return out; };
       const segs = (list) => list.map(([a, b]) => pathOf([[a, 0], [b, 0]], UPPER)).join('');
       const peb = (R) => pebbleAll(R);
-      sP.rock.setAttribute('d', segs(spans(MODEL.R_IN, rSn, (R) => peb(R) > 0.3)));
-      sP.icy.setAttribute('d', segs(spans(rSn, 31, (R) => peb(R) > 0.3)));
-      sP.pile.setAttribute('d', segs([[rSn * 1.02, rSn * 1.3], ...spans(Math.max(rSn, 2), 31, (R) => peb(R) > 1.8)]));
+      // (round 6: with the pebbles shown only, as the page's key has it)
+      const pebOn = !!(opt.mode & 4);
+      sP.rock.setAttribute('d', pebOn ? segs(spans(MODEL.R_IN, rSn, (R) => peb(R) > 0.3)) : '');
+      sP.icy.setAttribute('d', pebOn ? segs(spans(rSn, 31, (R) => peb(R) > 0.3)) : '');
+      sP.pile.setAttribute('d', pebOn ? segs([[rSn * 1.02, rSn * 1.3], ...spans(Math.max(rSn, 2), 31, (R) => peb(R) > 1.8)]) : '');
       // the planet's orbit, where it crosses the plane
       sP.planet.setAttribute('d', planets.filter((p) => p.amp > 0.5).map((p) => [-1, 1].map((sr) => { const c = sp(sr * p.a, 0); return c[2] > zN ? 'M' + (c[0] - 4).toFixed(1) + ' ' + c[1].toFixed(1) + 'l4 -4l4 4l-4 4z' : ''; }).join('')).join(''));
       // field lines in the plane, and arrows for the gas velocity in the plane, (v_R, v_z) = v_K(r0) F (dxi/dchi, 1),
@@ -4006,8 +4090,8 @@ void main(){
       }
       sP.flines.setAttribute('d', dF);
       sP.arrows.setAttribute('d', dA);
-      // the dead zone's top (not on the layers' face, which fills it)
-      sP.dead.setAttribute('d', opt.sliceQ === 'layers' ? '' : pathOf(deadTop, ALL));
+      // (the dead zone's top: the regions' face shows it as a boundary of colours; round 6, no longer a line on the others)
+      sP.dead.setAttribute('d', '');
       // the accretion's inflow along its layer(s), on the side(s) that accrete: arrows toward the star, ACC_PX px per km/s
       // (the inflow is a few km/s, ten times slower than the wind), with the gas
       let dAcc = '';
@@ -4024,8 +4108,10 @@ void main(){
             + 'M' + (ex - hx - hy * 0.7).toFixed(1) + ' ' + (ey - hy + hx * 0.7).toFixed(1) + 'L' + ex.toFixed(1) + ' ' + ey.toFixed(1)
             + 'L' + (ex - hx + hy * 0.7).toFixed(1) + ' ' + (ey - hy - hx * 0.7).toFixed(1);
       }
-      // labels, on the right half of the upper face where they fall inside the picture, without overlaps (in
-      // order of importance; the contour labels are spread across the right half)
+      // the legend (top left), and the keys of the velocity arrows (bottom right). (Disk Lab v2, round 6: no names on the
+      // face's lines and regions any more, the owner's "the labels on the cut say poorly which line they mean, and the
+      // contours' values sit in regions too narrow to tell": the page's key names the lines, and the legend the colours,
+      // with the magnetosphere's two regions close to the star)
       li = drawCbar(opt.sliceQ, li);
       const boxes = [[0, 0, CBW + 30, 52]], textW = (t) => [...t].reduce((w, c) => w + (c.charCodeAt(0) > 0x2e80 ? 11 : 6.3), 0);
       const place = (x, y, t, anchor) => {
@@ -4034,7 +4120,6 @@ void main(){
         boxes.push(b); sLabel(li++, x, y, t, anchor);
         return true;
       };
-      const at = (pts, xFrac) => { let best = null; for (const [R, z] of pts) { const q = sp(R, z); if (inView(q) && (!best || Math.abs(q[0] - xFrac * W) < Math.abs(best[0] - xFrac * W))) best = q; } return best; };
       if (dA) {
         const x0 = W - 36, y0 = Hh - 18;   // 30 km/s at 0.6 px per km/s
         sP.arrows.setAttribute('d', dA + 'M' + x0 + ' ' + y0 + 'L' + (x0 + 18) + ' ' + y0 + 'M' + (x0 + 14) + ' ' + (y0 - 3) + 'L' + (x0 + 18) + ' ' + y0 + 'L' + (x0 + 14) + ' ' + (y0 + 3));
@@ -4045,67 +4130,24 @@ void main(){
         sP.acc.setAttribute('d', dAcc + 'M' + (x0 + 18 - l) + ' ' + y0 + 'L' + (x0 + 18) + ' ' + y0 + 'M' + (x0 + 14) + ' ' + (y0 - 3) + 'L' + (x0 + 18) + ' ' + y0 + 'L' + (x0 + 14) + ' ' + (y0 + 3));
         boxes.push([x0 - 80, y0 - 12, W, y0 + 6]); sLabel(li++, x0 + 12 - l, y0 + 4, (ja_ ? '降着 ' : 'accretion ') + '3 km/s', 'end');
       } else sP.acc.setAttribute('d', '');
-      let q = at(g.tau1, 0.62); if (q) place(q[0], q[1] - 6, opt.sliceQ === 'layers' ? (ja_ ? '風の根元(τ* = 1)' : 'wind base (τ* = 1)') : 'τ* = 1', 'middle');
-      if (opt.sliceQ === 'layers') {
-        // the regions, on the right face where they fall inside the picture (the accretion layer on its side)
-        const zk = (R) => zKinkHJS(R) * Hof(R), za = (R) => (zKinkHJS(R) + ACC.OFF) * Hof(R), sideA = accW()[0] >= 0.5 ? 1 : -1;
-        const tries = [[[[0.16, 0], [0.2, 0], [0.24, 0]], ja_ ? '乱流(熱電離)' : 'turbulent (thermally ionized)'],
-          [[[1.2, 0.35 * zk(1.2)], [1.8, 0.35 * zk(1.8)], [2.6, 0.35 * zk(2.6)]], ja_ ? 'デッドゾーン(オーム散逸)' : 'dead zone (Ohmic)'],
-          [[[1.6, 0.5 * (za(1.6) + zBase(1.6))], [2.3, 0.5 * (za(2.3) + zBase(2.3))], [3.2, 0.5 * (za(3.2) + zBase(3.2))]], ja_ ? '層流の表層(両極性拡散)' : 'laminar surface (ambipolar)'],
-          [[[2.0, sideA * za(2.0)], [2.8, sideA * za(2.8)], [3.8, sideA * za(3.8)]], ja_ ? '降着層' : 'accretion layer'],
-          [[[2.5, 2.2 * zBase(2.5)], [3.5, 2.2 * zBase(3.5)]], ja_ ? '風' : 'wind'],
-          [[[16, 0], [20, 0], [24, 0]], ja_ ? '弱い乱流(外側)' : 'weakly turbulent (outer)']];
-        for (const [pts, t] of tries) { const q2 = at(pts, 0.6); if (q2) place(q2[0] + 4, q2[1] + 4, t); }
-        // (close to the star: the magnetosphere's labels, on every face, below)
-      } else {
-        q = at(deadTop.filter((pt) => pt[0] > 1.2 && pt[0] < 3), 0.7); if (q) place(q[0], q[1] + 13, ja_ ? 'デッドゾーンの上端' : 'top of the dead zone', 'middle');
-      }
-      for (const p of planets) { if (p.amp <= 0.5) continue; q = sp(p.a, 0); if (inView(q)) place(q[0] + 8, q[1] - 8, ja_ ? '惑星の軌道' : 'planet orbit'); }
-      q = sp(rSn, 0.55 * zOfTau(rSn, 0)); if (inView(q)) place(q[0] - 5, q[1], ja_ ? '氷の境界' : 'ice line', 'end');
-      q = at([[0.5 * (MODEL.R_IN + rSn), 0], [2, 0], [4, 0]], 0.72); if (q) place(q[0], q[1] + 15, ja_ ? '小石の層' : 'pebbles', 'middle');
       // (the 1/4 cut: through its face, below the disk's thin layer, lies the space under the disk behind it, dark, beside
-      // the left half of the disk left whole: named, as it reads as a hole)
+      // the left half of the disk left whole: named, as it reads as a hole; a name of what is seen past the face, not on it)
       sP.edge.setAttribute('d', '');
       if (opt.cut === 'quarter' && sliceU >= 0.82) {
         const sz = cam[2] >= 0 ? -1 : 1, qL = sp(0.3 * camD, sz * 0.14 * camD);
         if (inView(qL)) place(qL[0], qL[1], sz < 0 ? (ja_ ? '円盤の下の空間(切り口ごしに)' : 'the space under the disk, through the cut') : (ja_ ? '円盤の上の空間(切り口ごしに)' : 'the space over the disk, through the cut'), 'middle');
       }
-      // close to the star, on every face: the closed magnetosphere (no disk there), the curtains' cross-section (named, so
-      // that they are not taken for the disk's own flows), the X-points at the truncation radius, the dust-free gas disk
+      // close to the star, on every face: the X-points at the truncation radius, marked (the closed magnetosphere and the
+      // curtains' cross-section are painted, and named in the legend)
       let dXp = '';
-      if (magFrame.vis > 0.5 && opt.sliceQ !== 'none') {
-        let q2 = sp(0.55 * MAG.RT, 0.45 * MAG.RT); if (inView(q2)) place(q2[0], q2[1], ja_ ? '磁気圏(閉じた磁力線、円盤なし)' : 'magnetosphere (closed lines, no disk)', 'middle');
-        // (the curtain's label where a curtain crosses the face: of the four places, each face and each hemisphere, the
-        // densest, as magAz on the GPU with the dipole as it has turned)
-        const Lc = MAG.RT * (1 + 0.5 * MAG.DL), th = 0.95, rr = Lc * Math.sin(th) * Math.sin(th), { ax: mA, e1: mE } = magFrame;
-        const mE2 = [mA[1] * mE[2] - mA[2] * mE[1], mA[2] * mE[0] - mA[0] * mE[2], mA[0] * mE[1] - mA[1] * mE[0]];
-        const cands = [];
-        for (const sr of [1, -1]) for (const sz of [1, -1]) {
-          const e = cutE[sr > 0 ? 1 : 0], P = [rr * Math.sin(th) * e[0], rr * Math.sin(th) * e[1], sz * rr * Math.cos(th)], r3 = Math.hypot(...P);
-          const cz = (P[0] * mA[0] + P[1] * mA[1] + P[2] * mA[2]) / r3, phm = Math.atan2(P[0] * mE2[0] + P[1] * mE2[1] + P[2] * mE2[2], P[0] * mE[0] + P[1] * mE[1] + P[2] * mE[2]);
-          const dph = cz > 0 ? phm : Math.PI - Math.abs(phm);
-          cands.push({ w: Math.pow(0.5 + 0.5 * Math.cos(dph), 3), sr, sz });
-        }
-        // (the densest place where the label fits)
-        for (const c of cands.sort((a2, b2) => b2.w - a2.w)) {
-          if (c.w < 0.3) break;
-          if (!faceSeen[c.sr > 0 ? 1 : 0]) continue;
-          q2 = sp(c.sr * rr * Math.sin(th), c.sz * rr * Math.cos(th));
-          if (inView(q2) && place(q2[0] + (c.sr > 0 ? 8 : -8), q2[1] + (c.sz > 0 ? -10 : 14), ja_ ? '磁気圏降着(カーテン)' : 'magnetospheric accretion (curtain)', c.sr > 0 ? 'start' : 'end')) break;
-        }
+      if (magFrame.vis > 0.5) {
         for (const sr of [1, -1]) {
           const qx = sp(sr * MAG.RT, 0);
           if (!faceSeen[sr > 0 ? 1 : 0] || qx[2] <= zN || !inView(qx)) continue;
           dXp += 'M' + (qx[0] - 5) + ' ' + (qx[1] - 5) + 'L' + (qx[0] + 5) + ' ' + (qx[1] + 5) + 'M' + (qx[0] - 5) + ' ' + (qx[1] + 5) + 'L' + (qx[0] + 5) + ' ' + (qx[1] - 5);
         }
-        q2 = sp(MAG.RT, 0); if (XPOINT_LABEL && inView(q2)) place(q2[0] + 8, q2[1] - 8, ja_ ? 'X 点' : 'X-point');
-        q2 = sp(0.5 * (MAG.RT * (1 + MAG.DL) + MODEL.R_IN), 0); if (inView(q2)) place(q2[0], q2[1] + 16, ja_ ? 'ダストのないガス円盤' : 'dust-free gas disk', 'middle');
       }
       sP.xpt.setAttribute('d', dXp);
-      g.labels.forEach((lb, i) => {
-        const q2 = lb.pts ? at(lb.pts, 0.55 + 0.08 * (i % 5)) : sp(lb.R, lb.z);
-        if (inView(q2)) place(q2[0] + 4, q2[1] - 4, lb.t);
-      });
       for (let i = li; i < sLabels.length; i++) sLabels[i].textContent = '';
     }
     function resize() {
@@ -4387,6 +4429,7 @@ void main(){
       gl.useProgram(F ? F.prog : prog);
       gl.uniform1i(U.uNP, plNP); gl.uniform4fv(U.uPl, plData); gl.uniform2fv(U.uGapR, gapR);
       gl.uniform4fv(U.uPlTrap, plTrapD);
+      gl.uniform4fv(U.uPlGap, plGapD);
       gl.uniform4fv(U.uPlRim, plRimD);
       gl.uniform2f(U.uRes, rW, rH);
       gl.uniform1f(U.uTime, time);
@@ -4443,7 +4486,7 @@ void main(){
       // starts over (it does not depend on a still's jitter), before the volume (which leaves out what lies behind it
       // where it is opaque): one sample per pixel into faceA (unit 12, unbound while it is drawn into), then faceT (unit
       // 11, for SHOW_FS), four samples where the face changes from pixel to pixel
-      const faceOn = !!F && opt.sliceQ !== 'none' && sliceU > 0.82 && lookNow === 'model';
+      const faceOn = !!F && sliceU > 0.82 && lookNow === 'model';
       if (faceOn && mapsDue) {
         if (!faceT) {
           faceA = target(canvas.width, canvas.height, gl.RGBA8, gl.CLAMP_TO_EDGE); faceT = target(canvas.width, canvas.height, gl.RGBA8, gl.CLAMP_TO_EDGE);
@@ -4519,7 +4562,7 @@ void main(){
       // not closed with Z, which would join the ends of a cut path across the picture.)
       let d = '', pen = false, qPrev = null;
       const inRing = Math.hypot(...cam) < 1.25 * rSn;   // actual proximity: a high, face-on camera is outside the ring
-      const ringA = annAmp * (opt.sliceQ === 'none' ? 1 : 1 - ss(0.82, 1, sliceU)), ringOn = ringA > 0.002 && !inRing, pts = [];
+      const ringA = annAmp * (1 - ss(0.82, 1, sliceU)), ringOn = ringA > 0.002 && !inRing, pts = [];
       let x0r = Infinity, x1r = -Infinity;
       for (let i = 0; i <= 72 && ringOn; i++) {
         const a = i / 72 * Math.PI * 2, P = [rSn * Math.cos(a), rSn * Math.sin(a), 0];
@@ -4562,17 +4605,17 @@ void main(){
         const rc = 0.4 * (pV ? pV.a : PLANET.A) * Math.cbrt(PLANET.Q / 3) / pq[2] * Hh / (2 * basis.th);   // radius of the planet's disk on the screen (px)
         plabel.setAttribute('x', (pq[0] + 0.75 * rc + 10).toFixed(1)); plabel.setAttribute('y', (pq[1] - 0.35 * rc - 12).toFixed(1)); plabel.setAttribute('opacity', (pa * annAmp).toFixed(2));
       }
-      const QN = { T: ['温度', 'temperature'], rho: ['ガスの密度', 'gas density'], tau: ['星の方向の光学的厚さ', 'optical depth toward the star'], layers: ['磁場とガスの結合の層', 'the layers of the coupling of field and gas'], none: ['', ''] }[opt.sliceQ] || ['', ''];
+      const QN = { T: ['温度', 'temperature'], rho: ['ガスの密度', 'gas density'], layers: ['磁場とガスの結びつきによる領域', 'the regions of how the field couples to the gas'] }[opt.sliceQ] || ['温度', 'temperature'];
       const CON = { chan: ['チャンネルマップ(' + opt.coV.toFixed(2) + ' km/s)', 'a channel map at ' + opt.coV.toFixed(2) + ' km/s'], m1: ['平均の視線速度(モーメント 1)', 'its mean velocity (moment 1)'], m0: ['積分強度(モーメント 0)', 'its integrated intensity (moment 0)'] }[opt.coMode];
       const cutJa = opt.cut === 'quarter' ? '右手前の 4 分の 1 を切り取り(右の切り口を正面から見る)' : '星を通る鉛直な面で手前の半分を切り取り', cutEn = opt.cut === 'quarter' ? ' The near right quarter is cut away (its right face seen face-on)' : ' The near half is cut away along a vertical plane through the star';
       const LKD = { optical: ['可視光・近赤外線の散乱光で見た姿で、星の光を散乱する表層と円盤風が見えます。', ' Seen in scattered light (visible and near infrared): the surface and the wind scatter starlight.'],
         mir: ['中間赤外線で見た姿で、暖かい表層の熱放射が内側ほど明るく見えます。', ' Seen in the mid-infrared: the warm surface glows, brightest close in.'],
         mm: ['ミリ波で見た姿で、赤道面に沈んだ小石の熱放射が、惑星のギャップのすぐ外の環とともに見えます。', ' Seen at millimetre wavelengths: the pebbles at the midplane glow, with a ring just outside the planet\u2019s gap.'] }[lookNow];
       const desc = ja()
-        ? '原始惑星系円盤(半径30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、ダストが赤道面に沈み、約0.9 auのスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に木星質量の惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + (QN[0] ? QN[0] + 'を色で示しています。' : '切り口から円盤の内部を見た目のまま見せ、ガスの密度の等高線を重ねています。') : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? '一酸化炭素の輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
-        : 'Volume rendering of a model protoplanetary disk (30 au in radius): warm surface layers, a cold midplane with settled dust, and a water snow line near 0.9 au.' + (plShown().length ? (plShown().length > 1 ? ' Jupiter-mass planets at ' + plShown().join(', ') + ' au open gaps.' : ' A Jupiter-mass planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + (QN[1] ? QN[1] + ' in colour.' : 'the inside of the disk as it looks, with contours of the gas density.') : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in the line of carbon monoxide: ' + CON[1] + '.' : '');
+        ? '原始惑星系円盤(半径30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、ダストが赤道面に沈み、約0.9 auのスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に木星質量の惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + QN[0] + 'を色で示しています。' : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? '一酸化炭素の輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
+        : 'Volume rendering of a model of a protoplanetary disk (30 au in radius): warm surface layers, a cold midplane with settled dust, and a water snow line near 0.9 au.' + (plShown().length ? (plShown().length > 1 ? ' Jupiter-mass planets at ' + plShown().join(', ') + ' au open gaps.' : ' A Jupiter-mass planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + QN[1] + ' in colour.' : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in the line of carbon monoxide: ' + CON[1] + '.' : '');
       if (desc !== descEl.textContent) descEl.textContent = desc;
-      const name = ja() ? '原始惑星系円盤のモデル(操作できる図)' : 'Model protoplanetary disk (interactive)';
+      const name = ja() ? '操作できる原始惑星系円盤のモデル' : 'Interactive model of a protoplanetary disk';
       if (canvas.getAttribute('aria-label') !== name) { canvas.setAttribute('aria-label', name); keysEl.textContent = ja() ? KEYS_JA : KEYS_EN; }
       // scale bar: 1 au (or a round multiple) at the distance of the star (of the planet when following it)
       const o = project(camT), r1 = project(camT.map((v, i) => v + basis.r[i])), pxAu = o[2] > zN ? Math.hypot(r1[0] - o[0], r1[1] - o[1]) : 0;
@@ -4687,7 +4730,7 @@ void main(){
     });
     // the gap's light tables (about 2 ms each), one per idle moment, so that a zoom or the tour never waits for one
     const idle = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 3000 }) : (f) => setTimeout(f, 300);
-    const prefetch = () => { if (gapLight.prefetch()) idle(prefetch); else idle(makeEnv3); };
+    const prefetch = () => { if (gapLight(PLANET.A).prefetch()) idle(prefetch); else idle(makeEnv3); };
     idle(prefetch);
     const stop = () => {
       running = false;
@@ -5046,7 +5089,7 @@ void main(){
       if (Array.isArray(st.gain) && st.gain.length === 4 && st.gain.every((g) => isFinite(Number(g)))) opt.gain = st.gain.map((g) => Math.min(3, Math.max(0.25, Number(g))));
       if (st.pi != null) followI = Math.max(0, Math.min(PLANETS.MAX - 1, Math.round(st.pi)));
       if (st.p != null) { follow = !!Number(st.p) && planets.length > 0; if (follow) opt.slice = false; }
-      if (st.sq != null && own(SLICE_Q, st.sq)) opt.sliceQ = st.sq;
+      if (st.sq != null && sqOf(st.sq)) opt.sliceQ = sqOf(st.sq);
       opt.dist = Math.max(opt.dist, dmin());
       // the time before the view: az is the azimuth at that time (the slow spin is taken off it)
       if (st.time != null) { time = Number(st.time); update(); }
@@ -5104,7 +5147,7 @@ void main(){
     const TOUR = [
       { go: () => home(), ms: 8000, title: ['円盤の全体像', 'The whole disk'],
         ja: '原始惑星系円盤のモデル(半径 30 au)。星の光が反り返った表層を温め、赤道面は冷たいままです。表面からは、磁場に駆動された風が吹き出しています。',
-        en: 'A model protoplanetary disk, 30 au in radius. Starlight warms its flared surface while the midplane stays cold. A magnetically driven wind leaves the surface.' },
+        en: 'A model of a protoplanetary disk, 30 au in radius. Starlight warms its flared surface while the midplane stays cold. A magnetically driven wind leaves the surface.' },
       { go: () => box.diskSet({ p: 0, slice: 0, el: 30, az: -65, d: 9, tx: 0, ty: 0, tz: 0, fly: 1 }), ms: 9000, tmp: { waves: 1 }, title: ['スノーラインと惑星', 'Snow line and planet'],
         ja: '内側の数 au に寄りました。約 0.9 au のスノーラインの外では、赤道面に沈んだ小石が氷をまとっています。3 au の惑星がギャップを開け、渦巻きの波を立てています(この段では波を強調表示しています)。',
         en: 'Closer in, the inner few au: beyond the snow line near 0.9 au the pebbles settled at the midplane are icy, and a planet at 3 au opens a gap and raises spiral waves (shown exaggerated in this step).' },
@@ -5191,7 +5234,7 @@ void main(){
     const CUT_VIEW = { half: { el: 6, d: 2.4 }, quarter: { el: 24, d: 3.4 } };
     let sliceBefore = null;
     box.diskSlice = (on, sq, cut) => {
-      if (sq && own(SLICE_Q, sq)) opt.sliceQ = sq;
+      if (sq && sqOf(sq)) opt.sliceQ = sqOf(sq);
       const kind = cut === 2 || cut === 'quarter' ? 'quarter' : cut === 1 || cut === 'half' ? 'half' : opt.cut;
       if (on && !opt.slice) {
         const st = box.diskState(); sliceBefore = { el: st.el, az: st.az, d: st.d, p: st.p, tx: st.tx, ty: st.ty, tz: st.tz };

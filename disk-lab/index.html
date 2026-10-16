@@ -16,14 +16,14 @@
 <meta property="og:image" content="https://shoji-mori.github.io/disk-lab/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="A model protoplanetary disk seen from above its plane: a bright star, the disk, and a magnetic wind rising from it.">
+<meta property="og:image:alt" content="Disk Lab's model of a protoplanetary disk, seen from above its plane: a bright star, the disk, and a magnetic wind rising from it.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-wave-32.png?v=a5-bold-20261015">
 <link rel="icon" type="image/svg+xml" sizes="any" href="/images/favicon-wave.svg?v=a5-bold-20261015">
 <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-wave.png?v=a5-bold-20261015">
 <link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="disk-lab.css?v=20261016d">
+<link rel="stylesheet" href="disk-lab.css?v=20261016e">
 <script>
   // The language, chosen as the site chooses it: ?lang=, the visit's choice, then the browser's language.
   (() => {
@@ -38,16 +38,17 @@
   })();
 </script>
 <script>
-  // The way in from the site and back out (DESIGN.md, section 12): a cross-document view transition between the site's
-  // pages that carry the Disk Lab card (home, research) and this page. The card's picture grows into the stage, the
-  // paper turns to night; going back, the reverse. Both ends are named "disk-lab" for these moves only, and every other
-  // move to or from this page is left instant. With motion allowed only (the CSS's @view-transition), and where the
+  // The way in from the site and back out (DESIGN.md, sections 12 and 16): a cross-document view transition between the
+  // site's pages and this page. The paper turns to night; from a page with the Disk Lab card (home, research), the card's
+  // picture grows into the stage; going back, the reverse. Both ends are named "disk-lab" for these moves only, and every
+  // other move to or from this page (within Disk Lab, its print pages) is left instant. (Round 6: from every page of the
+  // site, as the header's navigation now leads here from all of them; before, from the card's pages only.) With motion allowed only (the CSS's @view-transition), and where the
   // browser has these events; elsewhere the page simply loads.
   // window.diskLabArrival settles when the page is shown and a transition into it has ended: app.js starts the engine
   // after it, so that compiling the shaders does not stall the transition.
   (() => {
-    const CARD_PAGES = ['/', '/research/'];
-    const carded = (url) => { try { const u = new URL(url, location.href); return u.origin === location.origin && CARD_PAGES.includes(u.pathname); } catch { return false; } };
+    // (a page of the site: the same origin, not Disk Lab itself, not a print page, which takes no part in transitions)
+    const carded = (url) => { try { const u = new URL(url, location.href); return u.origin === location.origin && !u.pathname.startsWith('/disk-lab/') && !/\/print\/?$/.test(u.pathname); } catch { return false; } };
     let arrived;
     window.diskLabArrival = new Promise((resolve) => { arrived = resolve; });
     if (!('onpagereveal' in window)) arrived();
@@ -83,7 +84,7 @@
   })();
 </script>
 <link rel="expect" href="#posterFirst" blocking="render">
-<script type="module" src="app.js?v=20261016e"></script>
+<script type="module" src="app.js?v=20261016f"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
@@ -98,7 +99,7 @@
   </header>
 
   <main class="stage" id="stage">
-    <h1 class="sr-only"><span class="en" lang="en">Disk Lab: a model protoplanetary disk</span><span class="ja" lang="ja">Disk Lab:原始惑星系円盤のモデル</span></h1>
+    <h1 class="sr-only"><span class="en" lang="en">Disk Lab: an interactive model of a protoplanetary disk</span><span class="ja" lang="ja">Disk Lab:操作できる原始惑星系円盤のモデル</span></h1>
     <div class="disk-panel" id="disk" data-mobile data-elevation="22" data-azimuth="-65" data-distance="90" data-fov="32" data-scale="0.5" data-scale-max="1" data-adapt="off" data-steps="150" data-mode="47">
       <img class="disk-static" id="poster" alt="" decoding="async">
     </div>
@@ -213,8 +214,8 @@
     <dl class="facts">
       <dt><span class="en" lang="en">Disk</span><span class="ja" lang="ja">円盤</span></dt>
       <dd><span class="en" lang="en">30 au in radius. Surface density falls as 1/R; the thickness, H/R = 0.03 (R/1 au)<sup>1/4</sup>, flares outward. The midplane is 150 K at 1 au.</span><span class="ja" lang="ja">半径 30 au。面密度は半径に反比例し、厚み H/R = 0.03 (R/1 au)<sup>1/4</sup> で外ほど反り返ります。赤道面の温度は 1 au で 150 K。</span></dd>
-      <dt><span class="en" lang="en">Dust and the lit surface</span><span class="ja" lang="ja">塵と表層</span></dt>
-      <dd><span class="en" lang="en">Small grains, mixed with the gas and absent inside about 0.08 au where they evaporate, absorb the grazing starlight in a thin layer a few scale heights up, which is heated to about three times the midplane's temperature. In the model look it shows as the warmer colour of the thin gas there; in the scattered-light and mid-infrared looks this lit surface is what you see (its light is integrated analytically).</span><span class="ja" lang="ja">小さな塵はガスとよく混ざり、約 0.08 au より内側では蒸発してありません。斜めに当たる星の光は、数スケールハイト上の薄い層で塵に吸収され、そこは赤道面の約 3 倍の温度になります。モデルの見え方では、その薄いガスの暖かい色として現れ、散乱光と中間赤外の見え方では、この照らされた表層が見えます(光り方は解析的に積分しています)。</span></dd>
+      <dt><span class="en" lang="en">Gas and its temperature</span><span class="ja" lang="ja">ガスと温度</span></dt>
+      <dd><span class="en" lang="en">The gas carries small dust grains, well mixed with it (they evaporate inside about 0.08 au); the two are shown together, as the gas. The grains absorb the grazing starlight in a thin layer a few scale heights up, the lit surface, heated to about 2.8 times the midplane's temperature; below it the temperature falls smoothly to the midplane's (the vertical profile of Dartois et al. 2003), so that in the model look the gas grows warmer in colour toward the surface. In the visible and mid-infrared looks the lit surface is what you see (its light is integrated analytically).</span><span class="ja" lang="ja">ガスには小さな塵がよく混ざっています(約 0.08 au より内側では蒸発してありません)。この二つを合わせて「ガス」として見せています。斜めに当たる星の光は、数スケールハイト上の薄い層(照らされた表層)で塵に吸収され、そこは赤道面の約 2.8 倍の温度になります。その下では温度が赤道面の値へなめらかに下がり(Dartois et al. 2003 の鉛直分布)、モデルの見え方では表層ほど温かい色になります。可視光と中間赤外の見え方では、この照らされた表層が見えます(光り方は解析的に積分しています)。</span></dd>
       <dt><span class="en" lang="en">Pebbles and the snow line</span><span class="ja" lang="ja">小石とスノーライン</span></dt>
       <dd><span class="en" lang="en">Larger dust settles to the midplane and is coated in ice where it is colder than 160 K, beyond about 0.9 au.</span><span class="ja" lang="ja">大きめの塵は赤道面に沈み、160 K より冷たい所(約 0.9 au より外)で氷をまといます。</span></dd>
       <dt><span class="en" lang="en">Field and wind</span><span class="ja" lang="ja">磁場と円盤風</span></dt>
@@ -222,18 +223,18 @@
       <dt><span class="en" lang="en">Field and gas</span><span class="ja" lang="ja">磁場とガスの結びつき</span></dt>
       <dd><span class="en" lang="en">The gas is weakly ionized. Near the midplane, Ohmic diffusion leaves a dead zone (out to 7.5 au) where the field cannot act; inside 0.3 au the gas is ionized by heat and turbulent (where models with accretion heating pass about 1000 K; the colours here show the starlight's heating only). Elsewhere the disk is nearly laminar: the surface above the dead zone by ambipolar diffusion, with accretion in a thin, smooth layer near it; beyond about 10 au, where the whole column is ionized, a weak turbulence.</span><span class="ja" lang="ja">ガスの電離は弱く、赤道面付近はオーム散逸で磁場が効かないデッドゾーン(約 7.5 au まで)。0.3 au より内側は熱で電離して乱流になります(降着の加熱を入れたモデルで約 1000 K を超える範囲。このモデルの色は星の光による加熱だけを表します)。それ以外はほぼ層流で、デッドゾーンの上の表層は両極性拡散で層流、降着は表層近くの薄い層を静かに流れます。約 10 au より外側は柱全体が電離し、弱い乱流があります。</span></dd>
       <dt><span class="en" lang="en">Planet</span><span class="ja" lang="ja">惑星</span></dt>
-      <dd><span class="en" lang="en">A Jupiter-mass planet at 3 au: its gap, the ring of pebbles just outside, spiral waves (their decay from the global solution of Rafikov 2002) and a circumplanetary disk.</span><span class="ja" lang="ja">3 au に木星質量の惑星。ギャップ、そのすぐ外の小石の環、渦巻きの波(減衰は Rafikov 2002 の大域解)、周惑星円盤。</span></dd>
+      <dd><span class="en" lang="en">A Jupiter-mass planet at 3 au: its gap (the profile of Kanagawa et al. 2017 for a viscosity α = 10<sup>−3</sup>: nearly empty from 2.5 to 3.5 au, its walls reaching 1 and 5 au), the ring of pebbles at the pressure maximum just outside, spiral waves (their decay from the global solution of Rafikov 2002) and a circumplanetary disk (0.4 Hill radii, H/R = 0.1).</span><span class="ja" lang="ja">3 au に木星質量の惑星。ギャップ(Kanagawa et al. 2017 の形、粘性 α = 10<sup>−3</sup>:2.5〜3.5 au はほぼ空で、壁は 1 au と 5 au まで)、そのすぐ外の圧力の極大にたまる小石の環、渦巻きの波(減衰は Rafikov 2002 の大域解)、周惑星円盤(ヒル半径の 0.4 倍、H/R = 0.1)。</span></dd>
       <dt><span class="en" lang="en">The star's magnetosphere</span><span class="ja" lang="ja">星の磁気圏</span></dt>
       <dd><span class="en" lang="en">The star's dipole field truncates the disk at 0.05 au; inside, gas falls onto the star along closed field lines.</span><span class="ja" lang="ja">星の双極子磁場が 0.05 au で円盤を切り取り、その内側ではガスが閉じた磁力線に沿って星へ落ちます。</span></dd>
       <dt><span class="en" lang="en">Envelope</span><span class="ja" lang="ja">エンベロープ</span></dt>
-      <dd><span class="en" lang="en">The rest of the parent cloud, falling in as it rotates (the solution of Ulrich 1976, landing within the disk's edge at 30 au), with a cavity cleared along the axis.</span><span class="ja" lang="ja">回転しながら落ちる母体の雲の名残(Ulrich 1976 の解。円盤の縁 30 au より内側に着地)。軸に沿って空洞が開いています。</span></dd>
+      <dd><span class="en" lang="en">The rest of the parent cloud, falling in as it rotates (the solution of Ulrich 1976, its centrifugal radius at the disk's edge, 30 au, within which it lands), with a cavity cleared along the axis. At a given distance it is densest near the midplane, but there it lies in the disk's shadow: what shines is the lit walls of the cavity (its brightness is the starlight it scatters).</span><span class="ja" lang="ja">回転しながら落ちる母体の雲の名残(Ulrich 1976 の解。遠心力半径を円盤の縁 30 au にとり、その内側に着地)。軸に沿って空洞が開いています。同じ距離では赤道面の近くで最も濃くなりますが、そこは円盤の影で星の光が届かず、明るく見えるのは光の当たる空洞の壁です(明るさは散らされた星の光)。</span></dd>
     </dl>
 
     <h3><span class="en" lang="en">The looks</span><span class="ja" lang="ja">見え方</span></h3>
     <dl class="facts">
       <dt><span class="en" lang="en">Model</span><span class="ja" lang="ja">モデル</span></dt>
-      <dd><span class="en" lang="en">The model's own quantities, only what is there: colour is temperature, brightness how much gas and dust is there (the surface heated by the star is not drawn as a sheet; it shows as a warmer colour). The disk is drawn translucent so the midplane shows; a real disk is opaque in visible light.</span><span class="ja" lang="ja">モデルの量そのもの。そこにあるものだけを描き、色は温度、明るさはガスと塵の量です(星に温められた表層は面としては描かず、暖かい色として現れます)。赤道面が見えるよう、円盤は半透明に描いています(実際の円盤は可視光では不透明です)。</span></dd>
-      <dt><span class="en" lang="en">Scattered, Mid-IR, Millimetre</span><span class="ja" lang="ja">散乱光、中間赤外、ミリ波</span></dt>
+      <dd><span class="en" lang="en">The model's own quantities, only what is there: colour is temperature, brightness how much gas (with its dust) is there (the surface heated by the star is not drawn as a sheet: the gas grows warmer in colour toward it). The disk is drawn translucent so the midplane shows; a real disk is opaque in visible light.</span><span class="ja" lang="ja">モデルの量そのもの。そこにあるものだけを描き、色は温度、明るさはガス(塵を含む)の量です(星に温められた表層は面としては描かず、表層へ向かってガスが温かい色になります)。赤道面が見えるよう、円盤は半透明に描いています(実際の円盤は可視光では不透明です)。</span></dd>
+      <dt><span class="en" lang="en">Visible, Mid-IR, Millimetre</span><span class="ja" lang="ja">可視光、中間赤外、ミリ波</span></dt>
       <dd><span class="en" lang="en">The disk as a telescope at that wavelength would see it: starlight scattered by the surface and the wind; the warm surface's own glow; the pebbles' glow at the midplane.</span><span class="ja" lang="ja">その波長の望遠鏡に映る姿。表層と風が散らす星の光、暖かい表層が自ら出す光、赤道面の小石が出す光。</span></dd>
       <dt>CO</dt>
       <dd><span class="en" lang="en">The rotational line of carbon monoxide, as a channel map, the mean velocity (moment 1) or the integrated intensity (moment 0).</span><span class="ja" lang="ja">一酸化炭素の回転輝線。チャンネル図、平均速度(モーメント 1)、積分強度(モーメント 0)。</span></dd>
@@ -241,7 +242,7 @@
 
     <h3><span class="en" lang="en">Limits</span><span class="ja" lang="ja">限界</span></h3>
     <ul>
-      <li><span class="en" lang="en">Compared with RADMC-3D for the same inputs, the millimetre look agrees; the CO line, the mid-infrared and scattered light keep differences from the approximations used here.</span><span class="ja" lang="ja">同じ入力の RADMC-3D の計算と比べると、ミリ波は一致し、CO、中間赤外、散乱光には近似による差が残ります。</span></li>
+      <li><span class="en" lang="en">Compared with RADMC-3D for the same inputs, the millimetre look agrees; the CO line, the mid-infrared and the visible (scattered) light keep differences from the approximations used here.</span><span class="ja" lang="ja">同じ入力の RADMC-3D の計算と比べると、ミリ波は一致し、CO、中間赤外、可視光(散乱光)には近似による差が残ります。</span></li>
       <li><span class="en" lang="en">Time is compressed, and follows the view: at ×1 an orbit at 1 au takes 12 seconds in the view of the whole disk, and closer in the clock slows with the orbital period at the radius in view (to about 1/30 at the snow line, 1/15000 next to the star). An outburst runs on its own clock and fades in about half a minute (real ones last decades); a planet grows in seconds (really hundreds of thousands of years or more).</span><span class="ja" lang="ja">時間は縮め、見ている範囲に合わせています。全体の眺めの ×1 で 1 au の公転が 12 秒、寄るほど見ている半径の公転周期に比例して遅くなります(スノーラインで約 1/30、星のそばで約 1/15000)。増光は別の時計で 30 秒ほどで収まり(実際は数十年)、惑星は数秒で育ちます(実際は数十万年以上)。</span></li>
       <li><span class="en" lang="en">Scattering is single, with an approximate allowance for light that seeps below the surface.</span><span class="ja" lang="ja">散乱は一回だけで、表層の下へしみ込む光を近似で加えています。</span></li>
     </ul>
@@ -264,6 +265,8 @@
       <li>Blandford, R. D. &amp; Payne, D. G. 1982, MNRAS, 199, 883</li>
       <li>Ulrich, R. K. 1976, ApJ, 210, 377</li>
       <li>Rafikov, R. R. 2002, ApJ, 569, 997</li>
+      <li>Kanagawa, K. D., Tanaka, H., Muto, T. &amp; Tanigawa, T. 2017, PASJ, 69, 97</li>
+      <li>Dartois, E., Dutrey, A. &amp; Guilloteau, S. 2003, A&amp;A, 399, 773</li>
       <li>Mori, S., Bai, X.-N. &amp; Tomida, K. 2025, ApJ, 992, 85</li>
       <li>Cieza, L. A. et al. 2016, Nature, 535, 258 <span class="en" lang="en">(the snow line of V883 Ori in outburst)</span><span class="ja" lang="ja">(増光中の V883 Ori のスノーライン)</span></li>
     </ul>

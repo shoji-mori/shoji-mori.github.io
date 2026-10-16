@@ -15,17 +15,17 @@ export const WORDS = {
       mm: { short: 'ミリ波', title: 'ミリ波で見る',
         text: 'ミリ波(ALMA の波長)では、赤道面の小石が光ります。惑星のギャップは暗い溝に、そのすぐ外にたまった小石は明るい環になります。' },
       heat: { short: '温度', title: '円盤の中の温度',
-        text: '星を通る面で手前の半分を切り取り、切り口を温度で塗りました。白い線(τ* = 1)より上は星の光で熱く、その下は冷たいままです。' },
+        text: '星を通る面で手前の半分を切り取り、切り口を温度で塗りました。星の光は白い線(τ* = 1)より上の表層を温め、その下では赤道面へ向かって冷えていきます。' },
       deadzone: { short: 'デッドゾーン', title: 'デッドゾーン',
-        text: '右手前の 4 分の 1 を切り取り、磁場とガスの結びつきで塗り分けました。紺のデッドゾーンでは磁場がガスをつかめず、乱流も起きません。降着は、その上下の薄い層(琥珀色)を流れます。' },
+        text: '右手前の 4 分の 1 を切り取り、磁場とガスの結びつきで領域に塗り分けました。紺のデッドゾーンでは磁場がガスをつかめず、乱流も起きません。降着は、その上下の薄い層(琥珀色)を流れます。' },
       star: { short: '星のそば', title: '星のすぐそば',
         text: '星から 0.15 au。星の磁場が円盤を 0.05 au で切り取り、ガスは磁力線に沿う弧状のカーテン(桃色)となって星へ落ちます(秒速約 400 km)。' },
       afar: { short: '遠くから', title: '遠くから',
         text: '340 au から。母体の雲の名残(エンベロープ)が回転しながら円盤へ落ち、軸に沿って開いた空洞の壁が、星の光で明るく見えます。' }
     },
     looks: {
-      model: { label: 'モデル', note: '色は温度(青は冷たく、白はスノーライン、橙から黄は熱い)、明るさはそこにあるガスと塵の量です。' },
-      optical: { label: '散乱光', note: '可視光・近赤外線の散乱光。星の光を散らす表層と風が見えます。' },
+      model: { label: 'モデル', note: '色は温度(青は冷たく、白はスノーライン、橙から黄は熱い)、明るさはそこにあるガス(塵を含む)の量です。表層ほど温かい色になります。' },
+      optical: { label: '可視光', note: '可視光・近赤外線で見た姿。表層と風が散らす星の光(散乱光)が見えます。' },
       mir: { label: '中間赤外', note: '中間赤外線。暖かい表層が自ら光り、内側ほど明るく見えます。' },
       mm: { label: 'ミリ波', note: 'ミリ波。赤道面に沈んだ小石の熱放射です。' },
       co: { label: 'CO', note: 'CO 分子の回転輝線。ドップラー効果で、ガスの動きが色と形に現れます。' }
@@ -37,13 +37,25 @@ export const WORDS = {
       m0: '輝線の強さを速度について足し合わせたもの(モーメント 0)です。'
     },
     velocity: '視線速度',
-    cutQ: { T: '温度', rho: '密度', tau: '星の光の深さ', layers: '層構造', none: '透かし' },
+    cutQ: { T: '温度', rho: '密度', layers: '領域' },
     cutNotes: {
-      T: '切り口の色は温度(対数の尺度)。白い線は τ* = 1、水色の破線は氷の境目です。',
-      rho: '切り口の色はガスの密度(1 au の赤道面に対する比、対数の尺度)です。',
-      tau: '切り口の色は星へ向かう光学的厚さ τ*(対数の尺度)。白い線 τ* = 1 が、星の光が届く深さです。',
-      layers: '切り口の色は磁場とガスの結びつき。色の意味は左上にあります。',
-      none: '切り口をそのまま見せ、奥のガスは薄くしています。白い線は円盤の縁、細い線は密度の等高線です。'
+      T: '切り口の色は温度です(対数の尺度、左上の目盛り)。',
+      rho: '切り口の色はガスの密度です(1 au の赤道面に対する比、対数の尺度)。',
+      layers: '切り口を、磁場とガスの結びつきで領域に塗り分けています(色の意味は左上)。'
+    },
+    // the key of the cut's lines and of what is left clear (round 6: the names are no longer on the face)
+    cutKey: {
+      tau1: '星の光が届く深さ(τ* = 1)', tau1Regions: '星の光が届く深さ(τ* = 1)、風の根元',
+      ice: 'スノーライン(160 K、氷の境界)',
+      pebbles: '小石の層(茶:岩、白:氷)',
+      contour: '等密度線(目盛りの値)',
+      field: '磁力線', flow: 'ガスの速度(右下の矢印が 30 km/s)', acc: '降着の流れ(右下の矢印が 3 km/s)', planet: '惑星の軌道',
+      clear: {
+        T: '色のない所:円盤風と、内縁(0.08 au)より内側。温度を描いていません。',
+        rho: '色のない所:軸のまわりと、内縁より内側。このモデルではガスがありません。',
+        layers: '色のない所:軸のまわりと、内縁より内側。このモデルではガスがありません。'
+      },
+      label: '断面の線'
     },
     actions: {
       asym: '上下非対称に(Mori, Bai & Tomida 2025)',
@@ -79,8 +91,7 @@ export const WORDS = {
     ariaStage: '円盤のモデル',
     ariaRoute: '行き先',
     show: {
-      gas: 'ガス', dust: '塵', pebbles: '小石', wind: '円盤風', field: '磁力線', planet: '惑星', envelope: 'エンベロープ', labels: '注釈',
-      amount: '濃さ', amountNote: '見た目の倍率(1 がモデルの量)',
+      gas: 'ガス', pebbles: '小石', wind: '円盤風', field: '磁力線', planet: '惑星', envelope: 'エンベロープ', labels: '注釈',
       asym: '上下非対称(Mori, Bai & Tomida 2025)', marks: '流れの印', waves: '波を強調',
       planetRow: (i, a) => `${i}  ${a} au`, orbit: (i) => `惑星 ${i} の軌道半径`, remove: '外す',
       addPlanet: '惑星を置く', picking: '円盤をクリックした半径に惑星を置きます(Esc でやめる)。', placed: (a) => `${a} au に惑星を置きました。`,
@@ -91,11 +102,13 @@ export const WORDS = {
       label: '画質', auto: '自動', low: '低', mid: '中', high: '高', full: '最高',
       autoNote: '自動:端末の速さに合わせて解像度を変え、止まった絵は細かく描き直します。',
       fixedNote: (pct) => `固定:画面の解像度の ${pct} % で描きます(自動の調整は止まります)。`,
-      capped: (pct) => `この眺めでは重すぎるため、${pct} % に下げています(描画が止まらないように)。`
+      capped: (pct) => `この眺めでは重すぎるため、${pct} % に下げています(描画が止まらないように)。`,
+      bestNote: '最高(既定):画面の解像度で描きます。重い眺めでは、動きが止まらないよう静かに一段ずつ下げます。',
+      bestCapped: (pct) => `最高(既定):この眺めは重いため、いまは ${pct} % で描いています。`
     },
     cite: {
       lead: '研究や発表での利用は自由です。出典として、このページを引用してください。',
-      line: (y, url) => `森 昇志 (${y})「Disk Lab:原始惑星系円盤のモデル」${url}`,
+      line: (y, url) => `森 昇志 (${y})「Disk Lab:操作できる原始惑星系円盤のモデル」${url}`,
       copy: '引用をコピー', copied: '引用をコピーしました。'
     }
   },
@@ -112,17 +125,17 @@ export const WORDS = {
       mm: { short: 'Millimetre', title: 'In millimetre light',
         text: 'At millimetre wavelengths (ALMA\u2019s) the pebbles at the midplane glow. The planet\u2019s gap shows as a dark lane; the pebbles trapped just outside it form a bright ring.' },
       heat: { short: 'Heat', title: 'Heat inside the disk',
-        text: 'The near half cut away through the star, the face coloured by temperature. Above the white line (\u03c4* = 1) starlight heats the gas; below it the disk stays cold.' },
+        text: 'The near half cut away through the star, the face coloured by temperature. Starlight heats the surface above the white line (\u03c4* = 1); below it the gas cools toward the midplane.' },
       deadzone: { short: 'Dead zone', title: 'The dead zone',
-        text: 'A quarter cut away, coloured by how well the magnetic field grips the gas. In the navy dead zone it cannot, and nothing stirs; accretion runs through thin layers above and below it (amber).' },
+        text: 'A quarter cut away, coloured by region: how well the magnetic field grips the gas. In the navy dead zone it cannot, and nothing stirs; accretion runs through thin layers above and below it (amber).' },
       star: { short: 'The star', title: 'Next to the star',
         text: 'At 0.15 au, the star\u2019s magnetic field holds the disk off at 0.05 au. Gas falls onto the star along the field lines in arc-shaped curtains (pink), at about 400 km/s.' },
       afar: { short: 'Afar', title: 'From afar',
         text: 'From 340 au: the remains of the parent cloud (the envelope) fall onto the disk as they rotate, and starlight lights the walls of a cavity along the axis.' }
     },
     looks: {
-      model: { label: 'Model', note: 'Colour is temperature (blue cold, white at the snow line, orange to yellow hot); brightness is how much gas and dust is there.' },
-      optical: { label: 'Scattered', note: 'Visible and near-infrared light, scattered by the surface and the wind.' },
+      model: { label: 'Model', note: 'Colour is temperature (blue cold, white at the snow line, orange to yellow hot), warmer toward the surface; brightness is how much gas (with its dust) is there.' },
+      optical: { label: 'Visible', note: 'Visible and near-infrared light: starlight scattered by the surface and the wind.' },
       mir: { label: 'Mid-IR', note: 'Mid-infrared: the warm surface glows, brightest close in.' },
       mm: { label: 'Millimetre', note: 'Millimetre: the thermal glow of the pebbles at the midplane.' },
       co: { label: 'CO', note: 'The rotational line of carbon monoxide: its Doppler shift shows how the gas moves.' }
@@ -134,13 +147,24 @@ export const WORDS = {
       m0: 'The line’s strength summed over velocity (moment 0).'
     },
     velocity: 'Velocity',
-    cutQ: { T: 'Temperature', rho: 'Density', tau: 'Starlight depth', layers: 'Layers', none: 'See-through' },
+    cutQ: { T: 'Temperature', rho: 'Density', layers: 'Regions' },
     cutNotes: {
-      T: 'The cut face shows temperature (logarithmic). The white line is \u03c4* = 1; the dashed blue line is the ice boundary.',
+      T: 'The cut face shows temperature (logarithmic; the scale at the top left).',
       rho: 'The cut face shows gas density, relative to the midplane at 1 au (logarithmic).',
-      tau: 'The cut face shows the optical depth toward the star, \u03c4* (logarithmic); the white line, \u03c4* = 1, is how deep starlight reaches.',
-      layers: 'The cut face shows how the field couples to the gas; the key is at the top left.',
-      none: 'The cut face as it is, with the gas behind it thinned; the white line is the disk\u2019s edge, the thin lines density contours.'
+      layers: 'The cut face is divided into regions by how the field couples to the gas (the key at the top left).'
+    },
+    cutKey: {
+      tau1: 'Where starlight reaches (\u03c4* = 1)', tau1Regions: 'Where starlight reaches (\u03c4* = 1), the wind\u2019s base',
+      ice: 'Snow line (160 K, where water freezes)',
+      pebbles: 'Pebbles (brown: rock, white: ice)',
+      contour: 'Density contours (at the scale\u2019s ticks)',
+      field: 'Field lines', flow: 'Gas velocity (the arrow at the lower right: 30 km/s)', acc: 'Accretion flow (the arrow at the lower right: 3 km/s)', planet: 'Planet orbit',
+      clear: {
+        T: 'No colour: the wind, and inside the inner edge (0.08 au); no temperature is drawn there.',
+        rho: 'No colour: along the axis, and inside the inner edge; this model has no gas there.',
+        layers: 'No colour: along the axis, and inside the inner edge; this model has no gas there.'
+      },
+      label: 'Lines on the cut'
     },
     actions: {
       asym: 'One-sided (Mori, Bai & Tomida 2025)',
@@ -176,8 +200,7 @@ export const WORDS = {
     ariaStage: 'Model of a protoplanetary disk',
     ariaRoute: 'Places',
     show: {
-      gas: 'Gas', dust: 'Dust', pebbles: 'Pebbles', wind: 'Wind', field: 'Field lines', planet: 'Planets', envelope: 'Envelope', labels: 'Labels',
-      amount: 'Amount', amountNote: 'a display factor (1: the model’s amount)',
+      gas: 'Gas', pebbles: 'Pebbles', wind: 'Wind', field: 'Field lines', planet: 'Planets', envelope: 'Envelope', labels: 'Labels',
       asym: 'One-sided (Mori, Bai & Tomida 2025)', marks: 'Flow markers', waves: 'Exaggerate the waves',
       planetRow: (i, a) => `${i}  ${a} au`, orbit: (i) => `Planet ${i}: orbital radius`, remove: 'Remove',
       addPlanet: 'Place a planet', picking: 'Click the disk where the planet should orbit (Esc to stop).', placed: (a) => `A planet placed at ${a} au.`,
@@ -188,11 +211,13 @@ export const WORDS = {
       label: 'Quality', auto: 'Auto', low: 'Low', mid: 'Medium', high: 'High', full: 'Best',
       autoNote: 'Auto: the resolution follows the device’s speed, and a still picture is drawn again more finely.',
       fixedNote: (pct) => `Fixed: drawn at ${pct}% of the screen’s resolution (the automatic steps stop).`,
-      capped: (pct) => `Too heavy in this view: held at ${pct}% so that drawing does not stall.`
+      capped: (pct) => `Too heavy in this view: held at ${pct}% so that drawing does not stall.`,
+      bestNote: 'Best (the default): drawn at the screen\u2019s resolution, stepped down quietly where a view is too heavy to move smoothly.',
+      bestCapped: (pct) => `Best (the default): this view is heavy, so it is drawn at ${pct}% for now.`
     },
     cite: {
       lead: 'Free to use in research and talks; please cite this page as the source.',
-      line: (y, url) => `Mori, S. (${y}). Disk Lab: a model protoplanetary disk. ${url}`,
+      line: (y, url) => `Mori, S. (${y}). Disk Lab: an interactive model of a protoplanetary disk. ${url}`,
       copy: 'Copy the citation', copied: 'Citation copied.'
     }
   }

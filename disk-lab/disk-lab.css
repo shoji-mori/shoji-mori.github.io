@@ -45,7 +45,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 
 /* ---- the frame: header; the stage with the sandbox (rail) beside it and the highlights (dock) below ---- */
 .lab{--rail:300px;display:grid;grid-template-columns:minmax(0,1fr) var(--rail);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"bar bar" "stage rail" "dock rail";height:100vh;height:100dvh;position:relative}
-.bar{grid-area:bar;display:flex;align-items:center;justify-content:space-between;gap:16px;height:52px;padding:0 var(--gx);border-bottom:1px solid var(--line)}
+/* (round 6: the page is drawn under the phone's status bar and beside its notch, viewport-fit=cover: the bar keeps its
+   52 px below the top inset, and the frame's edges keep clear of the side insets. On a desktop the insets are 0) */
+.bar{grid-area:bar;display:flex;align-items:center;justify-content:space-between;gap:16px;height:calc(52px + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) max(var(--gx),env(safe-area-inset-right,0px)) 0 max(var(--gx),env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
 .mark{display:flex;align-items:baseline;gap:10px;font-size:15px;letter-spacing:-.01em;white-space:nowrap}
 .mark .home{display:inline-flex;align-items:center;gap:9px;align-self:center;color:var(--text-2);text-decoration:none;font-weight:500}
 .mark .home:hover{color:var(--text)}
@@ -97,7 +99,7 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .lab[data-state=loading] .stage-note.on{bottom:50%;transform:translate(-50%,50%);background:none;border:0;color:var(--text-2)}
 
 /* ---- the highlights (the dock, below the stage) ---- */
-.dock{grid-area:dock;display:grid;row-gap:6px;padding:10px var(--gx) 16px;border-top:1px solid var(--line);background:var(--night);min-width:0}
+.dock{grid-area:dock;display:grid;row-gap:6px;padding:10px var(--gx) calc(16px + env(safe-area-inset-bottom,0px)) max(var(--gx),env(safe-area-inset-left,0px));border-top:1px solid var(--line);background:var(--night);min-width:0}
 .route-row{display:flex;align-items:center;gap:10px;min-width:0}
 .steppers{display:flex;gap:2px;flex:none}
 .icon-button{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:999px;color:var(--text-2)}
@@ -119,7 +121,7 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .still-note button{margin-left:8px}
 
 /* ---- the sandbox (the rail, beside the stage) ---- */
-.rail{grid-area:rail;min-height:0;overflow-y:auto;border-left:1px solid var(--line);padding:2px 18px 30px;background:var(--night);scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent;
+.rail{grid-area:rail;min-height:0;overflow-y:auto;border-left:1px solid var(--line);padding:2px max(18px,env(safe-area-inset-right,0px)) calc(30px + env(safe-area-inset-bottom,0px)) 18px;background:var(--night);scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent;
   /* (a rail taller than the window fades out at the bottom, so that more is seen to follow; at the end the fade lies over the padding) */
   -webkit-mask-image:linear-gradient(#000 calc(100% - 28px),transparent);mask-image:linear-gradient(#000 calc(100% - 28px),transparent)}
 .rail-sec{padding:10px 0 11px;border-top:1px solid var(--line)}
@@ -148,6 +150,10 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .segmented.looks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-radius:12px;width:100%}
 .segmented.looks button{border-radius:9px;padding:6px 4px;font-size:12.5px}
 .rail-context .segmented{flex-wrap:wrap;border-radius:14px}
+/* the cut's key: the lines on the faces as drawn, and what is left clear (round 6) */
+.cut-key{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:12px;line-height:1.45;color:var(--text-3)}
+.cut-key li{display:flex;align-items:baseline;gap:8px}
+.cut-key svg{width:24px;height:10px;flex:none;align-self:center;stroke-linecap:butt}
 .velocity{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2)}
 .velocity input{width:120px;accent-color:var(--accent)}
 .velocity output{font-variant-numeric:tabular-nums;min-width:6.6em;color:var(--text)}
@@ -176,9 +182,6 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .comp>.toggle{justify-self:start}
 .comp-opts{grid-column:1/-1;display:grid;gap:6px;justify-items:start;width:100%;margin:0 0 4px;padding:6px 0 7px 12px;border-left:1px solid var(--line-2)}
 .toggle.small{min-height:26px;padding:2px 9px;font-size:12px}
-.gain{display:flex;align-items:center;gap:6px;width:100%;font-size:12px;color:var(--text-2)}
-.gain input{flex:1;min-width:0;accent-color:var(--accent)}
-.gain output{font-variant-numeric:tabular-nums;min-width:3.4em;text-align:right;color:var(--text)}
 .planet-list{display:grid;gap:4px;width:100%}
 .planet-row{display:flex;align-items:center;gap:6px;width:100%}
 .planet-row .toggle{min-width:6.6em;font-variant-numeric:tabular-nums;white-space:pre}
@@ -253,7 +256,7 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 /* ---- narrow screens: the stage above; below it, the sandbox or the highlights, as two tabs; nothing over the disk ---- */
 @media (max-width:860px){
   .lab{--panel:min(36vh,290px);grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto var(--panel);grid-template-areas:"bar" "stage" "tabs" "panel"}
-  .bar{height:48px}
+  .bar{height:calc(48px + env(safe-area-inset-top,0px))}
   .mark .home-name,.mark .slash{display:none}
   .bar-end{gap:16px}
   .tabs{grid-area:tabs;display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);padding:0 var(--gx)}
@@ -273,6 +276,8 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   .facts{grid-template-columns:minmax(0,1fr);gap:2px}
   .facts dd{margin-bottom:10px}
   .about{width:100%;max-width:100%;max-height:100%;height:100%;border-radius:0;margin:0}
+  .about-inner{padding-top:calc(40px + env(safe-area-inset-top,0px));padding-bottom:calc(44px + env(safe-area-inset-bottom,0px))}
+  .about-close{top:calc(14px + env(safe-area-inset-top,0px))}
   .temp-key{top:8px;bottom:auto;right:8px;width:132px;padding:6px 8px 3px;font-size:10.5px}
   .stage-hint{bottom:40px;left:auto;right:10px;transform:none}
   .watermark{width:44px;right:10px;bottom:10px}

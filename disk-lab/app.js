@@ -3,12 +3,12 @@
 // what is shown, cut, variants, time, view) and the highlights (places.js), and keeps its controls in step with the
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
-import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016b';
-import { WORDS } from './words.js?v=20261016e';
+import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016c';
+import { WORDS } from './words.js?v=20261016f';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=b3666e03cd';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=99b3786b86';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 const VERSION = '2026-10-16';
 // The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
 // moves from its hidden address to its public one.
@@ -129,6 +129,8 @@ function goPlace(i, { fly = true } = {}) {
     else if ((pl.needs & 16) && !S().planets.some((p) => p[1])) st.planets = [[3, 1]];
     box.diskSet({ ...st, fly: fly && !reduce ? 1 : 0 });
     target = { ...st, time: S().time };
+    // (the default Best starts each place from 100 %: its quiet steps were for the view left)
+    if (bestDefault() && qCap < 1 && st.look !== 'co') { qCap = 1; bestRuns.length = 0; box.diskScale(fixedScale()); }
   } else setPoster(pl.id);
   renderPlace();
   sync();
@@ -201,7 +203,9 @@ function setLook(k) {
 }
 
 // ---------- the controls that depend on the state: the place's action; in the rail, the CO maps and the cut's quantities ----------
-const CUT_Q = ['T', 'rho', 'tau', 'layers', 'none'];
+// (round 6: the optical depth toward the star and the cut alone are gone, the owner's choice; old links ask the engine
+// for them, and it gives the temperature and the density instead)
+const CUT_Q = ['T', 'rho', 'layers'];
 function segmented(items, current, onPick, label, cls = 'segmented small') {
   const g = el('div', { class: cls, role: 'group', 'aria-label': label });
   for (const [key, text] of items) g.append(el('button', { type: 'button', 'aria-pressed': String(key === current), onclick: () => onPick(key) }, text));
@@ -267,14 +271,52 @@ function renderRail(s) {
     const input = lookContext.querySelector('input');
     if (input && document.activeElement !== input && Number(input.value) !== s.coV) { input.value = String(s.coV); lookContext.querySelector('output').textContent = kms(s.coV); }
   }
-  const ck = [L(), cutOpen, s.sq].join('|');
+  const shown = cutOpen ? keyItems(s) : [];
+  const ck = [L(), cutOpen, s.sq, shown.join()].join('|');
   if (ck !== cutKey) {
     cutKey = ck;
-    cutContext.replaceChildren(...(cutOpen ? [segmented(CUT_Q.map((k) => [k, w.cutQ[k]]), s.sq, (k) => { box.diskSet({ sq: k }); sync(); }, L() === 'ja' ? '断面に描く量' : 'Quantity on the cut')] : []));
+    cutContext.replaceChildren(...(cutOpen ? [segmented(CUT_Q.map((k) => [k, w.cutQ[k]]), s.sq, (k) => { box.diskSet({ sq: k }); sync(); }, L() === 'ja' ? '断面に描く量' : 'Quantity on the cut'), cutKeyList(s.sq, shown)] : []));
   }
   lookNote.textContent = co ? w.coNotes[s.coMode] : cutOpen ? w.cutNotes[s.sq] : w.looks[s.look].note;
 }
 const kms = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' km/s';
+// The key of the cut (round 6): the lines the engine draws on the faces, as it draws them, and what is left clear, in place
+// of the names it wrote beside them (the owner: "the labels on the cut say poorly which line they mean"). The colours are
+// the engine's legend at the top left of the picture. Which lines are drawn follows the engine's drawSlice: the snow line
+// and where starlight reaches on every face, the pebbles with the pebbles shown, the density's contours on its face, the
+// field lines with them, their flow arrows with the markers (the wind's with the wind, the accretion's with the gas), the
+// planets' orbits.
+function keyItems(s) {
+  const out = ['tau1', 'ice'];
+  if (s.mode & 4) out.push('pebbles');
+  if (s.sq === 'rho') out.push('contour');
+  if (s.field) out.push('field');
+  if (s.field && s.marks && (s.mode & 8)) out.push('flow');
+  if (s.field && s.marks && (s.mode & 1)) out.push('acc');
+  if ((s.mode & 16) && s.planets.some((p) => p[1])) out.push('planet');
+  return out;
+}
+const KEY_SVG = {
+  tau1: '<path d="M1 5h22" stroke="#fff3df" stroke-width="1.5"/>',
+  ice: '<path d="M1 5h22" stroke="#0a0d18" stroke-opacity=".5" stroke-width="5"/><path d="M1 5h22" stroke="#6fd0ff" stroke-width="2.6" stroke-dasharray="7 4"/>',
+  pebbles: '<path d="M1 5h11" stroke="#b07a52" stroke-width="2.2"/><path d="M12 5h11" stroke="#e3f1ff" stroke-width="2.2"/>',
+  contour: '<path d="M1 7c6-5 16-5 22 0" stroke="#fff" stroke-opacity=".55" stroke-width=".9"/>',
+  field: '<path d="M2 9c4-1 8-4 10-8M12 9c4-1 8-4 10-8" stroke="#cfe3ff" stroke-opacity=".7" stroke-width=".9"/>',
+  flow: '<path d="M2 5h18M16 2l4 3-4 3" stroke="#e8f4ff" stroke-width="1.1"/>',
+  acc: '<path d="M22 5H6M10 2 6 5l4 3" stroke="#ffbe6a" stroke-width="1.3"/>',
+  planet: '<path d="M12 1l4 4-4 4-4-4z" fill="#ffd9a8" stroke="#0a0d18"/>',
+  clear: '<rect x="1.5" y="1.5" width="21" height="7" rx="1.5" stroke="#808a9a" stroke-dasharray="2 2"/>'
+};
+function cutKeyList(sq, shown) {
+  const w = T().cutKey, li = (k, text) => {
+    const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    sv.setAttribute('viewBox', '0 0 24 10'); sv.setAttribute('aria-hidden', 'true'); sv.innerHTML = KEY_SVG[k];
+    return el('li', {}, sv, el('span', {}, text));
+  };
+  const items = shown.map((k) => li(k, k === 'tau1' && sq === 'layers' ? w.tau1Regions : w[k]));
+  items.push(li('clear', w.clear[sq] || w.clear.T));
+  return el('ul', { class: 'cut-key', 'aria-label': w.label }, ...items);
+}
 
 // ---------- keeping every control in step with the engine ----------
 // The CO line costs 7 (a channel) to 35 (its moments) times the model's look per frame: the governor's floor is lower
@@ -328,7 +370,8 @@ function setClockRate(k) {
 rail.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b || !live()) return;
   const s = S();
-  if (b.dataset.bit) { const m = s.mode ^ Number(b.dataset.bit); box.diskSet({ mode: m, ...((m & 16) && !s.planets.some((p) => p[1]) ? { planets: [...s.planets.filter((p) => roomFor([[3, 1]], p[0], -1) || !p[1]), [3, 1]].slice(-4) } : {}) }); }
+  // (a component may be more than one of the engine's bits, the gas with its dust: on if any is, and all turn together)
+  if (b.dataset.bit) { const bit = Number(b.dataset.bit), m = s.mode & bit ? s.mode & ~bit : s.mode | bit; box.diskSet({ mode: m, ...((m & 16) && !s.planets.some((p) => p[1]) ? { planets: [...s.planets.filter((p) => roomFor([[3, 1]], p[0], -1) || !p[1]), [3, 1]].slice(-4) } : {}) }); }
   else if (b.dataset.opt === 'field') box.diskField(!s.field);
   else if (b.dataset.opt === 'marks') box.diskSet({ marks: s.marks ? 0 : 1 });
   else if (b.dataset.opt === 'ann') box.diskAnnotations(!s.ann);
@@ -350,40 +393,37 @@ rail.addEventListener('click', (e) => {
 });
 rail.addEventListener('input', (e) => {
   const t = e.target; if (!live()) return;
-  if (t.dataset.gain != null) { const g = S().gain; g[Number(t.dataset.gain)] = gainOf(t.value); box.diskSet({ gain: g }); t.nextElementSibling.textContent = '×' + gainOf(t.value).toFixed(2); }
-  else if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value));
+  if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value));
 });
 
 // ---------- the components (Show): each a toggle; turned on, its settings open below it ----------
-// gain: the engine's display factor for the component (gas, small grains, pebbles, wind: 0.25 to 3, a log slider);
+// (round 6: the gas and its dust are one component, the engine's bits 1 and 2 together: the owner, "treat the gas as a
+// mixture with its dust; the dust on its own hardly shows in the model". In the observed looks bit 2 is the lit surface
+// the dust makes, which goes with the gas as well. A link with one of the two bits is read as both, linkMode.)
+// (round 6: the amounts, the engine's display factors of the components, are gone from the page, the owner's choice: the
+// model's own amounts are what is shown, and a link's g= is read past)
 // opts: the engine's options that belong to it (the wind's asymmetry, the field lines' flow markers, the planets' waves);
 // planets: the list of planets. The envelope and the labels have no settings of their own. (The flow markers move along
 // the field lines, and the engine draws them only with the lines: the owner put them there, 2026-10-16.)
 const COMPS = [
-  { key: 'gas', bit: 1, gain: 0 }, { key: 'dust', bit: 2, gain: 1 }, { key: 'pebbles', bit: 4, gain: 2 },
-  { key: 'wind', bit: 8, gain: 3, opts: ['asym'] }, { key: 'field', opt: 'field', opts: ['marks'] },
+  { key: 'gas', bit: 3 }, { key: 'pebbles', bit: 4 },
+  { key: 'wind', bit: 8, opts: ['asym'] }, { key: 'field', opt: 'field', opts: ['marks'] },
   { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32 }, { key: 'labels', opt: 'ann' }
 ];
-const gainOf = (v) => Math.round(Math.pow(3, Number(v) / 100) * 100) / 100;   // (slider -126..100: 0.25 to 3)
-const sliderOfGain = (g) => String(Math.round(100 * Math.log(g) / Math.log(3)));
 const compEls = COMPS.map((c) => {
   const btn = el('button', { type: 'button', class: 'toggle', 'aria-pressed': 'false', ...(c.bit ? { 'data-bit': String(c.bit) } : { 'data-opt': c.opt }) });
-  // (the amount beside the toggle, on its row; the other settings below it)
-  const gain = c.gain == null ? null : el('label', { class: 'gain', hidden: true }, el('span', { class: 'sr-only gain-name' }),
-    el('input', { type: 'range', min: '-126', max: '100', step: '1', value: '0', 'data-gain': String(c.gain) }), el('output', {}, '×1.00'));
   const box_ = c.opts || c.planets ? el('div', { class: 'comp-opts', hidden: true }) : null;
   if (c.planets) box_.append(el('div', { class: 'planet-list' }), el('button', { type: 'button', class: 'chip quiet', id: 'addPlanet', 'aria-pressed': 'false' }));
   for (const o of c.opts || []) box_.append(el('button', { type: 'button', class: 'toggle small', 'data-opt': o, 'aria-pressed': 'false' }));
   if (c.planets) box_.append(el('p', { class: 'rail-note planets-note' }));
-  const row = el('div', { class: 'comp', 'data-comp': c.key }, btn, gain, box_);
+  const row = el('div', { class: 'comp', 'data-comp': c.key }, btn, box_);
   $('comps').append(row);
-  return { c, row, btn, gain, opts: box_ };
+  return { c, row, btn, opts: box_ };
 });
 function renderComps() {
   const w = T().show;
-  for (const { c, btn, gain, opts } of compEls) {
+  for (const { c, btn, opts } of compEls) {
     btn.textContent = w[c.key];
-    if (gain) { gain.querySelector('.gain-name').textContent = w.amount; gain.title = w.amount + ': ' + w.amountNote; gain.querySelector('input').setAttribute('aria-label', w[c.key] + ': ' + w.amount); }
     if (!opts) continue;
     opts.querySelectorAll('[data-opt]').forEach((b) => { b.textContent = w[b.dataset.opt]; });
     const add = opts.querySelector('#addPlanet'); if (add) add.textContent = '+ ' + w.addPlanet;
@@ -410,13 +450,9 @@ function movePlanet(i, a) {
 }
 function syncComps(s) {
   const opt = { field: s.field, ann: s.ann };
-  for (const { c, gain, opts } of compEls) {
+  for (const { c, opts } of compEls) {
     const on = c.bit ? !!(s.mode & c.bit) : !!opt[c.opt];
     if (opts) opts.hidden = !on;
-    if (!gain) continue;
-    gain.hidden = !on;
-    const r = gain.querySelector('input');
-    if (document.activeElement !== r) { r.value = sliderOfGain(s.gain[c.gain]); r.nextElementSibling.textContent = '×' + s.gain[c.gain].toFixed(2); }
   }
   // the planets' rows (rebuilt when the list changes)
   const key = L() + JSON.stringify(s.planets);
@@ -478,8 +514,14 @@ stage.addEventListener('pointerdown', (e) => { if (!pop.hidden && !pop.contains(
 // the sharpening at rest, unless the frames grow too long: then the scale is lowered so that a frame takes about 150 ms
 // (a frame of seconds can make the GPU drop the WebGL context; the CO line's moments at full resolution did), and the
 // note says so. In the CO look a fixed level starts from CO_FLOOR, as Auto does.
-let quality = 'auto', qCap = 1;
-try { const k = sessionStorage.getItem('disk-lab-quality'); if (k && (k === 'auto' || QUALITY[k])) quality = k; } catch { /* default */ }
+// Round 6: Best is the default (the owner: "the resolution can be the highest, basically"). Not chosen, it keeps the
+// picture moving: where frames take longer than BEST_SLOW while the clock runs and the view rests, it steps down quietly
+// to the fixed level whose frame is predicted under BEST_AIM (80 %, then 55 %, 35 %), and back up when a frame there
+// would be under BEST_UP, saying so in the quality's note only (no toast: the visitor did not choose it). A new place
+// starts again from 100 %. Chosen, Best holds 100 % as the other fixed levels hold theirs (only the guard against stalls).
+const BEST_SLOW = 70, BEST_AIM = 60, BEST_UP = 40, BEST_STEPS = [1, 0.8, 0.55, 0.35];
+let quality = 'full', qCap = 1, qChosen = false;
+try { const k = sessionStorage.getItem('disk-lab-quality'); if (k && (k === 'auto' || QUALITY[k])) { quality = k; qChosen = true; } } catch { /* default */ }
 const qualityButtons = ['auto', 'low', 'mid', 'high', 'full'].map((k) => {
   const b = el('button', { type: 'button', 'data-quality': k, 'aria-pressed': String(k === quality) });
   $('qualityGroup').append(b);
@@ -492,9 +534,14 @@ function renderQuality() {
 }
 const govRest = () => { if (gov) gov.pause(quality !== 'auto' || holdSharp); };
 const fixedScale = () => Math.min(QUALITY[quality] || 1, qCap);
+// the visitor's choice (kept for the visit); applyQuality: the level applied, chosen or the default
 function setQuality(k) {
-  quality = k; qCap = 1; costs.length = 0;
+  qChosen = true;
   try { sessionStorage.setItem('disk-lab-quality', k); } catch { /* for this view only */ }
+  applyQuality(k);
+}
+function applyQuality(k) {
+  quality = k; qCap = 1; costs.length = 0; bestRuns.length = 0;
   unsharpen();
   if (live()) {
     if (k === 'auto') { const base = diag.calibration && diag.calibration.scale || 0.5; box.diskScale(S().look === 'co' ? CO_FLOOR : base); runScale = box.diskScale(); }
@@ -507,13 +554,32 @@ function syncQuality() {
   qualityButtons.forEach((b) => pressed(b, b.dataset.quality === quality));
   const w = T().quality, n = $('qualityNote');
   if (quality === 'auto') n.textContent = w.autoNote;
+  else if (bestDefault()) n.textContent = qCap < 1 ? w.bestCapped(Math.round(100 * fixedScale())) : w.bestNote;
   else if (qCap < (QUALITY[quality] || 1)) n.textContent = w.capped(Math.round(100 * fixedScale()));
   else n.textContent = w.fixedNote(Math.round(100 * (QUALITY[quality] || 1)));
 }
 // the frames' intervals at a fixed level (consecutive frames: the clock running or a picture being averaged)
-const costs = [];
+const costs = [], bestRuns = [];
+let bestT = 0;
+const bestDefault = () => quality === 'full' && !qChosen;
+// the default Best's quiet steps (see BEST_SLOW): from the frames of the running clock at a resting view, over 1.5 s
+function guardBest(dt) {
+  if (!bestDefault() || S().paused || S().look === 'co') { bestRuns.length = 0; return; }
+  if (!(dt > 0 && dt < 2000)) return;
+  bestRuns.push(dt);
+  const now = performance.now();
+  if (now - bestT < 1500 || bestRuns.length < 8) return;
+  const mean = bestRuns.reduce((a, b) => a + b, 0) / bestRuns.length, s = box.diskScale();
+  bestRuns.length = 0; bestT = now;
+  const at = (to) => mean * (0.12 + 0.88 * (to * to) / (s * s));   // (a frame at another scale: 12 % fixed, the rest with the pixels, as scaleFor)
+  let to = qCap;
+  if (mean > BEST_SLOW) to = BEST_STEPS.find((l) => l < qCap - 0.005 && at(l) <= BEST_AIM) ?? BEST_STEPS[BEST_STEPS.length - 1];
+  else { const up = BEST_STEPS.slice().reverse().find((l) => l > qCap + 0.005); if (up && at(up) < BEST_UP) to = up; }
+  if (Math.abs(to - qCap) > 0.005) { qCap = to; box.diskScale(fixedScale()); sync(); }
+}
 function guardFixed(dt, acc, accMax) {
   if (quality === 'auto' || !live() || holdSharp || moveFrom) return;
+  guardBest(dt);
   if (!(dt > 0) || (S().paused && !(acc >= 2 && acc <= accMax))) return;
   costs.push(dt); if (costs.length > 6) costs.shift();
   const mean = costs.reduce((a, b) => a + b, 0) / costs.length, s = box.diskScale();
@@ -546,7 +612,6 @@ function linkFor(s) {
   if (s.look === 'co') { u.searchParams.set('com', s.coMode); u.searchParams.set('cov', String(s.coV)); }
   if (!s.ms) u.searchParams.set('ms', '0');
   if (s.planets.length) u.searchParams.set('pl', s.planets.map(([a, on]) => a + ':' + on).join(','));
-  if (s.gain.some((g) => g !== 1)) u.searchParams.set('g', s.gain.join(','));
   u.searchParams.set('t', String(Math.round(s.time * 1000) / 1000));
   u.searchParams.set('lang', L());
   return u.href;
@@ -588,18 +653,20 @@ async function watermark(c) {
   const g = c.getContext('2d'), w = Math.round(c.width * 0.06), h = Math.round(w * 677 / 1874), m = Math.round(c.width * 0.012);
   g.save(); g.globalAlpha = 0.2; g.drawImage(markImg, c.width - w - m, c.height - h - m, w, h); g.restore();
 }
+// a link's mode with the gas and its dust as one: either of the engine's bits 1 and 2 turns on both (round 6)
+const linkMode = (m) => (Number.isInteger(m) && (m & 3) ? m | 3 : m);
 // a link's state: the place first, then any of the engine's keys (diskSet checks every value)
 function stateFromLink() {
   const NUM = ['p', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'mode', 'field', 'speed', 'paused', 'slice', 'ann', 'ms', 'asym', 'marks', 'waves'];
   const st = {};
   for (const k of NUM) if (q.has(k)) st[k] = q.get(k);
+  if (st.mode != null) st.mode = linkMode(Number(st.mode));
   if (q.has('sq')) st.sq = q.get('sq');
   if (q.has('look')) st.look = q.get('look');
   if (q.has('com')) st.coMode = q.get('com');
   if (q.has('cov')) st.coV = q.get('cov');
   if (q.has('t')) st.time = q.get('t');
   if (q.has('pl')) st.planets = q.get('pl').split(',').filter(Boolean).map((t) => t.split(':').map(Number));
-  if (q.has('g')) st.gain = q.get('g').split(',').map(Number);
   return Object.keys(st).length ? st : null;
 }
 
@@ -769,7 +836,7 @@ async function start() {
   runScale = box.diskScale();
   if (!reduce) gov = govern(box, { base: diag.calibration && diag.calibration.scale || 0.5, running: () => !S().paused,
     floor: () => (S().look === 'co' ? CO_FLOOR : MIN_SCALE), onChange: (sc) => { runScale = sc; } });
-  if (quality !== 'auto') setQuality(quality);
+  if (quality !== 'auto') applyQuality(quality);
   if (reduce) { const r = $('reducedNote'); r.textContent = T().reduced; r.hidden = false; playBtn.hidden = true; $('speedGroup').hidden = true; }
   sync();
   hint(true);
@@ -861,6 +928,8 @@ window.diskLab = {
   // (for measurements: also holds the sharpening of a still picture and the CO line's own scale; the scale is the caller's)
   pauseGovernor: (on) => { holdSharp = !!on; if (on) unsharpen(); govRest(); },
   setQuality: (k) => setQuality(k),
+  // (for checks: back to the default, Best not chosen)
+  defaultQuality: () => { qChosen = false; try { sessionStorage.removeItem('disk-lab-quality'); } catch { /* */ } applyQuality('full'); },
   // (for checks: a picture with the mark, as saved)
   stamped: async () => { const c = await shot({}); if (c) await watermark(c); return c; },
   setLook, setLang, setTab: (t) => setTab(t), link: () => (live() ? linkFor(S()) : null), snapshot: (opts) => shot(opts)

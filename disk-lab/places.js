@@ -8,7 +8,8 @@
 //   look    the look the place is written for
 //   field   the field lines drawn there (the engine's lines over the volume)
 //   cut     null, or { slice: 1 (half) | 2 (quarter), sq } with sq one of T, rho, tau, layers, none
-//   needs   bits of the engine's mode that the text describes (1 gas, 2 small dust (the lit surface in the observed looks), 4 pebbles, 8 wind, 16 planet,
+//   needs   bits of the engine's mode that the text describes (1 gas, 2 its small dust (the lit surface in the observed looks; the page
+//           shows 1 and 2 as one, the gas), 4 pebbles, 8 wind, 16 planet,
 //           32 envelope); turned on when arriving, other bits left as the visitor set them
 //   hides   bits turned off when arriving (default: the envelope, which fades in from about 150 au, everywhere but afar;
 //           on a narrow stage the whole disk is seen from farther and would show a part of it)
@@ -21,7 +22,7 @@ export const PLACES = [
   { id: 'wind', view: { el: 10, az: -80, d: 60 }, fitW: 22, look: 'model', field: 1, cut: null, needs: 1 | 2 | 8, action: 'asym' },
   { id: 'snow', view: { el: 30, az: -65, d: 9 }, fitW: 3.6, look: 'model', field: 0, cut: null, needs: 1 | 2 | 4, action: 'burst' },
   { id: 'planet', view: { p: 1, el: 30, az: 160, d: 1.6 }, fitW: 0.6, look: 'model', field: 0, cut: null, needs: 1 | 2 | 4 | 16, action: 'waves' },
-  { id: 'mm', view: { el: 50, az: -65, d: 12 }, fitW: 4.6, look: 'mm', field: 0, cut: null, needs: 4 | 16, action: 'noplanet' },
+  { id: 'mm', view: { el: 50, az: -65, d: 15 }, fitW: 6, look: 'mm', field: 0, cut: null, needs: 4 | 16, action: 'noplanet' },
   { id: 'heat', view: { el: 6, az: -65, d: 2.4 }, fitW: 1.3, look: 'model', field: 0, cut: { slice: 1, sq: 'T' }, needs: 1 | 2, action: 'cut' },
   { id: 'deadzone', view: { el: 24, az: -65, d: 3.4 }, fitW: 1.6, look: 'model', field: 0, cut: { slice: 2, sq: 'layers' }, needs: 1 | 2, action: 'cut' },
   { id: 'star', view: { el: 22, az: -65, d: 0.15 }, fitW: 0.07, look: 'model', field: 1, cut: null, needs: 1 | 2 },
