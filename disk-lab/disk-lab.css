@@ -147,6 +147,8 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .segmented button[aria-pressed=true]{background:var(--selected);color:var(--on-selected);font-weight:500}
 .segmented button:disabled{opacity:.35;cursor:default}
 .segmented.small button{padding:4px 10px;font-size:12.5px}
+/* (round 7) the saved picture's size, under the save button */
+#saveSizeGroup{margin-top:8px}
 .segmented.looks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-radius:12px;width:100%}
 .segmented.looks button{border-radius:9px;padding:6px 4px;font-size:12.5px}
 .rail-context .segmented{flex-wrap:wrap;border-radius:14px}

@@ -15,7 +15,7 @@ export const WORDS = {
       mm: { short: 'ミリ波', title: 'ミリ波で見る',
         text: 'ミリ波(ALMA の波長)では、赤道面の小石が光ります。惑星のギャップは暗い溝に、そのすぐ外にたまった小石は明るい環になります。' },
       heat: { short: '温度', title: '円盤の中の温度',
-        text: '星を通る面で手前の半分を切り取り、切り口を温度で塗りました。星の光は白い線(τ* = 1)より上の表層を温め、その下では赤道面へ向かって冷えていきます。' },
+        text: '手前の半分を切り取り、切り口を温度で塗りました。白い線(τ* = 1)より上では星の光で塵が熱く、その下の内部はぬるいまま。0.3 au より内側だけは降着の熱で赤道面が最も熱くなります。' },
       deadzone: { short: 'デッドゾーン', title: 'デッドゾーン',
         text: '右手前の 4 分の 1 を切り取り、磁場とガスの結びつきで領域に塗り分けました。紺のデッドゾーンでは磁場がガスをつかめず、乱流も起きません。降着は、その上下の薄い層(琥珀色)を流れます。' },
       star: { short: '星のそば', title: '星のすぐそば',
@@ -77,7 +77,15 @@ export const WORDS = {
     linkCopied: 'リンクをコピーしました。',
     linkShown: 'リンクを表示しました。選んでコピーしてください。',
     imageBusy: '画像を作っています…',
+    imageProgress: (i, n) => `画像を作っています… ${i} / ${n}`,
     imageDone: '画像を保存しました。',
+    // (round 7) the saved picture's size: as the screen, twice, or 3840 px wide (4K); the lines, labels and the mark at that size
+    saveSize: {
+      label: '保存する画像の大きさ', screen: '画面と同じ', twice: '2 倍', uhd: '4K',
+      note: (w, h) => `保存する画像:${w} × ${h} px(線と文字と印も同じ大きさで)。`,
+      lower: (w, h, pct) => `保存する画像:${w} × ${h} px。この見え方は重いため、ガスは ${pct} % の細かさで描きます。`,
+      coScreen: (w, h) => `この見え方は計算が重いため、画面と同じ ${w} × ${h} px で保存します。`
+    },
     imageFailed: '画像を作れませんでした。',
     still: {
       nogl: 'このブラウザーでは動くモデルを描けないため(WebGL 2 が必要です)、同じモデルの静止画を表示しています。',
@@ -95,8 +103,8 @@ export const WORDS = {
       asym: '上下非対称(Mori, Bai & Tomida 2025)', marks: '流れの印', waves: '波を強調',
       planetRow: (i, a) => `${i}  ${a} au`, orbit: (i) => `惑星 ${i} の軌道半径`, remove: '外す',
       addPlanet: '惑星を置く', picking: '円盤をクリックした半径に惑星を置きます(Esc でやめる)。', placed: (a) => `${a} au に惑星を置きました。`,
-      noRoom: 'そこには置けません(1〜20 au、隣の惑星と半径の比 1.4 以上)。', full: '惑星は 4 つまでです。',
-      planetsNote: '木星質量。軌道半径 1〜20 au、隣どうしは半径の比 1.4 以上(近すぎる軌道は不安定です)。絵の中の惑星をクリックしても動かせます。'
+      noRoom: 'そこには置けません(0.05〜20 au、隣の惑星と半径の比 1.4 以上)。', full: '惑星は 4 つまでです。',
+      planetsNote: '木星質量。軌道半径 0.05〜20 au(内側の端は、星の磁場が円盤を切り取る所)、隣どうしは半径の比 1.4 以上(近すぎる軌道は不安定です)。絵の中の惑星をクリックしても動かせます。'
     },
     quality: {
       label: '画質', auto: '自動', low: '低', mid: '中', high: '高', full: '最高',
@@ -125,7 +133,7 @@ export const WORDS = {
       mm: { short: 'Millimetre', title: 'In millimetre light',
         text: 'At millimetre wavelengths (ALMA\u2019s) the pebbles at the midplane glow. The planet\u2019s gap shows as a dark lane; the pebbles trapped just outside it form a bright ring.' },
       heat: { short: 'Heat', title: 'Heat inside the disk',
-        text: 'The near half cut away through the star, the face coloured by temperature. Starlight heats the surface above the white line (\u03c4* = 1); below it the gas cools toward the midplane.' },
+        text: 'The near half cut away through the star, the face coloured by temperature. Above the white line (\u03c4* = 1) starlight makes the dust hot; the interior below stays cool. Only inside 0.3 au does accretion make the midplane the hottest.' },
       deadzone: { short: 'Dead zone', title: 'The dead zone',
         text: 'A quarter cut away, coloured by region: how well the magnetic field grips the gas. In the navy dead zone it cannot, and nothing stirs; accretion runs through thin layers above and below it (amber).' },
       star: { short: 'The star', title: 'Next to the star',
@@ -186,7 +194,14 @@ export const WORDS = {
     linkCopied: 'Link copied.',
     linkShown: 'The link is shown below; select it to copy.',
     imageBusy: 'Making the image…',
+    imageProgress: (i, n) => `Making the image… ${i} / ${n}`,
     imageDone: 'Image saved.',
+    saveSize: {
+      label: 'Size of the saved image', screen: 'Screen', twice: '2×', uhd: '4K',
+      note: (w, h) => `The image: ${w} × ${h} px (lines, labels and the mark at that size too).`,
+      lower: (w, h, pct) => `The image: ${w} × ${h} px. This look is heavy, so the gas is drawn at ${pct} % detail.`,
+      coScreen: (w, h) => `This look is heavy to compute, so it is saved as the screen, ${w} × ${h} px.`
+    },
     imageFailed: 'The image could not be made.',
     still: {
       nogl: 'This browser can’t draw the live model (it needs WebGL 2), so these are still pictures of the same model.',
@@ -204,8 +219,8 @@ export const WORDS = {
       asym: 'One-sided (Mori, Bai & Tomida 2025)', marks: 'Flow markers', waves: 'Exaggerate the waves',
       planetRow: (i, a) => `${i}  ${a} au`, orbit: (i) => `Planet ${i}: orbital radius`, remove: 'Remove',
       addPlanet: 'Place a planet', picking: 'Click the disk where the planet should orbit (Esc to stop).', placed: (a) => `A planet placed at ${a} au.`,
-      noRoom: 'No room there (1 to 20 au, and at least 1.4 times the radius of a neighbour).', full: 'Four planets at most.',
-      planetsNote: 'Jupiter-mass, on orbits of 1 to 20 au, neighbours at least 1.4 apart in radius (closer orbits are unstable). A planet in the picture can be clicked to move it too.'
+      noRoom: 'No room there (0.05 to 20 au, and at least 1.4 times the radius of a neighbour).', full: 'Four planets at most.',
+      planetsNote: 'Jupiter-mass, on orbits of 0.05 to 20 au (the inner end is where the star\u2019s magnetic field cuts off the disk), neighbours at least 1.4 apart in radius (closer orbits are unstable). A planet in the picture can be clicked to move it too.'
     },
     quality: {
       label: 'Quality', auto: 'Auto', low: 'Low', mid: 'Medium', high: 'High', full: 'Best',

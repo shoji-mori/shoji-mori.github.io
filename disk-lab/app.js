@@ -4,12 +4,12 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016c';
-import { WORDS } from './words.js?v=20261016f';
+import { WORDS } from './words.js?v=20261017a';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=99b3786b86';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
-const VERSION = '2026-10-16';
+const ENGINE_SRC = 'engine/disk3d.js?v=dc5b934c42';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const VERSION = '2026-10-17';
 // The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
 // moves from its hidden address to its public one.
 const CITE_URL = 'https://shoji-mori.github.io/disk-lab/', CITE_YEAR = 2026;
@@ -130,7 +130,8 @@ function goPlace(i, { fly = true } = {}) {
     box.diskSet({ ...st, fly: fly && !reduce ? 1 : 0 });
     target = { ...st, time: S().time };
     // (the default Best starts each place from 100 %: its quiet steps were for the view left)
-    if (bestDefault() && qCap < 1 && st.look !== 'co') { qCap = 1; bestRuns.length = 0; box.diskScale(fixedScale()); }
+    if (bestDefault() && st.look !== 'co') bestReset();
+    if (quality !== 'auto') { relaxGuard(); applyFixed(); }
   } else setPoster(pl.id);
   renderPlace();
   sync();
@@ -181,6 +182,7 @@ function renderAll() {
   renderLooks();
   renderComps();
   renderQuality();
+  renderSaveSize();
   renderCite();
   renderStillNote();
   sync();
@@ -335,6 +337,7 @@ function sync() {
   else if (co && !wasCo && !sharpFrom && !holdSharp) { box.diskScale(CO_FLOOR); runScale = CO_FLOOR; }
   else if (!co && wasCo && !sharpFrom && !holdSharp && base) { box.diskScale(base); runScale = base; }
   wasCo = co;
+  applyFixed();
   lookButtons.forEach((b) => pressed(b, b.dataset.look === s.look));
   renderActions(s);
   renderRail(s);
@@ -345,6 +348,7 @@ function sync() {
   setClock(s.time);
   syncComps(s);
   syncQuality(s);
+  if (!saving) renderSaveSize();
   if (s.paused) setClockRate(0);   // (paused, no frames come to clear the clock's rate)
   // the rail
   rail.querySelectorAll('[data-bit]').forEach((b) => pressed(b, s.mode & Number(b.dataset.bit)));
@@ -384,6 +388,7 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.speed) box.diskSpeed(Number(b.dataset.speed));
   else if (b.id === 'copyLink') copyLink();
   else if (b.id === 'saveImage') saveImage(b);
+  else if (b.dataset.saveSize) { saveSize = b.dataset.saveSize; try { sessionStorage.setItem('disk-lab-save-size', saveSize); } catch { /* for this view only */ } renderSaveSize(); }
   else if (b.dataset.quality) setQuality(b.dataset.quality);
   else if (b.id === 'citeCopy') copyCite();
   else if (b.dataset.planetOn != null) { const pl = S().planets; const i = Number(b.dataset.planetOn); if (pl[i]) { pl[i][1] = pl[i][1] ? 0 : 1; if (pl[i][1] && !roomFor(pl, pl[i][0], i)) pl[i][1] = 0; box.diskSet({ planets: pl }); } }
@@ -432,16 +437,20 @@ function renderComps() {
   planetsKey = '';
 }
 let planetsKey = '';
-// a planet's slider: 1 to 20 au on a log scale (0 to 1000)
-const aOf = (v) => { const a = Math.pow(20, Number(v) / 1000); return Math.round(a * (a < 10 ? 10 : 2)) / (a < 10 ? 10 : 2); };
-const sliderOfA = (a) => String(Math.round(1000 * Math.log(a) / Math.log(20)));
-const fmtA = (a) => (a < 10 ? a.toFixed(1) : String(Math.round(a)));
-// is there room for a planet at a (within 1 to 20 au, at least 1.4 in the ratio of radii from the other shown planets)?
-const roomFor = (list, a, skip) => a >= 1 && a <= 20 && list.every((p, i) => i === skip || !p[1] || Math.max(a, p[0]) / Math.min(a, p[0]) >= 1.4);
+// the planets' orbits: from the gas disk's inner edge, the magnetosphere's truncation radius (0.05 au; round 7, before
+// 1 au), to 20 au, as the engine's PLANETS.RANGE; a slider on a log scale (0 to 1000), radii rounded to two significant
+// figures below 10 au
+const PL_A = [0.05, 20];
+const roundA = (a) => { const k = a < 0.1 ? 1000 : a < 1 ? 100 : a < 10 ? 10 : 2; return Math.round(a * k) / k; };
+const aOf = (v) => roundA(PL_A[0] * Math.pow(PL_A[1] / PL_A[0], Number(v) / 1000));
+const sliderOfA = (a) => String(Math.round(1000 * Math.log(a / PL_A[0]) / Math.log(PL_A[1] / PL_A[0])));
+const fmtA = (a) => (a < 1 ? String(roundA(a)) : a < 10 ? a.toFixed(1) : String(Math.round(a)));
+// is there room for a planet at a (within PL_A, at least 1.4 in the ratio of radii from the other shown planets)?
+const roomFor = (list, a, skip) => a >= PL_A[0] && a <= PL_A[1] && list.every((p, i) => i === skip || !p[1] || Math.max(a, p[0]) / Math.min(a, p[0]) >= 1.4);
 // a planet moved by a slider: held between its shown neighbours (1.4 in the ratio of radii)
 function movePlanet(i, a) {
   const pl = S().planets; if (!pl[i]) return;
-  let lo = 1, hi = 20;
+  let lo = PL_A[0], hi = PL_A[1];
   pl.forEach((p, j) => { if (j === i || !p[1]) return; if (p[0] <= pl[i][0]) lo = Math.max(lo, p[0] * 1.4); else hi = Math.min(hi, p[0] / 1.4); });
   pl[i][0] = Math.min(hi, Math.max(lo, a));
   box.diskSet({ planets: pl });
@@ -475,7 +484,7 @@ function setPick(on) {
   sync();
 }
 box.addEventListener('diskpick', (e) => {
-  const w = T().show, pl = S().planets, a = Math.round(Math.min(20, Math.max(1, e.detail.R)) * 10) / 10;
+  const w = T().show, pl = S().planets, a = roundA(Math.min(PL_A[1], Math.max(PL_A[0], e.detail.R)));
   if (!roomFor(pl, a, -1)) { note(w.noRoom, 3500); return; }
   const i = pl.findIndex((p) => !p[1]);
   if (i >= 0) pl[i] = [a, 1]; else if (pl.length < 4) pl.push([a, 1]); else { note(w.full, 3500); return; }
@@ -519,8 +528,19 @@ stage.addEventListener('pointerdown', (e) => { if (!pop.hidden && !pop.contains(
 // to the fixed level whose frame is predicted under BEST_AIM (80 %, then 55 %, 35 %), and back up when a frame there
 // would be under BEST_UP, saying so in the quality's note only (no toast: the visitor did not choose it). A new place
 // starts again from 100 %. Chosen, Best holds 100 % as the other fixed levels hold theirs (only the guard against stalls).
-const BEST_SLOW = 70, BEST_AIM = 60, BEST_UP = 40, BEST_STEPS = [1, 0.8, 0.55, 0.35];
-let quality = 'full', qCap = 1, qChosen = false;
+// Round 7 (the owner: "after stepping down quietly, step up again quietly when it can"): the quiet step (bestCap) is for
+// the running clock only; a paused picture is accumulated at 100 % as before (the guard against stalls still applies), and
+// when the clock runs again it starts from the step it had. Up one level at a time, once the frames at the next level are
+// predicted under BEST_UP (the 40 / 70 ms band is the hysteresis) and at least the hold after the last change has passed:
+// BEST_HOLD, doubled (to BEST_HOLD_MAX) each time a step up has to be taken back within BEST_UNDO, back to BEST_HOLD at
+// a new place, so that a view at the edge does not go up and down every few seconds. Frames that come at the display's
+// pace (a mean under BEST_PACED) say nothing of the room left, so there the next level is tried (and taken back, with the
+// longer hold, if it is slow). The guard against stalls lowers this step while the clock runs (so that it comes back up
+// the same way) and the level of a paused picture otherwise (back to the level when the clock starts or stops, the view
+// moves or the place changes: a cap that never relaxed kept a view at its lowest after one slow moment).
+const BEST_SLOW = 70, BEST_AIM = 60, BEST_UP = 40, BEST_PACED = 22, BEST_STEPS = [1, 0.8, 0.55, 0.35];
+const BEST_HOLD = 3000, BEST_HOLD_MAX = 24000, BEST_UNDO = 8000;
+let quality = 'full', qCap = 1, qChosen = false, bestCap = 1;
 try { const k = sessionStorage.getItem('disk-lab-quality'); if (k && (k === 'auto' || QUALITY[k])) { quality = k; qChosen = true; } } catch { /* default */ }
 const qualityButtons = ['auto', 'low', 'mid', 'high', 'full'].map((k) => {
   const b = el('button', { type: 'button', 'data-quality': k, 'aria-pressed': String(k === quality) });
@@ -533,7 +553,19 @@ function renderQuality() {
   $('qualityGroup').setAttribute('aria-label', w.label);
 }
 const govRest = () => { if (gov) gov.pause(quality !== 'auto' || holdSharp); };
-const fixedScale = () => Math.min(QUALITY[quality] || 1, qCap);
+// (the default Best's quiet step applies while the clock runs; a paused picture is drawn at the level itself)
+const fixedScale = () => Math.min(QUALITY[quality] || 1, qCap, bestDefault() && live() && !S().paused ? bestCap : 1);
+// the scale a fixed level asks for now, set when it changed (the clock paused or running again; not while the view moves,
+// a still picture is sharpened, a measurement holds the governor or a picture is being saved)
+let fixedPaused = null, skipFrames = 0;
+function applyFixed() {
+  if (quality === 'auto' || !live() || moveFrom || holdSharp || sharpFrom || saving || 'lost' in lab.dataset) return;
+  const p = !!S().paused;
+  if (p !== fixedPaused) { fixedPaused = p; relaxGuard(); syncQuality(); }
+  const want = fixedScale();
+  // (the frames still in flight were drawn at the scale left: not counted for the guards)
+  if (Math.abs(box.diskScale() - want) > 0.004) { box.diskScale(want); skipFrames = 3; }
+}
 // the visitor's choice (kept for the visit); applyQuality: the level applied, chosen or the default
 function setQuality(k) {
   qChosen = true;
@@ -541,7 +573,7 @@ function setQuality(k) {
   applyQuality(k);
 }
 function applyQuality(k) {
-  quality = k; qCap = 1; costs.length = 0; bestRuns.length = 0;
+  quality = k; qCap = 1; costs.length = 0; bestReset();
   unsharpen();
   if (live()) {
     if (k === 'auto') { const base = diag.calibration && diag.calibration.scale || 0.5; box.diskScale(S().look === 'co' ? CO_FLOOR : base); runScale = box.diskScale(); }
@@ -554,14 +586,18 @@ function syncQuality() {
   qualityButtons.forEach((b) => pressed(b, b.dataset.quality === quality));
   const w = T().quality, n = $('qualityNote');
   if (quality === 'auto') n.textContent = w.autoNote;
-  else if (bestDefault()) n.textContent = qCap < 1 ? w.bestCapped(Math.round(100 * fixedScale())) : w.bestNote;
+  else if (bestDefault()) n.textContent = fixedScale() < 1 ? w.bestCapped(Math.round(100 * fixedScale())) : w.bestNote;
   else if (qCap < (QUALITY[quality] || 1)) n.textContent = w.capped(Math.round(100 * fixedScale()));
   else n.textContent = w.fixedNote(Math.round(100 * (QUALITY[quality] || 1)));
 }
 // the frames' intervals at a fixed level (consecutive frames: the clock running or a picture being averaged)
+// the guard's cap back to the level's own (1, or CO_FLOOR in the CO look)
+function relaxGuard() { const base = live() && S().look === 'co' ? CO_FLOOR : 1; if (qCap < base) { qCap = base; costs.length = 0; } }
 const costs = [], bestRuns = [];
-let bestT = 0;
+let bestT = 0, bestChanged = 0, bestUpAt = -1e9, bestHold = BEST_HOLD;
 const bestDefault = () => quality === 'full' && !qChosen;
+// (a new place, a new level: Best from 100 % with the shortest hold)
+function bestReset() { bestCap = 1; bestRuns.length = 0; bestHold = BEST_HOLD; bestUpAt = -1e9; bestChanged = 0; }
 // the default Best's quiet steps (see BEST_SLOW): from the frames of the running clock at a resting view, over 1.5 s
 function guardBest(dt) {
   if (!bestDefault() || S().paused || S().look === 'co') { bestRuns.length = 0; return; }
@@ -572,11 +608,22 @@ function guardBest(dt) {
   const mean = bestRuns.reduce((a, b) => a + b, 0) / bestRuns.length, s = box.diskScale();
   bestRuns.length = 0; bestT = now;
   const at = (to) => mean * (0.12 + 0.88 * (to * to) / (s * s));   // (a frame at another scale: 12 % fixed, the rest with the pixels, as scaleFor)
-  let to = qCap;
-  if (mean > BEST_SLOW) to = BEST_STEPS.find((l) => l < qCap - 0.005 && at(l) <= BEST_AIM) ?? BEST_STEPS[BEST_STEPS.length - 1];
-  else { const up = BEST_STEPS.slice().reverse().find((l) => l > qCap + 0.005); if (up && at(up) < BEST_UP) to = up; }
-  if (Math.abs(to - qCap) > 0.005) { qCap = to; box.diskScale(fixedScale()); sync(); }
+  let to = bestCap;
+  if (mean > BEST_SLOW) {
+    to = BEST_STEPS.find((l) => l < bestCap - 0.005 && at(l) <= BEST_AIM) ?? BEST_STEPS[BEST_STEPS.length - 1];
+    // (a step up taken back soon: wait longer before the next one)
+    if (now - bestUpAt < BEST_UNDO) bestHold = Math.min(BEST_HOLD_MAX, 2 * bestHold);
+  } else if (now - bestChanged >= bestHold) {
+    const up = BEST_STEPS.slice().reverse().find((l) => l > bestCap + 0.005);
+    if (up && (mean < BEST_PACED || at(up) < BEST_UP)) { to = up; bestUpAt = now; }
+  }
+  if (Math.abs(to - bestCap) > 0.005) {
+    bestCap = to; bestChanged = now;
+    if (bestLog) bestLog.push({ t: Math.round(now), to, mean: Math.round(mean), from: Math.round(100 * s) / 100 });
+    applyFixed(); sync();
+  }
 }
+let bestLog = null;   // (for measurements: diskLab.bestLog(true) records each quiet step)
 function guardFixed(dt, acc, accMax) {
   if (quality === 'auto' || !live() || holdSharp || moveFrom) return;
   guardBest(dt);
@@ -584,7 +631,10 @@ function guardFixed(dt, acc, accMax) {
   costs.push(dt); if (costs.length > 6) costs.shift();
   const mean = costs.reduce((a, b) => a + b, 0) / costs.length, s = box.diskScale();
   if ((dt > 600 || (costs.length >= 4 && mean > 220)) && s > CO_FLOOR + 0.005) {
-    qCap = Math.max(CO_FLOOR, Math.min(s * 0.85, scaleFor(Math.max(dt, mean), s, 150)));
+    const to = Math.max(CO_FLOOR, Math.min(s * 0.85, scaleFor(Math.max(dt, mean), s, 150)));
+    // (round 7: the default Best's running step takes it, and comes back up by its quiet steps)
+    if (bestDefault() && !S().paused && S().look !== 'co') { bestCap = Math.min(bestCap, to); bestChanged = performance.now(); bestRuns.length = 0; }
+    else qCap = to;
     box.diskScale(fixedScale()); costs.length = 0; sync();
   }
 }
@@ -622,18 +672,65 @@ async function copyLink() {
   catch { field.value = href; field.hidden = false; field.focus(); field.select(); note(T().linkShown, 4000); }
 }
 let saving = false;
+// (round 7, the owner: "offering a resolution when saving is a good idea") The saved picture's size: as the screen (its
+// pixels, up to twice the CSS size), twice that each way, or 3840 px wide (4K), within what the GPU allows (diskSnapMax:
+// the largest texture, renderbuffer and viewport, and 8192 px) and at most SAVE_MPX million pixels. The volume is drawn
+// at that size, each frame in bands of about SAVE_BAND_MS on the GPU (predicted from the frames just drawn: a frame of
+// seconds makes the system stop the GPU and the WebGL context is lost), and where even SAVE_BANDS bands would not keep it
+// so (next to the star in some looks), at a lower render scale, said so in the note; the lines, labels and the mark are
+// drawn at the full size from their vectors. The frames are drawn one at a time, with the progress. The CO look saves at
+// the screen's size only: its line transfer costs some 30 times the model's a frame (the moments at 4K took 0.4-40 s a
+// frame in a trial, at 17 % of the pixels, in eight bands, and three such trials made Chrome turn WebGL off until it was
+// restarted), for a picture already drawn at 12 % of the screen's pixels; so does a view whose frame on the screen already
+// takes over SAVE_HEAVY ms (measured just before, diskCost), and a camera within SAVE_NEAR au of the star (the magnetosphere
+// and the inner disk's eddies are drawn there, a frame some four times the whole disk's).
+const SAVE_SIZES = ['1', '2', '4k'], SAVE_MPX = 12, SAVE_BAND_MS = 250, SAVE_BANDS = 8, SAVE_FRAMES = 12, SAVE_HEAVY = 400, SAVE_NEAR = 2;
+let saveSize = '1';
+try { const k = sessionStorage.getItem('disk-lab-save-size'); if (SAVE_SIZES.includes(k)) saveSize = k; } catch { /* the default */ }
+const saveSizeButtons = SAVE_SIZES.map((k) => {
+  const b = el('button', { type: 'button', 'data-save-size': k, 'aria-pressed': String(k === saveSize) });
+  $('saveSizeGroup').append(b);
+  return b;
+});
+// the plan for the size chosen: k (times the screen's pixels each way), the picture's size, the render scale and the bands
+// (fm: the cost of a frame now, measured just before saving (diskCost); the frames' intervals otherwise, for the note)
+function savePlan(fmNow) {
+  const m = box.diskSnapMax(), [sw, sh] = m.screen;
+  let k = saveSize === '4k' ? 3840 / sw : Number(saveSize);
+  const sc = box.diskScale(), fm = fmNow || frameMs || (diag.calibration && diag.calibration.fullMs) || 100;
+  // (the CO look, and a view whose frame on the screen already takes over SAVE_HEAVY ms, at the screen's size only)
+  const st = S(), e = st.el * Math.PI / 180, a = st.az * Math.PI / 180;
+  const camR = Math.hypot(st.tx + st.d * Math.cos(e) * Math.cos(a), st.ty + st.d * Math.cos(e) * Math.sin(a), st.tz + st.d * Math.sin(e));
+  k = st.look === 'co' || fm > SAVE_HEAVY || camR < SAVE_NEAR ? 1 : Math.max(1, Math.min(k, m.k, Math.sqrt(SAVE_MPX * 1e6 / (sw * sh))));
+  // (a frame at render scale `to` and k times the pixels: 12 % fixed, the rest with the pixels, as scaleFor)
+  const cost = (to) => fm * (0.12 + 0.88 * (k * k * to * to) / (sc * sc));
+  let to = 1, bands = Math.max(1, Math.ceil(cost(1) / SAVE_BAND_MS));
+  if (k === 1) { to = Math.min(1, Math.max(sc, scaleFor(fm, sc, 400))); bands = 1; }   // (as before round 7, at the screen's size)
+  else if (bands > SAVE_BANDS) { bands = SAVE_BANDS; to = Math.max(0.1, Math.min(1, sc / k * Math.sqrt(Math.max(0.01, (SAVE_BANDS * SAVE_BAND_MS / fm - 0.12) / 0.88)))); }
+  return { k, w: Math.round(sw * k), h: Math.round(sh * k), to: Math.round(to * 100) / 100, bands };
+}
+// (p: a plan measured just before saving, which may differ from the one the note showed: then the note says the new one)
+function renderSaveSize(p = null) {
+  const w = T().saveSize;
+  saveSizeButtons.forEach((b) => { b.textContent = w[{ 1: 'screen', 2: 'twice', '4k': 'uhd' }[b.dataset.saveSize]]; pressed(b, b.dataset.saveSize === saveSize); });
+  $('saveSizeGroup').setAttribute('aria-label', w.label);
+  if (!live()) { $('saveSizeNote').textContent = ''; return; }
+  p = p || savePlan();
+  $('saveSizeNote').textContent = saveSize !== '1' && p.k === 1 ? w.coScreen(p.w, p.h) : p.k > 1 && p.to < 0.999 ? w.lower(p.w, p.h, Math.round(100 * p.to)) : w.note(p.w, p.h);
+}
 async function saveImage(btn) {
   if (saving) return;
   saving = true; btn.disabled = true; note(T().imageBusy, 0);
   try {
-    // (at the screen's resolution where a frame there is predicted under 400 ms from the frames just drawn, else at the
-    // scale that keeps it so: a saved picture of the CO line's moments at full resolution took seconds a frame)
-    const sc = box.diskScale(), to = frameMs ? Math.min(1, Math.max(sc, scaleFor(frameMs, sc, 400))) : (diag.calibration && diag.calibration.fullMs < 400 ? 1 : sc);
-    const c = await shot({ scale: to });
+    // (at the screen's size: at its resolution where a frame there is predicted under 400 ms from the frames just drawn,
+    // else at the scale that keeps it so; a saved picture of the CO line's moments at full resolution took seconds a frame)
+    const p = savePlan(saveSize !== '1' ? await box.diskCost() : 0);
+    renderSaveSize(p);
+    const c = await shot({ scale: p.to, size: p.k, bands: p.bands, bandMs: SAVE_BAND_MS, frames: SAVE_FRAMES, onFrame: (i, n) => note(T().imageProgress(i, n), 0) });
     if (c) await watermark(c);
     const blob = c && await toPng(c);
     if (!blob) throw new Error('no picture');
-    const a = el('a', { href: URL.createObjectURL(blob), download: `disk-lab-${PLACES[placeI].id}.png` });
+    const a = el('a', { href: URL.createObjectURL(blob), download: `disk-lab-${PLACES[placeI].id}${p.k > 1 ? '-' + c.width + 'x' + c.height : ''}.png` });
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     note(T().imageDone);
@@ -750,7 +847,8 @@ stage.addEventListener('wheel', () => hint(false), { capture: true, passive: tru
 // seconds, and the GPU dropped the WebGL context).
 const SHARP_MS = 150;
 let sharpFrom = 0, runScale = 0;   // runScale: the scale the model runs at (calibrated, then governed)
-let lastFrame = 0, holdSharp = false, sharpWhat = '', frameMs = 0;   // sharpWhat: the look sharpened
+let lastFrame = 0, lastIdle = false, holdSharp = false, sharpWhat = '', frameMs = 0;   // sharpWhat: the look sharpened
+document.addEventListener('visibilitychange', () => { lastFrame = 0; });
 const recent = [];                 // the intervals between the accumulation's frames (ms; the last 12)
 function unsharpen() {
   if (!sharpFrom) return;
@@ -853,7 +951,13 @@ box.addEventListener('diskframe', (e) => {
   // (the intervals between frames of one still picture, at one scale, are what a frame of it costs; a complete picture
   // may be sharpened)
   const now = performance.now(), { acc = 0, accMax = 0 } = e.detail;
-  guardFixed(lastFrame ? now - lastFrame : 0, acc, accMax);
+  // (round 7: an interval after a complete still picture, or after the page was hidden, is a rest, not a frame's cost:
+  // counted, the first frame after the clock started again took the scale to its floor)
+  if (lastIdle) lastFrame = 0;
+  lastIdle = !!S().paused && accMax > 0 && acc >= accMax;
+  applyFixed();
+  if (skipFrames > 0) { skipFrames--; costs.length = 0; }
+  else guardFixed(lastFrame ? now - lastFrame : 0, acc, accMax);
   // (what a frame costs now: consecutive frames, the clock running or a picture being averaged)
   if (lastFrame && now - lastFrame < 3000 && (!S().paused || acc >= 2)) frameMs = frameMs ? 0.7 * frameMs + 0.3 * (now - lastFrame) : now - lastFrame;
   if (acc >= 2 && lastFrame) { recent.push(now - lastFrame); if (recent.length > 12) recent.shift(); }
@@ -905,7 +1009,8 @@ stage.addEventListener('pointermove', (e) => { if (e.buttons && e.target === box
 stage.addEventListener('wheel', moving, { capture: true, passive: true });
 function endMoving() {
   if (!moveFrom) return;
-  moveFrom = 0;
+  moveFrom = 0; skipFrames = 3;
+  if (quality !== 'auto') relaxGuard();
   if (live()) box.diskScale(quality === 'auto' ? runScale : fixedScale());
   govRest();
 }
@@ -928,6 +1033,9 @@ window.diskLab = {
   // (for measurements: also holds the sharpening of a still picture and the CO line's own scale; the scale is the caller's)
   pauseGovernor: (on) => { holdSharp = !!on; if (on) unsharpen(); govRest(); },
   setQuality: (k) => setQuality(k),
+  // (for measurements: record the default Best's quiet steps from now, or stop and return them)
+  bestLog: (on) => { const l = bestLog; bestLog = on ? [] : null; return l; },
+  quality: () => ({ quality, chosen: qChosen, qCap, bestCap, hold: bestHold, scale: live() ? box.diskScale() : 0, paused: live() ? !!S().paused : null, moving: !!moveFrom, sharpened: !!sharpFrom, held: holdSharp, saving }),
   // (for checks: back to the default, Best not chosen)
   defaultQuality: () => { qChosen = false; try { sessionStorage.removeItem('disk-lab-quality'); } catch { /* */ } applyQuality('full'); },
   // (for checks: a picture with the mark, as saved)

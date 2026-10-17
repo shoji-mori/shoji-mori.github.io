@@ -21,7 +21,7 @@ URL parameters:
 | `lang=en` / `lang=ja` | language (otherwise the visit's choice, `sessionStorage['site-language']`, then the browser's) |
 | `place=whole` … `afar` | start at a place (`whole wind snow planet mm heat deadzone star afar`) |
 | `el az d look mode field ann asym marks waves slice sq p tx ty tz speed paused t com cov ms` | a view, as "Copy a link" writes it (the same keys as the archived preview page's links). `sq` is `T`, `rho` or `layers` (the Regions); an old link's `tau` opens the temperature, `none` the density. A `mode` with one of the bits 1 and 2 turns on both (the gas with its dust) |
-| `pl=3:1,8:0` | the planets: orbital radius (au) and on (1) or off (0), up to four |
+| `pl=3:1,8:0` | the planets: orbital radius (au, 0.05 to 20 since round 7) and on (1) or off (0), up to four |
 | `g=1,1,1,1` | (until round 6: the display amounts; read past now, the model's own amounts are shown) |
 | `still=1` | show the still pictures (as without WebGL2) |
 | `gl=force` | skip the check for software rendering and slow devices |
@@ -90,8 +90,28 @@ cached would fail).
 The suggested citation is built from `CITE_URL` (the public address) and `CITE_YEAR` at the top of `app.js`: change the
 URL there if the page ever moves. The quality levels (render scale of a fixed level) are `QUALITY` beside them. Best is
 the default (round 6): not chosen by the visitor, it steps down quietly where a view is too heavy (`BEST_SLOW`, `BEST_AIM`,
-`BEST_UP`, `BEST_STEPS` in `app.js`; DESIGN.md, section 16); a choice is kept for the visit (sessionStorage
-`disk-lab-quality`). While the
+`BEST_UP`, `BEST_STEPS` in `app.js`; DESIGN.md, section 16). Since round 7 that step is for the running clock only (a
+paused picture is drawn at 100 %), and it comes back up one level at a time after a hold (`BEST_HOLD`, doubled up to
+`BEST_HOLD_MAX` when a step up is taken back within `BEST_UNDO`; frames at the display's pace, under `BEST_PACED`, try the
+next level); `diskLab.quality()` and `diskLab.bestLog(true)` show it (DESIGN.md, section 17). A choice is kept for the
+visit (sessionStorage `disk-lab-quality`). While the
 view moves, the volume is drawn at a lower scale and the scale comes back 0.2 s after it stops (`MOVE_K`, `MOVE_FIXED`,
 `MOVE_REST` in `app.js`; DESIGN.md, section 13); `data-move="off"` on `#disk` turns this off, to compare
 (`check.js`'s `zoomPacing` and `dragPacing`).
+
+## Saving a larger picture
+
+"Save an image" offers the screen's size, twice that, or 3840 px wide (4K) (`SAVE_SIZES`, at most `SAVE_MPX` million
+pixels and the GPU's limits, `box.diskSnapMax()`). The engine's `diskSnapshot({ size, bands, bandMs, frames, onFrame })`
+draws the canvas `size` times larger for the picture, each frame's volume in `bands` sent to the GPU one by one (more where
+one runs over twice `bandMs`), frame by frame; the page plans it from the cost of a frame measured just before
+(`box.diskCost()`, `SAVE_BAND_MS`, `SAVE_BANDS`) and keeps the CO look and any view slower than `SAVE_HEAVY` ms a frame at
+the screen's size (a CO moment map at 4K lost the WebGL context). `box.diskSnapLog()` gives the last one's bands and times.
+
+## The temperature
+
+`THERMO` at the top of `engine/disk3d.js` holds the temperature's parameters (the star's luminosity, its colour
+temperature, the accretion rate, the Rosseland opacity, the turbulent alpha, the heating layer's optical depth, the
+thermal ionization and dust sublimation temperatures); `tempAt` in the shaders and `tempJS` in the script use them, and the
+thermally ionized edge `NONIDEAL.R_TI` and the snow line follow. `box.diskTemp(R, z)` returns the temperature at R and z
+(au), the midplane's, ln tau*, the snow line and R_TI (DESIGN.md, section 17, has the equations and the sources).
