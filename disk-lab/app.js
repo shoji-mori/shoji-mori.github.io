@@ -4,7 +4,7 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016c';
-import { WORDS } from './words.js?v=20261017b';
+import { WORDS } from './words.js?v=20261017e';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
@@ -882,7 +882,7 @@ function renderStillNote() {
   // reload with the view in the address may find it again; else a restart of the browser)
   if (['blocked', 'failed', 'nogl'].includes(stillReason)) kids.push(el('button', { type: 'button', class: 'action', onclick: retryLive }, w.retry));
   // (why it failed, small, so that a report can say: the engine's box.dataset.fallbackError, or the probe's reason)
-  const why = stillReason === 'failed' ? (box.dataset.fallbackError || diag.failError || '') : '';
+  const why = ['failed', 'blocked'].includes(stillReason) ? (box.dataset.fallbackError || diag.failError || '') : '';
   if (why) kids.push(el('span', { class: 'still-why' }, '(' + why + ')'));
   stillNote.replaceChildren(...kids.map((k) => (typeof k === 'string' ? document.createTextNode(k) : k)));
   stillNote.hidden = false;
@@ -926,6 +926,9 @@ async function start() {
   box.setAttribute('data-disk3d', '');
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); return enterStill('failed'); }
   diag.timings.engine = Math.round(performance.now() - t0);
+  // (the probe found WebGL2 with float targets, but the engine's own context came out lost or without them: the browser's
+  // WebGL is stuck, as in Safari on 2026-10-17, where only quitting and reopening the browser brought it back; a reload does not)
+  if (box.classList.contains('disk-fallback') && /^(the WebGL2 context was lost|no float render targets)/.test(box.dataset.fallbackError || '')) return enterStill('blocked');
   if (typeof box.diskSet !== 'function' || box.classList.contains('disk-fallback')) return enterStill('failed');
   mode = 'live';
   lab.dataset.state = 'loading';
