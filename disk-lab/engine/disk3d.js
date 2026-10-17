@@ -2682,7 +2682,13 @@ void main(){
     // targets the static picture stays
     const fbFloat = gl && !!gl.getExtension('EXT_color_buffer_float'), fbHalf = fbFloat || (gl && !!gl.getExtension('EXT_color_buffer_half_float'));
     // (Disk Lab v2: why the live model did not start, for the page to show: box.dataset.fallbackError)
-    if (!gl || !fbHalf) { box.dataset.fallbackError = !gl ? 'no WebGL2 context' : 'no float render targets'; box.classList.add('disk-fallback'); return; }
+    // (a context lost as soon as it is made gives no extensions either: Safari loses the oldest contexts when a page or its
+    // process holds too many, so say which it was)
+    if (!gl || !fbHalf) {
+      box.dataset.fallbackError = !gl ? 'no WebGL2 context' : gl.isContextLost() ? 'the WebGL2 context was lost as it was made (too many open?)'
+        : 'no float render targets (' + (gl.getSupportedExtensions() || []).filter((e) => /color_buffer|float/i.test(e)).join(', ') + ')';
+      box.classList.add('disk-fallback'); return;
+    }
     if (!reuse) box.prepend(canvas);
     const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     overlay.setAttribute('class', 'disk-overlay'); overlay.setAttribute('aria-hidden', 'true');

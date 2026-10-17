@@ -8,7 +8,7 @@ import { WORDS } from './words.js?v=20261017b';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=f4b4c563db';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=0f4eefce4f';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 const VERSION = '2026-10-17';
 // The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
 // moves from its hidden address to its public one.
