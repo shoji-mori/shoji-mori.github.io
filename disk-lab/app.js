@@ -4,7 +4,7 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016c';
-import { WORDS } from './words.js?v=20261017e';
+import { WORDS } from './words.js?v=20261017f';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
@@ -950,6 +950,7 @@ async function start() {
   sync();
   hint(true);
   diag.timings.live = Math.round(performance.now() - t0);
+  armIdle();
 }
 
 // the engine's own changes (keys, a drag, the easter eggs, a restored context) reach the controls
@@ -1055,6 +1056,38 @@ box.addEventListener('disklost', (e) => {
     sync();
   }
 });
+
+// ---------- resting when left alone ----------
+// A running clock keeps the GPU drawing every frame. Left alone for IDLE_MS (IDLE_BLUR_MS while the window is not the
+// focused one), the clock is paused: the picture is then finished at full resolution (onAccumulated) and the engine draws
+// nothing more, so the GPU rests. The next input (a move, a press, a key, the wheel, a touch, the window coming back to
+// the front) starts the clock again, if it was this rest that stopped it; a pause chosen by the visitor stays. A press on
+// the play button itself is left to the button. data-idle="off" on the disk turns it off (the checks run without input).
+const IDLE_MS = 60000, IDLE_BLUR_MS = 15000;
+let idleTimer = 0, restedByIdle = false;
+function armIdle() {
+  clearTimeout(idleTimer);
+  if (!live() || reduce || box.dataset.idle === 'off') return;
+  idleTimer = setTimeout(restIdle, document.hasFocus() ? IDLE_MS : IDLE_BLUR_MS);
+}
+function restIdle() {
+  if (!live() || reduce || box.dataset.idle === 'off' || 'lost' in lab.dataset) return;
+  if (saving || moveFrom) return armIdle();
+  if (S().paused) return;
+  restedByIdle = true; box.diskPlay(false); sync(); note(T().idleRest, 0);
+}
+function wake(e) {
+  if (restedByIdle) {
+    restedByIdle = false; note('', 0);
+    const onPlay = e && e.target && e.target.closest && e.target.closest('#play');
+    if (!onPlay && live() && S().paused) { box.diskPlay(true); sync(); }
+  }
+  armIdle();
+}
+for (const t of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart']) window.addEventListener(t, wake, { capture: true, passive: true });
+window.addEventListener('focus', wake);
+window.addEventListener('blur', () => armIdle());
+document.addEventListener('visibilitychange', () => { if (!document.hidden) armIdle(); });
 
 window.diskLab = {
   diag, PLACES, WORDS,
