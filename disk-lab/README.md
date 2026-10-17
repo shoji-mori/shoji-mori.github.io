@@ -20,8 +20,9 @@ URL parameters:
 | --- | --- |
 | `lang=en` / `lang=ja` | language (otherwise the visit's choice, `sessionStorage['site-language']`, then the browser's) |
 | `place=whole` … `afar` | start at a place (`whole wind snow planet mm heat deadzone star afar`) |
-| `el az d look mode field ann asym marks waves slice sq p tx ty tz speed paused t com cov ms` | a view, as "Copy a link" writes it (the same keys as the archived preview page's links). `sq` is `T`, `rho` or `layers` (the Regions); an old link's `tau` opens the temperature, `none` the density. A `mode` with one of the bits 1 and 2 turns on both (the gas with its dust) |
-| `pl=3:1,8:0` | the planets: orbital radius (au, 0.05 to 20 since round 7) and on (1) or off (0), up to four |
+| `el az d look mode field ann asym marks waves slice sq p tx ty tz speed paused t com cov ms` | a view, as "Copy a link" writes it (the same keys as the archived preview page's links). `sq` is `T`, `rho` or `layers` (the Regions); an old link's `tau` opens the temperature, `none` the density. A `mode` with one of the bits 1 and 2 turns on both (the gas with its dust); bit 64 is the jet (round 8). `marks` the flow arrows (the gas's option since round 8) |
+| `bg=off` / `bg=cloud` | the background: none, or the dark molecular cloud of a star-forming region (round 8; the stars, the default, are not written) |
+| `pl=3:1:1,8:0:0.1` | the planets: orbital radius (au, 0.05 to 20 since round 7), on (1) or off (0), and mass in Jupiter masses (round 8: 10 Earth masses to 3; without it, 1), up to four |
 | `g=1,1,1,1` | (until round 6: the display amounts; read past now, the model's own amounts are shown) |
 | `still=1` | show the still pictures (as without WebGL2) |
 | `gl=force` | skip the check for software rendering and slow devices |
@@ -55,6 +56,8 @@ In the page's console (a visible window gives frame times too):
 `await c.zoomPacing()` the frame intervals while the wheel zooms in and out (DESIGN.md, section 7).
 `ver2/tools/disk-lab-v2/frame.html?w=390&h=760&src=/disk-lab/%3Flang%3Dja` shows the page at a phone's size in
 a desktop window. With `serve.py --save-dir DIR`, `c.run({ save: 'check.json' })` writes the results there.
+In that frame, `const t = await import('/ver2/tools/disk-lab-v2/touch-check.js'); await t.run(frames[0])` plays
+synthetic two-finger gestures on the picture and reports how far each moved the view (round 8, DESIGN.md section 21).
 
 The engine's own checks (ver2/tools/disk-check's state matrix, on v2's engine, with the states close to the star):
 

@@ -23,7 +23,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-wave.png?v=a5-bold-20261015">
 <link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="disk-lab.css?v=20261017h">
+<link rel="stylesheet" href="disk-lab.css?v=20261017i">
 <script>
   // The language, chosen as the site chooses it: ?lang=, the visit's choice, then the browser's language.
   (() => {
@@ -84,7 +84,7 @@
   })();
 </script>
 <link rel="expect" href="#posterFirst" blocking="render">
-<script type="module" src="app.js?v=20261017h"></script>
+<script type="module" src="app.js?v=20261017i"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
@@ -100,13 +100,12 @@
 
   <main class="stage" id="stage">
     <h1 class="sr-only"><span class="en" lang="en">Disk Lab: an interactive model of a protoplanetary disk</span><span class="ja" lang="ja">Disk Lab:操作できる原始惑星系円盤のモデル</span></h1>
-    <div class="disk-panel" id="disk" data-mobile data-elevation="22" data-azimuth="-65" data-distance="90" data-fov="32" data-scale="0.5" data-scale-max="1" data-adapt="off" data-steps="150" data-mode="47">
+    <div class="disk-panel" id="disk" data-mobile data-elevation="22" data-azimuth="-65" data-distance="90" data-fov="32" data-scale="0.5" data-scale-max="1" data-adapt="off" data-steps="150" data-mode="111">
       <img class="disk-static" id="poster" alt="" decoding="async">
     </div>
-    <div class="temp-key" id="tempKey" aria-hidden="true">
-      <span class="temp-title"><span class="en" lang="en">Temperature</span><span class="ja" lang="ja">温度</span></span>
-      <span class="temp-bar" id="tempBar"></span>
-      <span class="temp-ticks"><span>30 K</span><span>160 K</span><span>2000 K</span></span>
+    <div class="mat-key" id="matKey" aria-hidden="true">
+      <span class="mat-title"><span class="en" lang="en">Colours: materials</span><span class="ja" lang="ja">色:物質</span></span>
+      <ul class="mat-list" id="matList"></ul>
     </div>
     <img class="watermark" id="watermark" src="logo-white.svg" alt="" aria-hidden="true" width="88" height="32">
     <p class="stage-hint" id="stageHint" aria-hidden="true"></p>
@@ -131,7 +130,7 @@
     <section class="rail-sec">
       <h3><span class="en" lang="en">Show</span><span class="ja" lang="ja">見せるもの</span></h3>
       <div class="comps" id="comps"></div>
-      <p class="rail-note"><span class="en" lang="en">Turned on, each shows its settings below it. Field lines and flow markers show in the model look; the envelope from afar.</span><span class="ja" lang="ja">オンにすると、その下に設定が開きます。磁力線と流れの印はモデルの見え方で、エンベロープは遠くから見えます。</span></p>
+      <p class="rail-note"><span class="en" lang="en">Turned on, each shows its settings below it. Field lines and flow arrows show in the model look; the envelope faintly from about 40 au away, fully from afar.</span><span class="ja" lang="ja">オンにすると、その下に設定が開きます。磁力線と流れの矢印はモデルの見え方で、エンベロープは 40 au ほど離れるとかすかに、遠くからははっきり見えます。</span></p>
     </section>
     <section class="rail-sec">
       <h3><span class="en" lang="en">Cut</span><span class="ja" lang="ja">断面</span></h3>
@@ -145,7 +144,7 @@
     <section class="rail-sec" id="timeSection">
       <h3><span class="en" lang="en">Time</span><span class="ja" lang="ja">時間</span></h3>
       <div class="time-row">
-        <button type="button" class="tool" id="play"><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L12.6 8z"/></svg><span class="clock" id="clock">0.0 yr</span></button>
+        <button type="button" class="tool" id="play"><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L12.6 8z"/></svg></button>
         <div class="segmented small" role="group" id="speedGroup" data-aria-en="Speed" data-aria-ja="速さ">
           <button type="button" data-speed="0.3" aria-pressed="false">×0.3</button>
           <button type="button" data-speed="1" aria-pressed="true">×1</button>
@@ -173,6 +172,15 @@
         <button type="button" class="chip quiet" id="recentre"><span class="en" lang="en">Centre on the star</span><span class="ja" lang="ja">中心を星に</span></button>
         <button type="button" class="chip quiet" id="resetView"><span class="en" lang="en">Start again</span><span class="ja" lang="ja">最初の眺めへ</span></button>
       </div>
+    </section>
+    <section class="rail-sec">
+      <h3><span class="en" lang="en">Background</span><span class="ja" lang="ja">背景</span></h3>
+      <div class="segmented small" role="group" id="bgGroup" data-aria-en="Background" data-aria-ja="背景">
+        <button type="button" data-bg="off" aria-pressed="false"><span class="en" lang="en">None</span><span class="ja" lang="ja">なし</span></button>
+        <button type="button" data-bg="stars" aria-pressed="true"><span class="en" lang="en">Stars</span><span class="ja" lang="ja">星</span></button>
+        <button type="button" data-bg="cloud" aria-pressed="false"><span class="en" lang="en">Cloud</span><span class="ja" lang="ja">分子雲</span></button>
+      </div>
+      <p class="rail-note"><span class="en" lang="en">Cloud: the dark molecular cloud a young star is born in. Background stars and the Milky Way show, reddened, through its thin parts, and nearby bright stars light its edges blue (reflection nebulae). A backdrop, in the model and visible looks.</span><span class="ja" lang="ja">分子雲:若い星が生まれる暗い分子雲。薄い所から背後の星と天の川が赤みを帯びてのぞき、近くの明るい星が雲の縁を青く照らします(反射星雲)。背景の絵で、モデルと可視光の見え方に出ます。</span></p>
     </section>
     <section class="rail-sec">
       <h3><span class="en" lang="en">Save and share</span><span class="ja" lang="ja">保存と共有</span></h3>
@@ -218,17 +226,19 @@
     <h3><span class="en" lang="en">What is in it</span><span class="ja" lang="ja">入っているもの</span></h3>
     <dl class="facts">
       <dt><span class="en" lang="en">Disk</span><span class="ja" lang="ja">円盤</span></dt>
-      <dd><span class="en" lang="en">30 au in radius. Surface density falls as 1/R; the thickness, H/R = 0.03 (R/1 au)<sup>1/4</sup>, flares outward. The star has the Sun’s mass and 2.7 times its luminosity (a young star); the disk feeds it 1.5 × 10<sup>−8</sup> solar masses a year.</span><span class="ja" lang="ja">半径 30 au。面密度は半径に反比例し、厚み H/R = 0.03 (R/1 au)<sup>1/4</sup> で外ほど反り返ります。中心星は太陽の質量で、明るさは太陽の 2.7 倍(若い星)。円盤から星へ年に太陽質量の 1.5 × 10<sup>−8</sup> 倍のガスが降着します。</span></dd>
+      <dd><span class="en" lang="en">30 au in radius. Surface density falls as 1/R; the thickness, H/R = 0.045 (R/1 au)<sup>1/4</sup>, flares outward. It is drawn about 1.8 times thicker than its own temperature would make it (about 160 K at 1 au, which holds up H/R ≈ 0.025), so that its layers show; the surface density is kept, and everything built on the thickness follows it (the lit surface, the wind’s base, the gaps). The star has the Sun’s mass and 2.7 times its luminosity (a young star); the disk feeds it 1.5 × 10<sup>−8</sup> solar masses a year.</span><span class="ja" lang="ja">半径 30 au。面密度は半径に反比例し、厚み H/R = 0.045 (R/1 au)<sup>1/4</sup> で外ほど反り返ります。層の構造が見えるよう、自身の温度(1 au で約 160 K、H/R ≈ 0.025 を支える)が支えるより 1.8 倍ほど厚く描いています。面密度は変えず、厚みで決まるもの(照らされた表層、風の根元、ギャップ)はそれに従います。中心星は太陽の質量で、明るさは太陽の 2.7 倍(若い星)。円盤から星へ年に太陽質量の 1.5 × 10<sup>−8</sup> 倍のガスが降着します。</span></dd>
       <dt><span class="en" lang="en">Gas and its temperature</span><span class="ja" lang="ja">ガスと温度</span></dt>
-      <dd><span class="en" lang="en">The gas carries small dust grains, well mixed with it (they evaporate inside about 0.08 au); the two are shown together, as the gas. The temperature follows from the starlight and the accretion (Chiang &amp; Goldreich 1997; Mori et al. 2019, 2021, 2025): the grains in the thin layer a few scale heights up that absorbs the grazing starlight (the white line on the cut, τ* = 1) are superheated, about 590 K at 1 au, and the interior below is warmed by the light they give off again, 147 K at 1 au, so the water snow line lies near 0.9 au. In a magnetically accreting disk the accretion releases its heat high up, where it escapes, and adds little; only inside about 0.3 au, where the disk is turbulent, does it make the midplane the hottest, above 1000 K (up to about 1500 K, where the dust evaporates). In the model look the gas is coloured by this temperature. In the visible and mid-infrared looks the lit surface is what you see (its light is integrated analytically).</span><span class="ja" lang="ja">ガスには小さな塵がよく混ざっています(約 0.08 au より内側では蒸発してありません)。この二つを合わせて「ガス」として見せています。温度は星の光と降着から求めています(Chiang &amp; Goldreich 1997、Mori et al. 2019, 2021, 2025)。斜めに当たる星の光を吸う数スケールハイト上の薄い層(断面の白い線、τ* = 1)の塵は過熱されて 1 au で約 590 K、その下の内部は塵が出し直す光で温まり 1 au で 147 K です。そのため水のスノーラインは約 0.9 au にあります。磁場で降着する円盤では降着の熱が上の方で出て逃げるので、内部はほとんど温まりません。乱流のある約 0.3 au より内側でだけ、降着の熱で赤道面が最も熱くなり、1000 K を超えます(塵が蒸発する約 1500 K まで)。モデルの見え方では、ガスをこの温度で色づけています。可視光と中間赤外の見え方では、この照らされた表層が見えます(光り方は解析的に積分しています)。</span></dd>
+      <dd><span class="en" lang="en">The gas carries small dust grains, well mixed with it (they evaporate inside about 0.08 au); the two are shown together, as the gas. The temperature follows from the starlight and the accretion (Chiang &amp; Goldreich 1997; Mori et al. 2019, 2021, 2025): the grains in the thin layer a few scale heights up that absorbs the grazing starlight (the white line on the cut, τ* = 1) are superheated, about 590 K at 1 au, and the interior below is warmed by the light they give off again, 158 K at 1 au, so the water snow line lies near 1 au. In a magnetically accreting disk the accretion releases its heat high up, where it escapes, and adds little; only inside about 0.3 au, where the disk is turbulent, does it make the midplane the hottest, above 1000 K (up to about 1500 K, where the dust evaporates). The temperature shows on the cut (its Temperature quantity) and in the observed looks: in the visible and mid-infrared looks the lit surface is what you see (its light is integrated analytically).</span><span class="ja" lang="ja">ガスには小さな塵がよく混ざっています(約 0.08 au より内側では蒸発してありません)。この二つを合わせて「ガス」として見せています。温度は星の光と降着から求めています(Chiang &amp; Goldreich 1997、Mori et al. 2019, 2021, 2025)。斜めに当たる星の光を吸う数スケールハイト上の薄い層(断面の白い線、τ* = 1)の塵は過熱されて 1 au で約 590 K、その下の内部は塵が出し直す光で温まり 1 au で 158 K です。そのため水のスノーラインは約 1 au にあります。磁場で降着する円盤では降着の熱が上の方で出て逃げるので、内部はほとんど温まりません。乱流のある約 0.3 au より内側でだけ、降着の熱で赤道面が最も熱くなり、1000 K を超えます(塵が蒸発する約 1500 K まで)。温度は断面の「温度」と観測の見え方で見られます。可視光と中間赤外の見え方では、この照らされた表層が見えます(光り方は解析的に積分しています)。</span></dd>
       <dt><span class="en" lang="en">Pebbles and the snow line</span><span class="ja" lang="ja">小石とスノーライン</span></dt>
-      <dd><span class="en" lang="en">Larger dust settles to the midplane and is coated in ice where it is colder than 160 K, beyond about 0.9 au.</span><span class="ja" lang="ja">大きめの塵は赤道面に沈み、160 K より冷たい所(約 0.9 au より外)で氷をまといます。</span></dd>
+      <dd><span class="en" lang="en">Larger dust settles to the midplane and is coated in ice where it is colder than 160 K, beyond about 1 au. The pebbles’ disk ends at 20 au, two thirds of the gas’s: millimetre dust disks are smaller than their gas disks (by a factor of about 1.5 to 3 in Lupus; Ansdell et al. 2018).</span><span class="ja" lang="ja">大きめの塵は赤道面に沈み、160 K より冷たい所(約 1 au より外)で氷をまといます。小石の円盤はガスの 3 分の 2、20 au で終わります(ミリ波の塵の円盤はガスの円盤より小さく、おおかみ座の円盤で 1.5〜3 分の 1。Ansdell et al. 2018)。</span></dd>
       <dt><span class="en" lang="en">Field and wind</span><span class="ja" lang="ja">磁場と円盤風</span></dt>
-      <dd><span class="en" lang="en">A self-similar solution for a cold magnetocentrifugal wind of the Blandford &amp; Payne (1982) kind, with lever arm λ = 3. By default the wind is symmetric; as an option it is stronger on one side, as for a field aligned with the rotation (Mori, Bai &amp; Tomida 2025).</span><span class="ja" lang="ja">Blandford &amp; Payne (1982) 型の、冷たい磁気遠心風の自己相似解(レバーアーム λ = 3)。既定では上下対称の風です。選ぶと、片側が強い風になります(磁場が回転と同じ向きの場合。Mori, Bai &amp; Tomida 2025)。</span></dd>
+      <dd><span class="en" lang="en">Self-similar solutions for a cold magnetocentrifugal wind of the Blandford &amp; Payne (1982) kind, each line with the lever arm λ of its foot: 3.3 at the inner edge, 2 at 1 au, 1.8 from 3 au out, as simulations of weakly ionized disks and the rotating outflows observed suggest (λ about 1.5–2.5 in the disk, larger close to the star; e.g. Bai 2017; Wang, Bai &amp; Goodman 2019). So the wind is fast and narrow inside and slow and wide outside, and it carries the mass the accretion asks for, more where λ is small. By default the wind is symmetric; as an option it is stronger on one side, as for a field aligned with the rotation (Mori, Bai &amp; Tomida 2025).</span><span class="ja" lang="ja">Blandford &amp; Payne (1982) 型の、冷たい磁気遠心風の自己相似解。磁力線ごとに、足元の半径に応じたレバーアーム λ の解を使います(内縁で 3.3、1 au で 2、3 au より外で 1.8。弱電離の円盤のシミュレーションや、回転する流出の観測で、円盤では λ ≈ 1.5〜2.5、星の近くで大きい。Bai 2017、Wang, Bai &amp; Goodman 2019 など)。そのため風は内側ほど速く細く、外側ほど遅く広がり、降着が求める量のガスを運びます(λ が小さい外側ほど多く)。既定では上下対称の風です。選ぶと、片側が強い風になります(磁場が回転と同じ向きの場合。Mori, Bai &amp; Tomida 2025)。</span></dd>
+      <dt><span class="en" lang="en">Jet</span><span class="ja" lang="ja">ジェット</span></dt>
+      <dd><span class="en" lang="en">A narrow, fast flow along the axis, both ways, launched close to the star at the disk’s inner edge: 250 km/s, widening from a few au across near its base to about 25 au at 100 au and then at 1.5 degrees, with knots, the shocks of a launch speed that varies (every 2.5 and 0.6 years), moving out with the gas (as measured in T Tauri jets: Frank et al. 2014; Ray &amp; Ferreira 2021; Hartigan &amp; Morse 2007; Agra-Amboage et al. 2011). With the one-sided option its lower lobe is 1.5 times slower and denser, as in some jets. It shows in the model look and faintly in the visible one (its emission lines); not in the infrared, millimetre or CO looks.</span><span class="ja" lang="ja">軸に沿って上下へ細く速く吹き出す流れ。星の近く、円盤の内縁から出ます。速さ 250 km/s、根元の数 au から 100 au で幅約 25 au まで広がり、その先は 1.5° で開きます。吹き出す速さが揺らぐため衝撃波の結び目ができ(2.5 年ごとと 0.6 年ごと)、ガスとともに外へ動きます(T タウリ型星のジェットの観測から:Frank et al. 2014、Ray &amp; Ferreira 2021、Hartigan &amp; Morse 2007、Agra-Amboage et al. 2011)。上下非対称の選択肢では、下側が 1.5 倍遅く、そのぶん濃くなります(いくつかのジェットで見られるように)。モデルの見え方と、可視光でかすかに(輝線の光)見えます。赤外線、ミリ波、CO では見えません。</span></dd>
       <dt><span class="en" lang="en">Field and gas</span><span class="ja" lang="ja">磁場とガスの結びつき</span></dt>
-      <dd><span class="en" lang="en">The gas is weakly ionized. Near the midplane, Ohmic diffusion leaves a dead zone (out to 7.5 au) where the field cannot act; inside 0.3 au the gas is ionized by heat and turbulent (where the turbulence's own accretion heating keeps it above about 1000 K). Elsewhere the disk is nearly laminar: the surface above the dead zone by ambipolar diffusion, with accretion in a thin, smooth layer near it; beyond about 10 au, where the whole column is ionized, a weak turbulence.</span><span class="ja" lang="ja">ガスの電離は弱く、赤道面付近はオーム散逸で磁場が効かないデッドゾーン(約 7.5 au まで)。0.3 au より内側は熱で電離して乱流になります(乱流による降着の加熱で約 1000 K を超える範囲)。それ以外はほぼ層流で、デッドゾーンの上の表層は両極性拡散で層流、降着は表層近くの薄い層を静かに流れます。約 10 au より外側は柱全体が電離し、弱い乱流があります。</span></dd>
+      <dd><span class="en" lang="en">The gas is weakly ionized. Near the midplane, Ohmic diffusion leaves a dead zone (out to about 7 au) where the field cannot act. Just above it, where the gas begins to couple, the field lines bend and a thin accretion layer carries the gas inward (Bai &amp; Stone 2013; Mori, Bai &amp; Tomida 2025); above that the field opens and the gas is lifted slowly (the wind base), until it leaves as the wind from the irradiation surface, a few scale heights up. Beyond the dead zone the accretion layer lies at the midplane. Inside 0.3 au the gas is ionized by heat and turbulent (where the turbulence’s own accretion heating keeps it above about 1000 K); beyond about 10 au, where the whole column is ionized, weakly turbulent. Everything else, the dead zone, the accretion layer and the wind included, is laminar: not turbulent. With the field aligned with the rotation (the one-sided option), the Hall effect pushes the accretion layer up to the lower side’s surface, out to about 10 au.</span><span class="ja" lang="ja">ガスの電離は弱く、赤道面付近はオーム散逸で磁場が効かないデッドゾーン(約 7 au まで)。そのすぐ上、ガスが磁場と結びつき始める所で磁力線が折れ曲がり、薄い降着層がガスを内側へ運びます(Bai &amp; Stone 2013、Mori, Bai &amp; Tomida 2025)。その上では磁力線が開いてガスがゆっくり持ち上がり(風の根元)、数スケールハイト上の照射面から円盤風として吹き出します。デッドゾーンより外では、降着層は赤道面にあります。0.3 au より内側は熱で電離して乱流になり(乱流による降着の加熱で約 1000 K を超える範囲)、約 10 au より外側は柱全体が電離して弱い乱流があります。それ以外は、デッドゾーンも降着層も円盤風も、乱流のない層流です。磁場が回転と同じ向きのとき(上下非対称の選択肢)は、ホール効果で降着層が下側の表面まで押し上げられます(約 10 au まで)。</span></dd>
       <dt><span class="en" lang="en">Planet</span><span class="ja" lang="ja">惑星</span></dt>
-      <dd><span class="en" lang="en">Jupiter-mass planets, up to four, from 0.05 au (where the star’s field cuts off the disk) to 20 au; the first at 3 au. Its gap (the profile of Kanagawa et al. 2017 for a viscosity α = 10<sup>−3</sup>: nearly empty from 2.5 to 3.5 au, its walls reaching 1 and 5 au), the ring of pebbles at the pressure maximum just outside, spiral waves (their decay from the global solution of Rafikov 2002) and a circumplanetary disk out to 0.4 Hill radii (H/R = 0.1), which glows, so that each planet shows from afar as a point of warm light. Closer in than 1 au the gap’s profile is extrapolated beyond the disks it was fitted to.</span><span class="ja" lang="ja">木星質量の惑星を 4 つまで、0.05 au(星の磁場が円盤を切り取る所)から 20 au に。最初の 1 つは 3 au。ギャップ(Kanagawa et al. 2017 の形、粘性 α = 10<sup>−3</sup>:2.5〜3.5 au はほぼ空で、壁は 1 au と 5 au まで)、そのすぐ外の圧力の極大にたまる小石の環、渦巻きの波(減衰は Rafikov 2002 の大域解)、ヒル半径の 0.4 倍まで広がる周惑星円盤(H/R = 0.1)。周惑星円盤が光るので、惑星は遠くからも暖かい光の点として見えます。1 au より内側では、ギャップの形は式が確かめられた円盤の外へ延ばして使っています。</span></dd>
+      <dd><span class="en" lang="en">Up to four planets, from 0.05 au (where the star’s field cuts off the disk) to 20 au, of 10 Earth masses to 3 Jupiter masses (heavier gaps turn eccentric, which this model does not show); the first a Jupiter at 3 au. Each opens a gap (the profile of Kanagawa et al. 2017 for a viscosity α = 10<sup>−3</sup>: a Jupiter at 3 au leaves it nearly empty from 2.6 to 3.4 au, its walls reaching 1.5 and 4.5 au), raises spiral waves (their decay from the global solution of Rafikov 2002, their strength growing with the mass up to a few thermal masses), and, above the pebble isolation mass (Bitsch et al. 2018; 43 Earth masses at 3 au), traps pebbles in a ring at the pressure maximum just outside. Neighbours keep at least four mutual Hill radii apart. Each has a disk of its own out to 0.4 Hill radii that glows, so that it shows from afar as a point of warm light; the disk flares, from H/r of about 0.1 near the planet to 0.3 at its edge for a Jupiter at 3 au (its outer part takes the temperature of the gas around it), and a planet of only a few thermal masses wears a nearly round envelope instead. Closer in than about 0.3 au the gap’s profile is extrapolated beyond the disks it was fitted to.</span><span class="ja" lang="ja">惑星を 4 つまで、0.05 au(星の磁場が円盤を切り取る所)から 20 au に、地球の 10 倍から木星の 3 倍の質量で(それより重いとギャップが楕円になり、このモデルでは描けません)。最初の 1 つは 3 au の木星。惑星はギャップを開け(Kanagawa et al. 2017 の形、粘性 α = 10<sup>−3</sup>:3 au の木星なら 2.6〜3.4 au はほぼ空で、壁は 1.5 au と 4.5 au まで)、渦巻きの波を立て(減衰は Rafikov 2002 の大域解、強さは熱的質量の数倍まで質量とともに増える)、小石の孤立質量(Bitsch et al. 2018。3 au で地球の 43 倍)を超えると、すぐ外の圧力の極大に小石の環を作ります。隣どうしは相互ヒル半径の 4 倍以上離します。ヒル半径の 0.4 倍まで広がる周惑星円盤が光り、遠くからも暖かい光の点として見えます。周惑星円盤は外ほど厚く反り返り(3 au の木星で H/r が惑星のそばの約 0.1 から縁の 0.3 へ。外側はまわりのガスの温度になるため)、熱的質量の数倍しかない惑星では、円盤ではなく丸いエンベロープをまといます。約 0.3 au より内側では、ギャップの形は式が確かめられた円盤の外へ延ばして使っています。</span></dd>
       <dt><span class="en" lang="en">The star's magnetosphere</span><span class="ja" lang="ja">星の磁気圏</span></dt>
       <dd><span class="en" lang="en">The star's dipole field truncates the disk at 0.05 au; inside, gas falls onto the star along closed field lines.</span><span class="ja" lang="ja">星の双極子磁場が 0.05 au で円盤を切り取り、その内側ではガスが閉じた磁力線に沿って星へ落ちます。</span></dd>
       <dt><span class="en" lang="en">Envelope</span><span class="ja" lang="ja">エンベロープ</span></dt>
@@ -238,11 +248,13 @@
     <h3><span class="en" lang="en">The looks</span><span class="ja" lang="ja">見え方</span></h3>
     <dl class="facts">
       <dt><span class="en" lang="en">Model</span><span class="ja" lang="ja">モデル</span></dt>
-      <dd><span class="en" lang="en">The model's own quantities, only what is there: colour is temperature, brightness how much gas (with its dust) is there (the surface heated by the star is not drawn as a sheet: the gas grows warmer in colour toward it). The disk is drawn translucent so the midplane shows; a real disk is opaque in visible light.</span><span class="ja" lang="ja">モデルの量そのもの。そこにあるものだけを描き、色は温度、明るさはガス(塵を含む)の量です(星に温められた表層は面としては描かず、表層へ向かってガスが温かい色になります)。赤道面が見えるよう、円盤は半透明に描いています(実際の円盤は可視光では不透明です)。</span></dd>
+      <dd><span class="en" lang="en">The model's own quantities, only what is there: colour is the material, each with its own (the disk of gas and dust royal blue, its accretion layer amber, the pebbles brown where rock and pale blue where icy, the wind cyan, the jet coral, the envelope orchid, the planets and their disks gold, the star’s magnetosphere violet and its accretion curtains magenta; the key at the lower right), brightness how much of it is there. The colours are chosen to be told apart and to look well together, not to show a temperature. The disk is drawn translucent so the midplane shows; a real disk is opaque in visible light.</span><span class="ja" lang="ja">モデルの量そのもの。そこにあるものだけを描き、色は物質の種類、明るさはその量です(ガスと塵の円盤は青、その降着層は琥珀色、小石は岩なら茶色・氷なら淡い水色、円盤風は水色、ジェットは珊瑚色、エンベロープは薄紫、惑星と周惑星円盤は金色、星の磁気圏は紫、降着の柱は赤紫。右下に一覧)。色は見分けやすく、並べて見栄えのするように選んだもので、温度を表してはいません。赤道面が見えるよう、円盤は半透明に描いています(実際の円盤は可視光では不透明です)。</span></dd>
       <dt><span class="en" lang="en">Visible, Mid-IR, Millimetre</span><span class="ja" lang="ja">可視光、中間赤外、ミリ波</span></dt>
       <dd><span class="en" lang="en">The disk as a telescope at that wavelength would see it: starlight scattered by the surface and the wind; the warm surface's own glow; the pebbles' glow at the midplane.</span><span class="ja" lang="ja">その波長の望遠鏡に映る姿。表層と風が散らす星の光、暖かい表層が自ら出す光、赤道面の小石が出す光。</span></dd>
       <dt>CO</dt>
       <dd><span class="en" lang="en">The rotational line of carbon monoxide, as a channel map, the mean velocity (moment 1) or the integrated intensity (moment 0).</span><span class="ja" lang="ja">一酸化炭素の回転輝線。チャンネル図、平均速度(モーメント 1)、積分強度(モーメント 0)。</span></dd>
+      <dt><span class="en" lang="en">Background</span><span class="ja" lang="ja">背景</span></dt>
+      <dd><span class="en" lang="en">A backdrop, not part of the model: none, a sparse field of stars, or the sky of a star-forming region, a dark molecular cloud around the disk, its thin parts letting through background stars and the Milky Way, reddened as by interstellar dust (Cardelli, Clayton &amp; Mathis 1989), and its edges lit blue by two bright stars nearby, as reflection nebulae are. The cloud shows in the model and visible looks; the other looks keep the stars.</span><span class="ja" lang="ja">モデルの一部ではない背景の絵。なし、まばらな星、星形成領域の空(円盤を包む暗い分子雲。薄い所から背後の星と天の川が星間塵による赤化を受けてのぞき(Cardelli, Clayton &amp; Mathis 1989)、近くの二つの明るい星が雲の縁を青く照らす反射星雲)から選べます。分子雲はモデルと可視光の見え方に出て、ほかの見え方では星だけです。</span></dd>
     </dl>
 
     <h3><span class="en" lang="en">Limits</span><span class="ja" lang="ja">限界</span></h3>
@@ -258,7 +270,7 @@
       <li><span class="en" lang="en">On a touch screen, as on a map: one finger moves, two fingers zoom and turn, two fingers moved up or down tilt; double-tap to zoom in.</span><span class="ja" lang="ja">タッチでは地図と同じです。1 本指で移動、2 本指で拡大と回転、2 本そろえて上下に動かすと傾きが変わります。ダブルタップで拡大。</span></li>
       <li><span class="en" lang="en">With the picture focused (Tab): arrows turn, + and − zoom, Home returns to the first view, space pauses, 1–5 set the angle, P goes to the planet, F field lines, S the cut, A labels.</span><span class="ja" lang="ja">図にフォーカスがあるとき(Tab):矢印で回転、+ と − で拡大・縮小、Home で最初の視点、スペースで一時停止、1〜5 で角度、P で惑星へ、F で磁力線、S で断面、A で注釈。</span></li>
       <li><span class="en" lang="en">Planets: turn them on under Show; click a planet in the picture to move its orbit, or place more with “Place a planet” (up to four).</span><span class="ja" lang="ja">惑星:「見せるもの」でオンにします。絵の中の惑星をクリックすると軌道半径を動かせ、「惑星を置く」で増やせます(4 つまで)。</span></li>
-      <li><span class="en" lang="en">Click the star, or click the disk, and see what happens.</span><span class="ja" lang="ja">星や円盤をクリックすると、何かが起きます。</span></li>
+      <li><span class="en" lang="en">Click the star and see what happens. With “Tap to drop pebbles” (under Pebbles), a click on the disk drops pebbles there; keep at it.</span><span class="ja" lang="ja">星をクリックすると、何かが起きます。「小石」の下の「タップで小石を置く」をオンにすると、円盤をクリックした所に小石を置けます(続けてみてください)。</span></li>
     </ul>
 
     <h3><span class="en" lang="en">Using it</span><span class="ja" lang="ja">利用について</span></h3>
@@ -271,8 +283,13 @@
       <li>Ulrich, R. K. 1976, ApJ, 210, 377</li>
       <li>Rafikov, R. R. 2002, ApJ, 569, 997</li>
       <li>Kanagawa, K. D., Tanaka, H., Muto, T. &amp; Tanigawa, T. 2017, PASJ, 69, 97</li>
+      <li>Bitsch, B. et al. 2018, A&amp;A, 612, A30</li>
       <li>Dartois, E., Dutrey, A. &amp; Guilloteau, S. 2003, A&amp;A, 399, 773</li>
+      <li>Bai, X.-N. &amp; Stone, J. M. 2013, ApJ, 769, 76</li>
+      <li>Cardelli, J. A., Clayton, G. C. &amp; Mathis, J. S. 1989, ApJ, 345, 245</li>
+      <li>Frank, A. et al. 2014, in Protostars and Planets VI, 451</li>
       <li>Mori, S., Bai, X.-N. &amp; Tomida, K. 2025, ApJ, 992, 85</li>
+      <li>Ansdell, M. et al. 2018, ApJ, 859, 21</li>
       <li>Cieza, L. A. et al. 2016, Nature, 535, 258 <span class="en" lang="en">(the snow line of V883 Ori in outburst)</span><span class="ja" lang="ja">(増光中の V883 Ori のスノーライン)</span></li>
     </ul>
     <p class="colophon" id="colophon"></p>

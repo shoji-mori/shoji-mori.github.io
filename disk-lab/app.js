@@ -3,15 +3,15 @@
 // what is shown, cut, variants, time, view) and the highlights (places.js), and keeps its controls in step with the
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
-import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016c';
-import { WORDS } from './words.js?v=20261017h';
+import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261017i';
+import { WORDS } from './words.js?v=20261017i';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=0f4eefce4f';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=e8981d3830';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
-const VERSION = '1.4.1', RELEASED = '2026-10-17';
+const VERSION = '1.5', RELEASED = '2026-10-17';
 // The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
 // moves from its hidden address to its public one.
 const CITE_URL = 'https://shoji-mori.github.io/disk-lab/', CITE_YEAR = 2026;
@@ -29,8 +29,8 @@ const T = () => WORDS[L()];
 const lab = $('lab'), stage = $('stage'), box = $('disk'), poster = $('poster');
 const routeList = $('routeList'), placeText = $('placeText'), placeTitle = $('placeTitle'), placeActions = $('placeActions');
 const lookGroup = $('lookGroup'), lookNote = $('lookNote'), lookContext = $('lookContext'), cutContext = $('cutContext');
-const playBtn = $('play'), clock = $('clock'), rail = $('rail');
-const stageHint = $('stageHint'), stageNote = $('stageNote'), stillNote = $('stillNote'), tempKey = $('tempKey');
+const playBtn = $('play'), rail = $('rail');
+const stageHint = $('stageHint'), stageNote = $('stageNote'), stillNote = $('stillNote'), matKey = $('matKey'), matList = $('matList');
 const LOOKS = ['model', 'optical', 'mir', 'mm', 'co'];
 const SPIN_DEG = 0.004 * 180 / Math.PI;   // the engine's slow turn of the view (data-spin, rad per second of the clock)
 
@@ -91,26 +91,30 @@ function setPoster(id) {
   poster.src = src;
 }
 
-// ---------- the temperature key: the engine's colours for temperature (tcolor in its shader, tcolorJS in its script) ----------
-(function drawTempKey() {
-  const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-  const tcolor = (T_) => {
-    const l = Math.log(T_), st = [[3.69, 4.50, [0.071, 0.325, 1.000]], [4.50, 4.98, [0.560, 0.800, 1.000]], [4.98, 5.16, [0.920, 0.900, 0.860]],
-      [5.16, 5.86, [1.000, 0.325, 0.047]], [5.86, 6.68, [1.000, 0.560, 0.120]], [6.68, 7.38, [1.000, 0.860, 0.240]]];
-    let c = [0.023, 0.148, 0.893];
-    for (const [a, b, k] of st) { const t = ss(a, b, l); c = c.map((v, i) => v + (k[i] - v) * t); }
-    return c.map((v) => Math.round(255 * 0.92 * Math.pow(v, 1 / 2.2)));
-  };
-  const T0 = 30, T1 = 2000, stops = [];
-  for (let i = 0; i <= 24; i++) { const u = i / 24, c = tcolor(T0 * Math.pow(T1 / T0, u)); stops.push(`rgb(${c.join(',')}) ${(u * 100).toFixed(1)}%`); }
-  $('tempBar').style.background = `linear-gradient(90deg, ${stops.join(', ')})`;
-  const ticks = tempKey.querySelector('.temp-ticks');
-  ticks.style.position = 'relative'; ticks.style.height = '1.4em';
-  [...ticks.children].forEach((s, i) => {
-    const Tk = [30, 160, 2000][i], u = Math.log(Tk / T0) / Math.log(T1 / T0);
-    Object.assign(s.style, { position: 'absolute', left: (u * 100) + '%', transform: i === 0 ? 'none' : i === 2 ? 'translateX(-100%)' : 'translateX(-50%)' });
-  });
-})();
+// ---------- the material key (round 8): the model look's colours, one per material (the engine's MAT, box.diskPalette) ----------
+// (the owner: "colour the model look by material, not by temperature"; the temperature's bar that stood here went with it)
+// Only the materials shown, and those that show at this distance: the envelope from 40 au, the star's magnetosphere and
+// curtains within 2 au of the star; the pebbles' rock and ice on one row.
+let matShown = '';
+function renderMatKey(s) {
+  const on = s.look === 'model' && !s.slice && !!s.ann && typeof box.diskPalette === 'function';
+  matKey.classList.toggle('on', on);
+  if (!on) return;
+  const P = Object.fromEntries(box.diskPalette().map((m) => [m.key, m])), rows = [];
+  if (s.mode & 3) rows.push(['disk'], ['acc']);
+  if (s.mode & 4) rows.push(['rock', 'ice']);
+  if (s.mode & 8) rows.push(['wind']);
+  if (s.mode & 64) rows.push(['jet']);
+  if ((s.mode & 32) && s.d > 40) rows.push(['env']);
+  if ((s.mode & 16) && s.planets.some((p) => p[1])) rows.push(['planet']);
+  if (s.d < 2 && !s.p) rows.push(['mag'], ['curt']);
+  if (s.marks && (s.mode & 1)) rows.push(['arrows']);   // (round 8: the flow arrows, with what their length means)
+  const key = L() + JSON.stringify(rows);
+  if (key === matShown) return;
+  matShown = key;
+  matList.replaceChildren(...rows.map((ks) => ks[0] === 'arrows' ? el('li', {}, el('i', { class: 'arr' }, '\u2192'), el('span', {}, T().arrowsKey))
+    : el('li', {}, ...ks.map((k) => el('i', { style: 'background:' + P[k].hex })), el('span', {}, ks.length > 1 ? T().pebblesKey : P[ks[0]][L()]))));
+}
 
 // ---------- the route (places) ----------
 const routeButtons = PLACES.map((p, i) => {
@@ -127,8 +131,9 @@ function goPlace(i, { fly = true } = {}) {
   if (live()) {
     const st = placeState(pl, S().mode, aspect());
     // (the planet's place shows the first planet at 3 au, as its text says; others are kept)
-    if (pl.id === 'planet') { const ps = S().planets.filter((p, j) => j > 0 && roomFor([[3, 1]], p[0], -1)); st.planets = [[3, 1], ...ps].slice(0, 4); st.pi = 0; }
-    else if ((pl.needs & 16) && !S().planets.some((p) => p[1])) st.planets = [[3, 1]];
+    // (round 8: a Jupiter, as the place's text says)
+    if (pl.id === 'planet') { const ps = S().planets.filter((p, j) => j > 0 && roomFor([[3, 1, 1]], p[0], -1, p[2])); st.planets = [[3, 1, 1], ...ps].slice(0, 4); st.pi = 0; }
+    else if ((pl.needs & 16) && !S().planets.some((p) => p[1])) st.planets = [[3, 1, 1]];
     box.diskSet({ ...st, fly: fly && !reduce ? 1 : 0 });
     target = { ...st, time: S().time };
     // (the default Best starts each place from 100 %: its quiet steps were for the view left)
@@ -290,28 +295,27 @@ const kms = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' km/s';
 // of the names it wrote beside them (the owner: "the labels on the cut say poorly which line they mean"). The colours are
 // the engine's legend at the top left of the picture. Which lines are drawn follows the engine's drawSlice: the snow line
 // and where starlight reaches on every face, the pebbles with the pebbles shown, the density's contours on its face, the
-// field lines with them, their flow arrows with the markers (the wind's with the wind, the accretion's with the gas), the
-// planets' orbits.
+// field lines with them, the flow arrows with the gas and its option (the wind's with the wind as well; round 8: no longer
+// with the field lines), the planets' orbits.
 function keyItems(s) {
   const out = ['tau1', 'ice'];
   if (s.mode & 4) out.push('pebbles');
   if (s.sq === 'rho') out.push('contour');
   if (s.field) out.push('field');
-  if (s.field && s.marks && (s.mode & 8)) out.push('flow');
-  if (s.field && s.marks && (s.mode & 1)) out.push('acc');
+  if (s.marks && (s.mode & 1) && (s.mode & 8)) out.push('flow');
+  if (s.marks && (s.mode & 1)) out.push('acc');
   if ((s.mode & 16) && s.planets.some((p) => p[1])) out.push('planet');
   return out;
 }
 const KEY_SVG = {
   tau1: '<path d="M1 5h22" stroke="#fff3df" stroke-width="1.5"/>',
-  ice: '<path d="M1 5h22" stroke="#0a0d18" stroke-opacity=".5" stroke-width="5"/><path d="M1 5h22" stroke="#6fd0ff" stroke-width="2.6" stroke-dasharray="7 4"/>',
+  ice: '<path d="M1 5h22" stroke="#0a0d18" stroke-opacity=".6" stroke-width="4.6" stroke-dasharray="9 2" stroke-dashoffset="1"/><path d="M1 5h22" stroke="#6fd0ff" stroke-width="2.6" stroke-dasharray="7 4"/>',
   pebbles: '<path d="M1 5h11" stroke="#b07a52" stroke-width="2.2"/><path d="M12 5h11" stroke="#e3f1ff" stroke-width="2.2"/>',
   contour: '<path d="M1 7c6-5 16-5 22 0" stroke="#fff" stroke-opacity=".55" stroke-width=".9"/>',
   field: '<path d="M2 9c4-1 8-4 10-8M12 9c4-1 8-4 10-8" stroke="#cfe3ff" stroke-opacity=".7" stroke-width=".9"/>',
-  flow: '<path d="M2 5h18M16 2l4 3-4 3" stroke="#e8f4ff" stroke-width="1.1"/>',
-  acc: '<path d="M22 5H6M10 2 6 5l4 3" stroke="#ffbe6a" stroke-width="1.3"/>',
-  planet: '<path d="M12 1l4 4-4 4-4-4z" fill="#ffd9a8" stroke="#0a0d18"/>',
-  clear: '<rect x="1.5" y="1.5" width="21" height="7" rx="1.5" stroke="#808a9a" stroke-dasharray="2 2"/>'
+  flow: '<path d="M5 5h13M14.5 2.7 18 5l-3.5 2.3" stroke="#e8f4ff" stroke-width="1.1"/>',
+  acc: '<path d="M19 5H8M11.5 2.7 8 5l3.5 2.3" stroke="#ffbe6a" stroke-width="1.2"/>',
+  planet: '<circle cx="12" cy="5" r="4.2" fill="none" stroke="#ffd040" stroke-opacity=".7"/><circle cx="12" cy="5" r="2.2" fill="#ffd040" stroke="#0a0d18" stroke-width=".8"/>'
 };
 function cutKeyList(sq, shown) {
   const w = T().cutKey, li = (k, text) => {
@@ -320,7 +324,8 @@ function cutKeyList(sq, shown) {
     return el('li', {}, sv, el('span', {}, text));
   };
   const items = shown.map((k) => li(k, k === 'tau1' && sq === 'layers' ? w.tau1Regions : w[k]));
-  items.push(li('clear', w.clear[sq] || w.clear.T));
+  // (round 8, the owner: "the caption for the parts without colour confuses more than it helps": the row of what is left
+  // clear, added in round 6, is gone; the classification stays in DESIGN.md)
   return el('ul', { class: 'cut-key', 'aria-label': w.label }, ...items);
 }
 
@@ -346,26 +351,23 @@ function sync() {
   renderActions(s);
   renderRail(s);
   // (not next to the star, where the magnetosphere's columns and curtains have colours of their own)
-  tempKey.classList.toggle('on', s.look === 'model' && !s.slice && !!s.ann && (s.p || s.d >= 2));
+  renderMatKey(s);
   playBtn.toggleAttribute('data-paused', !!s.paused);
   playBtn.setAttribute('aria-label', s.paused ? T().play : T().pause);
-  setClock(s.time);
   syncComps(s);
   syncQuality(s);
   if (!saving) renderSaveSize();
   if (s.paused) setClockRate(0);   // (paused, no frames come to clear the clock's rate)
   // the rail
   rail.querySelectorAll('[data-bit]').forEach((b) => pressed(b, s.mode & Number(b.dataset.bit)));
-  const opt = { field: s.field, marks: s.marks, ann: s.ann, asym: s.asym, waves: s.waves };
+  const opt = { field: s.field, marks: s.marks, ann: s.ann, asym: s.asym, waves: s.waves, drop: box.dataset.pick === 'pebbles' };
   rail.querySelectorAll('[data-opt]').forEach((b) => pressed(b, opt[b.dataset.opt]));
   rail.querySelectorAll('[data-cut]').forEach((b) => pressed(b, Number(b.dataset.cut) === s.slice));
+  rail.querySelectorAll('[data-bg]').forEach((b) => pressed(b, b.dataset.bg === (s.bg || 'stars')));
   rail.querySelectorAll('[data-speed]').forEach((b) => pressed(b, Math.abs(Number(b.dataset.speed) - s.speed) < 1e-6));
 }
-let clockShown = -1;
-function setClock(time) {
-  const y = Math.floor(time / 12 * 10) / 10;
-  if (y !== clockShown) { clockShown = y; clock.textContent = T().clock(y); }
-}
+// (round 8, the owner: "the clock's reading is not needed": the years beside the play button are gone. The rate below the
+// speeds stays, as it says how fast the clock runs for the view; a link keeps the time, t=)
 // the clock's rate for the view (the engine's clockK, slower zoomed in), told at the end of the time section's note
 // while the clock runs, not on the picture (the owner, 2026-10-16)
 let rateShown = '';
@@ -379,12 +381,14 @@ rail.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b || !live()) return;
   const s = S();
   // (a component may be more than one of the engine's bits, the gas with its dust: on if any is, and all turn together)
-  if (b.dataset.bit) { const bit = Number(b.dataset.bit), m = s.mode & bit ? s.mode & ~bit : s.mode | bit; box.diskSet({ mode: m, ...((m & 16) && !s.planets.some((p) => p[1]) ? { planets: [...s.planets.filter((p) => roomFor([[3, 1]], p[0], -1) || !p[1]), [3, 1]].slice(-4) } : {}) }); }
+  if (b.dataset.bit) { const bit = Number(b.dataset.bit), m = s.mode & bit ? s.mode & ~bit : s.mode | bit; box.diskSet({ mode: m, ...((m & 16) && !s.planets.some((p) => p[1]) ? { planets: [...s.planets.filter((p) => roomFor([[3, 1, 1]], p[0], -1, p[2]) || !p[1]), [3, 1, 1]].slice(-4) } : {}) }); }
   else if (b.dataset.opt === 'field') box.diskField(!s.field);
   else if (b.dataset.opt === 'marks') box.diskSet({ marks: s.marks ? 0 : 1 });
   else if (b.dataset.opt === 'ann') box.diskAnnotations(!s.ann);
   else if (b.dataset.opt === 'asym') box.diskSet({ asym: s.asym ? 0 : 1 });
   else if (b.dataset.opt === 'waves') box.diskSet({ waves: s.waves ? 0 : 1 });
+  else if (b.dataset.opt === 'drop') setPick(box.dataset.pick === 'pebbles' ? false : 'pebbles');
+  else if (b.dataset.bg) box.diskSet({ bg: b.dataset.bg });   // (round 8: the background, the engine's BG)
   else if (b.dataset.cut) { const k = Number(b.dataset.cut); if (k === 0) box.diskSlice(false); else box.diskSlice(true, null, k === 2 ? 'quarter' : 'half'); }
   else if (b.dataset.angle) { const [elv, az] = b.dataset.angle.split(',').map(Number); box.diskSet({ slice: 0, p: 0, el: elv, az, fly: reduce ? 0 : 1 }); }
   else if (b.id === 'recentre') box.diskCenter();
@@ -395,14 +399,15 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.saveSize) { saveSize = b.dataset.saveSize; try { sessionStorage.setItem('disk-lab-save-size', saveSize); } catch { /* for this view only */ } renderSaveSize(); }
   else if (b.dataset.quality) setQuality(b.dataset.quality);
   else if (b.id === 'citeCopy') copyCite();
-  else if (b.dataset.planetOn != null) { const pl = S().planets; const i = Number(b.dataset.planetOn); if (pl[i]) { pl[i][1] = pl[i][1] ? 0 : 1; if (pl[i][1] && !roomFor(pl, pl[i][0], i)) pl[i][1] = 0; box.diskSet({ planets: pl }); } }
+  else if (b.dataset.planetOn != null) { const pl = S().planets; const i = Number(b.dataset.planetOn); if (pl[i]) { pl[i][1] = pl[i][1] ? 0 : 1; if (pl[i][1] && !roomFor(pl, pl[i][0], i, pl[i][2])) pl[i][1] = 0; box.diskSet({ planets: pl }); } }
   else if (b.dataset.planetRemove != null) { const pl = S().planets; pl.splice(Number(b.dataset.planetRemove), 1); box.diskSet({ planets: pl }); }
-  else if (b.id === 'addPlanet') setPick(box.dataset.pick !== 'planet');
+  else if (b.id === 'addPlanet') setPick(box.dataset.pick === 'planet' ? false : 'planet');
   sync();
 });
 rail.addEventListener('input', (e) => {
   const t = e.target; if (!live()) return;
   if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value));
+  else if (t.dataset.planetM != null) massPlanet(Number(t.dataset.planetM), mOf(t.value));
 });
 
 // ---------- the components (Show): each a toggle; turned on, its settings open below it ----------
@@ -411,12 +416,14 @@ rail.addEventListener('input', (e) => {
 // the dust makes, which goes with the gas as well. A link with one of the two bits is read as both, linkMode.)
 // (round 6: the amounts, the engine's display factors of the components, are gone from the page, the owner's choice: the
 // model's own amounts are what is shown, and a link's g= is read past)
-// opts: the engine's options that belong to it (the wind's asymmetry, the field lines' flow markers, the planets' waves);
-// planets: the list of planets. The envelope and the labels have no settings of their own. (The flow markers move along
-// the field lines, and the engine draws them only with the lines: the owner put them there, 2026-10-16.)
+// opts: the engine's options that belong to it (the gas's flow arrows, the pebbles' tap mode, the wind's asymmetry, the
+// planets' waves); planets:
+// the list of planets. The envelope, the jet and the labels have no settings of their own. (The flow markers were the field
+// lines' option from round 5, 2026-10-16; round 8, the owner: "the flow markers: an option of the gas; small arrows". They
+// show the gas's motion, drawn while the gas is shown.)
 const COMPS = [
-  { key: 'gas', bit: 3 }, { key: 'pebbles', bit: 4 },
-  { key: 'wind', bit: 8, opts: ['asym'] }, { key: 'field', opt: 'field', opts: ['marks'] },
+  { key: 'gas', bit: 3, opts: ['marks'] }, { key: 'pebbles', bit: 4, opts: ['drop'] },
+  { key: 'wind', bit: 8, opts: ['asym'] }, { key: 'jet', bit: 64 }, { key: 'field', opt: 'field' },
   { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32 }, { key: 'labels', opt: 'ann' }
 ];
 const compEls = COMPS.map((c) => {
@@ -449,14 +456,36 @@ const roundA = (a) => { const k = a < 0.1 ? 1000 : a < 1 ? 100 : a < 10 ? 10 : 2
 const aOf = (v) => roundA(PL_A[0] * Math.pow(PL_A[1] / PL_A[0], Number(v) / 1000));
 const sliderOfA = (a) => String(Math.round(1000 * Math.log(a / PL_A[0]) / Math.log(PL_A[1] / PL_A[0])));
 const fmtA = (a) => (a < 1 ? String(roundA(a)) : a < 10 ? a.toFixed(1) : String(Math.round(a)));
-// is there room for a planet at a (within PL_A, at least 1.4 in the ratio of radii from the other shown planets)?
-const roomFor = (list, a, skip) => a >= PL_A[0] && a <= PL_A[1] && list.every((p, i) => i === skip || !p[1] || Math.max(a, p[0]) / Math.min(a, p[0]) >= 1.4);
-// a planet moved by a slider: held between its shown neighbours (1.4 in the ratio of radii)
+// (round 8, the owner: "give the planets a mass slider") the planets' masses, in Jupiter masses, from 10 Earth masses to 3
+// (the engine's MASS: above 3 the gap turns eccentric, which the model cannot show), on a log slider; shown in Earth
+// masses below 0.1 M_J (about 32), else in M_J, to two figures. Neighbours keep apart by the engine's rule in mutual Hill
+// radii (box.diskMinRatio; a radius ratio of 1.4 before round 8, about the same for two Jupiters)
+const PL_M = [10 / 317.83, 3], M_EARTH = 1 / 317.83;
+const roundM = (m) => (m < 0.1 ? Math.round(m / M_EARTH) * M_EARTH : +m.toPrecision(2));
+const mOf = (v) => roundM(PL_M[0] * Math.pow(PL_M[1] / PL_M[0], Number(v) / 1000));
+const sliderOfM = (m) => String(Math.round(1000 * Math.log(m / PL_M[0]) / Math.log(PL_M[1] / PL_M[0])));
+// the mass as text with its unit (M⊕ or M_J, the J as a subscript)
+const fmtM = (m) => (m < 0.1 - 1e-9 ? [String(Math.round(m / M_EARTH)), 'M', '⊕'] : [String(+(m || 1).toPrecision(2)), 'M', 'J']);
+const massEl = (m) => { const [n, u, sub] = fmtM(m); return el('span', { class: 'mass' }, n + '\u2009' + u, sub === 'J' ? el('sub', {}, 'J') : sub); };
+const minRatio = (m1, m2) => (typeof box.diskMinRatio === 'function' ? box.diskMinRatio(m1, m2) : 1.4);
+// is there room for a planet of mass m at a (within PL_A, and apart from the other shown planets by the engine's rule)?
+const roomFor = (list, a, skip, m = 1) => a >= PL_A[0] && a <= PL_A[1] && list.every((p, i) => i === skip || !p[1] || Math.max(a, p[0]) / Math.min(a, p[0]) >= minRatio(m, p[2] || 1));
+// a planet moved by a slider: held between its shown neighbours (the engine's rule in mutual Hill radii)
 function movePlanet(i, a) {
   const pl = S().planets; if (!pl[i]) return;
   let lo = PL_A[0], hi = PL_A[1];
-  pl.forEach((p, j) => { if (j === i || !p[1]) return; if (p[0] <= pl[i][0]) lo = Math.max(lo, p[0] * 1.4); else hi = Math.min(hi, p[0] / 1.4); });
+  pl.forEach((p, j) => { if (j === i || !p[1]) return; const k = minRatio(pl[i][2], p[2]); if (p[0] <= pl[i][0]) lo = Math.max(lo, p[0] * k); else hi = Math.min(hi, p[0] / k); });
   pl[i][0] = Math.min(hi, Math.max(lo, a));
+  box.diskSet({ planets: pl });
+  planetsKey = ''; syncComps(S());
+  popSync();
+}
+// a planet's mass changed by a slider: as heavy as its neighbours leave room for (they keep their places)
+function massPlanet(i, m) {
+  const pl = S().planets; if (!pl[i]) return;
+  let mm = m;
+  while (mm > PL_M[0] && !roomFor(pl, pl[i][0], i, mm)) mm = roundM(mm * 0.97);
+  pl[i][2] = Math.max(PL_M[0], mm);
   box.diskSet({ planets: pl });
   planetsKey = ''; syncComps(S());
   popSync();
@@ -467,6 +496,8 @@ function syncComps(s) {
     const on = c.bit ? !!(s.mode & c.bit) : !!opt[c.opt];
     if (opts) opts.hidden = !on;
   }
+  // (round 8: the pebbles' tap mode ends with the pebbles, as its button goes with their settings)
+  if (box.dataset.pick === 'pebbles' && !(s.mode & 4)) { delete box.dataset.pick; lab.classList.remove('picking'); note('', 0); }
   // the planets' rows (rebuilt when the list changes)
   const key = L() + JSON.stringify(s.planets);
   const list = $('comps').querySelector('.planet-list');
@@ -474,42 +505,52 @@ function syncComps(s) {
   if (!list || key === planetsKey) return;
   planetsKey = key;
   const w = T().show;
-  list.replaceChildren(...s.planets.map(([a, on], i) => el('div', { class: 'planet-row' },
+  // (round 8: a second line with the mass and its slider under the orbit's)
+  list.replaceChildren(...s.planets.map(([a, on, m], i) => el('div', { class: 'planet-row' },
     el('button', { type: 'button', class: 'toggle small', 'data-planet-on': String(i), 'aria-pressed': String(!!on) }, w.planetRow(i + 1, fmtA(a))),
     el('input', { type: 'range', min: '0', max: '1000', step: '1', value: sliderOfA(a), 'data-planet-a': String(i), 'aria-label': w.orbit(i + 1) }),
-    el('button', { type: 'button', class: 'icon-x', 'data-planet-remove': String(i), 'aria-label': w.remove, title: w.remove }, '×'))));
+    el('button', { type: 'button', class: 'icon-x', 'data-planet-remove': String(i), 'aria-label': w.remove, title: w.remove }, '×'),
+    el('span', { class: 'planet-mass' }, massEl(m)),
+    el('input', { type: 'range', min: '0', max: '1000', step: '1', value: sliderOfM(m || 1), 'data-planet-m': String(i), 'aria-label': w.massOf(i + 1) }))));
 }
 
-// placing a planet: a click on the disk (the engine sends diskpick instead of dropping pebbles)
-function setPick(on) {
-  if (on) box.dataset.pick = 'planet'; else delete box.dataset.pick;
-  lab.classList.toggle('picking', !!on);
-  if (on) note(T().show.picking, 0); else note('', 0);
+// what a click on the disk does (the engine's data-pick): 'planet', place a planet (the engine sends diskpick); 'pebbles'
+// (round 8, the owner: "no pebbles on a tap by default; a mode of the pebbles"), drop a clump of pebbles there, three near one
+// radius growing a planet; neither, nothing (a click on the star or a planet still does its own). One at a time: either
+// button ends the other's mode
+function setPick(kind) {
+  if (kind) box.dataset.pick = kind; else delete box.dataset.pick;
+  lab.classList.toggle('picking', !!kind);
+  note(kind === 'planet' ? T().show.picking : kind === 'pebbles' ? T().show.dropping : '', 0);
   sync();
 }
 box.addEventListener('diskpick', (e) => {
   const w = T().show, pl = S().planets, a = roundA(Math.min(PL_A[1], Math.max(PL_A[0], e.detail.R)));
   if (!roomFor(pl, a, -1)) { note(w.noRoom, 3500); return; }
   const i = pl.findIndex((p) => !p[1]);
-  if (i >= 0) pl[i] = [a, 1]; else if (pl.length < 4) pl.push([a, 1]); else { note(w.full, 3500); return; }
+  if (i >= 0) pl[i] = [a, 1, 1]; else if (pl.length < 4) pl.push([a, 1, 1]); else { note(w.full, 3500); return; }
   box.diskSet({ planets: pl, mode: S().mode | 16 });
   setPick(false);
   note(w.placed(fmtA(a)), 3000);
 });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (box.dataset.pick === 'planet') setPick(false); popClose(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (box.dataset.pick) setPick(false); popClose(); } });
 
 // a click on a planet in the picture: its orbit's slider, beside it
 const pop = $('planetPop');
 let popI = -1;
 box.addEventListener('diskplanet', (e) => {
   popI = e.detail.i;
-  const w = T().show, a = S().planets[popI][0];
+  const w = T().show, [a, , m] = S().planets[popI];
   const input = el('input', { type: 'range', min: '0', max: '1000', step: '1', value: sliderOfA(a), 'aria-label': w.orbit(popI + 1),
     oninput: (ev) => movePlanet(popI, aOf(ev.target.value)) });
+  // (round 8: and its mass)
+  const inputM = el('input', { type: 'range', min: '0', max: '1000', step: '1', value: sliderOfM(m || 1), 'aria-label': w.massOf(popI + 1),
+    oninput: (ev) => massPlanet(popI, mOf(ev.target.value)) });
   pop.replaceChildren(el('span', { class: 'pop-name' }, w.planetRow(popI + 1, fmtA(a))), input,
-    el('button', { type: 'button', class: 'icon-x', 'aria-label': 'close', onclick: popClose }, '×'));
+    el('button', { type: 'button', class: 'icon-x', 'aria-label': 'close', onclick: popClose }, '×'),
+    el('span', { class: 'pop-mass' }, massEl(m)), inputM);
   pop.hidden = false;
-  const x = Math.min(stage.clientWidth - 230, Math.max(8, e.detail.x + 18)), y = Math.min(stage.clientHeight - 60, Math.max(8, e.detail.y - 22));
+  const x = Math.min(stage.clientWidth - 260, Math.max(8, e.detail.x + 18)), y = Math.min(stage.clientHeight - 84, Math.max(8, e.detail.y - 22));
   pop.style.left = x + 'px'; pop.style.top = y + 'px';
   input.focus({ preventScroll: true });
 });
@@ -518,6 +559,7 @@ function popSync() {
   const a = S().planets[popI] && S().planets[popI][0];
   if (a == null) { popClose(); return; }
   pop.querySelector('.pop-name').textContent = T().show.planetRow(popI + 1, fmtA(a));
+  pop.querySelector('.pop-mass').replaceChildren(massEl(S().planets[popI][2]));
 }
 function popClose() { pop.hidden = true; popI = -1; }
 stage.addEventListener('pointerdown', (e) => { if (!pop.hidden && !pop.contains(e.target)) popClose(); }, { capture: true });
@@ -665,7 +707,9 @@ function linkFor(s) {
   if (s.tx || s.ty || s.tz) for (const k of ['tx', 'ty', 'tz']) u.searchParams.set(k, String(s[k]));
   if (s.look === 'co') { u.searchParams.set('com', s.coMode); u.searchParams.set('cov', String(s.coV)); }
   if (!s.ms) u.searchParams.set('ms', '0');
-  if (s.planets.length) u.searchParams.set('pl', s.planets.map(([a, on]) => a + ':' + on).join(','));
+  if (s.bg && s.bg !== 'stars') u.searchParams.set('bg', s.bg);   // (round 8: the background, when not the stars)
+  // (round 8: with each planet's mass in M_J; a link without it is read as Jupiter's)
+  if (s.planets.length) u.searchParams.set('pl', s.planets.map(([a, on, m]) => a + ':' + on + ':' + m).join(','));
   u.searchParams.set('t', String(Math.round(s.time * 1000) / 1000));
   u.searchParams.set('lang', L());
   return u.href;
@@ -764,6 +808,7 @@ function stateFromLink() {
   if (st.mode != null) st.mode = linkMode(Number(st.mode));
   if (q.has('sq')) st.sq = q.get('sq');
   if (q.has('look')) st.look = q.get('look');
+  if (q.has('bg')) st.bg = q.get('bg');
   if (q.has('com')) st.coMode = q.get('com');
   if (q.has('cov')) st.coV = q.get('cov');
   if (q.has('t')) st.time = q.get('t');
@@ -798,7 +843,7 @@ narrow.addEventListener('change', tabRoles); tabRoles();
 function setLang(l) {
   html.lang = l; html.classList.toggle('lang-ja', l === 'ja');
   try { sessionStorage.setItem('site-language', l); } catch { /* the choice still applies to this page */ }
-  actionsKey = lookKey = cutKey = ''; clockShown = -1;
+  actionsKey = lookKey = cutKey = '';
   if (mode !== 'live' || 'lost' in lab.dataset) setPoster(PLACES[placeI].id);   // (the stills carry their labels)
   renderAll();
 }
@@ -960,7 +1005,6 @@ box.addEventListener('diskstate', () => sync());
 box.addEventListener('diskmode', () => sync());
 box.addEventListener('diskframe', (e) => {
   if (mode !== 'live') return;
-  setClock(e.detail.time);
   setClockRate(e.detail.clock);
   // (the intervals between frames of one still picture, at one scale, are what a frame of it costs; a complete picture
   // may be sharpened)
@@ -978,6 +1022,7 @@ box.addEventListener('diskframe', (e) => {
   lastFrame = now;
   if (accMax && acc >= accMax && lab.dataset.state === 'live') onAccumulated();
   watchMoving(e.detail);
+  renderMatKey(S());   // (the key's rows follow the distance: the envelope, the magnetosphere)
 });
 
 // ---------- a lighter picture while the view moves ----------
