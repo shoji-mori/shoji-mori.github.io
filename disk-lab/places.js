@@ -19,7 +19,8 @@
 export const FOV = 32;   // the engine's vertical field of view (data-fov), degrees
 
 export const PLACES = [
-  { id: 'whole', view: { el: 22, az: -65, d: 90 }, fitW: 31, look: 'model', field: 0, cut: null, needs: 1 | 2 | 4 | 8 },
+  // (round 8: the whole disk seen from 16 degrees, 22 before, so that its flared, lit surface and the dark band under it show)
+  { id: 'whole', view: { el: 16, az: -65, d: 90 }, fitW: 31, look: 'model', field: 0, cut: null, needs: 1 | 2 | 4 | 8 },
   { id: 'wind', view: { el: 10, az: -80, d: 60 }, fitW: 22, look: 'model', field: 1, cut: null, needs: 1 | 2 | 8 | 64, action: 'asym' },
   { id: 'snow', view: { el: 30, az: -65, d: 9 }, fitW: 3.6, look: 'model', field: 0, cut: null, needs: 1 | 2 | 4, action: 'burst' },
   { id: 'planet', view: { p: 1, el: 30, az: 160, d: 1.6 }, fitW: 0.6, look: 'model', field: 0, cut: null, needs: 1 | 2 | 4 | 16, action: 'waves' },

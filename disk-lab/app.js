@@ -3,20 +3,24 @@
 // what is shown, cut, variants, time, view) and the highlights (places.js), and keeps its controls in step with the
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
-import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261017i';
+import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261017j';
 import { WORDS } from './words.js?v=20261017i';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=e8981d3830';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=dc18d49585';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
-const VERSION = '1.5', RELEASED = '2026-10-17';
+const VERSION = '1.6', RELEASED = '2026-10-17';
 // The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
 // moves from its hidden address to its public one.
 const CITE_URL = 'https://shoji-mori.github.io/disk-lab/', CITE_YEAR = 2026;
 // The quality the viewer may fix (render scale; Auto: the governor, and the sharpening of still pictures)
 const QUALITY = { low: 0.35, mid: 0.55, high: 0.8, full: 1 };
+// (round 8) the engine's finish for each level (its opt.fx: 0 none, 1 the starlight's shading, the tone and the depth's haze,
+// 2 also the glow of the bright parts); Auto by the scale calibrated at the start (DESIGN.md, section 21)
+const FX_OF = { low: 0, mid: 1, high: 2, full: 2 };
+const fxAuto = () => { const sc = (diag.calibration && diag.calibration.scale) || 0.5; return sc >= 0.7 ? 2 : sc >= 0.45 ? 1 : 0; };
 
 const html = document.documentElement;
 const $ = (id) => document.getElementById(id);
@@ -622,6 +626,7 @@ function applyQuality(k) {
   quality = k; qCap = 1; costs.length = 0; bestReset();
   unsharpen();
   if (live()) {
+    box.diskSet({ fx: k === 'auto' ? fxAuto() : FX_OF[k] ?? 2 });   // (round 8: the finish, see FX_OF)
     if (k === 'auto') { const base = diag.calibration && diag.calibration.scale || 0.5; box.diskScale(S().look === 'co' ? CO_FLOOR : base); runScale = box.diskScale(); }
     else { qCap = S().look === 'co' ? CO_FLOOR : 1; box.diskScale(fixedScale()); }
   }
@@ -993,6 +998,7 @@ async function start() {
   if (!reduce) gov = govern(box, { base: diag.calibration && diag.calibration.scale || 0.5, running: () => !S().paused,
     floor: () => (S().look === 'co' ? CO_FLOOR : MIN_SCALE), onChange: (sc) => { runScale = sc; } });
   if (quality !== 'auto') applyQuality(quality);
+  else box.diskSet({ fx: fxAuto() });   // (round 8: the finish for Auto, see FX_OF)
   if (reduce) { const r = $('reducedNote'); r.textContent = T().reduced; r.hidden = false; playBtn.hidden = true; $('speedGroup').hidden = true; }
   sync();
   hint(true);
