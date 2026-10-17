@@ -94,7 +94,10 @@ export const WORDS = {
       failed: '動くモデルを始められなかったため、同じモデルの静止画を表示しています。',
       forced: '静止画を表示しています。',
       lost: '描画が中断しました。戻るまで静止画を表示します。',
-      tryLive: 'それでも動かす'
+      blocked: 'ブラウザーが WebGL を止めています(GPU の負荷が続いたためです)。ブラウザーを再起動すると、動くモデルに戻ります。',
+      tryLive: 'それでも動かす',
+      retryText: '描画が止まったままです。',
+      retry: 'もう一度描く'
     },
     ariaStage: '円盤のモデル',
     ariaRoute: '行き先',
@@ -210,7 +213,10 @@ export const WORDS = {
       failed: 'The live model could not start, so these are still pictures of the same model.',
       forced: 'Showing still pictures.',
       lost: 'Drawing was interrupted; a still picture shows until it recovers.',
-      tryLive: 'Run the live model anyway'
+      blocked: 'The browser has stopped WebGL (the GPU was overloaded). Restarting the browser brings the live model back.',
+      tryLive: 'Run the live model anyway',
+      retryText: 'Drawing has stopped.',
+      retry: 'Try again'
     },
     ariaStage: 'Model of a protoplanetary disk',
     ariaRoute: 'Places',

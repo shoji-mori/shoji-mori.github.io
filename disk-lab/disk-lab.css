@@ -95,6 +95,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 
 .stage-hint,.stage-note{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:4;max-width:calc(100% - 2*var(--gx));padding:6px 14px;border-radius:999px;background:rgba(12,15,23,.78);border:1px solid var(--line);font-size:12.5px;color:var(--text-2);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .5s}
 .stage-hint.on,.stage-note.on{opacity:1}
+/* a lost WebGL context that does not come back: a way to draw again, over the still picture */
+.stage-retry{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;display:grid;justify-items:center;gap:10px;max-width:min(340px,calc(100% - 2*var(--gx)));padding:14px 18px;border-radius:12px;background:rgba(12,15,23,.84);border:1px solid var(--line);font-size:13px;color:var(--text);text-align:center}
+.stage-retry[hidden]{display:none}
 .stage-note{white-space:normal;text-align:center;color:var(--text)}
 .lab[data-state=loading] .stage-note.on{bottom:50%;transform:translate(-50%,50%);background:none;border:0;color:var(--text-2)}
 

@@ -4,7 +4,7 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016c';
-import { WORDS } from './words.js?v=20261017a';
+import { WORDS } from './words.js?v=20261017b';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
@@ -176,6 +176,8 @@ function renderAll() {
   $('route').setAttribute('aria-label', w.ariaRoute);
   lookGroup.setAttribute('aria-label', L() === 'ja' ? '見え方' : 'Look');
   stageHint.textContent = coarse ? w.hintTouch : w.hintMouse;
+  const retry = document.getElementById('stageRetry');   // (the retry panel, if shown, in the new language)
+  if (retry && !retry.hidden) { retry.firstElementChild.textContent = w.still.retryText; document.getElementById('retryLive').textContent = w.still.retry; }
   document.querySelectorAll('.lang-switch [data-lang]').forEach((b) => pressed(b, b.dataset.lang === L()));
   document.title = 'Disk Lab | ' + (L() === 'ja' ? '森 昇志' : 'Shoji Mori');
   renderPlace();
@@ -876,6 +878,8 @@ function renderStillNote() {
       const u = new URL(location.href); u.searchParams.delete('still'); u.searchParams.set('gl', 'force'); location.replace(u.href);
     } }, w.tryLive));
   }
+  // (WebGL stopped by the browser after a lost context: a reload may find it again, else a restart of the browser)
+  if (stillReason === 'blocked') kids.push(el('button', { type: 'button', class: 'action', onclick: () => location.reload() }, w.retry));
   stillNote.replaceChildren(...kids.map((k) => (typeof k === 'string' ? document.createTextNode(k) : k)));
   stillNote.hidden = false;
 }
@@ -904,7 +908,7 @@ async function start() {
   renderAll();
   if (q.get('still') === '1') return enterStill('forced');
   diag.probe = probe();
-  if (!diag.probe.ok && q.get('gl') !== 'force') return enterStill(diag.probe.reason);
+  if (!diag.probe.ok && q.get('gl') !== 'force') return enterStill(q.get('retry') === '1' ? 'blocked' : diag.probe.reason);
   // (after the way in from the site, if the page was entered by it: index.html, window.diskLabArrival)
   if (window.diskLabArrival) await window.diskLabArrival;
   note(T().loading, 0);
@@ -1014,11 +1018,31 @@ function endMoving() {
   if (live()) box.diskScale(quality === 'auto' ? runScale : fixedScale());
   govRest();
 }
+// A lost context usually comes back by itself within a second or two. If it has not after RETRY_AFTER, the stage offers
+// to draw again: the page is loaded anew with the view and settings in its address (linkFor), and retry=1 tells the
+// start that a failing probe means the browser has stopped WebGL (after repeated losses Chrome blocks it until restart).
+const RETRY_AFTER = 2500;
+let retryTimer = 0;
+const stageRetry = $('stageRetry');
+function retryLive() {
+  let href = location.href;
+  try { href = linkFor(S()); } catch { /* (the state may be out of reach while the context is lost) */ }
+  const u = new URL(href); u.searchParams.set('retry', '1'); u.searchParams.delete('still'); location.replace(u.href);
+}
+$('retryLive').addEventListener('click', retryLive);
+function showRetry(on) {
+  clearTimeout(retryTimer);
+  if (on) { stageRetry.firstElementChild.textContent = T().still.retryText; $('retryLive').textContent = T().still.retry; }
+  stageRetry.hidden = !on;
+}
 box.addEventListener('disklost', (e) => {
-  if (e.detail.lost) { lab.dataset.lost = ''; posterKey = ''; setPoster(PLACES[placeI].id); note(T().still.lost, 0); }
+  if (e.detail.lost) {
+    lab.dataset.lost = ''; posterKey = ''; setPoster(PLACES[placeI].id); note(T().still.lost, 0);
+    clearTimeout(retryTimer); retryTimer = setTimeout(() => { if ('lost' in lab.dataset) { note('', 0); showRetry(true); } }, RETRY_AFTER);
+  }
   else {
     // (the engine is built anew from its data attributes: give it back the scale it ran at)
-    delete lab.dataset.lost; note('', 0);
+    delete lab.dataset.lost; note('', 0); showRetry(false);
     sharpFrom = 0; recent.length = 0; govRest();
     if (runScale) box.diskScale(runScale);
     sync();
