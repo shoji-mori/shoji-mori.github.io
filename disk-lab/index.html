@@ -6,12 +6,12 @@
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0c0f17">
 <title>Disk Lab | Shoji Mori</title>
-<meta name="description" content="An interactive, physically based model of a protoplanetary disk, drawn on the GPU in the browser.">
+<meta name="description" content="An interactive, physics-based visualization of protoplanetary disks, from magnetic fields and disk winds to planet formation and observational signatures.">
 <link rel="canonical" href="https://shoji-mori.github.io/disk-lab/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Shoji Mori">
 <meta property="og:title" content="Disk Lab | Shoji Mori">
-<meta property="og:description" content="An interactive, physically based model of a protoplanetary disk, drawn on the GPU in the browser.">
+<meta property="og:description" content="An interactive, physics-based visualization of protoplanetary disks, from magnetic fields and disk winds to planet formation and observational signatures.">
 <meta property="og:url" content="https://shoji-mori.github.io/disk-lab/">
 <meta property="og:image" content="https://shoji-mori.github.io/disk-lab/og.jpg">
 <meta property="og:image:width" content="1200">
@@ -23,7 +23,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-wave.png?v=a5-bold-20261015">
 <link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="disk-lab.css?v=20261017g">
+<link rel="stylesheet" href="disk-lab.css?v=20261017h">
 <script>
   // The language, chosen as the site chooses it: ?lang=, the visit's choice, then the browser's language.
   (() => {
@@ -84,7 +84,7 @@
   })();
 </script>
 <link rel="expect" href="#posterFirst" blocking="render">
-<script type="module" src="app.js?v=20261017g"></script>
+<script type="module" src="app.js?v=20261017h"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
@@ -211,7 +211,8 @@
   <div class="about-inner">
     <button type="button" class="icon-button about-close" id="aboutClose" data-aria-en="Close" data-aria-ja="閉じる"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
     <h2 id="aboutTitle" tabindex="-1" autofocus><span class="en" lang="en">About this model</span><span class="ja" lang="ja">このモデルについて</span></h2>
-    <p class="lead"><span class="en" lang="en">A schematic model of a protoplanetary disk, assembled from physics. The equations and solutions come from the literature; strengths, colours and other settings are chosen so that the structure reads clearly. It is not the output of a simulation.</span><span class="ja" lang="ja">原始惑星系円盤を、物理にもとづいて組み立てた模式的なモデルです。式と解は文献のものを使い、強さや色などの値は構造が読み取りやすいように選んでいます。シミュレーションの結果そのものではありません。</span></p>
+    <p class="tagline"><span class="en" lang="en">An interactive, physics-based visualization of protoplanetary disks, from magnetic fields and disk winds to planet formation and observational signatures.</span><span class="ja" lang="ja">磁場と円盤風から、惑星の形成、観測で見える姿まで。原始惑星系円盤を物理にもとづいて描き、操作しながら見られるようにしたものです。</span></p>
+    <p class="lead"><span class="en" lang="en">The model is schematic: the equations and solutions come from the literature; strengths, colours and other settings are chosen so that the structure reads clearly. It is not the output of a simulation.</span><span class="ja" lang="ja">ただし模式的なモデルです。式と解は文献のものを使い、強さや色などの値は構造が読み取りやすいように選んでいます。シミュレーションの結果そのものではありません。</span></p>
     <p><span class="en" lang="en">It is drawn on your GPU: along each line of sight the light emitted and absorbed is added up (volume rendering). Field lines and labels are drawn over it as vector lines. Made by Shoji Mori.</span><span class="ja" lang="ja">ブラウザーの GPU で、視線に沿って光の放射と吸収を足し合わせて描いています(ボリュームレンダリング)。磁力線と注釈はベクトルの線で重ねています。作成:森 昇志。</span></p>
 
     <h3><span class="en" lang="en">What is in it</span><span class="ja" lang="ja">入っているもの</span></h3>

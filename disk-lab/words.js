@@ -120,7 +120,7 @@ export const WORDS = {
     },
     cite: {
       lead: '研究や発表での利用は自由です。出典として、このページを引用してください。',
-      line: (y, url) => `森 昇志 (${y})「Disk Lab:操作できる原始惑星系円盤のモデル」${url}`,
+      line: (y, url, v) => `森 昇志 (${y})「Disk Lab:操作できる原始惑星系円盤のモデル」v${v}、${url}`,
       copy: '引用をコピー', copied: '引用をコピーしました。'
     }
   },
@@ -240,7 +240,7 @@ export const WORDS = {
     },
     cite: {
       lead: 'Free to use in research and talks; please cite this page as the source.',
-      line: (y, url) => `Mori, S. (${y}). Disk Lab: an interactive model of a protoplanetary disk. ${url}`,
+      line: (y, url, v) => `Mori, S. ${y}, Disk Lab: an interactive model of a protoplanetary disk (v${v}), ${url}`,
       copy: 'Copy the citation', copied: 'Citation copied.'
     }
   }

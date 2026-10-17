@@ -4,14 +4,14 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261016c';
-import { WORDS } from './words.js?v=20261017f';
+import { WORDS } from './words.js?v=20261017h';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
 const ENGINE_SRC = 'engine/disk3d.js?v=0f4eefce4f';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
-const VERSION = '1.4', RELEASED = '2026-10-17';
+const VERSION = '1.4.1', RELEASED = '2026-10-17';
 // The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
 // moves from its hidden address to its public one.
 const CITE_URL = 'https://shoji-mori.github.io/disk-lab/', CITE_YEAR = 2026;
@@ -645,12 +645,12 @@ function guardFixed(dt, acc, accMax) {
 
 // ---------- the citation ----------
 function renderCite() {
-  const w = T().cite, line = w.line(CITE_YEAR, CITE_URL);
+  const w = T().cite, line = w.line(CITE_YEAR, CITE_URL, VERSION);
   $('citeRail').replaceChildren(document.createTextNode(w.lead + ' '), el('span', { class: 'cite-line' }, line), ' ', el('button', { type: 'button', class: 'chip quiet', id: 'citeCopy' }, w.copy));
   $('citeAbout').textContent = w.lead; $('citeLine').textContent = line;
 }
 async function copyCite() {
-  try { await navigator.clipboard.writeText(T().cite.line(CITE_YEAR, CITE_URL)); note(T().cite.copied); } catch { note(T().cite.line(CITE_YEAR, CITE_URL), 6000); }
+  try { await navigator.clipboard.writeText(T().cite.line(CITE_YEAR, CITE_URL, VERSION)); note(T().cite.copied); } catch { note(T().cite.line(CITE_YEAR, CITE_URL, VERSION), 6000); }
 }
 
 // ---------- time ----------

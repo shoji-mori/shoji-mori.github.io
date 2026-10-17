@@ -233,6 +233,10 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .about p+p{margin-top:12px}
 .about .lead{font-size:17px;line-height:1.7}
 .lang-ja .about .lead{font-size:16px;line-height:1.85}
+/* the one-line description (as in the page's meta description), above the lead, a little stronger */
+.about .tagline{font-size:17px;line-height:1.65;font-weight:600;color:#1f2327}
+.lang-ja .about .tagline{font-size:16px;line-height:1.8}
+.about .tagline+.lead{margin-top:10px}
 .about ul{margin:0;padding-left:1.1em}
 .about li{margin:6px 0}
 .facts{margin:0;display:grid;grid-template-columns:minmax(120px,11em) minmax(0,1fr);gap:10px 22px}
