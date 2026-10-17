@@ -9,7 +9,9 @@ import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
 const ENGINE_SRC = 'engine/disk3d.js?v=0f4eefce4f';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
-const VERSION = '2026-10-17';
+// The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
+// of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
+const VERSION = '1.4', RELEASED = '2026-10-17';
 // The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
 // moves from its hidden address to its public one.
 const CITE_URL = 'https://shoji-mori.github.io/disk-lab/', CITE_YEAR = 2026;
@@ -1106,5 +1108,6 @@ window.diskLab = {
   stamped: async () => { const c = await shot({}); if (c) await watermark(c); return c; },
   setLook, setLang, setTab: (t) => setTab(t), link: () => (live() ? linkFor(S()) : null), snapshot: (opts) => shot(opts)
 };
-$('colophon').textContent = `Disk Lab ${VERSION} · engine ${ENGINE_SRC.split('v=')[1]}`;
+$('colophon').textContent = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
+$('railVersion').textContent = `Disk Lab v${VERSION} · ${RELEASED}`;
 start();
