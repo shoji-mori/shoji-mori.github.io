@@ -8,7 +8,7 @@ import { WORDS } from './words.js?v=20261017b';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261016b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=dc5b934c42';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=f4b4c563db';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 const VERSION = '2026-10-17';
 // The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
 // moves from its hidden address to its public one.
@@ -878,8 +878,12 @@ function renderStillNote() {
       const u = new URL(location.href); u.searchParams.delete('still'); u.searchParams.set('gl', 'force'); location.replace(u.href);
     } }, w.tryLive));
   }
-  // (WebGL stopped by the browser after a lost context: a reload may find it again, else a restart of the browser)
-  if (stillReason === 'blocked') kids.push(el('button', { type: 'button', class: 'action', onclick: () => location.reload() }, w.retry));
+  // (WebGL stopped by the browser after a lost context, or the live model failing to start or finding no WebGL: a
+  // reload with the view in the address may find it again; else a restart of the browser)
+  if (['blocked', 'failed', 'nogl'].includes(stillReason)) kids.push(el('button', { type: 'button', class: 'action', onclick: retryLive }, w.retry));
+  // (why it failed, small, so that a report can say: the engine's box.dataset.fallbackError, or the probe's reason)
+  const why = stillReason === 'failed' ? (box.dataset.fallbackError || diag.failError || '') : '';
+  if (why) kids.push(el('span', { class: 'still-why' }, '(' + why + ')'));
   stillNote.replaceChildren(...kids.map((k) => (typeof k === 'string' ? document.createTextNode(k) : k)));
   stillNote.hidden = false;
 }
@@ -920,7 +924,7 @@ async function start() {
   // (the wind symmetric by default, as the client asked; the one-sided wind of Mori, Bai & Tomida 2025 is a control)
   box.dataset.asym = 'off';
   box.setAttribute('data-disk3d', '');
-  try { await loadEngine(); } catch { return enterStill('failed'); }
+  try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); return enterStill('failed'); }
   diag.timings.engine = Math.round(performance.now() - t0);
   if (typeof box.diskSet !== 'function' || box.classList.contains('disk-fallback')) return enterStill('failed');
   mode = 'live';

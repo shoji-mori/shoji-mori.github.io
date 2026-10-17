@@ -2681,7 +2681,8 @@ void main(){
     // the lookup maps (see MAP_GLSL) are float textures drawn on the GPU; without WebGL2 or float render
     // targets the static picture stays
     const fbFloat = gl && !!gl.getExtension('EXT_color_buffer_float'), fbHalf = fbFloat || (gl && !!gl.getExtension('EXT_color_buffer_half_float'));
-    if (!gl || !fbHalf) { box.classList.add('disk-fallback'); return; }
+    // (Disk Lab v2: why the live model did not start, for the page to show: box.dataset.fallbackError)
+    if (!gl || !fbHalf) { box.dataset.fallbackError = !gl ? 'no WebGL2 context' : 'no float render targets'; box.classList.add('disk-fallback'); return; }
     if (!reuse) box.prepend(canvas);
     const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     overlay.setAttribute('class', 'disk-overlay'); overlay.setAttribute('aria-hidden', 'true');
@@ -5210,7 +5211,7 @@ void main(){
         box.dispatchEvent(new CustomEvent('diskstate', { detail: box.diskState() }));
       } catch (err) {
         box.querySelectorAll(':scope > canvas, :scope > .disk-overlay').forEach((el) => el.remove());
-        box.classList.add('disk-fallback'); console.error(err);
+        box.dataset.fallbackError = String((err && err.message) || err).slice(0, 240); box.classList.add('disk-fallback'); console.error(err);
       }
       lostEvent(false);
     }, on);
@@ -5619,6 +5620,6 @@ void main(){
   // If setting up fails part way, the canvas and overlay come out again so the static picture shows.
   document.querySelectorAll('[data-disk3d]').forEach((box) => {
     if (phone && !('mobile' in box.dataset)) { box.classList.add('disk-fallback'); return; }
-    try { init(box); } catch (e) { box.querySelectorAll(':scope > canvas, :scope > .disk-overlay').forEach((el) => el.remove()); box.classList.add('disk-fallback'); console.error(e); }
+    try { init(box); } catch (e) { box.querySelectorAll(':scope > canvas, :scope > .disk-overlay').forEach((el) => el.remove()); box.dataset.fallbackError = String((e && e.message) || e).slice(0, 240); box.classList.add('disk-fallback'); console.error(e); }
   });
 })();
