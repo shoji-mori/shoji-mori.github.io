@@ -27,7 +27,9 @@ function rendererOf(gl) {
   } catch { return ''; }
 }
 
-// { ok, reason: null | 'nogl' | 'software', renderer }
+// { ok, reason: null | 'nogl' | 'software', renderer, timer }
+// (round 9: timer, whether the GPU's timer queries are offered: Chrome on a desktop has them, Safari does not; the page guards
+// more closely where they are missing, as on every phone, DESIGN.md section 22)
 export function probe() {
   let gl = null, renderer = '';
   try {
@@ -42,7 +44,7 @@ export function probe() {
     if (SOFTWARE.test(renderer)) return { ok: false, reason: 'software', renderer };
     // (the engine draws its lookup maps into float targets)
     if (!gl.getExtension('EXT_color_buffer_float') && !gl.getExtension('EXT_color_buffer_half_float')) return { ok: false, reason: 'nogl', renderer };
-    return { ok: true, reason: null, renderer };
+    return { ok: true, reason: null, renderer, timer: !!gl.getExtension('EXT_disjoint_timer_query_webgl2') };
   } catch {
     return { ok: false, reason: 'nogl', renderer };
   } finally { lose(gl); }
@@ -88,26 +90,28 @@ export async function calibrate(box, { budget = BUDGET } = {}) {
 // Steps the render scale with the intervals between drawn frames; returns { stop, state }.
 // base: the scale found at start (calibrate); far below it, the way back up is quicker (a burst of load, another tab, a
 // snapshot, may have pushed the scale to its floor). floor: the lowest scale for what is drawn now (MIN_SCALE, lower for
-// a look many times dearer than the model, as the CO line's).
-export function govern(box, { onChange, base = 0.5, running = () => true, floor = () => MIN_SCALE } = {}) {
+// a look many times dearer than the model, as the CO line's). cap: the highest scale the page's guard allows now (round 9:
+// no frame whose predicted GPU time could make the system stop the GPU; app.js, capRun).
+export function govern(box, { onChange, base = 0.5, running = () => true, floor = () => MIN_SCALE, cap = () => 1 } = {}) {
   const WINDOW_MS = 500, MIN_FRAMES = 10, SLOW_MS = 22, FAST_MS = 17.8, AIM_MS = 16.7, IDLE_MS = 250, STALL_MS = 2000, RELAX_MS = 6000;
   let iv = [], last = 0, since = performance.now(), fastRuns = 0, ceiling = 1, ceilingT = 0, paused = false;
   const log = [];
   const quartile = (a) => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(0.75 * (s.length - 1))]; };
   const set = (s, why, m) => {
-    const now = box.diskScale(), next = Math.round(clamp(s, floor(), 1) * 1000) / 1000;
+    const now = box.diskScale(), next = Math.round(clamp(s, Math.min(floor(), cap()), cap()) * 1000) / 1000;
     if (Math.abs(next - now) < 0.01) return;
     box.diskScale(next);
     log.push({ t: Math.round(performance.now()), from: now, to: next, why, ms: Math.round(m * 10) / 10 });
     if (log.length > 40) log.shift();
     if (onChange) onChange(next, why);
   };
-  const onFrame = () => {
-    const now = performance.now();
+  const onFrame = (e) => {
+    const now = performance.now(), held = (e && e.detail && e.detail.held) || 0;
     if (document.hidden || paused) { last = 0; return; }
     // (a gap means nothing was being drawn: a paused, settled picture; it says nothing of the frame rate. While the clock
-    // runs every frame is drawn, and a long interval is a stall, which counts)
-    if (last && (running() ? now - last < STALL_MS : now - last < IDLE_MS)) iv.push(now - last);
+    // runs every frame is drawn, and a long interval is a stall, which counts. Round 9: less the time the frame waited for
+    // the engine's frame-rate cap, which is not its cost)
+    if (last && (running() ? now - last < STALL_MS : now - last < IDLE_MS)) iv.push(Math.max(1, now - last - held));
     last = now;
     if (ceiling < 1 && now - ceilingT > RELAX_MS) { ceiling = Math.min(1, ceiling * 1.12); ceilingT = now; }
     if (iv.length < MIN_FRAMES || now - since < WINDOW_MS) return;

@@ -137,6 +137,11 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .rail h3{font-size:11px;font-weight:500;color:var(--text-3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
 .lang-ja .rail h3{font-size:12px;letter-spacing:.1em;text-transform:none}
 .rail-note{font-size:12px;line-height:1.5;color:var(--text-3);margin-top:7px}
+/* (round 9) the top of the rail: what is kept on this device, and Reset */
+.rail-keep{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 10px;padding:10px 0 10px}
+.rail-keep .rail-note{margin:0}
+.rail-keep #resetNote{grid-column:1/-1;font-size:11.5px}
+.rail-keep .chip svg{width:13px;height:13px}
 .rail-version{margin:18px 0 26px;font-size:11px;letter-spacing:.02em;color:var(--text-3)}
 .rail-context:not(:empty){margin-top:8px;display:grid;gap:8px;justify-items:start}
 .time-row{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap}

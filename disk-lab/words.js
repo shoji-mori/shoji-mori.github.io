@@ -31,7 +31,8 @@ export const WORDS = {
       optical: { label: '可視光', note: '可視光・近赤外線で見た姿。表層と風が散らす星の光(散乱光)が見えます。' },
       mir: { label: '中間赤外', note: '中間赤外線。暖かい表層が自ら光り、内側ほど明るく見えます。' },
       mm: { label: 'ミリ波', note: 'ミリ波。赤道面に沈んだ小石の熱放射です。' },
-      co: { label: 'CO', note: 'CO 分子の回転輝線。ドップラー効果で、ガスの動きが色と形に現れます。' }
+      // (round 9, the owner: "the CO line had better not name the molecule": a gas's emission line; the link's key stays co)
+      co: { label: 'ガス輝線', note: 'ガスが出す輝線(電波で観測される分子の回転輝線)。ドップラー効果で、ガスの動きが色と形に現れます。' }
     },
     pebblesKey: '小石(岩・氷)',
     arrowsKey: 'ガスの流れ(長さは速さの桁)',
@@ -99,11 +100,24 @@ export const WORDS = {
       failed: '動くモデルを始められなかったため、同じモデルの静止画を表示しています。',
       forced: '静止画を表示しています。',
       lost: '描画が中断しました。戻るまで静止画を表示します。',
-      blocked: 'このブラウザーの WebGL が一時的に使えない状態です。ブラウザーを一度終了して開き直すと、動くモデルに戻ります(再読み込みでは戻りません)。',
+      // (round 9) what helps when the browser's WebGL has stopped: quitting and reopening the browser; the way to quit it
+      blocked: (how) => `このブラウザーの WebGL が止まっています。${how}。動くモデルに戻ります(再読み込みやキャッシュの消去では戻りません)。`,
+      stuck: (how) => `描画が止まりました。${how}。再読み込みやキャッシュの消去では戻りません。`,
+      restart: {
+        ios: (app) => `App スイッチャー(画面の下端から上へスワイプして指を止める)で ${app} を上へはじいて閉じ、開き直してください`,
+        mac: (app) => `${app} を終了(⌘Q)して開き直してください`,
+        other: () => 'ブラウザーを一度終了して開き直してください'
+      },
       tryLive: 'それでも動かす',
       retryText: '描画が止まったままです。',
+      retryHint: 'ボタンで描き直します。それでも戻らないときは、ブラウザーを一度終了して開き直してください(キャッシュを消す必要はありません)。',
       retry: 'もう一度描く'
     },
+    resetDone: '最初の状態に戻しました。',
+    preparingLook: 'この表示を準備しています…',
+    heavyStill: 'この見え方はこの端末で動かすには重いため、時計を止めて静止画で描いています(再生ボタンで動かすこともできます)。',
+    safeStart: '前回は描画が止まったため、安全な設定(モデル、断面なし、画質は自動、全体の眺め)で始めました。',
+    restoredSafe: '描画が中断したため、モデルの見え方に戻しました。',
     ariaStage: '円盤のモデル',
     ariaRoute: '行き先',
     show: {
@@ -156,7 +170,7 @@ export const WORDS = {
       optical: { label: 'Visible', note: 'Visible and near-infrared light: starlight scattered by the surface and the wind.' },
       mir: { label: 'Mid-IR', note: 'Mid-infrared: the warm surface glows, brightest close in.' },
       mm: { label: 'Millimetre', note: 'Millimetre: the thermal glow of the pebbles at the midplane.' },
-      co: { label: 'CO', note: 'The rotational line of carbon monoxide: its Doppler shift shows how the gas moves.' }
+      co: { label: 'Gas line', note: 'An emission line of the gas (a molecule\u2019s rotational line, observed at radio wavelengths): its Doppler shift shows how the gas moves.' }
     },
     pebblesKey: 'pebbles (rock, ice)',
     arrowsKey: 'gas flow (length: speed, by powers of ten)',
@@ -222,11 +236,23 @@ export const WORDS = {
       failed: 'The live model could not start, so these are still pictures of the same model.',
       forced: 'Showing still pictures.',
       lost: 'Drawing was interrupted; a still picture shows until it recovers.',
-      blocked: 'WebGL in this browser is temporarily unavailable. Quitting and reopening the browser brings the live model back (reloading the page does not).',
+      blocked: (how) => `WebGL has stopped in this browser. To bring the live model back, ${how} (reloading the page or clearing the cache does not help).`,
+      stuck: (how) => `Drawing has stopped. To bring it back, ${how}; reloading the page or clearing the cache does not help.`,
+      restart: {
+        ios: (app) => `close ${app} from the app switcher (swipe up from the bottom edge and pause, then flick ${app} up) and open it again`,
+        mac: (app) => `quit ${app} (⌘Q) and open it again`,
+        other: () => 'quit the browser and open it again'
+      },
       tryLive: 'Run the live model anyway',
       retryText: 'Drawing has stopped.',
+      retryHint: 'The button draws it again; if that does not help, quit the browser and open it again (clearing the cache is not needed).',
       retry: 'Try again'
     },
+    resetDone: 'Everything is back as it was at first.',
+    preparingLook: 'Preparing this view…',
+    heavyStill: 'This look is too heavy to animate on this device, so the clock is paused and it is drawn as a still (the play button animates it anyway).',
+    safeStart: 'Drawing stopped last time, so this visit starts with safe settings (the model look, no cut, Auto quality, the whole disk).',
+    restoredSafe: 'Drawing was interrupted, so the model look is back.',
     ariaStage: 'Model of a protoplanetary disk',
     ariaRoute: 'Places',
     show: {

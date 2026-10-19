@@ -1,7 +1,7 @@
 # Disk Lab
 
 The public disk model, at https://shoji-mori.github.io/disk-lab/: a protoplanetary disk drawn on the GPU (WebGL2) in the
-browser, with nine places to visit, five looks (model, visible, mid-infrared, millimetre, CO), and still pictures
+browser, with nine places to visit, five looks (model, visible, mid-infrared, millimetre, gas line), and still pictures
 where the live model cannot run. Static files only: no build, no dependencies. This folder is both where it is developed
 and what is published (it was `lab_pub/disk_v2/`, hidden, until round 4). The site links to it from the home and research
 pages, with a view transition (DESIGN.md, section 12). Why it is built this way: [DESIGN.md](DESIGN.md) (in Japanese).
@@ -27,6 +27,12 @@ URL parameters:
 | `still=1` | show the still pictures (as without WebGL2) |
 | `gl=force` | skip the check for software rendering and slow devices |
 | `motion=reduce` | behave as with the system's reduced-motion setting |
+| `retry=1` | written by "Try again" (round 9): start with safe settings (the model look, no cut, Auto, the whole disk), as after a visit that ended with drawing stopped |
+| `guard=70` | for checks (round 9): guard as on a phone, with that budget in ms a piece of GPU work |
+| `gpux=5` | for checks (round 9): count every frame's GPU time 5 times, as on a GPU 5 times slower (the floor of a frame, its slowest ray, is counted 5 times too, so this is pessimistic) |
+
+A link's view and settings win over those kept on the device (below); the CO look's key stays `look=co` (shown as the gas
+line since round 9).
 
 ## Files
 
@@ -58,6 +64,10 @@ In the page's console (a visible window gives frame times too):
 a desktop window. With `serve.py --save-dir DIR`, `c.run({ save: 'check.json' })` writes the results there.
 In that frame, `const t = await import('/ver2/tools/disk-lab-v2/touch-check.js'); await t.run(frames[0])` plays
 synthetic two-finger gestures on the picture and reports how far each moved the view (round 8, DESIGN.md section 21).
+
+Before any check that draws heavy looks, follow "GPU checks without losing the browser" at the top of `check.js` (round 9: a
+fresh origin such as `http://r9b.localhost:8642/`, a tripwire, and the slowest rays first in
+`ver2/tools/disk-lab-v2/ray-check.html?view=whole|edge|star`).
 
 The engine's own checks (ver2/tools/disk-check's state matrix, on v2's engine, with the states close to the star):
 
@@ -92,24 +102,53 @@ cached would fail).
 
 The suggested citation is built from `CITE_URL` (the public address) and `CITE_YEAR` at the top of `app.js`: change the
 URL there if the page ever moves. The quality levels (render scale of a fixed level) are `QUALITY` beside them. Best is
-the default (round 6): not chosen by the visitor, it steps down quietly where a view is too heavy (`BEST_SLOW`, `BEST_AIM`,
+the default on a desktop browser with GPU timer queries (round 6; round 9: Auto on a phone or tablet, or without timers,
+as in Safari, `guarded`): not chosen by the visitor, it steps down quietly where a view is too heavy (`BEST_SLOW`, `BEST_AIM`,
 `BEST_UP`, `BEST_STEPS` in `app.js`; DESIGN.md, section 16). Since round 7 that step is for the running clock only (a
 paused picture is drawn at 100 %), and it comes back up one level at a time after a hold (`BEST_HOLD`, doubled up to
 `BEST_HOLD_MAX` when a step up is taken back within `BEST_UNDO`; frames at the display's pace, under `BEST_PACED`, try the
-next level); `diskLab.quality()` and `diskLab.bestLog(true)` show it (DESIGN.md, section 17). A choice is kept for the
-visit (sessionStorage `disk-lab-quality`). While the
+next level); `diskLab.quality()` and `diskLab.bestLog(true)` show it (DESIGN.md, section 17). A choice is kept with the
+settings (below). While the
 view moves, the volume is drawn at a lower scale and the scale comes back 0.2 s after it stops (`MOVE_K`, `MOVE_FIXED`,
 `MOVE_REST` in `app.js`; DESIGN.md, section 13); `data-move="off"` on `#disk` turns this off, to compare
 (`check.js`'s `zoomPacing` and `dragPacing`).
+
+## The guard against long frames (round 9)
+
+A piece of GPU work of a few seconds makes the system stop the GPU: the WebGL context is lost, and WebKit then gives the
+page, or the whole browser, no WebGL until it is quit (the owner's iPhone, switching to the visible look at Best). Every
+frame is measured (the engine's fences: `diskgpu` events with its GPU time, bands, scale and kind), and before something
+dearer is drawn (a look, the line's map, the cut) its cost is predicted from the factor of the change (the engine's
+`GFAC`, `box.diskGuard()`), so that the scale is lowered first: running frames stay under `GUARD_MS` (70 ms where guarded,
+120 ms elsewhere), climbing one `LADDER` step at a time where guarded; a still picture may be finer (`STILL_MS` a frame),
+drawn in bands of about `GUARD_MS`, one per animation frame (`box.diskBands(n, ms)`). The engine has a guard of its own as
+the last word, with the same budget (`box.diskGuard({ ms })`; it lowers the scale, to 0.12 at least, and tells the page
+with `diskguard`), so that no route (a link, a script's `diskSet`, a key) comes around it. A look still over the budget at
+the lowest step is shown as a still on a guarded device. `diskLab.guard()` gives the state and its log. While only the
+clock moves, frames are drawn at most `FPS_STILL` a second (`FPS_STILL_PHONE` on a phone; the engine's `box.diskFps(n)`;
+the wait goes with each frame as `held` in `diskframe`), and a phone or tablet rests the clock after `IDLE_MS_PHONE`.
+DESIGN.md, section 22.
+
+## Kept on the device, and the visit's record (round 9)
+
+The visitor's settings and view (the look and its map, what is shown and its options, the background, the cut, the speed,
+the planets, a quality chosen, the place, the angle and distance, the point looked at) are kept in localStorage
+`disk-lab-settings` a moment after each change and on leaving, and taken back at the next start without a link. "Reset
+all" at the top of the rail forgets them (`diskLab.resetAll()`). `disk-lab-session` records how the visit went
+(`starting`, `live`, `changing`, `lost`, `stuck`, `failed`, `blocked`, `still`, `left`): after one that ended `starting`,
+`changing`, `lost`, `stuck`, `failed` or `blocked`, the next visit starts with safe settings and throws the kept ones
+away. check.js starts from Reset and leaves both as after a visit that went well.
 
 ## Saving a larger picture
 
 "Save an image" offers the screen's size, twice that, or 3840 px wide (4K) (`SAVE_SIZES`, at most `SAVE_MPX` million
 pixels and the GPU's limits, `box.diskSnapMax()`). The engine's `diskSnapshot({ size, bands, bandMs, frames, onFrame })`
-draws the canvas `size` times larger for the picture, each frame's volume in `bands` sent to the GPU one by one (more where
-one runs over twice `bandMs`), frame by frame; the page plans it from the cost of a frame measured just before
-(`box.diskCost()`, `SAVE_BAND_MS`, `SAVE_BANDS`) and keeps the CO look and any view slower than `SAVE_HEAVY` ms a frame at
-the screen's size (a CO moment map at 4K lost the WebGL context). `box.diskSnapLog()` gives the last one's bands and times.
+draws the canvas `size` times larger for the picture, each frame's volume in `bands`, each band in a task of its own and
+waited for (round 9; before, all sent in one task; more bands where one runs over twice `bandMs`), frame by frame; the page
+plans it from the guard's cost of a frame, or the one measured just before if dearer (`box.diskCost()`; `SAVE_MS` a frame,
+`SAVE_MS_SCREEN` at the screen's size, in bands of the guard's budget) and keeps the gas line's look and any view slower
+than `SAVE_HEAVY` ms a frame at the screen's size (a CO moment map at 4K lost the WebGL context). `box.diskSnapLog()`
+gives the last one's bands and times.
 
 ## The temperature
 
