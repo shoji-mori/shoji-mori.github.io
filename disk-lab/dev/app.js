@@ -8,13 +8,13 @@ import { WORDS } from './words.js?v=f608a7fcff';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng } from './capture.js?v=aa82de203b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=c4568da63d';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=b706fe9db7';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.8-dev.2', RELEASED = '2026-10-20';
+const VERSION = '1.8-dev.3', RELEASED = '2026-10-20';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
@@ -105,8 +105,9 @@ if (typeof WebGL2RenderingContext !== 'undefined') {
 }
 // (round 10a, switches to try on a phone, recorded with the visit) ?duty=off, or a fraction: the GPU's duty (see the engine's
 // diskDuty; a guarded device 0.5 by default); ?ctmax=N, the continuum's iterations at most; ?eddy=0, no eddies' volume;
-// ?fps=N, the frame rate while only the clock moves
-const SWITCH = { duty: q.get('duty'), ctmax: Number(q.get('ctmax')) || 0, eddy: q.get('eddy') === '0', fps: Number(q.get('fps')) || 0 };
+// ?fps=N, the frame rate while only the clock moves; ?split=0, the continuum's rays drawn whole, not in kicks (see the
+// engine's SPLIT); ?kick=N, the work of a kick
+const SWITCH = { duty: q.get('duty'), ctmax: Number(q.get('ctmax')) || 0, eddy: q.get('eddy') === '0', fps: Number(q.get('fps')) || 0, split: q.get('split') === '0', kick: Number(q.get('kick')) || 0 };
 // (round 9) the last visit's record (see record): a visit that ended with drawing stopped, or "Try again", starts safe
 // (round 10a: judged from its phase and its flight record, judgePrev: only what is broken counts, not a page closed or put
 // in the background while it started or changed its look)
@@ -1379,6 +1380,8 @@ async function start() {
   // SAFE_MATH; the record says which ran)
   if (q.get('math') === 'safe') box.dataset.math = 'safe';
   if (SWITCH.eddy) box.dataset.eddy = 'off';   // (round 10a: see SWITCH)
+  if (SWITCH.split) box.dataset.split = '0';
+  if (SWITCH.kick > 0) box.dataset.kick = String(Math.round(SWITCH.kick));
   box.setAttribute('data-disk3d', '');
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), DEF_KEYS);   // (the engine's own start: the defaults Reset returns to)
@@ -1460,6 +1463,11 @@ function engineSettings() {
   // the time at most busy, DUTY_GUARDED; see the engine's diskDuty)
   if (typeof box.diskDuty === 'function') box.diskDuty(SWITCH.duty === 'off' ? 0 : Number(SWITCH.duty) > 0 ? Number(SWITCH.duty) : guarded ? DUTY_GUARDED : 0);
   if (SWITCH.ctmax > 0 && typeof box.diskCtMax === 'function') box.diskCtMax(SWITCH.ctmax);
+  // (round 10a: the march in kicks, see the engine's SPLIT: a kick's work and the state's size by the device. Guarded (a phone),
+  // 32 steps a kick (5 to 7 ms at the slowest rays on the M1 Max) and 8 MB a set; else 48 steps (64 made a frame's GPU time 1.16
+  // times the rays drawn whole, where 32 made it 1.56, but its slowest kicks 9 to 14 ms) and 32 MB a set, so that a desktop's
+  // frame is one band, its slowest ray paid once)
+  if (typeof box.diskSplit === 'function') box.diskSplit({ k: SWITCH.kick > 0 ? SWITCH.kick : guarded ? 32 : 48, mb: guarded ? 8 : 32 });
 }
 // the engine's own changes (keys, a drag, the easter eggs, a restored context) reach the controls
 box.addEventListener('diskstate', () => sync());
@@ -1796,6 +1804,11 @@ box.addEventListener('diskrec', (ev) => {
   } else if (d.k === 'late') { hungEnded(d.ms, d.id); flogAdd({ k: 'late', key: d.key || '', ms: r1(d.ms), s: d.s || undefined }); }
   else if (d.k === 'oom' || d.k === 'glerr') { if (d.k === 'oom') flog.broken = flog.broken || 'oom'; flogAdd({ k: d.k, w: d.w, e: d.e }, true); }
   else if (d.k === 'first') flogAdd({ k: 'first', w: d.w, key: d.key }, true);   // (a pipeline the GPU's process makes now)
+  // (round 10a: the march in kicks given up for a kind, a bug of the engine's (its state could not be made, or a band was
+  // given more kicks than its rays can need): written down at once)
+  else if (d.k === 'split') flogAdd({ k: 'split', ok: d.ok, broken: d.broken || undefined, stuck: d.stuck, key: d.key, rows: d.rows, w: d.w, h: d.h }, true);
+  // (round 10a: a piece of GPU work timed with no fence, an error of the engine's: see its GT_NOFENCE)
+  else if (d.k === 'nofence') flogAdd({ k: 'nofence', w: d.w, key: d.key, gpu: d.gpu, age: d.age, late: d.late, ms: d.ms }, true);
   else if (d.k === 'sync') {
     // (a call that waited for the GPU's process over 5 ms, see the engine's slowSync: one entry for a run of the same call,
     // with their count and the longest)
@@ -1805,22 +1818,25 @@ box.addEventListener('diskrec', (ev) => {
   }
 });
 // (round 10a) A heartbeat a second (hb, the last HB_N): frames finished, pieces, the GPU's busy time (their sum, ms), the
-// longest piece, the scale, the kind, the clock running, the model's time, the components: the seconds before a loss
-const hbCur = { f: 0, p: 0, busy: 0, max: 0 };
+// longest piece, the scale, the kind, the clock running, the model's time, the components: the seconds before a loss; and
+// the dearest kick of the march in kicks (its piece's time over its kicks, ms; see the engine's SPLIT)
+const hbCur = { f: 0, p: 0, busy: 0, max: 0, kick: 0 };
 flog.hb = [];
 setInterval(() => {
   if (document.hidden) return;
   const s0 = live() ? S() : null;
-  flog.hb.push([Math.round((Date.now() - flog.t0) / 1000), hbCur.f, hbCur.p, Math.round(hbCur.busy), Math.round(hbCur.max), live() ? Math.round(box.diskScale() * 1000) / 1000 : 0, gc.key, s0 ? (s0.paused ? 0 : 1) : -1, s0 ? Math.round(s0.time) : 0, s0 ? s0.mode : 0]);
+  flog.hb.push([Math.round((Date.now() - flog.t0) / 1000), hbCur.f, hbCur.p, Math.round(hbCur.busy), Math.round(hbCur.max), live() ? Math.round(box.diskScale() * 1000) / 1000 : 0, gc.key, s0 ? (s0.paused ? 0 : 1) : -1, s0 ? Math.round(s0.time) : 0, s0 ? s0.mode : 0, Math.round(hbCur.kick * 10) / 10]);
   if (flog.hb.length > HB_N) flog.hb.shift();
-  hbCur.f = hbCur.p = hbCur.busy = hbCur.max = 0;
+  hbCur.f = hbCur.p = hbCur.busy = hbCur.max = hbCur.kick = 0;
 }, 1000);
 // every frame summed up by its kind, no entry each (saved with the heartbeat)
 box.addEventListener('diskgpu', (ev) => {
   const d = ev.detail || {}; if (!(d.ms > 0)) return;
-  hbCur.f++; hbCur.p += d.bands || 1; hbCur.busy += d.ms; hbCur.max = Math.max(hbCur.max, d.band || d.ms);
+  hbCur.f++; hbCur.p += d.bands || 1; hbCur.busy += d.ms; hbCur.max = Math.max(hbCur.max, d.band || d.ms); hbCur.kick = Math.max(hbCur.kick, d.kick || 0);
   const k = String(d.key || '').replace(/:F$/, ''), s = flog.sum[k] || (flog.sum[k] = { n: 0, ms: 0, band: 0, sc: 0, top: 0, pre: 0, first: 0 });
   s.n++; s.ms = Math.max(s.ms, Math.round(d.ms)); s.band = Math.max(s.band, Math.round(d.band)); s.sc = d.scale; s.top = Math.max(s.top, d.scale); s.pre = Math.max(s.pre, Math.round(d.pre || 0)); if (d.first) s.first++;
+  // (round 10a: in kicks, the most a frame took, its dearest kick, and the dearest kick sent alone (ms))
+  if (d.kicks) { s.kicks = Math.max(s.kicks || 0, d.kicks); s.kick = Math.max(s.kick || 0, d.kick || 0); s.kick1 = Math.max(s.kick1 || 0, d.kick1 || 0); }
 });
 // the picture's health (the engine's HEALTH_FS): values not finite are a bug, said in the record and offered in the next visit
 let healthT = 0, healthKey = '';
@@ -1846,6 +1862,7 @@ function flogDevice(kept) {
   flog.dev = { ua: navigator.userAgent, dpr: devicePixelRatio, screen: [screen.width, screen.height], stage: [stage.clientWidth, stage.clientHeight], canvas: c ? [c.width, c.height] : null,
     probe: diag.probe, caps, emu: CAPS || undefined, math: box.dataset.math || undefined, gpux: GPUX > 1 ? GPUX : undefined,
     sw: Object.fromEntries(Object.entries(SWITCH).filter(([, v]) => v)), duty: typeof box.diskDuty === 'function' ? box.diskDuty() : undefined,
+    split: typeof box.diskSplit === 'function' ? (({ on, k }) => ({ on: on ? 1 : 0, k }))(box.diskSplit()) : undefined,
     still: mode === 'still' ? stillReason : undefined, fail: box.dataset.fallbackError || diag.failError || undefined, guarded, budget: GUARD_MS, march: diag.guard && diag.guard.march, quality, chosen: qChosen,
     prev: { phase: prevRec && prevRec.phase, why: verdict.why, culprit: verdict.culprit }, kept };
   flogSave();
@@ -1920,7 +1937,7 @@ function logText(l) {
   if (l.clock) out.push('clock: ' + f(l.clock) + (d.sw && Object.keys(d.sw).length ? ' · switches ' + JSON.stringify(d.sw) : '') + (d.duty != null ? ' · duty ' + d.duty : '') + (d.still ? ' · still ' + d.still : '') + (d.fail ? ' · fail ' + d.fail : ''));
   else if (d.still || d.fail) out.push('still: ' + (d.still || '') + (d.fail ? ' · fail ' + d.fail : '') + (d.probe ? ' · probe ' + JSON.stringify(d.probe) : ''));
   if (l.gl) out.push('gl: live ' + JSON.stringify(l.gl.live) + ' · made ' + JSON.stringify(l.gl.made) + ' · MB ' + l.gl.mb);
-  if (l.hb && l.hb.length) out.push('per second [s, frames, pieces, busy ms, longest ms, scale, kind, clock, time, mode]: ' + l.hb.map((h) => '[' + h.join(',') + ']').join(' '));
+  if (l.hb && l.hb.length) out.push('per second [s, frames, pieces, busy ms, longest ms, scale, kind, clock, time, mode, kick ms]: ' + l.hb.map((h) => '[' + h.join(',') + ']').join(' '));
   out.push(`at the end: key ${l.key} · quality ${l.q} · scale ${l.sc} · last frame +${r1((l.frT || 0) / 1000)} s · last input +${r1((l.inT || 0) / 1000)} s · last sign of life +${r1((l.alive - l.t0) / 1000)} s`);
   for (const x of l.e) { const { t, k, ...rest } = x; out.push(`+${(t / 1000).toFixed(1)} s ${k} ${f(rest)}`); }
   return out.join('\n');
