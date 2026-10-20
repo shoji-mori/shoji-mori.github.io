@@ -2132,7 +2132,8 @@ vec2 jetLobe(vec3 ro, vec3 rd, float side, float jitter){
 // (its colour: the visible look the red of its lines)
 vec3 jetCol(){ return uLook == 0 ? MAT_JET : vec3(1.0, 0.22, 0.28); }
 
-uniform int uRayB;        // (round 9) the bound on a long ray's work (CO_IT, CT_IT): 1, or 0 as before, to compare
+uniform int uRayB;        // (round 10a) the bound on a long ray's work (CO_IT, CT_IT): 1, or 0 as before, to compare
+uniform int uCtMax;       // (round 10a, a switch to try on a phone: the continuum's iterations at most; 32768, none)
 // (round 9) the march's tier (MARCH in the script): x the continuum's substeps a step, y the CO line's step in geometric steps,
 // z its halvings at most; uCoIt and uCtIt the long-ray bounds of the CO line and the continuum (see CO_IT, CT_IT)
 uniform vec4 uMarch;
@@ -2853,7 +2854,7 @@ ${BG.LAMPS.map(([x, y, z, , k]) => `    { float t = acos(clamp(dot(dSky, normali
       // the dark end of the stretch (asinh: a step is about 3.4e-4 there). It went on to a transmission of 1e-20 before:
       // in the slowest rays of the visible and mid-infrared looks, 17 to 36 % of the iterations came after 1e-9. (uRayB 0: as
       // before, to compare.)
-      if ((!continuum && i >= uSteps) || t >= b.y || transmission < (continuum ? (uRayB > 0 ? CONT_EPS / (LIGHT_MAX + (starDone ? 0.0 : maxChannel(starGlow) * uExposure)) : 1e-20) : 0.01)) break;
+      if ((!continuum && i >= uSteps) || (continuum && i >= uCtMax) || t >= b.y || transmission < (continuum ? (uRayB > 0 ? CONT_EPS / (LIGHT_MAX + (starDone ? 0.0 : maxChannel(starGlow) * uExposure)) : 1e-20) : 0.01)) break;
 #ifdef FULL
       if (continuum && t >= tSkip.x) {
         cutWind(ro, rd, tSkip.x, min(tSkip.y, b.y), jitter, col, tr);
@@ -3008,16 +3009,19 @@ void main(){
   vec2 cs = uSrc / vec2(${HEALTH_W}.0, ${HEALTH_H}.0);
   ivec2 a = ivec2(floor(floor(gl_FragCoord.xy) * cs)), b = max(ivec2(floor((floor(gl_FragCoord.xy) + 1.0) * cs)), a + 1);
   float bad = 0.0, neg = 0.0, mx = 0.0, n = 0.0;
+  bvec3 chan = bvec3(false);   // (round 10a: which channels were not finite: one channel alone shows coloured, G alone magenta)
   for (int y = a.y; y < b.y; y++) for (int x = a.x; x < b.x; x++) {
     vec4 c = texelFetch(uAcc, ivec2(x, y), 0);
-    bool fin = abs(c.r) < 1e30 && abs(c.g) < 1e30 && abs(c.b) < 1e30 && abs(c.a) < 1e30;
+    bvec3 f = bvec3(abs(c.r) < 1e30, abs(c.g) < 1e30, abs(c.b) < 1e30);
     n += 1.0;
-    if (!fin) { bad += 1.0; continue; }
+    if (!(f.x && f.y && f.z && abs(c.a) < 1e30)) { bad += 1.0; chan = bvec3(chan.x || !f.x, chan.y || !f.y, chan.z || !f.z); continue; }
     if (min(c.r, min(c.g, c.b)) < -1e-3) neg += 1.0;
     mx = max(mx, max(c.r, max(c.g, c.b)));
   }
-  // (a cell with any bad texel shows at least one step: a single NaN pixel among a thousand is not rounded away)
-  fragColor = vec4(bad > 0.0 ? max(bad / n, 1.0 / 255.0) : 0.0, neg > 0.0 ? max(neg / n, 1.0 / 255.0) : 0.0, min(mx, 4.0) / 4.0, 1.0);
+  // (a cell with any bad texel shows at least one step: a single NaN pixel among a thousand is not rounded away; alpha: the
+  // channels not finite, 1 red, 2 green, 4 blue, in steps of 32)
+  float mask = (chan.x ? 1.0 : 0.0) + (chan.y ? 2.0 : 0.0) + (chan.z ? 4.0 : 0.0);
+  fragColor = vec4(bad > 0.0 ? max(bad / n, 1.0 / 255.0) : 0.0, neg > 0.0 ? max(neg / n, 1.0 / 255.0) : 0.0, min(mx, 4.0) / 4.0, mask * 32.0 / 255.0);
 }`;
 
   // The picture is drawn into a float target and shown by this pass, with a dither against banding: a still picture is
@@ -3448,7 +3452,7 @@ void main(){
     const UWS = uniforms(progWS, ['uResW', 'uLayer0', 'uTime', 'uSeed']);
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
-    const UNAMES = ['uRayB', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
+    const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
       'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uLit', 'uFx', 'uFocus'];
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS, 'show'), progBloom = link(BLOOM_FS, 'bloom');
@@ -3503,6 +3507,7 @@ void main(){
     let healthT = null, healthBuf = null, healthSync = null, healthWanted = 0, healthOf = null;
     const healthPx = new Uint8Array(HEALTH_W * HEALTH_H * 4);
     function healthPass(info) {
+      firstUse('health');
       if (!healthT) { healthT = target(HEALTH_W, HEALTH_H, gl.RGBA8, gl.CLAMP_TO_EDGE); healthBuf = gl.createBuffer(); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, healthBuf); gl.bufferData(gl.PIXEL_PACK_BUFFER, healthPx.length, gl.STREAM_READ); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null); }
       gl.bindFramebuffer(gl.FRAMEBUFFER, healthT.fb); gl.viewport(0, 0, HEALTH_W, HEALTH_H);
       gl.useProgram(progHealth); gl.uniform2f(uHealthSrc, rW, rH);
@@ -3518,9 +3523,13 @@ void main(){
       const ts = performance.now();
       gl.bindBuffer(gl.PIXEL_PACK_BUFFER, healthBuf); gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, healthPx); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
       slowSync('getBufferSubData health', ts);
-      let bad = 0, neg = 0, mx = 0, worst = 0;
-      for (let i = 0; i < healthPx.length; i += 4) { if (healthPx[i]) bad++; if (healthPx[i + 1]) neg++; mx = Math.max(mx, healthPx[i + 2]); worst = Math.max(worst, healthPx[i]); }
-      box.dispatchEvent(new CustomEvent('diskhealth', { detail: { cells: HEALTH_W * HEALTH_H, bad, neg, worst: Math.round(worst / 2.55) / 100, max: Math.round(mx / 255 * 4 * 100) / 100, ...healthOf } }));
+      let bad = 0, neg = 0, mx = 0, worst = 0, chans = 0;
+      const where = [];   // (round 10a: the cells with values not finite, [column, row from the top, share in %, channels], at most 12)
+      for (let i = 0; i < healthPx.length; i += 4) {
+        if (healthPx[i]) { bad++; const c = Math.round(healthPx[i + 3] / 32); chans |= c; if (where.length < 12) { const k = i / 4; where.push([k % HEALTH_W, HEALTH_H - 1 - Math.floor(k / HEALTH_W), Math.round(healthPx[i] / 2.55), c]); } }
+        if (healthPx[i + 1]) neg++; mx = Math.max(mx, healthPx[i + 2]); worst = Math.max(worst, healthPx[i]);
+      }
+      box.dispatchEvent(new CustomEvent('diskhealth', { detail: { cells: HEALTH_W * HEALTH_H, grid: [HEALTH_W, HEALTH_H], bad, neg, worst: Math.round(worst / 2.55) / 100, max: Math.round(mx / 255 * 4 * 100) / 100, chans, where, ...healthOf } }));
     }
     // the FULL program, compiled in the background where the driver can (KHR_parallel_shader_compile), otherwise
     // when first needed; null until it is ready, false if it failed (the usual program then stands in). A single
@@ -5384,6 +5393,7 @@ void main(){
     // (the view moving: a flight, a drag, a touch on the picture)
     const viewMoving = () => !!flyV || !!flyT || dragging || touching;
     function aePass() {   // the measurement of the frame in accT, into aeT
+      firstUse('ae');
       gl.bindFramebuffer(gl.FRAMEBUFFER, aeT.fb); gl.viewport(0, 0, AE_W, AE_H);
       gl.useProgram(progAE); gl.uniform2f(uAeSrc, rW, rH);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -5603,7 +5613,7 @@ void main(){
         drawWindMap(Math.round(ASYM_F_JS * asymSm() * 100) / 100);
         // (round 9: while only the clock moves, the eddies drawn every eddyEvery frames: 2 on a guarded device, a phone's
         // power; they move on orbital time scales, and 15 updates a second at 30 frames do not show. 1 elsewhere)
-        if (!clockOnly || eddyEvery <= 1 || ++eddyTick % eddyEvery === 0) eddyPass();
+        if (box.dataset.eddy !== 'off' && (!clockOnly || eddyEvery <= 1 || ++eddyTick % eddyEvery === 0)) { firstUse('eddy'); eddyPass(); }   // (round 10a: data-eddy="off", a switch to try on a phone)
         windPass();
         // the disk map for this moment and view (the footprints of the pixels depend on the camera)
         gl.useProgram(progDisk);
@@ -5624,6 +5634,7 @@ void main(){
       gl.useProgram(F ? F.prog : prog);
       gl.uniform1i(U.uBg, BG.MODES[opt.bg]);
       gl.uniform1i(U.uRayB, rayBound ? 1 : 0);   // (round 9: see CO_IT, CT_IT)
+      gl.uniform1i(U.uCtMax, ctMax);   // (round 10a: see box.diskCtMax)
       gl.uniform1i(U.uProbe, probing);
       { const m = rayBound ? MARCH[march] : MARCH.full; gl.uniform4f(U.uMarch, m.sub, m.coStep, m.coRef, m.coThr); gl.uniform1i(U.uCoRec, m.coRec); gl.uniform1i(U.uCoP, m.coP); gl.uniform3fv(U.uCoIt, m.coIt); gl.uniform3fv(U.uCtIt, m.ctIt); }
       gl.uniform1i(U.uCoPass, 0); gl.uniform1f(U.uCoDith, 0);
@@ -5692,7 +5703,7 @@ void main(){
       gl.uniform1f(U.uEnv, envVis);
       // frame acc of a still picture: R2 and golden-ratio sequences (none for the first), weighted 1/(acc + 1); the
       // sequence runs on through the averaged frames while the clock moves (jitN)
-      const jn = acc ? ++jitN : 0;
+      const jn = acc || probeJit ? ++jitN : 0;   // (round 10a: diskRayProbe({ jitter }) draws with the next offset)
       gl.uniform3f(U.uJit, jn ? (jn * 0.7548777) % 1 - 0.5 : 0, jn ? (jn * 0.5698403) % 1 - 0.5 : 0, (jn * 0.618034) % 1);
       // the cut face at the screen's resolution (the same program and uniforms, see faceAt), drawn again when the picture
       // starts over (it does not depend on a still's jitter), before the volume (which leaves out what lies behind it
@@ -5767,13 +5778,32 @@ void main(){
         job.si = 0; job.nb = Math.max(1, Math.ceil(job.n / nPass)); job.n = nPass * job.nb + 1; job.probeAt = coProbeAt;
       }
       // (round 9: a script's frame, each band waited for: its bands sized as it goes, see adaptRows)
-      if (adaptRows > 0 && !fullFrame) { job.ad = true; job.y = 0; job.rows = Math.min(rH, Math.max(BAND_ROWS, adaptRows)); job.n = (job.stages ? job.stages.length : 1) * Math.ceil(rH / job.rows); }
+      // (round 10a: its first band within what this kind is known to cost, or the least band where it is not, see firstRows)
+      const aimFirst = adaptAim > 0 ? adaptAim : 0.5 * (gBudget > 0 ? gBudget : 120);
+      if (adaptRows > 0 && !fullFrame) { job.ad = true; job.y = 0; job.rows = Math.min(rH, Math.max(BAND_ROWS, Math.min(adaptRows, firstRows(aimFirst)))); job.n = (job.stages ? job.stages.length : 1) * Math.ceil(rH / job.rows); }
       // (round 9: the first animation frames after a jump, see probeNext: the same, each band's rows from the one before)
-      else if (probeNext > 0 && !fullFrame && !snapping && !stepping && !reduce) {
-        probeNext--; job.ad = true; job.st = {}; job.y = 0; job.rows = Math.min(rH, Math.max(BAND_ROWS, Math.ceil(rH / 8))); job.n = Math.ceil(rH / job.rows);
+      // (round 10a: and any frame of a kind not measured lately (gKnown, 30 s): a prediction carried by the factors is not
+      // trusted with a whole frame)
+      else if ((probeNext > 0 || (gBudget > 0 && !knownNow(kindNow()))) && !fullFrame && !snapping && !stepping && !reduce) {
+        if (probeNext > 0) probeNext--;
+        job.ad = true; job.st = {}; job.y = 0; job.rows = firstRows(aimFirst); job.n = (job.stages ? job.stages.length : 1) * Math.ceil(rH / job.rows);
+      }
+      // (round 10a) A frame meant to be in bands (a still, or a look over the budget at the lowest scale) is sized as it goes too:
+      // its bands from the cost row by row of the frame before of the same picture (stillSt), or, for its first frame, from
+      // what the kind is known to cost or the least band. Its uniform bands were sized by the prediction, and where that was
+      // low one band was long: 331 ms of GPU time in round 10a's checks (the visible look's still after a jump, the page's
+      // bands from a c1 measured on the model)
+      else if (job.n > 1 && !fullFrame && !snapping && !stepping && !reduce) {
+        // (a new picture, not the next frame of a still nor of the clock alone, starts over: another view costs otherwise)
+        const k = job.key + (job.stages ? ':' + job.stages.length : '');
+        if (!stillSt || stillSt.key !== k || stillSt.rW !== rW || stillSt.rH !== rH || (!acc && !clockOnly)) stillSt = { key: k, rW, rH, prof: job.stages ? null : new Float32Array(rH) };
+        job.ad = true; job.st = stillSt; job.y = 0; job.rows = firstRowsOf(stillSt, aimFirst);
+        job.n = (job.stages ? job.stages.length : 1) * Math.ceil(rH / job.rows);
       }
       const vk = (F ? 'F' : 'U') + (acc ? 'b' : '');
-      job.first = !variants.has(vk) || (faceOn && mapsDue && !variants.has('F8')) || (envMade && !!env3T) || (!!job.stages && !variants.has('Fc')); variants.add(vk); if (faceOn) variants.add('F8'); if (job.stages) variants.add('Fc');
+      job.first = !variants.has(vk) || (faceOn && mapsDue && !variants.has('F8')) || (envMade && !!env3T) || (!!job.stages && !variants.has('Fc'));
+      if (job.first) rec({ k: 'first', w: vk + (faceOn && !variants.has('F8') ? '+F8' : '') + (job.stages && !variants.has('Fc') ? '+Fc' : '') + (envMade ? '+env3' : ''), key: job.key });   // (round 10a)
+      variants.add(vk); if (faceOn) variants.add('F8'); if (job.stages) variants.add('Fc');
       bandJob = lastJob = job;
       job.finish = () => {
       accN = acc + 1;
@@ -5781,7 +5811,7 @@ void main(){
       // (round 8) the finish (see BLOOM): the glow of the bright parts and the tone curve, by the quality of the moment; in
       // the model's look only (the observed looks keep the stretch they are compared by: DESIGN.md, section 21)
       const fin = Math.min(fxAmp, 1) * modelAmp, bk = Math.max(0, Math.min(fxAmp - 1, 1)) * modelAmp * BLOOM.K;
-      const bp = bk > 0 ? bloomPass() : [1, 1];
+      const bp = bk > 0 ? (firstUse('bloom'), bloomPass()) : [1, 1];
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.useProgram(progShow);
       gl.uniform3f(uShowBloom, bp[0], bp[1], bk); gl.uniform1f(uShowTone, fin * TONE);
@@ -5956,11 +5986,13 @@ void main(){
     const kindNow = () => lookNow + (lookNow === 'co' ? ':' + opt.coMode : '') + (opt.slice || sliceU > 0 ? ':cut' : '');
     const gFactor = (k) => (GFAC[k.replace(/:cut$/, '')] || 1) * (/:cut$/.test(k) ? GCUT : 1);
     const median3 = (a) => a.slice().sort((x, y) => x - y)[a.length >> 1];
+    // (round 10a: a kind's own measure: of whole frames where there are fresh ones, else the upper bound from frames in bands)
+    const ownC1 = (k) => { const kn = gKnown[k], now = performance.now(); return !kn ? 0 : kn.c.length && now - kn.t < 30000 ? median3(kn.c) : kn.tub && now - kn.tub < 30000 ? kn.ub : 0; };
     function gC1(k) {
-      const kn = gKnown[k], fresh = kn && performance.now() - kn.t < 30000;
-      if (fresh && k === gLast.key) return median3(kn.c);
+      const own = ownC1(k);
+      if (own > 0 && k === gLast.key) return own;
       const pred = gLast.c1 > 0 ? gLast.c1 * gFactor(k) / gFactor(gLast.key || 'model') : 0;
-      return Math.max(pred, fresh ? median3(kn.c) : 0);
+      return Math.max(pred, own);
     }
     function gNote(k, ms, scale, n, band) {
       if (!(scale > 0) || !(ms > 0)) return;
@@ -5968,10 +6000,17 @@ void main(){
       // frame's cost, each band carrying the delay of the looks for its fence. Round 9: short bands were not noted, and a
       // look predicted dear from another's measure (GFAC, of the full march) kept the bands it was first given: the gas
       // line's mean velocity on the phone frame, 11 bands of 20 ms)
+      // (round 10a) The sum of a frame in bands is only an upper bound of the frame drawn whole: each band pays the time of its
+      // own slowest ray and its submission, which a whole frame pays once (16 bands of the model's frame at scale 1: 104 ms
+      // against 25 ms in one piece, M1 Max). So it is kept apart (ub, the latest) and used only while no whole frame of the
+      // kind has been measured lately: frames begun with the least band after every jump otherwise held the looks at scale
+      // 0.125, the sums of their many small bands divided by the scale squared. A whole frame's measure takes over at once.
+      // (Taking off each band's share of that fixed cost instead would underestimate frames whose bands carry equal work.)
       const c = (n > 1 && band > 2 * gBudget ? band * n : ms) / (scale * scale);
-      const kn = gKnown[k] || (gKnown[k] = { c: [], t: 0 });
-      kn.c.push(c); if (kn.c.length > 3) kn.c.shift(); kn.t = performance.now();
-      gLast = { key: k, c1: median3(kn.c) };
+      const kn = gKnown[k] || (gKnown[k] = { c: [], t: 0, ub: 0, tub: 0 });
+      if (n > 1) { kn.ub = c; kn.tub = performance.now(); }
+      else { kn.c.push(c); if (kn.c.length > 3) kn.c.shift(); kn.t = performance.now(); }
+      gLast = { key: k, c1: ownC1(k) };
     }
     // (the bands the guard asks for this frame, 0 for none; set at the start of drawOnce)
     let gBands = 0;
@@ -6061,6 +6100,7 @@ void main(){
       if (!stageDone) return true;
       if (sg && j.si < j.stages.length - 1 && !(probing === 1 && j.probeAt === j.si)) { j.si++; j.b = 0; j.y = 0; return true; }
       if (j.ad || sg) j.n = j.pieces;
+      if (j.ad && j.st && j.st.prof && !j.stages) j.st.full = true;   // (round 10a: its rows' costs known, for the next frame, see rowsAfter)
       bandJob = null;
       if (sg && probing === 1) return false;   // (the probe's counts: the frame not finished)
       // (round 10a: the volume's last band sent on its own before the finish (the glow, the display, the measurements), so
@@ -6112,10 +6152,49 @@ void main(){
     const PROBE_FRAMES = 2;
     // (and the first frames of a start, or of a context given back: nothing is measured yet)
     let probeNext = PROBE_FRAMES, lastBand = { j: null, ms: 0 };
+    // (round 10a) A band sized as it goes: from the dearest rows measured so far, aiming at `aim`, as before; but at most twice
+    // the rows of the band before (the rows ahead may be far dearer than those measured: the disk after the sky, a few
+    // ms a row against hundredths), and within the guard's bands (gBands). Round 10a's checks: a script's frame of the
+    // visible look at scale 1, its first band an eighth of the rows (99 of 792), took 655 ms on the M1 Max
+    // (and, where the frame before of the same picture left its cost row by row (st.prof: each band's time spread over its
+    // rows; a still's frames are the same view, jittered), the rows ahead taken from it until they add up to `aim`: bands cut
+    // where they cost the same, the disk's in thin bands, the sky's in thick ones)
     const rowsAfter = (st, j, ms, aim) => {
-      if (j && j.ad && j.sent > 0 && ms > 0) st.perRow = Math.max(st.perRow || 0, ms / j.sent);
-      return st.perRow > 0 ? Math.max(BAND_ROWS, Math.floor(aim / st.perRow)) : Math.max(BAND_ROWS, Math.ceil(rH / 8));
+      if (j && j.ad && j.sent > 0 && ms > 0) {
+        st.perRow = Math.max(st.perRow || 0, ms / j.sent);
+        if (st.prof && !j.stages) st.prof.fill(ms / j.sent, Math.max(0, j.y - j.sent), j.y);
+      }
+      let r;
+      if (st.full && st.prof && j && !j.stages) { let sum = 0, y = j.y; while (y < rH && sum + st.prof[y] <= aim) sum += st.prof[y++]; r = y - j.y; }
+      else {
+        r = st.perRow > 0 ? Math.floor(aim / st.perRow) : Math.ceil(rH / 8);
+        if (j && j.sent > 0) r = Math.min(r, 2 * j.sent);
+      }
+      if (gBands > 0) r = Math.min(r, Math.ceil(rH / gBands));
+      return Math.max(BAND_ROWS, r);
     };
+    // (round 10a) the rows of a frame's first band from the profile of the frame before (see rowsAfter), or firstRows
+    const firstRowsOf = (st, aim) => {
+      if (!(st.full && st.prof)) return firstRows(aim);
+      let sum = 0, y = 0; while (y < rH && sum + st.prof[y] <= aim) sum += st.prof[y++];
+      return Math.max(BAND_ROWS, Math.min(y, gBands > 0 ? Math.ceil(rH / gBands) : rH));
+    };
+    // (round 10a) the state of the frames in bands of one picture (its kind, size), kept from frame to frame: see drawOnce
+    let stillSt = null;
+    // (round 10a) The first band of a frame sized as it goes (a script's, or the first frames after a jump): where this kind
+    // of frame has been measured on this device since the last jump (gKnown, fresh), the rows its cost per row at this
+    // scale allows within `aim`; where it has not (a look, a line's map or a cut not yet drawn since the jump, a march's tier
+    // changed, a context given back: nothing to trust), the least band, BAND_ROWS, the next ones growing from the measures
+    // (rowsAfter). Within the guard's bands (gBands) either way
+    const knownNow = (k) => ownC1(k) > 0;
+    const firstRows = (aim) => {
+      const k = kindNow(), kn = gKnown[k], trusted = knownNow(k);
+      let r = BAND_ROWS;
+      if (trusted) { const perRow = ownC1(k) / Math.max(1, coPassesNow()) * opt.scale * opt.scale / rH; r = perRow > 0 ? Math.floor(aim / perRow) : rH; }
+      if (gBands > 0) r = Math.min(r, Math.ceil(rH / gBands));
+      return Math.max(BAND_ROWS, Math.min(rH, r));
+    };
+    let adaptAim = 0;   // (the aim of a frame sized as it goes, for its first band: a script's; 0, half the budget)
     const bandsFor = () => (fullFrame ? 1 : snapping ? snapBands : Math.min(Math.max(stillBands, gBands), Math.max(1, Math.floor(rH / BAND_ROWS))));
     // what a frame costs depends on (beyond its pixels): the look (and the line's map), the cut, the FULL program
     const frameKeyOf = (F) => kindNow() + (F ? ':F' : '');
@@ -6172,7 +6251,20 @@ void main(){
     // recorder's last step is the one in flight)
     const GPU_STALE = 4000, GPU_LOOK = 8, HUNG_MS = 2500;
     let lastPreMs = -1;
-    let gpuEnd = 0, gpuSum = 0, gpuMax = 0, gpuBad = false, gpuTimer = 0, gpuLook = 0, gpuFirst = false, gpuStages = [], gpuPre = 0;
+    // (round 10a) a pass drawn for the first time in this build (a program in a state the GPU's process must make a pipeline
+    // for), told to the recorder with when
+    const firstSeen = new Set();
+    const firstUse = (w) => { if (!firstSeen.has(w)) { firstSeen.add(w); rec({ k: 'first', w }); } };
+    // (round 10a) measures taken while the page was hidden are its timers' delays, not the GPU's: a script's frame measured
+    // across a change of visibility is not noted (round 10a's checks: a tab put behind another for 12 minutes read 1.6 s a band)
+    let visGen = 0;
+    document.addEventListener('visibilitychange', () => { visGen++; }, on);
+    // (round 10a) The GPU's duty (diskDuty): where the page asks for it (a guarded device), a frame that only moves the clock on,
+    // and the next band of a still being refined, wait until the GPU has been idle for (1 / duty - 1) times the work just done.
+    // The owner's iPhone (A18, four GPU cores) reset its GPU ("firmware-detected lockup") after some 20 s of the visible look
+    // at 20 frames a second whose frames took up to 55 ms each: the GPU never idle. 0: none (as before)
+    let duty = 0, lastGpuFrame = 0, bandRestUntil = 0, ctMax = 32768, probeJit = false;
+    let gpuEnd = 0, gpuSum = 0, gpuMax = 0, gpuBad = false, gpuTimer = 0, gpuLook = 0, gpuFirst = false, gpuStages = [], gpuPre = 0, gpuVolMax = 0;
     const fence = (end, j) => {
       const ts = performance.now(), sy = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); slowSync('fenceSync', ts);
       flight.push({ s: sy, t: performance.now(), end, n: j ? j.n : 1, px: rW * rH, scale: opt.scale, key: j ? j.key : '', still: paused, first: !!(j && j.first), j, st: j && j.stages ? j.sentStage : null, gt: lastBandGt, rid: lastRid, rect: lastRect });
@@ -6195,11 +6287,13 @@ void main(){
         if (f.rid) rec({ k: 'piece', ph: 1, id: f.rid, ms, late: f.hung ? 1 : 0, ...(f.pre ? { pre: 1 } : {}) });
         else if (f.hung) rec({ k: 'late', key: f.key, ms: now - f.t, pre: f.pre ? 1 : 0 });
         if (f.pre) lastPreMs = ms;
+        if (duty > 0 && !f.pre && f.j && f.j.ad) bandRestUntil = now + ms * (1 / duty - 1);   // (round 10a: see duty)
         if (f.gt) { f.gt.fence = ms; f.gt.what = f.pre ? 'pre' : 'frame'; }   // (round 9: see diskGpuTime)
         if (f.st != null) gpuStages[f.st] = (gpuStages[f.st] || 0) + ms;   // (round 9: a frame in passes, each pass's time)
         if (f.pre) gpuPre += ms;   // (round 9: the work before the volume, see drawOnce)
         if (now - f.t > GPU_STALE || document.hidden) gpuBad = true;
         gpuSum += ms; gpuMax = Math.max(gpuMax, ms); gpuFirst = gpuFirst || f.first;
+        if (!f.pre) gpuVolMax = Math.max(gpuVolMax, ms);
         if (!f.end) continue;
         // (bands, or whole frames, that run past twice the time asked for one: more bands for the next frames; not where the
         // bands are already short on the whole, which more of them would not shorten: each has a cost of its own)
@@ -6207,10 +6301,14 @@ void main(){
         // (and fewer again, down to the page's, where they run well short: round 9, the gas line's maps on the phone frame
         // kept 11 bands of 20 ms where 3 would do, a picture every 130 ms)
         else if (stillBandMs > 0 && !gpuBad && !gpuFirst && f.n > 1 && stillBands > pageBands) stillBands = Math.min(stillBands, Math.max(pageBands, Math.ceil(f.n * gpuMax / stillBandMs)));
-        if (!gpuBad && !gpuFirst) gNote(f.key.replace(/:F$/, ''), gpuSum, f.scale, f.n, gpuMax);
+        // (round 10a: the volume's cost alone: the work before it (the maps) is a piece of its own, sent and measured on its own,
+        // and does not grow with the pixels; counted in, divided by the scale squared, it made a frame at 0.125 cost 3000 ms at
+        // scale 1 in the millimetre look (maps of 50 to 90 ms after a jump), and the guard held the looks at their lowest scale)
+        if (!gpuBad && !gpuFirst) gNote(f.key.replace(/:F$/, ''), gpuSum - gpuPre, f.scale, f.n, gpuVolMax);
         // (first: a program's first use in a blend state, see warmFull; its time is mostly the pipeline's making)
-        if (!gpuBad) box.dispatchEvent(new CustomEvent('diskgpu', { detail: { ms: Math.round(gpuSum * 10) / 10, band: Math.round(gpuMax * 10) / 10, bands: f.n, px: f.px, scale: f.scale, key: f.key, still: f.still ? 1 : 0, next: stillBands, first: gpuFirst ? 1 : 0, pre: Math.round(gpuPre * 10) / 10, ...(gpuStages.length ? { stages: gpuStages.map((v) => Math.round((v || 0) * 10) / 10) } : {}) } }));
-        gpuSum = 0; gpuMax = 0; gpuBad = false; gpuFirst = false; gpuStages = []; gpuPre = 0;
+        if (!gpuBad) box.dispatchEvent(new CustomEvent('diskgpu', { detail: { ms: Math.round(gpuSum * 10) / 10, band: Math.round(gpuMax * 10) / 10, vband: Math.round(gpuVolMax * 10) / 10, bands: f.n, px: f.px, scale: f.scale, key: f.key, still: f.still ? 1 : 0, next: stillBands, first: gpuFirst ? 1 : 0, pre: Math.round(gpuPre * 10) / 10, ...(gpuStages.length ? { stages: gpuStages.map((v) => Math.round((v || 0) * 10) / 10) } : {}) } }));
+        if (!gpuBad) lastGpuFrame = gpuSum;   // (round 10a: see duty)
+        gpuSum = 0; gpuMax = 0; gpuBad = false; gpuFirst = false; gpuStages = []; gpuPre = 0; gpuVolMax = 0;
       }
       if (flight.length) gpuLook = now;
     }
@@ -6302,7 +6400,7 @@ void main(){
       if (moving) dirty = true;   // flights, fades and the sweep run in real time (see draw)
       // (round 9) a frame being drawn in bands goes on, one band at a time, each waited for (see bandsFor)
       if (bandJob) {
-        if (!gpuBehind(1)) {
+        if (!gpuBehind(1) && !(duty > 0 && t < bandRestUntil)) {
           const j = bandJob;
           if (j.ad && j.st && lastBand.j === j) j.rows = rowsAfter(j.st, j, lastBand.ms, 0.5 * (gBudget > 0 ? gBudget : 120));
           bandStep(); fence(!bandJob, j);
@@ -6311,6 +6409,8 @@ void main(){
         if (gpuBehind()) { /* (the GPU is still on the frames before) */ }
         // (round 9) a frame that would only move the clock on waits for the frame rate's cap (see fpsCap)
         else if (fpsCap > 0 && !paused && !urgent && !moving && !viewMoving() && !fstats && lastDrawT && t - lastDrawT < 1000 / fpsCap - 3) { if (!capT0) capT0 = t; }
+        // (round 10a: and the GPU's duty, see duty: the next frame not before the last one's work, over the duty, has passed)
+        else if (duty > 0 && !urgent && !viewMoving() && !fstats && lastDrawT && t - lastDrawT < lastGpuFrame / duty - 3) { if (!capT0) capT0 = t; }
         else {
           heldNow = capT0 ? t - capT0 : 0; capT0 = 0; urgent = false; lastDrawT = t;
           // (the statistics and the adaptive scale count the frames drawn)
@@ -6423,9 +6523,11 @@ void main(){
     async function scriptFrame(what, st) {
       const aim = 0.5 * (gBudget > 0 ? gBudget : 120);
       await gpuDone(); if (lost) return 0;   // (the frames before it done first: their work is theirs, measured by their fences)
-      const t0 = performance.now();
-      adaptRows = rowsAfter(st, null, 0, aim);
-      try { drawOnce(); } finally { adaptRows = 0; }
+      const t0 = performance.now(), vg = visGen;
+      // (round 10a: a row's cost belongs to one size of the picture: a new scale starts over)
+      if (st.rW !== rW || st.rH !== rH) { st.perRow = 0; st.rW = rW; st.rH = rH; }
+      adaptRows = rowsAfter(st, null, 0, aim); adaptAim = aim;
+      try { drawOnce(); } finally { adaptRows = 0; adaptAim = 0; }
       let j = await firstBand(what); if (lost) return performance.now() - t0;
       let b0 = j && j.sentAt >= t0 ? j.sentAt : t0, sum = 0, mx = 0;
       for (;;) {
@@ -6436,7 +6538,7 @@ void main(){
         bandStep(); b0 = performance.now();
       }
       // (what it cost, for the guard's next prediction, as the animation frames' are; a first use apart)
-      if (j && !j.first && !lost) gNote(j.key.replace(/:F$/, ''), sum, opt.scale, j.n || 1, mx);
+      if (j && !j.first && !lost && vg === visGen && !document.hidden) gNote(j.key.replace(/:F$/, ''), sum, opt.scale, j.n || 1, mx);
       return performance.now() - t0;
     }
     idle(() => { if (pcomp && !fullP && !lost) startFull(); if (!warmQueued) { warmQueued = true; warmLater(warmFull); } });
@@ -7157,7 +7259,7 @@ void main(){
     box.diskGuard = (o = {}) => {
       const ms = finiteNumber(o.ms), c1 = finiteNumber(o.c1);
       if (isFinite(ms) && ms >= 0) gBudget = ms;
-      if (typeof o.key === 'string' && isFinite(c1) && c1 > 0) { gKnown[o.key] = { c: [c1], t: performance.now() }; gLast = { key: o.key, c1 }; }
+      if (typeof o.key === 'string' && isFinite(c1) && c1 > 0) { gKnown[o.key] = { c: [c1], t: performance.now(), ub: 0, tub: 0 }; gLast = { key: o.key, c1 }; }
       return { ms: gBudget, factors: { ...GFAC }, cut: GCUT, floor: GUARD_FLOOR, slack: GUARD_SLACK, last: { ...gLast } };
     };
     // (round 9, for checks) Where a frame's work goes: one frame of the present view drawn whole, the volume pass writing for
@@ -7178,8 +7280,8 @@ void main(){
       try {
         await gpuDone(); if (lost) return;   // (the frames before it done first)
         let t = performance.now();
-        adaptRows = Math.max(BAND_ROWS, Math.ceil(rH / 4));
-        try { drawOnce(); } finally { adaptRows = 0; }
+        adaptRows = Math.max(BAND_ROWS, Math.ceil(rH / 4)); adaptAim = 60;
+        try { drawOnce(); } finally { adaptRows = 0; adaptAim = 0; }
         const j = await firstBand('probe'); if (lost) return;
         if (j && j.sentAt > t) t = j.sentAt;
         for (;;) {
@@ -7204,6 +7306,7 @@ void main(){
     };
     box.diskRayProbe = async (o = {}) => {
       if (lost) return null;
+      probeJit = !!o.jitter;   // (round 10a: the next sub-pixel offset of a still's frames, as the clock's frames use)
       await gpuDone();
       const lin = !!o.linear && lookNow === 'co' && fbFloat;
       if (lin && (!probeT || probeT.w < rW || probeT.h < rH)) { if (probeT) { gl.deleteFramebuffer(probeT.fb); gl.deleteTexture(probeT.tex); } probeT = target(Math.max(rW, 1), Math.max(rH, 1), gl.RGBA32F, gl.CLAMP_TO_EDGE); }
@@ -7232,7 +7335,7 @@ void main(){
           if (it > mx) { mx = it; at = i; late = px[4 * i + 1]; }
         }
         return { size: [rW, rH], longest: mx, at: [at % rW, Math.floor(at / rW)], lateOfLongest: late, logTrOfLongest: +px[4 * at + 2].toFixed(1), mean: Math.round(sum / n), hist };
-      } finally { accN = 0; dirty = true; }
+      } finally { accN = 0; dirty = true; probeJit = false; }
     };
     // (round 9, for checks) FULL linked, and warmed (see fullWarm)
     box.diskWarm = () => ({ linked: !!full, warm: fullWarm });
@@ -7254,8 +7357,31 @@ void main(){
         maxRB: p(gl.MAX_RENDERBUFFER_SIZE), maxDB: p(gl.MAX_DRAW_BUFFERS), maxView: p(gl.MAX_VIEWPORT_DIMS), nb3: NB3, fbFloat: fbFloat ? 1 : 0, nExt: ex.length };
     })();
     box.diskCaps = () => ({ ...capsNow });
+    // (round 10a, for checks only: the volume's picture as it is in accT, rW x rH x 4 floats, by a read back that waits for the
+    // GPU; to look for values not finite and where they are)
+    box.diskAccRead = () => (lost || !accT ? null : { size: [rW, rH], scale: opt.scale, key: kindNow(), acc: accN, data: readF(accT) });
+    // (round 10a, for checks only: one texel of accT set to v ([r, g, b, a], NaN and Infinity allowed, as half floats) and the
+    // picture shown again (the display pass alone, see present), to see what such a value looks like on the screen; a still
+    // being accumulated keeps it, as a NaN blended with anything stays NaN)
+    const toHalf = (f) => {
+      if (Number.isNaN(f)) return 0x7e00;
+      const sg = f < 0 ? 0x8000 : 0, a = Math.abs(f);
+      if (a === Infinity || a > 65504) return sg | 0x7c00;
+      if (a < 6.1e-5) return sg | Math.round(a / 5.96e-8);
+      const e = Math.floor(Math.log2(a)), m = Math.round((a / 2 ** e - 1) * 1024);
+      return sg | ((e + 15) << 10) + Math.min(m, 1023);
+    };
+    box.diskAccPoke = (x, y, v) => {
+      if (lost || !accT) return false;
+      gl.activeTexture(gl.TEXTURE6);   // (accT is bound there, for the display)
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, 1, 1, gl.RGBA, gl.HALF_FLOAT, Uint16Array.from(v.map(toHalf)));
+      gl.activeTexture(gl.TEXTURE2);
+      present();
+      return true;
+    };
     // (round 9) the march's tier (see MARCH): 'full' or 'cheap'; no argument reads it
-    box.diskMarch = (k) => { if (k != null && own(MARCH, k) && k !== march) { march = k; touched(); } return march; };
+    // (round 10a: the costs measured with the other tier no longer hold: forgotten, see firstRows)
+    box.diskMarch = (k) => { if (k != null && own(MARCH, k) && k !== march) { march = k; for (const x in gKnown) delete gKnown[x]; touched(); } return march; };
     // (for checks: a tier's parameters changed for this page, to try values; returns them)
     box.diskMarchTry = (k, o) => { if (own(MARCH, k) && o && typeof o === 'object') { Object.assign(MARCH[k], o); touched(); } return own(MARCH, k) ? { ...MARCH[k] } : null; };
     // (round 9) the bound on a long ray's work in the CO line and the continuum (CO_IT, CT_IT): on (1, the default) or off
@@ -7269,6 +7395,10 @@ void main(){
     };
     // (round 9) the frame rate's cap while only the clock moves (see fpsCap): frames a second, 0 for none; no argument reads it
     // (round 9) while only the clock moves, the eddies' volume drawn every n frames (1 to 4; see drawOnce); no argument reads it
+    // (round 10a) the GPU's duty (see duty): 0 none, else 0.1 to 1; no argument reads it
+    box.diskDuty = (k) => { const v = finiteNumber(k); if (isFinite(v) && v >= 0) duty = v === 0 ? 0 : Math.min(1, Math.max(0.1, v)); return duty; };
+    // (round 10a, a switch to try on a phone) the continuum's iterations at most (see uCtMax): 64 to 32768; no argument reads it
+    box.diskCtMax = (n) => { const v = finiteNumber(n); if (isFinite(v) && v > 0) { ctMax = Math.min(32768, Math.max(64, Math.round(v))); touched(); } return ctMax; };
     box.diskEddyEvery = (n) => { const k = finiteNumber(n); if (isFinite(k) && k >= 1) eddyEvery = Math.min(4, Math.round(k)); return eddyEvery; };
     box.diskFps = (n) => { const k = finiteNumber(n); if (isFinite(k) && k >= 0) fpsCap = Math.min(240, k); return fpsCap; };
     // (round 9) the bands of a still picture's frames (see bandsFor): n (1 to 64), and the GPU time aimed at for one (ms), past
@@ -7319,8 +7449,8 @@ void main(){
       for (let i = 0; i < n; i++) {
         await gpuDone(); if (lost) return null;   // (the frames before it done first)
         const t0 = performance.now();
-        adaptRows = Math.min(rowsAfter(st, null, 0, aim), Math.ceil(rH / snapBands));
-        try { draw(); } finally { adaptRows = 0; }
+        adaptRows = Math.min(rowsAfter(st, null, 0, aim), Math.ceil(rH / snapBands)); adaptAim = aim;
+        try { draw(); } finally { adaptRows = 0; adaptAim = 0; }
         let j = await firstBand('snapshot'); if (lost) return null;
         let b0 = j && j.sentAt >= t0 ? j.sentAt : t0, bMax = 0, sum = 0;
         for (;;) {
@@ -7332,7 +7462,7 @@ void main(){
         }
         const dt = performance.now() - t0;
         snapLog.bands.push(j ? j.n : 1); snapLog.ms.push(Math.round(dt)); snapLog.band.push(Math.round(bMax));
-        if (j && !j.first) gNote(j.key.replace(/:F$/, ''), sum, opt.scale * snapK, j.n || 1, bMax);
+        if (j && !j.first && !document.hidden) gNote(j.key.replace(/:F$/, ''), sum, opt.scale * snapK, j.n || 1, bMax);
         if (o.onFrame && i < n - 1) o.onFrame(i + 1, n);
       }
       present();
