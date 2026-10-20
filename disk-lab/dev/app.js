@@ -8,13 +8,13 @@ import { WORDS } from './words.js?v=f608a7fcff';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng } from './capture.js?v=aa82de203b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=b706fe9db7';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=6984e6fe3f';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.8-dev.3', RELEASED = '2026-10-20';
+const VERSION = '1.8-dev.4', RELEASED = '2026-10-20';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
@@ -107,7 +107,7 @@ if (typeof WebGL2RenderingContext !== 'undefined') {
 // diskDuty; a guarded device 0.5 by default); ?ctmax=N, the continuum's iterations at most; ?eddy=0, no eddies' volume;
 // ?fps=N, the frame rate while only the clock moves; ?split=0, the continuum's rays drawn whole, not in kicks (see the
 // engine's SPLIT); ?kick=N, the work of a kick
-const SWITCH = { duty: q.get('duty'), ctmax: Number(q.get('ctmax')) || 0, eddy: q.get('eddy') === '0', fps: Number(q.get('fps')) || 0, split: q.get('split') === '0', kick: Number(q.get('kick')) || 0 };
+const SWITCH = { duty: q.get('duty'), ctmax: Number(q.get('ctmax')) || 0, eddy: q.get('eddy') === '0', fps: Number(q.get('fps')) || 0, split: q.get('split') === '0', kick: Number(q.get('kick')) || 0, kadapt: q.get('kadapt') === '1' };
 // (round 9) the last visit's record (see record): a visit that ended with drawing stopped, or "Try again", starts safe
 // (round 10a: judged from its phase and its flight record, judgePrev: only what is broken counts, not a page closed or put
 // in the background while it started or changed its look)
@@ -843,6 +843,29 @@ const stepFor = (ms) => LADDER.reduce((m, l) => (costAt(l) <= ms ? l : m), LADDE
 const stillNow = () => live() && (!!S().paused || reduce) && !moveFrom;
 const capRun = () => gc.cap;
 function capStill() { if (!gc.still) gc.still = Math.max(gc.cap, stepFor(STILL_MS)); return gc.still; }
+// (round 10a, A4: the owner, trying dev.3 on the iPhone: 「静止時はもっとがんばっていいかも」) A still picture is refined step by
+// step up to its level's scale (Best: 1, the full canvas; Auto: 1): it starts where it did (capStill: STILL_MS a frame), and
+// once PROG_N frames are averaged at a step, the next step of LADDER. No total time: each frame's pieces stay within the
+// budget whatever the scale (the engine's bands; in the visible and mid-infrared looks its kicks, a piece of which is bounded
+// whatever the ray), the GPU resting between them on a phone (its duty); the first touch, wheel or key leaves the frame and
+// brings the running scale back (the engine's leaveStill, and the page's lighter picture while the view moves). Not in the
+// gas line's look: its passes' slowest rays are not cut into kicks yet (STILL_MS, as before)
+// (round 10a, optimizing the time to the full scale: a step once one frame of it is done (PROG_N; 4 made the steps between
+// cost four frames each, and on a phone's frame as WebKit on a GPU six times slower the still had not reached scale 1 after 4
+// minutes), and two steps of LADDER at a time (PROG_SKIP: each about 1.56 times the last, 2.4 times the pixels), the last to
+// the level's scale: the frames on the way cost some 0.9 of the last one's, where every step at four frames cost some 10)
+const PROG_N = 1, PROG_SKIP = 2;
+const stillTop = () => (quality === 'auto' ? 1 : QUALITY[quality] || 1);
+function stillStep(acc, accMax) {
+  if (!stillNow() || !calibrated || saving || holdSharp || 'lost' in lab.dataset || S().look === 'co' || !gc.still) return false;
+  const s = box.diskScale(), top = stillTop();
+  if (gc.still >= top - 0.004 || s < gc.still - 0.004 || acc < Math.min(PROG_N, accMax || PROG_N)) return false;
+  const i = LADDER.findIndex((l) => l > gc.still + 0.004);
+  if (i < 0) return false;
+  const next = LADDER[Math.min(LADDER.length - 1, i + PROG_SKIP - 1)];
+  gc.still = Math.min(top, next); glog('still up');
+  return true;
+}
 const allowed = () => (!calibrated ? 1 : stillNow() ? capStill() : capRun());
 const glog = (what) => {
   gc.log.push({ t: Math.round(performance.now()), what, key: gc.key, c1: Math.round(gc.c1), cap: gc.cap, still: gc.still, scale: live() ? box.diskScale() : 0 }); if (gc.log.length > 60) gc.log.shift();
@@ -994,7 +1017,8 @@ box.addEventListener('diskgpu', (e) => {
   // the engine's gNote)
   d.vol = Math.max(0, d.ms - d.pre);
   // (a first use: the engine's program making its pipeline for a blend state, not the frame's cost; see the engine's warmFull)
-  if (mode !== 'live' || !(d.scale > 0) || !(d.ms > 0) || d.first || 'lost' in lab.dataset) return;
+  // (round 10a: nor a frame drawn outside the animation frames (out: a resize's), see the engine's fence)
+  if (mode !== 'live' || !(d.scale > 0) || !(d.ms > 0) || d.first || d.out || 'lost' in lab.dataset) return;
   const c = d.vol / (d.scale * d.scale), now = performance.now();
   if (d.bands === 1) known[key] = { c1: c, t: now };   // (a frame in bands carries the looks' delay in each band: see below)
   if (key !== gc.key) return;
@@ -1022,7 +1046,9 @@ box.addEventListener('diskgpu', (e) => {
   const cap0 = gc.cap;
   // (round 10a: the hold, doubled each time a step up was taken back, halves again once the cap has stayed four holds)
   if (gc.hold > GUARD_HOLD && now - gc.changed > 4 * gc.hold) { gc.hold = Math.max(GUARD_HOLD, gc.hold / 2); gc.changed = now; }
-  if (d.still) { if (gc.still && costAt(gc.still) > 1.5 * STILL_MS) { gc.still = stepFor(STILL_MS); glog('still lowered'); } }
+  // (a still's frame over STILL_MS: lowered, in the gas line's look only; the others' stills are refined step by step whatever
+  // a frame costs, their pieces bounded by the engine's bands and kicks, see stillStep)
+  if (d.still) { if (gc.still && S().look === 'co' && costAt(gc.still) > 1.5 * STILL_MS) { gc.still = stepFor(STILL_MS); glog('still lowered'); } }
   else if (costAt(gc.cap) > GUARD_MS) {
     gc.cap = stepFor(GUARD_MS);
     // (a step up taken back soon: wait twice as long before the next, as Best's quiet steps do)
@@ -1272,12 +1298,14 @@ function unsharpen() {
   govRest();
 }
 function onAccumulated() {
-  if (!live() || sharpFrom || moveFrom || holdSharp || quality !== 'auto' || 'lost' in lab.dataset || !(S().paused || reduce) || saving || recent.length < 4) return;
+  if (!live() || moveFrom || holdSharp || quality !== 'auto' || 'lost' in lab.dataset || !(S().paused || reduce) || saving || recent.length < 4) return;
   // (round 9: as fine as the guard's still picture, capStill: STILL_MS a frame, drawn in bands of GUARD_MS; it was the scale
   // whose frame the accumulation's own intervals predicted at SHARP_MS, drawn whole)
+  // (round 10a, A4: and on, a step at a time up to 1, see stillStep)
+  if (S().look !== 'co' && box.diskScale() >= capStill() - 0.004) stillStep(PROG_N, PROG_N);
   const s = box.diskScale(), to = Math.min(1, capStill());
   if (to < 1.15 * s) return;
-  sharpFrom = s; recent.length = 0; sharpWhat = S().look + S().coMode;
+  sharpFrom = sharpFrom || s; recent.length = 0; sharpWhat = S().look + S().coMode;
   if (gov) gov.pause(true);
   scaleTo(to);
 }
@@ -1467,7 +1495,8 @@ function engineSettings() {
   // 32 steps a kick (5 to 7 ms at the slowest rays on the M1 Max) and 8 MB a set; else 48 steps (64 made a frame's GPU time 1.16
   // times the rays drawn whole, where 32 made it 1.56, but its slowest kicks 9 to 14 ms) and 32 MB a set, so that a desktop's
   // frame is one band, its slowest ray paid once)
-  if (typeof box.diskSplit === 'function') box.diskSplit({ k: SWITCH.kick > 0 ? SWITCH.kick : guarded ? 32 : 48, mb: guarded ? 8 : 32 });
+  // (round 10a, optimizing: ?kadapt=1, the work of a kick adapted by kind, see the engine's kickKOf; off unless asked)
+  if (typeof box.diskSplit === 'function') box.diskSplit({ k: SWITCH.kick > 0 ? SWITCH.kick : guarded ? 32 : 48, mb: guarded ? 8 : 32, adapt: SWITCH.kadapt });
 }
 // the engine's own changes (keys, a drag, the easter eggs, a restored context) reach the controls
 box.addEventListener('diskstate', () => sync());
@@ -1478,14 +1507,18 @@ box.addEventListener('diskframe', (e) => {
   // (the intervals between frames of one still picture, at one scale, are what a frame of it costs; a complete picture
   // may be sharpened)
   // (round 9: held, the time the frame waited for the frame rate's cap, is not its cost)
-  const { acc = 0, accMax = 0, bands = 1, held = 0 } = e.detail, now = performance.now() - held;
+  const { acc = 0, accMax = 0, bands = 1, held = 0, kicks = 0 } = e.detail, now = performance.now() - held;
   // (round 7: an interval after a complete still picture, or after the page was hidden, is a rest, not a frame's cost:
   // counted, the first frame after the clock started again took the scale to its floor)
   if (lastIdle) lastFrame = 0;
   lastIdle = !!S().paused && accMax > 0 && acc >= accMax;
+  // (round 10a, A4: a still refined to the next step, see stillStep; Auto by its own sharpening, onAccumulated. The view moved:
+  // from its first step again)
+  if (moveFrom && gc.still) gc.still = 0;
+  if (quality !== 'auto' && stillStep(acc, accMax)) { applyFixed(); sync(); }
   applyFixed();
   if (skipFrames > 0) { skipFrames--; costs.length = 0; }
-  else guardFixed(lastFrame ? now - lastFrame : 0, acc, accMax, bands);
+  else guardFixed(lastFrame ? now - lastFrame : 0, acc, accMax, kicks ? Math.max(2, bands) : bands);   // (in kicks: no piece is the frame)
   // (what a frame costs now: consecutive frames, the clock running or a picture being averaged)
   if (bands === 1 && lastFrame && now - lastFrame < 3000 && (!S().paused || acc >= 2)) frameMs = frameMs ? 0.7 * frameMs + 0.3 * (now - lastFrame) : now - lastFrame;
   if (acc >= 2 && lastFrame) { recent.push(now - lastFrame); if (recent.length > 12) recent.shift(); }
@@ -1862,7 +1895,7 @@ function flogDevice(kept) {
   flog.dev = { ua: navigator.userAgent, dpr: devicePixelRatio, screen: [screen.width, screen.height], stage: [stage.clientWidth, stage.clientHeight], canvas: c ? [c.width, c.height] : null,
     probe: diag.probe, caps, emu: CAPS || undefined, math: box.dataset.math || undefined, gpux: GPUX > 1 ? GPUX : undefined,
     sw: Object.fromEntries(Object.entries(SWITCH).filter(([, v]) => v)), duty: typeof box.diskDuty === 'function' ? box.diskDuty() : undefined,
-    split: typeof box.diskSplit === 'function' ? (({ on, k }) => ({ on: on ? 1 : 0, k }))(box.diskSplit()) : undefined,
+    split: typeof box.diskSplit === 'function' ? (({ on, k, adapt }) => ({ on: on ? 1 : 0, k, adapt: adapt ? 1 : 0 }))(box.diskSplit()) : undefined,
     still: mode === 'still' ? stillReason : undefined, fail: box.dataset.fallbackError || diag.failError || undefined, guarded, budget: GUARD_MS, march: diag.guard && diag.guard.march, quality, chosen: qChosen,
     prev: { phase: prevRec && prevRec.phase, why: verdict.why, culprit: verdict.culprit }, kept };
   flogSave();

@@ -5525,7 +5525,7 @@ void main(){
       if (faceT && (faceT.w !== cw || faceT.h !== ch)) { for (const t of [faceT, faceA]) { gl.deleteFramebuffer(t.fb); gl.deleteTexture(t.tex); } faceT = faceA = null; for (const u of [gl.TEXTURE11, gl.TEXTURE12]) { gl.activeTexture(u); gl.bindTexture(gl.TEXTURE_2D, noFace); } }
       accN = 0;   // (the new target is empty: a still starts over, else its next frame would be averaged with nothing)
       gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, accT.tex);
-      if (!snapping) draw();   // (round 9: a snapshot draws its own frames, at the scale it plans, in its bands)
+      if (!snapping) drawOut();   // (round 9: a snapshot draws its own frames, at the scale it plans, in its bands)
     }
     // Disk Lab v2: a new render scale without new targets or a frame drawn at once (each cost 20-100 ms of script, and
     // the page steps the scale with the frame time, also while the view moves). The volume is drawn into the lower left
@@ -5533,7 +5533,7 @@ void main(){
     // part (uAccPart). The next animation frame draws.
     let accFor = null;
     function rescale() {
-      bandJob = null;   // (round 9: a frame being drawn in bands at the scale before is left)
+      cancelJob();   // (round 9: a frame being drawn in bands at the scale before is left; round 10a: its kicks' queries with it)
       if (lost || !accT || !accFor || accFor[0] !== canvas.width || accFor[1] !== canvas.height) { resize(); return; }
       const dpr = Math.min(window.devicePixelRatio || 1, 2) * snapK * opt.scale;
       rW = Math.max(1, Math.round(W * dpr)); rH = Math.max(1, Math.round(Hh * dpr));
@@ -5657,7 +5657,7 @@ void main(){
     // as before, to compare; data-kick (?kick=N): kickK; box.diskSplit
     const SPLIT = { UNIT: 20, MB: 8, K: 32, N0: 32, RING: 16 };
     let splitOn = box.dataset.split !== '0' && fbFloat, kickK = Number(box.dataset.kick) > 0 ? Math.min(4096, Math.max(4, Math.round(Number(box.dataset.kick)))) : SPLIT.K;
-    let kickEach = false, testT = null, stT = null, warmS = null;
+    let kickEach = false, testT = null, stT = null, warmS = null, testRows = 0, testTm = 0, testLate = false;   // (testRows: diskSplitTest's bands at most so many rows)
     const kickNeed = {};   // (per kind: the kicks its last bands took)
     const splitBroken = {};   // (per kind: its march in kicks given more kicks than its rays can need, see kickMax: a bug)
     // (per kind: what a band's first kick cost a pixel, ms, its last few: the bands' rows and the pieces' kicks are sized from it,
@@ -5666,9 +5666,44 @@ void main(){
     // to frame. KICK_MS_MIN: a first piece measured only from so many ms: the fences are looked at every 8 ms or so, and a piece
     // of a kick or two (1 to 3 ms) read as 8 to 16, its kick's cost overestimated several times, the bands kept small: four on a
     // phone's frame where one would do, each paying its slowest ray, 3 times the frame drawn whole)
-    const kickPx = {}, kickPxRows = {}, kickRowsOf = {}, KICK_MS_MIN = 8;
-    const kickPxOf = (key) => { const r = kickPx[key]; return r && r.length ? Math.max(...r) : 0; };
-    let kickFlush = 'kick';   // (a flush after each kick, or after each piece: box.diskSplit({ flush }), to compare)
+    // (round 10a, optimizing: kickT, per kind, what a band's first kicks took (t, ms: the piece's time over its kicks) at how many
+    // rows, the last four, measured at one size of the volume (w x h) and one work of a kick (K) only, and the most rows so
+    // measured (top). A kick of R rows is predicted at most min over them of t x max(1, R / rows): never cheaper than one
+    // measured at more rows, and in proportion beyond one at fewer (a kick's time is a part of its own, the slowest rays' steps
+    // in turn, and a part with its pixels: both bounds hold). Any other size, look, march or work of a kick has no measure
+    // (kickReset): its first band is the least, four kicks, as at a first use. Round 10a's checks: (1) the rows changed at most
+    // by half a band from a time a kick took, the work of a kick raised to 1024 at a small still, a still refined to scale 1 sent
+    // a kick of 639 ms; (2) the time over the band's pixels times the work, from small bands whose kicks were mostly their own
+    // part, refused every larger band and lowered the work to 16: a frame of 17 bands, 330 to 400 s)
+    const kickT = {}, kickRowsOf = {}, KICK_MS_MIN = 8;
+    const kickMs = (key, K) => { const m = kickT[key]; return m && m.w === rW && m.h === rH && m.K === K && m.ts.length ? m.ts : null; };
+    // (the predicted bound of a kick of R rows, ms; 0 where not measured at this size and work)
+    const kickAt = (key, K, R) => { const ts = kickMs(key, K); return ts ? Math.min(...ts.map((x) => x.t * Math.max(1, R / x.rows))) : 0; };
+    // (the most rows whose kick that bound keeps under ms; 0 where none does)
+    const kickRowsFor = (key, K, ms) => { const ts = kickMs(key, K); return ts ? Math.max(0, ...ts.map((x) => (x.t <= ms ? Math.floor(x.rows * ms / x.t) : 0))) : 0; };
+    // (round 10a, the CPU's part: a flush after each piece, one command buffer of at most the aim, as a band drawn whole had;
+    // each kick flushed on its own (box.diskSplit({ flush: 'kick' })) cost the GPU nothing measurable on the M1 Max either way)
+    let kickFlush = 'piece';
+    // (round 10a, the work of a kick by kind, adapted: kickK is where a kind starts (the page's: 32 on a phone, 48 else). A kind
+    // whose band, measured at this size and work, covers the frame (or the state's rows) with its first kicks well under half the
+    // aim (KICK_UP of it) takes twice the work a kick, up to KICK_MAX, and is measured anew from the least band (kickReset, the
+    // work kept); a kick predicted over half the aim even at the least band, half, never under kickK (the work the march in kicks
+    // was checked at; with 16 a frame of 17 bands differed from the rays drawn whole in a band's worth of pixels, not yet
+    // understood; over it with more rows, the band is made smaller instead: the kicks a frame takes are much the same either
+    // way, for a kick of a given time). The work
+    // goes back to kickK at any change of the volume's size or scale, the look or the march (the coordinator, after the 639 ms
+    // kick: it grows again only from kicks measured at the size drawn). The calls a kick makes (each a message to the GPU's
+    // process in WebKit) and what a kick costs the GPU over its rays' own work (the state read and written, the march set up
+    // again) are a frame's kicks over: on the M1 Max at the scales a phone's frame is drawn, a kick of 32 steps took 3 to 5 ms
+    // where half the aim is 17. The picture is the same whatever the work of a kick (the rays resume exactly). Off by default
+    // (the coordinator: the scheduler kept simple; kickK fixed by the device), box.diskSplit({ adapt: true }) or the page's
+    // ?kadapt=1 to measure what it saves)
+    const kickKOf = {}, KICK_MAX = 1024, KICK_UP = 0.3;
+    let kickAdapt = false;
+    const kOf = (key) => (kickAdapt && kickKOf[key]) || kickK;
+    // (a kind's measures dropped: its next band the least, four kicks, as at a first use; all: its work of a kick back to kickK)
+    function kickReset(key, all) { for (const m of [kickT, kickNeed, kickRowsOf]) delete m[key]; if (all) delete kickKOf[key]; }
+    const kickResetAll = () => { for (const m of [kickT, kickNeed, kickRowsOf, kickKOf]) for (const key in m) delete m[key]; };
     // (the sampler's texture while no state is made: a 1 x 1 array, never drawn into)
     const stDummy = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0 + SPLIT.UNIT); gl.bindTexture(gl.TEXTURE_2D_ARRAY, stDummy); gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA32F, 1, 1, 4);
@@ -5718,7 +5753,7 @@ void main(){
     // as many kicks as fit in the aim at the cost a kick had in its last piece (its first kicks are the dearest: all its rays
     // still go), and a band given more kicks than its rays can need, the most work a ray can do over a kick's (kickMax), ends
     // the march in kicks (recorded): the frame is left and drawn whole)
-    const kickMax = () => Math.ceil((32768 + 2 * 640 * 0.25 + 3 * 32 + 64) / kickK) + 8;
+    const kickMax = (K = kickK) => Math.ceil((32768 + 2 * 640 * 0.25 + 3 * 32 + 64) / K) + 8;
     // the band in hand seen done or not: its last kick's query, read once the piece's fence has passed (false while the result
     // is not there yet). Done, the kicks it took are noted for the kind: n, or two fewer where the third from last drew nothing too
     function splitReady(j) {
@@ -5729,7 +5764,7 @@ void main(){
       if (avail) {
         if (!gl.getQueryParameter(last.q, gl.QUERY_RESULT)) {
           bd.done = true;
-          const q0 = bd.qs.length >= 3 ? bd.qs[bd.qs.length - 3] : null;
+          const q0 = bd.qs.length >= 3 && bd.qs[bd.qs.length - 3].k === last.k - 2 ? bd.qs[bd.qs.length - 3] : null;
           const early = !!q0 && gl.getQueryParameter(q0.q, gl.QUERY_RESULT_AVAILABLE) && !gl.getQueryParameter(q0.q, gl.QUERY_RESULT);
           needNote(j.key, Math.max(3, early ? bd.k - 2 : bd.k));
         }
@@ -5752,17 +5787,25 @@ void main(){
       j.cancelled = true; bandJob = null; accN = 0; dirty = true;
     }
     window.addEventListener('pagehide', cancelJob, on);
-    // one kick of the band in hand: into the set its count picks, reading the other
-    function kickDraw(j, bd) {
-      const w = bd.k % 2, rows = bd.y1 - bd.y0;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, stT.fb[w]); gl.viewport(0, 0, rW, rows); gl.scissor(0, 0, rW, rows);
-      gl.activeTexture(gl.TEXTURE0 + SPLIT.UNIT); gl.bindTexture(gl.TEXTURE_2D_ARRAY, stT.tex[1 - w]); gl.activeTexture(gl.TEXTURE2);
-      gl.uniform1i(j.U.uKick0, bd.k === 0 ? 1 : 0); gl.uniform1f(j.U.uKickN, bd.k);
+    // (round 10a, A4: a still being refined is left at the first touch, wheel or key on the picture, so that the view answers at
+    // once: the page refines a still up to its level's scale, a frame of which in kicks may take seconds)
+    const leaveStill = () => { if (bandJob && bandJob.still) cancelJob(); };
+    for (const t of ['pointerdown', 'wheel', 'keydown']) canvas.addEventListener(t, leaveStill, { ...on, capture: true, passive: true });
+    // one kick of the band in hand: into the set its count picks, reading the other (the viewport, the scissor and the state's
+    // texture unit set for the piece, see splitStep; round 10a, the CPU's part: each call is a message to the GPU's process in
+    // WebKit, and a frame of the visible look is some 30 to 80 kicks); asked whether it drew (ask: the piece's last three)
+    function kickDraw(j, bd, ask) {
+      const w = bd.k % 2;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, stT.fb[w]); gl.bindTexture(gl.TEXTURE_2D_ARRAY, stT.tex[1 - w]);
+      if (bd.k <= 1) gl.uniform1i(j.U.uKick0, bd.k === 0 ? 1 : 0);
+      gl.uniform1f(j.U.uKickN, bd.k);
       // (the exact query: the conservative one may say a sample passed where none did, and the band would never be seen done)
-      const q = gl.createQuery(); gl.beginQuery(gl.ANY_SAMPLES_PASSED, q);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.endQuery(gl.ANY_SAMPLES_PASSED);
-      bd.qs.push({ q, k: bd.k }); if (bd.qs.length > 3) gl.deleteQuery(bd.qs.shift().q);
+      if (ask) {
+        const q = gl.createQuery(); gl.beginQuery(gl.ANY_SAMPLES_PASSED, q);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.endQuery(gl.ANY_SAMPLES_PASSED);
+        bd.qs.push({ q, k: bd.k }); if (bd.qs.length > 3) gl.deleteQuery(bd.qs.shift().q);
+      } else gl.drawArrays(gl.TRIANGLES, 0, 3);
       bd.k++;
       if (kickFlush === 'kick') gl.flush();   // (a command buffer for each kick; or for each piece, see kickFlush)
     }
@@ -5785,10 +5828,19 @@ void main(){
       if (j.rW !== rW || j.rH !== rH) { splitDrop(j); j.cancelled = true; bandJob = null; dirty = true; accN = 0; return false; }
       // (a band's first piece measured, where it was long enough to be (KICK_MS_MIN): what its kicks cost a pixel (its first kicks,
       // when all its rays go, the dearest), for the rows and kicks after it)
-      if (j.bd && j.bd.pieces === 1 && j.lastKicks > 0 && j.lastMs >= KICK_MS_MIN) {
-        const r = kickPx[j.key] || (kickPx[j.key] = []);
-        r.push(j.lastMs / (j.lastKicks * (j.bd.y1 - j.bd.y0) * rW)); if (r.length > 4) r.shift();
-        kickPxRows[j.key] = Math.max(kickPxRows[j.key] || 0, j.bd.y1 - j.bd.y0);
+      if (j.bd && j.bd.pieces === 1 && j.lastKicks > 0 && j.K === kOf(j.key) && !j.bd.cut) {
+        // (a piece under KICK_MS_MIN is not timed (the fences are looked at every 8 ms or so): its kicks were under KICK_MS_MIN
+        // over their count, enough to raise the work, not a cost for the rows)
+        const rows = j.bd.y1 - j.bd.y0, ms = Math.max(j.lastMs, KICK_MS_MIN) / j.lastKicks;
+        if (j.lastMs >= KICK_MS_MIN) {
+          let m = kickT[j.key];
+          if (!m || m.w !== rW || m.h !== rH || m.K !== j.K) m = kickT[j.key] = { ts: [], w: rW, h: rH, K: j.K, top: 0 };
+          m.ts.push({ t: ms, rows }); if (m.ts.length > 4) m.ts.shift();
+          m.top = Math.max(m.top, rows);
+        }
+        // (and the work of the kind's kicks from the next frame, see kickKOf: twice, where its band covers the frame with room)
+        const half = 0.5 * (j.aim || 0.5 * (gBudget > 0 ? gBudget : 120));
+        if (kickAdapt && !kickEach && rows >= Math.min(rH, stateRows()) && ms < KICK_UP * half && j.K < KICK_MAX) { kickKOf[j.key] = Math.min(KICK_MAX, 2 * j.K); kickReset(j.key); }
       }
       if (j.bd && j.bd.done) {
         emitBand(j, j.bd, testT || accT); j.bands = (j.bands || 0) + 1;
@@ -5813,18 +5865,26 @@ void main(){
         // (round 10a, the second test: bands sized as the rays drawn whole are, from a band's whole cost, made a frame of 25 to 45
         // thin bands in kicks, each paying its slowest ray's whole length: 2.7 times the frame drawn whole. A kick's cost is
         // bounded whatever the ray, so a band in kicks is as many rows as a kick of half the aim covers, at the cost its kind's
-        // first kicks had a pixel (kickPx), up to the state's rows: the whole frame at the usual scales, its slowest ray paid
+        // first kicks had a pixel (now kickT), up to the state's rows: the whole frame at the usual scales, its slowest ray paid
         // once. Where that is not known (a new kind, after a jump: the least band; or its pieces too short to measure) twice the
         // band before, of this frame or the last; and within a frame at most twice the band before (the rows ahead may be dearer))
-        const px = kickPxOf(j.key), prev = j.prevRows || kickRowsOf[j.key] || 0;
-        let rows = px > 0 ? Math.floor(0.5 * aim / (px * rW)) : prev > 0 ? 2 * prev : BAND_ROWS;
+        // (round 10a, optimizing: from the cost a pixel and a step measured at this size and work, see kickT; no kick sent whose
+        // time so predicted is over half the aim: the band's rows cut to it, and where even the least band would be over, the
+        // work of a kick halved first, its kind measured anew)
+        const known = !!kickMs(j.key, j.K);
+        let fits = known ? kickRowsFor(j.key, j.K, 0.5 * aim) : 0;
+        if (known && fits < BAND_ROWS && j.K > kickK) { j.K = Math.max(kickK, j.K / 2); kickKOf[j.key] = j.K; kickReset(j.key); fits = 0; }
+        const prev = j.prevRows || kickRowsOf[j.key] || 0;
+        let rows = fits > 0 ? fits : known ? BAND_ROWS : prev > 0 ? 2 * prev : BAND_ROWS;
         if (j.prevRows > 0) rows = Math.min(rows, 2 * j.prevRows);
-        rows = Math.max(1, Math.min(st.h, rH - j.y, Math.max(BAND_ROWS, rows)));
-        j.bd = { y0: j.y, y1: j.y + rows, k: 0, qs: [], done: false, pieces: 0 };
+        // (cut: the frame's last rows, fewer than the band would have: not a measure of what its rows cost, see kickT)
+        const want = testRows > 0 ? Math.min(st.h, testRows) : Math.max(1, Math.min(st.h, Math.max(BAND_ROWS, rows)));
+        rows = Math.min(want, rH - j.y);
+        j.bd = { y0: j.y, y1: j.y + rows, k: 0, qs: [], done: false, pieces: 0, cut: rows < want && rows < BAND_ROWS * 4 };
         j.sent = rows; j.y += rows;
       }
       const bd = j.bd;
-      if (bd.k >= kickMax()) {
+      if (bd.k >= kickMax(j.K)) {
         // (not drawn whole at once in its place: the frame is left, the picture before kept, and this kind drawn whole from
         // then on through the guard, its first frames in bands sized as they go (probeNext), its measures dropped)
         rec({ k: 'split', broken: 1, stuck: bd.k, key: j.key, rows: [bd.y0, bd.y1, rW, rH] });
@@ -5840,13 +5900,21 @@ void main(){
       // kind's bands needed beyond these, or half as many again)
       const want = Math.max(4, needOf(j.key) - bd.k + 2, Math.ceil(bd.k / 2));
       const more = Math.max(1, perKick > 0 ? Math.min(want, Math.floor(aim / perKick)) : 1);
-      const px1 = kickPxOf(j.key), rows1 = bd.y1 - bd.y0;
-      const fit = px1 > 0 ? Math.max(1, Math.floor(aim / (px1 * rows1 * rW))) : 4;
-      const first = Math.min(fit, px1 > 0 && rows1 <= (kickPxRows[j.key] || 0) ? needOf(j.key) : 4);
-      const n = Math.min(kickMax() - bd.k, kickEach ? 1 : bd.k === 0 ? first : more);
-      gl.uniform1i(j.U.uSplit, 1); gl.uniform1f(j.U.uKickK, kickK); gl.uniform1f(j.U.uRowOff, bd.y0);
-      gl.enable(gl.SCISSOR_TEST);
-      for (let i = 0; i < n; i++) kickDraw(j, bd);
+      const t1 = kickAt(j.key, j.K, bd.y1 - bd.y0), rows1 = bd.y1 - bd.y0;
+      const fit = t1 > 0 ? Math.max(1, Math.floor(aim / t1)) : 4;
+      const first = Math.min(fit, t1 > 0 && rows1 <= kickT[j.key].top ? needOf(j.key) : 4);
+      const n = Math.min(kickMax(j.K) - bd.k, kickEach ? 1 : bd.k === 0 ? first : more);
+      gl.uniform1i(j.U.uSplit, 1); gl.uniform1f(j.U.uKickK, j.K); gl.uniform1f(j.U.uRowOff, bd.y0);
+      // (the band's rows from the bottom of the state's sets, for all the piece's kicks; and the state's unit, its texture bound
+      // kick by kick, TEXTURE2 active again after them as everywhere else)
+      const rows = bd.y1 - bd.y0;
+      gl.viewport(0, 0, rW, rows); gl.scissor(0, 0, rW, rows); gl.enable(gl.SCISSOR_TEST);
+      if (bd.k > 1) gl.uniform1i(j.U.uKick0, 0);
+      gl.activeTexture(gl.TEXTURE0 + SPLIT.UNIT);
+      // (only the last three kicks asked whether they drew: the band is seen done from its last, and done two kicks earlier
+      // from the third from last, see splitReady; a query a kick was the most of a kick's calls)
+      for (let i = 0; i < n; i++) kickDraw(j, bd, i >= n - 3);
+      gl.activeTexture(gl.TEXTURE2);
       if (kickFlush !== 'kick') gl.flush();   // (one command buffer for the piece, at most the aim)
       gl.disable(gl.SCISSOR_TEST);
       gl.uniform1i(j.U.uSplit, 0); gl.uniform1f(j.U.uRowOff, 0);
@@ -5856,6 +5924,10 @@ void main(){
     }
     let accT = null, accN = 0, lastSig = [], jitN = 0;
     let fadeT = 0, fstats = null;   // fstats: a running measurement, see diskFrameStats
+    // (round 10a) a frame drawn outside the animation frames (a new size, a new language, a script's time or clump, a touch
+    // with reduced motion): its piece fenced as the animation frames' are, so that its time is measured and the next piece
+    // waits for it (these sent pieces without a fence: no measure, and the next frame queued behind them unseen)
+    function drawOut() { draw(); if (!lost && W) fence(!bandJob, lastJob, true); }
     function draw() {
       drawOnce();
       // reduced motion: no frames follow, so the exposure is found now (measured with blocking reads, redrawn), within the
@@ -5911,7 +5983,7 @@ void main(){
       if (lookNow !== opt.look && (reduce || performance.now() - lookT0 >= 300)) {
         // (round 9: an observed look waits for FULL, linked and warmed; the picture held at the dip's darkest meanwhile)
         const f = opt.look === 'model' || reduce ? true : fullProgram();
-        if (f === true || f === false || (f && fullWarm)) lookNow = opt.look;
+        if (f === true || f === false || (f && fullWarm)) { lookNow = opt.look; kickResetAll(); }   // (round 10a: see kickKOf)
         else lookT0 = performance.now() - 300;
       }
       guardFrame();   // (round 9: the engine's own guard, see GFAC)
@@ -6178,7 +6250,9 @@ void main(){
       if (pre && adaptRows === 0) { const ts = performance.now(), sy = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); slowSync('fenceSync pre', ts); flight.push({ s: sy, t: performance.now(), end: false, n: 1, px: rW * rH, scale: opt.scale, key: frameKeyOf(F), still: paused, first: false, j: null, st: null, pre: true, gt: lastPreGt, rid: preRid }); gl.flush(); if (!gpuTimer) gpuTimer = setTimeout(gpuTick, GPU_LOOK); }
       const job = { prog: F ? F.prog : prog, U, acc, n: bandsFor(), b: 0, key: frameKeyOf(F), finish: null };
       // (round 10a: the march in kicks, see SPLIT; the volume's size it was begun at)
-      job.split = splitWants(F); job.rW = rW; job.rH = rH;
+      job.split = splitWants(F); job.rW = rW; job.rH = rH; job.still = paused;
+      // (round 10a: a kind measured at another size of the volume: from its first use again, see kickT)
+      if (job.split) { const k0 = frameKeyOf(F), m0 = kickT[k0]; if (m0 && (m0.w !== rW || m0.h !== rH)) kickReset(k0, true); job.K = kOf(k0); }
       // (round 9: the moments in passes, see coGrid: each group pass, then the composite, every one a piece of its own in its
       // bands; the bands asked for the frame shared among the group passes)
       const nPass = F ? coPassesNow() : 0;
@@ -6419,7 +6493,8 @@ void main(){
       // 0.125, the sums of their many small bands divided by the scale squared. A whole frame's measure takes over at once.
       // (Taking off each band's share of that fixed cost instead would underestimate frames whose bands carry equal work.)
       const c = (n > 1 && band > 2 * gBudget ? band * n : ms) / (scale * scale);
-      const kn = gKnown[k] || (gKnown[k] = { c: [], t: 0, ub: 0, tub: 0 });
+      const kn = gKnown[k] || (gKnown[k] = { c: [], t: 0, ub: 0, tub: 0, s: 0 });
+      kn.s = scale;   // (round 10a: the scale it was measured at, see knownNow)
       // (round 10a: FULL's first measure of a kind replaces the usual program's, see fNow)
       if (isF && !kn.F) { kn.c = []; kn.ub = 0; kn.tub = 0; kn.F = true; }
       if (n > 1) { kn.ub = c; kn.tub = performance.now(); }
@@ -6431,6 +6506,11 @@ void main(){
     function guardFrame() {
       gBands = 0;
       if (!(gBudget > 0) || fullFrame || snapping || warming) return;
+      // (round 10a: a frame to be drawn in kicks is bounded by its kicks, a piece within the aim whatever the scale: not lowered
+      // here, nor cut into the bands of whole rays. The page sets its scale: a still refined up to its level's, see app.js)
+      // (only where the frame will be in kicks: FULL linked and warmed, its state made, not a measurement drawn whole; where FULL
+      // failed to link the observed looks are drawn whole by the light program, and guarded here as before)
+      if (splitOn && !reduce && !probing && !fullFrame && fullWarm && full && typeof full === 'object' && stT && (lookNow === 'optical' || lookNow === 'mir') && !splitBroken[kindNow() + ':F']) return;
       // (round 9: a frame of the moments in passes, see coGrid, judged by a pass: its bands are the frame's shared among them)
       const parts = Math.max(1, coPassesNow()), k = kindNow(), c1 = gC1(k) / parts, p0 = c1 * opt.scale * opt.scale;
       if (!(p0 > GUARD_SLACK * gBudget)) return;
@@ -6458,7 +6538,7 @@ void main(){
     function bandStep() {
       const j = bandJob, q = j && !lost ? gtBegin() : null;
       if (j && !lost) recBand(j);
-      try { return bandStepIn(); } finally { if (q) lastBandGt = gtNote(gtEnd(q), { what: 'band', key: j.key, first: j.first ? 1 : 0 }); }
+      try { return bandStepIn(); } finally { if (q) lastBandGt = gtNote(gtEnd(q), { what: 'band', key: j.key, first: j.first ? 1 : 0, from: gtFrom() }); }
     }
     // (round 10a) A band about to be sent, told to the recorder (see rec) when it is dear: predicted over DEAR of the budget
     // (from the guard's cost of its kind, or, for a band sized as it goes, its dearest rows so far: near the budget, where a
@@ -6484,6 +6564,10 @@ void main(){
       const nb = sg ? (sg.p === 3 ? 1 : j.nb) : j.n, y0 = bdN ? bdN.y0 : j.split || (j.ad && !(sg && sg.p === 3)) ? (j.y || 0) : Math.floor(rH * (j.b || 0) / nb);
       lastRect = [y0, Math.min(rH, Math.round(y0 + rows)), rW, rH];
       if (gBudget > 0 && pred > 0 && !j.first && pred <= DEAR * gBudget) return;
+      // (round 10a: a piece of a frame in kicks, once its kind's kicks are measured, is as many kicks as fit in half the budget
+      // (splitStep): not dear. Told as one with no prediction, each piece was written down at once by the page, some 24 times a
+      // second in the visible look on a phone's frame, a localStorage write each)
+      if (j.split && !j.first && kickMs(j.key, j.K)) return;
       lastRid = j.rid = ++recId;
       rec({ k: 'piece', ph: 0, id: lastRid, job: j.id, key: j.key, sc: opt.scale, b: j.pieces || 0, n: j.n, pred: Math.round(pred), first: j.first ? 1 : 0, s: snapping ? 'snap' : stepping ? 'script' : '', rows: lastRect });
     }
@@ -6609,7 +6693,11 @@ void main(){
     // start, 181 to 205 ms at scales 1 and 0.8 on the M1 Max (desktop budget 120), the cut's kind measured by the usual
     // program's frames while FULL was being linked (the cut left out of them), two to three times cheaper
     let fNow = false;
-    const knownNow = (k) => ownC1(k) > 0 && (!fNow || !!(gKnown[k] && gKnown[k].F));
+    // (round 10a, the coordinator: and measured at the scale drawn: a frame is drawn whole only from a measure of its own scale.
+    // The checks' start at the cut (heat, desktop): measured at 0.5, the cut's frame at 0.63 drawn whole was predicted 108 ms
+    // and took 185 to 235 (dev.3: 101, 109); a measure at another scale now sizes nothing, the frame's bands sized as they go
+    // from the least, and its measure at this scale taken)
+    const knownNow = (k) => ownC1(k) > 0 && (!fNow || !!(gKnown[k] && gKnown[k].F)) && Math.abs((gKnown[k].s || 0) - opt.scale) < 0.004;
     const firstRows = (aim) => {
       const k = kindNow(), kn = gKnown[k], trusted = knownNow(k);
       let r = BAND_ROWS;
@@ -6690,16 +6778,31 @@ void main(){
     let gpuEnd = 0, gpuSum = 0, gpuMax = 0, gpuBad = false, gpuTimer = 0, gpuLook = 0, gpuFirst = false, gpuStages = [], gpuPre = 0, gpuVolMax = 0;
     // (round 10a, the march in kicks: a frame's dearest kick, its piece's time over its kicks (a piece of one kick, that kick's
     // time), for the flight record, so that a phone's record says what its kicks cost; and the dearest so far by kind)
-    let gpuKick = 0, gpuKick1 = 0;
+    let gpuKick = 0, gpuKick1 = 0, gpuOut = false;
     const kickWorst = {};
-    const fence = (end, j) => {
+    // (out: a frame drawn outside the animation frames, see drawOut: fenced, its time told, but not a measure of what its kind
+    // costs: drawn at a resize, its view and program may not be those of the frames that follow, round 10a's start at the cut)
+    const fence = (end, j, out = false) => {
       const ts = performance.now(), sy = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); slowSync('fenceSync', ts);
-      flight.push({ s: sy, t: performance.now(), end, n: j ? j.n : 1, px: rW * rH, scale: opt.scale, key: j ? j.key : '', still: paused, first: !!(j && j.first), j, st: j && j.stages ? j.sentStage : null, gt: lastBandGt, rid: lastRid, rect: lastRect, kicks: j && j.split ? j.lastKicks || 0 : 0 });
+      flight.push({ s: sy, t: performance.now(), end, n: j ? j.n : 1, px: rW * rH, scale: opt.scale, key: j ? j.key : '', still: paused, first: !!(j && j.first), j, st: j && j.stages ? j.sentStage : null, gt: lastBandGt, rid: lastRid, rect: lastRect, kicks: j && j.split ? j.lastKicks || 0 : 0, out });
+      if (lastBandGt) lastBandGt.att = 1;   // (for 'nofence': its fence sent)
       lastBandGt = null; lastRid = 0; lastRect = null;
       gl.flush();
       if (!gpuTimer) gpuTimer = setTimeout(gpuTick, GPU_LOOK);
     };
-    function gpuTick() { gpuTimer = 0; if (lost) return; gpuPoll(); if (flight.length) gpuTimer = setTimeout(gpuTick, GPU_LOOK); }
+    function gpuTick() {
+      gpuTimer = 0; if (lost) return; gpuPoll();
+      // (round 10a, optimizing a still's time to its full scale: its next piece in kicks sent as soon as the GPU is done with the
+      // last and its rest (the duty) is over, here, not at the next animation frame: a still has no frame rate to keep, and on
+      // the phone's frame as WebKit on a GPU six times slower a piece took some 6 ms of a 16 ms animation frame. The same tests
+      // as the animation frames' (frame); fence sets the next look)
+      if (bandJob && bandJob.still && bandJob.split && running && !benching && !snapping && !stepping && !warmSync && !gpuBehind(1) && !(duty > 0 && performance.now() < bandRestUntil) && splitReady(bandJob)) {
+        const j = bandJob; bandStep(); fence(!bandJob, j);
+      }
+      if (flight.length && !gpuTimer) gpuTimer = setTimeout(gpuTick, GPU_LOOK);
+      // (its rest not over: looked at again when it is)
+      else if (!gpuTimer && bandJob && bandJob.still && bandJob.split && running && duty > 0 && performance.now() < bandRestUntil) gpuTimer = setTimeout(gpuTick, bandRestUntil - performance.now() + 1);
+    }
     function gpuPoll() {
       if (lost) return;
       const now = performance.now();
@@ -6720,7 +6823,7 @@ void main(){
         if (f.st != null) gpuStages[f.st] = (gpuStages[f.st] || 0) + ms;   // (round 9: a frame in passes, each pass's time)
         if (f.pre) gpuPre += ms;   // (round 9: the work before the volume, see drawOnce)
         if (now - f.t > GPU_STALE || document.hidden) gpuBad = true;
-        gpuSum += ms; gpuMax = Math.max(gpuMax, ms); gpuFirst = gpuFirst || f.first;
+        gpuSum += ms; gpuMax = Math.max(gpuMax, ms); gpuFirst = gpuFirst || f.first; gpuOut = gpuOut || !!f.out;
         if (!f.pre) gpuVolMax = Math.max(gpuVolMax, ms);
         if (f.kicks > 0 && !f.first && now - f.t <= GPU_STALE && !document.hidden) {
           gpuKick = Math.max(gpuKick, ms / f.kicks); if (f.kicks === 1) gpuKick1 = Math.max(gpuKick1, ms);
@@ -6737,11 +6840,11 @@ void main(){
         // (round 10a: the volume's cost alone: the work before it (the maps) is a piece of its own, sent and measured on its own,
         // and does not grow with the pixels; counted in, divided by the scale squared, it made a frame at 0.125 cost 3000 ms at
         // scale 1 in the millimetre look (maps of 50 to 90 ms after a jump), and the guard held the looks at their lowest scale)
-        if (!gpuBad && !gpuFirst) gNote(f.key.replace(/:F$/, ''), gpuSum - gpuPre, f.scale, f.n, gpuVolMax, /:F$/.test(f.key));
+        if (!gpuBad && !gpuFirst && !gpuOut) gNote(f.key.replace(/:F$/, ''), gpuSum - gpuPre, f.scale, f.n, gpuVolMax, /:F$/.test(f.key));
         // (first: a program's first use in a blend state, see warmFull; its time is mostly the pipeline's making)
-        if (!gpuBad) box.dispatchEvent(new CustomEvent('diskgpu', { detail: { ms: Math.round(gpuSum * 10) / 10, band: Math.round(gpuMax * 10) / 10, vband: Math.round(gpuVolMax * 10) / 10, bands: f.n, px: f.px, scale: f.scale, key: f.key, still: f.still ? 1 : 0, next: stillBands, first: gpuFirst ? 1 : 0, pre: Math.round(gpuPre * 10) / 10, ...(gpuStages.length ? { stages: gpuStages.map((v) => Math.round((v || 0) * 10) / 10) } : {}), ...(f.j && f.j.split ? { kicks: f.j.kicks || 0, kick: Math.round(gpuKick * 10) / 10, kick1: Math.round(gpuKick1 * 10) / 10 } : {}) } }));
+        if (!gpuBad) box.dispatchEvent(new CustomEvent('diskgpu', { detail: { ms: Math.round(gpuSum * 10) / 10, band: Math.round(gpuMax * 10) / 10, vband: Math.round(gpuVolMax * 10) / 10, bands: f.n, px: f.px, scale: f.scale, key: f.key, still: f.still ? 1 : 0, next: stillBands, first: gpuFirst ? 1 : 0, ...(gpuOut ? { out: 1 } : {}), pre: Math.round(gpuPre * 10) / 10, ...(gpuStages.length ? { stages: gpuStages.map((v) => Math.round((v || 0) * 10) / 10) } : {}), ...(f.j && f.j.split ? { kicks: f.j.kicks || 0, kick: Math.round(gpuKick * 10) / 10, kick1: Math.round(gpuKick1 * 10) / 10 } : {}) } }));
         if (!gpuBad) lastGpuFrame = gpuSum;   // (round 10a: see duty)
-        gpuSum = 0; gpuMax = 0; gpuBad = false; gpuFirst = false; gpuStages = []; gpuPre = 0; gpuVolMax = 0; gpuKick = 0; gpuKick1 = 0;
+        gpuSum = 0; gpuMax = 0; gpuBad = false; gpuFirst = false; gpuOut = false; gpuStages = []; gpuPre = 0; gpuVolMax = 0; gpuKick = 0; gpuKick1 = 0;
       }
       if (flight.length) gpuLook = now;
     }
@@ -6768,6 +6871,8 @@ void main(){
       return e;
     }
     const GT_NOFENCE = 10000;
+    // (where a timed piece was sent from, for 'nofence': the callers, while the timer queries are on (the checks))
+    const gtFrom = () => (new Error().stack || '').split('\n').slice(3, 7).map((l) => l.trim().replace(/^at /, '').replace(/ \(.*\)$/, '')).join(' < ');
     function gtTick() {
       gtTimer = 0;
       if (lost) { gtPend.length = 0; return; }
@@ -6781,7 +6886,9 @@ void main(){
         // time a piece waited queued behind others, see check.js 0b), 336 ms)
         if (e.res != null && (e.fence != null || now - e.t > GT_NOFENCE)) {
           gtPend.splice(i, 1);
-          if (e.fence == null) rec({ k: 'nofence', w: e.what, key: e.key, gpu: Math.round(e.res * 10) / 10, age: Math.round(now - e.t) });
+          // (whether its fence was sent (att), and the pieces in flight then, the oldest's age: a fence never sent, or one waited
+          // behind another that did not pass)
+          if (e.fence == null) rec({ k: 'nofence', w: e.what, key: e.key, gpu: Math.round(e.res * 10) / 10, age: Math.round(now - e.t), att: e.att ? 1 : 0, fl: flight.length, f0: flight.length ? Math.round(now - flight[0].t) : 0, from: e.from });
           if (e.res >= 0) box.dispatchEvent(new CustomEvent('diskgputime', { detail: { what: e.what, key: e.key, first: e.first, gpu: Math.round(e.res * 10) / 10, fence: e.fence == null ? null : Math.round(e.fence * 10) / 10, ...(e.fence == null ? { nofence: 1 } : {}) } }));
           continue;
         }
@@ -6818,6 +6925,12 @@ void main(){
     function frame(t) {
       frameRequest = null;
       if (!running) return;
+      // (round 10a: the script of each animation frame, for diskFrameStats' js: its draw, from a frame's start to its finish, spans
+      // the animation frames of a frame in bands (84 ms 'of script' a frame in a long check run: a still at scale 1 in bands))
+      if (fstats) { const f0 = performance.now(); try { frameIn(t); } finally { if (fstats) fstats.js.push(performance.now() - f0); } return; }
+      frameIn(t);
+    }
+    function frameIn(t) {
       // (diskBench draws on its own; so does diskSnapshot, round 9, its bands each waited for)
       // (round 9: and a script's frames, diskSettle and diskCost, each waited for: stepping)
       if (benching || snapping || stepping) { last = 0; lastRaw = 0; scheduleFrame(); return; }
@@ -6884,7 +6997,7 @@ void main(){
       const share = (lim) => (iv.length ? Math.round(iv.filter((v) => v > lim).length / iv.length * 1000) / 1000 : NaN);
       const st = (a) => ({ median: qs(a, 0.5), p95: qs(a, 0.95), max: qs(a, 1) });
       lvStep = 1;
-      f.resolve({ frames: f.t.length, levelStep: f.levelStep, interval: { ...st(iv), over20: share(20), over33: share(33) }, draw: st(f.draw), overlay: st(f.over), layout: st(f.layout),
+      f.resolve({ frames: f.t.length, levelStep: f.levelStep, interval: { ...st(iv), over20: share(20), over33: share(33) }, draw: st(f.draw), js: st(f.js), overlay: st(f.over), layout: st(f.layout),
         paths: paths.length, pathsWithData: paths.filter((e) => e.getAttribute('d')).length, chars: paths.reduce((n, e) => n + (e.getAttribute('d') || '').length, 0),
         size: [rW, rH], scale: opt.scale, visible: document.visibilityState === 'visible' });
       dirty = true;
@@ -6892,7 +7005,7 @@ void main(){
     box.diskFrameStats = (seconds = 5, { levelStep = 1 } = {}) => new Promise((resolve) => {
       if (fstats) fsDone();
       lvStep = Math.max(1, Math.round(levelStep));
-      fstats = { until: performance.now() + seconds * 1000, t: [], draw: [], over: [], layout: [], resolve, levelStep: lvStep };
+      fstats = { until: performance.now() + seconds * 1000, t: [], draw: [], over: [], layout: [], js: [], resolve, levelStep: lvStep };
       fstats.timer = setTimeout(fsDone, seconds * 1000 + 1000);   // (when no frames come)
       dirty = true;
     });
@@ -7013,7 +7126,7 @@ void main(){
     canvas.style.touchAction = 'none';   // (every touch on the picture is its own: see the touch handlers)
     canvas.tabIndex = 0;
     const clampEl = (v) => Math.min(EL_MAX, Math.max(-EL_MAX, v));   // (to 89 degrees: from straight above, the disk face-on)
-    const touched = () => { dirty = true; urgent = true; if (reduce) draw(); };
+    const touched = () => { dirty = true; urgent = true; if (reduce) drawOut(); };
     // tells the page that the view or the components changed from inside (keys, tour, easter eggs, a drag)
     const emitState = () => { if (box.diskState) box.dispatchEvent(new CustomEvent('diskstate', { detail: box.diskState() })); };
     const zoomBy = (f) => { const d = Math.min(DMAX, Math.max(dmin(), opt.dist * f)); if (d !== opt.dist && (coPending || coSavedKey || coHold)) coResume(); opt.dist = d; startFly(); touched(); };
@@ -7280,7 +7393,7 @@ void main(){
     // does not resize the observed box again in that delivery (and produce an undelivered-notification error).
     let resizeTimer = 0;
     const watchers = [new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(resize, 0); }), new IntersectionObserver((es) => es.forEach((en) => (en.isIntersecting ? start() : stop()))),
-      new MutationObserver(() => { if (toastMsg && toast.style.opacity === '1') toast.textContent = toastText(); if (tour) tourEvent(); draw(); })];
+      new MutationObserver(() => { if (toastMsg && toast.style.opacity === '1') toast.textContent = toastText(); if (tour) tourEvent(); drawOut(); })];
     watchers.push(new MutationObserver(resize));   // (data-aspect changed by the page: a phone turned, a window resized)
     watchers[0].observe(box); watchers[1].observe(box); watchers[3].observe(box, { attributes: true, attributeFilter: ['data-aspect'] });
     watchers[2].observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
@@ -7318,14 +7431,14 @@ void main(){
     resize();
     const finiteNumber = (v) => typeof v === 'number' || (typeof v === 'string' && v.trim() !== '') ? Number(v) : NaN;
     // Use the state's time validation and CO ownership rules; this entry point also draws immediately.
-    box.diskSetTime = (t) => { const st = checked({ time: t }); if (st.time != null) { box.diskSet(st); if (!reduce) draw(); } };
+    box.diskSetTime = (t) => { const st = checked({ time: t }); if (st.time != null) { box.diskSet(st); if (!reduce) drawOut(); } };
     box.diskBurst = () => { startBurst(); touched(); };
     // a clump of pebbles dropped as a click drops one (three near the planet's orbit grow it, see seedPlanet)
     // The click's disk domain (0.15..31 au), radians, and the clump's 120 s lifetime; invalid calls leave it alone.
     box.diskAddClump = (R, phi, age = 0) => {
       const r = finiteNumber(R), ph = finiteNumber(phi), a = finiteNumber(age);
       if (!isFinite(r) || r < 0.15 || r > 31 || !isFinite(ph) || !isFinite(a) || a < 0 || a > 120) return;
-      addClump(r, wrapPi(ph % (2 * Math.PI)), a); if (!a) seedPlanet(r); draw();
+      addClump(r, wrapPi(ph % (2 * Math.PI)), a); if (!a) seedPlanet(r); drawOut();
     };
     // controls for the preview page: view (degrees, au), components, time, state for links, snapshots
     // (to 0.01 degree and 0.001 au, so that a link restores the picture to within a pixel)
@@ -7432,7 +7545,7 @@ void main(){
         || coAfter[3] !== coBefore[3] || Math.hypot(coAfter[4] - coBefore[4], coAfter[5] - coBefore[5], coAfter[6] - coBefore[6]) > 0.1 * coBefore[2]);
       const jump = viewJump || coAfter[7] !== coBefore[7] || coAfter[8] !== coBefore[8]
         || [mode0, slice0, asym0, waves0].some((v, i) => v !== [opt.mode, opt.slice, opt.asym, opt.waves][i]);
-      if (jump && !reduce) { probeNext = PROBE_FRAMES; for (const k in gKnown) delete gKnown[k]; for (const k in kickPx) delete kickPx[k]; for (const k in kickPxRows) delete kickPxRows[k]; for (const k in kickRowsOf) delete kickRowsOf[k]; }
+      if (jump && !reduce) { probeNext = PROBE_FRAMES; for (const k in gKnown) delete gKnown[k]; kickResetAll(); }
       if (jump) cancelJob();   // (round 10a: see cancelJob)
       // A later visitor command redirects the view, so an unfinished restore no longer owns its range. The target
       // stays unchanged while its own flight/fades run (or the canvas resizes), which must retain the pending range.
@@ -7836,7 +7949,7 @@ void main(){
     };
     // (round 9) the march's tier (see MARCH): 'full' or 'cheap'; no argument reads it
     // (round 10a: the costs measured with the other tier no longer hold: forgotten, see firstRows)
-    box.diskMarch = (k) => { if (k != null && own(MARCH, k) && k !== march) { march = k; for (const x in gKnown) delete gKnown[x]; touched(); } return march; };
+    box.diskMarch = (k) => { if (k != null && own(MARCH, k) && k !== march) { march = k; for (const x in gKnown) delete gKnown[x]; kickResetAll(); touched(); } return march; };
     // (for checks: a tier's parameters changed for this page, to try values; returns them)
     box.diskMarchTry = (k, o) => { if (own(MARCH, k) && o && typeof o === 'object') { Object.assign(MARCH[k], o); touched(); } return own(MARCH, k) ? { ...MARCH[k] } : null; };
     // (round 9) the bound on a long ray's work in the CO line and the continuum (CO_IT, CT_IT): on (1, the default) or off
@@ -7860,14 +7973,19 @@ void main(){
       else if (o === 1 || o === true) splitOn = fbFloat;
       else if (o && typeof o === 'object') {
         if (o.on != null) splitOn = !!o.on && fbFloat;
-        const k = finiteNumber(o.k); if (isFinite(k) && k > 0) { kickK = Math.min(4096, Math.max(4, Math.round(k))); for (const key in kickNeed) delete kickNeed[key]; }
+        // (a new work of a kick: what the kicks cost and needed at the old one dropped too. Round 10a: the runaway check's kick of
+        // 4096 steps, sized from the cost of a kick of 48, sent a piece of 412 ms, every ray's whole march in its first kick over
+        // the rows a cheap kick covers; the engine's guard, which cut it before, no longer cuts a frame in kicks)
+        const k = finiteNumber(o.k);
+        if (isFinite(k) && k > 0 && Math.min(4096, Math.max(4, Math.round(k))) !== kickK) { kickK = Math.min(4096, Math.max(4, Math.round(k))); kickResetAll(); }
+        if (o.adapt != null && !!o.adapt !== kickAdapt) { kickAdapt = !!o.adapt; kickResetAll(); }
         if (o.each != null) kickEach = !!o.each;
         if (o.flush === 'kick' || o.flush === 'piece') kickFlush = o.flush;
         const mb = finiteNumber(o.mb); if (isFinite(mb) && mb >= 1 && mb <= 64) { SPLIT.MB = mb; dropState(); }   // (the state's size a set, MB)
       }
       if (o != null) touched();
-      return { on: splitOn, k: kickK, each: kickEach, flush: kickFlush, worst: JSON.parse(JSON.stringify(kickWorst)), px: Object.fromEntries(Object.keys(kickPx).map((key) => [key, kickPxOf(key)])), need: Object.fromEntries(Object.entries(kickNeed).map(([key, r]) => [key, Math.max(...r)])), broken: Object.keys(splitBroken),
-        last: lastJob && lastJob.split ? { key: lastJob.key, kicks: lastJob.kicks || 0, bands: lastJob.bands || 0, bandPieces: lastJob.bandPieces || 0, done: bandJob !== lastJob && !lastJob.cancelled,
+      return { on: splitOn, k: kickK, adapt: kickAdapt, ks: { ...kickKOf }, each: kickEach, flush: kickFlush, worst: JSON.parse(JSON.stringify(kickWorst)), t: JSON.parse(JSON.stringify(kickT)), need: Object.fromEntries(Object.entries(kickNeed).map(([key, r]) => [key, Math.max(...r)])), broken: Object.keys(splitBroken),
+        last: lastJob && lastJob.split ? { key: lastJob.key, K: lastJob.K, kicks: lastJob.kicks || 0, bands: lastJob.bands || 0, bandPieces: lastJob.bandPieces || 0, done: bandJob !== lastJob && !lastJob.cancelled,
           y: lastJob.y, rows: lastJob.rows, n: lastJob.n, ad: !!lastJob.ad, bd: lastJob.bd ? [lastJob.bd.y0, lastJob.bd.y1, lastJob.bd.k] : null, size: [rW, rH] } : null,
         state: stT ? { w: stT.w, h: stT.h, mb: Math.round(2 * stT.w * stT.h * 64 / 1048576 * 10) / 10 } : null };
     };
@@ -7883,16 +8001,31 @@ void main(){
     // (round 10a, for checks) The picture of the march in kicks against the same frame drawn whole: one frame of the present
     // view (paused; the exposure held), drawn whole and then in kicks, each as a script's frame (in the guard's bands), into a
     // target of 32-bit floats, and compared value by value: the share bit for bit the same, the largest and mean difference
-    box.diskSplitTest = async () => {
+    // (round 10a, the coordinator after a frame of 17 bands at a kick of 16 steps differed: o.k, the work of a kick held for the
+    // frame in kicks; o.rows, its bands at most so many rows, so that a frame of many bands is compared on purpose)
+    box.diskSplitTest = async (o = {}) => {
       if (lost || !fbFloat) return null;
       await gpuDone(); stepping++;
-      const was = splitOn, e0 = [aeLn, aeGoal, coLn, coGoal];
+      const was = splitOn, e0 = [aeLn, aeGoal, coLn, coGoal], k0 = kickK, a0 = kickAdapt;
+      const kT = finiteNumber(o.k), rT = finiteNumber(o.rows);
       try {
         await warmNow(); if (lost) return null;
         testT = target(rW, rH, gl.RGBA32F, gl.CLAMP_TO_EDGE, gl.NEAREST);
         const w0 = rW, h0 = rH;
-        const run = async (on) => { splitOn = on && fbFloat; [aeLn, aeGoal, coLn, coGoal] = e0; accN = 0; const ms = await scriptFrame('splittest', {}); return { ms, px: lost ? null : readF(testT), split: lastJob ? !!lastJob.split : false, kicks: lastJob ? lastJob.kicks || 0 : 0, bands: lastJob ? lastJob.n : 0, cancelled: !!(lastJob && lastJob.cancelled) }; };
-        const a = await run(false), b = await run(true);
+        // (round 10a: in a run whose frames took minutes, a frame of 17 bands drawn 330 s after its frame drawn whole differed in
+        // some 2500 pixels, the view not settled (diskSettle gave up after 20 s); not seen again in twelve frames of 1 to 21 bands
+        // and kicks of 16 to 96 at the same views settled. So no fade moves on in either draw (fadeT: their step, dtR, is the time
+        // since the last frame; every fade of the picture goes by it), the exposure and the line's range are those of the start
+        // (e0), and the two draws are compared only where no flight is under way nor a look's switch, whose dip goes by the clock)
+        if (flyV || flyT || lookNow !== opt.look || lookDip() < 1) return { changed: true, busy: true };
+        if (isFinite(kT) && kT > 0) { kickK = Math.min(4096, Math.max(4, Math.round(kT))); kickAdapt = false; kickResetAll(); }
+        testRows = isFinite(rT) && rT >= 1 ? Math.round(rT) : 0;
+        // (o.maxMs: the test's time; its frame left at the end of it, and { timedOut } returned)
+        const mT = finiteNumber(o.maxMs);
+        if (isFinite(mT) && mT > 0) testTm = setTimeout(() => { testLate = true; if (bandJob) cancelJob(); }, mT);
+        const run = async (on) => { splitOn = on && fbFloat; [aeLn, aeGoal, coLn, coGoal] = e0; accN = 0; fadeT = 0; const ms = await scriptFrame('splittest', {}); return { ms, px: lost ? null : readF(testT), split: lastJob ? !!lastJob.split : false, kicks: lastJob ? lastJob.kicks || 0 : 0, bands: lastJob ? lastJob.n : 0, K: lastJob ? lastJob.K : 0, cancelled: !!(lastJob && lastJob.cancelled) }; };
+        const a = await run(false); if (testLate) return { timedOut: true, at: 'whole' };
+        const b = await run(true); if (testLate) return { timedOut: true, at: 'kicks', kicks: b.kicks, bands: b.bands };
         if (!a.px || !b.px) return null;
         // (the volume's size changed under the test (a scale set by the page or the guard), or a frame left: nothing to compare)
         if (rW !== w0 || rH !== h0 || a.cancelled || b.cancelled) return { changed: true, size: [w0, h0, rW, rH] };
@@ -7903,14 +8036,20 @@ void main(){
           if (!isFinite(x) || !isFinite(y)) { nan++; continue; }
           const d = Math.abs(x - y); nd++; sum += d; if (d > mx) { mx = d; at = i >> 2; }
         }
-        return { size: [rW, rH], key: kindNow(), scale: opt.scale, whole: { ms: Math.round(a.ms), split: a.split }, kicks: { ms: Math.round(b.ms), split: b.split, kicks: b.kicks, bands: b.bands, k: kickK },
+        return { size: [rW, rH], key: kindNow(), scale: opt.scale, whole: { ms: Math.round(a.ms), split: a.split }, kicks: { ms: Math.round(b.ms), split: b.split, kicks: b.kicks, bands: b.bands, k: b.K },
           n: a.px.length, same, differ: nd, nonFinite: nan, max: mx, mean: nd ? sum / nd : 0, at: at >= 0 ? [at % rW, Math.floor(at / rW)] : null };
       } finally {
-        splitOn = was; [aeLn, aeGoal, coLn, coGoal] = e0;
+        splitOn = was; [aeLn, aeGoal, coLn, coGoal] = e0; testRows = 0; clearTimeout(testTm); testTm = 0; testLate = false;
+        if (kickK !== k0 || kickAdapt !== a0) { kickK = k0; kickAdapt = a0; kickResetAll(); }
         if (testT) { gl.deleteFramebuffer(testT.fb); gl.deleteTexture(testT.tex); testT = null; }
         stepping--; accN = 0; dirty = true;
       }
     };
+    // (round 10a, for checks) the engine's loops and queues now: the pieces in flight, the GPU timings waiting, the frame in bands,
+    // the animation frame asked for, the timers, the warm, and the automatic exposure's state: for state that piles up in a long
+    // session (the coordinator, after a full run's frames took 84 ms of script each)
+    box.diskLoops = () => ({ flight: flight.length, gtPend: gtPend.length, bandJob: bandJob ? { key: bandJob.key, split: !!bandJob.split, still: !!bandJob.still } : null, frameRequest: frameRequest !== null, running, gpuTimer: !!gpuTimer, gtTimer: !!gtTimer, warmSync: !!warmSync, accN, scale: opt.scale,
+      ae: { ln: Math.round(aeLn * 1000) / 1000, goal: Math.round(aeGoal * 1000) / 1000, fresh: aeFresh, tries: aeTries, held: aeHeld() }, busy: busy() });
     box.diskCtMax = (n) => { const v = finiteNumber(n); if (isFinite(v) && v > 0) { ctMax = Math.min(32768, Math.max(64, Math.round(v))); touched(); } return ctMax; };
     box.diskEddyEvery = (n) => { const k = finiteNumber(n); if (isFinite(k) && k >= 1) eddyEvery = Math.min(4, Math.round(k)); return eddyEvery; };
     box.diskFps = (n) => { const k = finiteNumber(n); if (isFinite(k) && k >= 0) fpsCap = Math.min(240, k); return fpsCap; };
