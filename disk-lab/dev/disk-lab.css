@@ -1,0 +1,349 @@
+/* Disk Lab v2. A night stage for looking, the sandbox beside it (the rail), the highlights below it, and a paper dialog
+   for reading (DESIGN.md, section 2).
+   Self-contained: the site's /styles.css is written for light pages; only its fonts and its paper colours are shared. */
+@font-face{font-family:Inter;font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/inter-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:Inter;font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/inter-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:Inter;font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/inter-latin-600-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+
+:root{
+  /* night: the sky the engine draws at the stage's edges (sampled), so that stage and dock meet without a seam */
+  --night:#0c0f17;
+  --night-2:#121622;
+  --text:#e9edf3;
+  --text-2:#b3bbc8;
+  --text-3:#808a9a;
+  --line:rgba(255,255,255,.09);
+  --line-2:rgba(255,255,255,.16);
+  --wash:rgba(255,255,255,.06);
+  --wash-2:rgba(255,255,255,.11);
+  --selected:#edf0f4;
+  --on-selected:#0c0f17;
+  --accent:#e0915a;            /* the site's warm orange, lightened for the night */
+  /* paper: the site's own colours, for the dialog */
+  --paper:#fafaf8;
+  --ink:#15171a;
+  --ink-2:#4b5056;
+  --paper-line:#e7e6e1;
+  --paper-accent:#b8532a;
+  --sans:Inter,'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Noto Sans JP',system-ui,sans-serif;
+  --gx:clamp(16px,2.6vw,32px);
+  --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--night);color:var(--text)}
+body{font:14px/1.6 var(--sans);-webkit-font-smoothing:antialiased;font-feature-settings:'cv11','ss01';overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+a{color:inherit}
+p,h1,h2,h3{margin:0}
+[hidden]{display:none!important}
+.ja{display:none!important}
+.lang-ja .en{display:none!important}
+.lang-ja .ja{display:revert!important}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ---- the frame: header; the stage with the sandbox (rail) beside it and the highlights (dock) below ---- */
+.lab{--rail:300px;display:grid;grid-template-columns:minmax(0,1fr) var(--rail);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"bar bar" "stage rail" "dock rail";height:100vh;height:100dvh;position:relative}
+/* (round 6: the page is drawn under the phone's status bar and beside its notch, viewport-fit=cover: the bar keeps its
+   52 px below the top inset, and the frame's edges keep clear of the side insets. On a desktop the insets are 0) */
+.bar{grid-area:bar;display:flex;align-items:center;justify-content:space-between;gap:16px;height:calc(52px + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) max(var(--gx),env(safe-area-inset-right,0px)) 0 max(var(--gx),env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
+.mark{display:flex;align-items:baseline;gap:10px;font-size:15px;letter-spacing:-.01em;white-space:nowrap}
+.mark .home{display:inline-flex;align-items:center;gap:9px;align-self:center;color:var(--text-2);text-decoration:none;font-weight:500}
+.mark .home:hover{color:var(--text)}
+/* the site's mark leads home; on narrow screens it stands alone for the name */
+.home-logo{display:block;width:auto;height:15px;opacity:.72;transition:opacity .2s}
+.mark .home:hover .home-logo{opacity:1}
+.mark .slash{color:var(--text-3)}
+.mark .title{font-weight:600;color:var(--text)}
+.bar-end{display:flex;align-items:center;gap:22px;flex:none}
+.text-button{font-size:13px;color:var(--text-2);padding:6px 0;white-space:nowrap}
+.text-button .short{display:none}
+.text-button:hover{color:var(--text)}
+.lang-switch{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-3);white-space:nowrap}
+.lang-switch button{padding:6px 2px;color:var(--text-3)}
+.lang-switch button[aria-pressed=true]{color:var(--text);font-weight:600}
+.lang-switch button:hover{color:var(--text)}
+
+.stage{grid-area:stage;position:relative;min-height:0;overflow:hidden;background:var(--night)}
+.disk-panel{position:relative;width:100%;height:100%;background:var(--night);overflow:hidden}
+.disk-panel canvas{position:absolute;inset:0;display:block;width:100%;height:100%;cursor:grab;touch-action:none;z-index:0}
+.disk-panel canvas:active{cursor:grabbing}
+.disk-panel canvas:focus{outline:none}
+.disk-panel canvas:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
+.disk-panel canvas[data-quiet-focus]:focus-visible{outline:none}
+.disk-static{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;opacity:1;transition:opacity .7s var(--ease);pointer-events:none}
+.lab[data-state=live] .disk-static{opacity:0}
+.lab[data-state=live][data-lost] .disk-static{opacity:1}
+.disk-static:not([src]){visibility:hidden}
+.disk-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.lab[data-state=loading] .disk-overlay{opacity:0}
+.disk-snowline{stroke:rgba(190,215,240,.55);stroke-width:1;stroke-dasharray:3 5}
+.disk-label{fill:rgba(205,222,242,.86);font:11px var(--sans);letter-spacing:.03em}
+.disk-scale line{stroke:rgba(205,222,242,.85);stroke-width:1}
+.disk-scale text{fill:rgba(205,222,242,.85);font:11px var(--sans);letter-spacing:.03em}
+/* the engine's own notes (its easter eggs) and hints: their placement is the engine's, their type and colour the page's */
+.disk-toast{background:rgba(12,15,23,.86)!important;color:var(--text)!important;border:1px solid var(--line-2)!important;border-radius:10px!important;font-family:var(--sans)!important;font-size:13px!important;line-height:1.65!important;padding:10px 14px!important;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.stage>.disk-toast{position:absolute!important;top:10px!important;left:10px!important;right:10px!important;width:auto!important;margin:0!important;z-index:6!important}
+.disk-hint{background:rgba(12,15,23,.84)!important;color:var(--text)!important;border-radius:999px!important;font-family:var(--sans)!important;font-size:12.5px!important;padding:6px 14px!important}
+
+/* (round 8) the model look's key: one swatch per material shown (the engine's MAT), in place of the temperature's bar */
+.mat-key{position:absolute;right:calc(var(--gx) + 66px);bottom:10px;z-index:3;display:grid;gap:3px;padding:6px 10px 6px;border-radius:8px;background:rgba(12,15,23,.62);font-size:11px;color:var(--text-2);pointer-events:none;opacity:0;transition:opacity .4s}
+.mat-key.on{opacity:1}
+.mat-title{letter-spacing:.02em;color:var(--text-3)}
+.mat-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.mat-list li{display:flex;align-items:center;gap:6px;white-space:nowrap;line-height:1.35}
+.mat-list i{display:inline-block;width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 .5px rgba(255,255,255,.3)}
+.mat-list i+i{margin-left:-4px}
+.mat-list i.arr{width:auto;height:auto;border-radius:0;box-shadow:none;font-style:normal;font-size:11px;line-height:1;color:#cfeaff}
+
+.stage-hint,.stage-note{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:4;max-width:calc(100% - 2*var(--gx));padding:6px 14px;border-radius:999px;background:rgba(12,15,23,.78);border:1px solid var(--line);font-size:12.5px;color:var(--text-2);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .5s}
+.stage-hint.on,.stage-note.on{opacity:1}
+/* a lost WebGL context that does not come back: a way to draw again, over the still picture */
+.stage-retry{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;display:grid;justify-items:center;gap:10px;max-width:min(340px,calc(100% - 2*var(--gx)));padding:14px 18px;border-radius:12px;background:rgba(12,15,23,.84);border:1px solid var(--line);font-size:13px;color:var(--text);text-align:center}
+.stage-retry[hidden]{display:none}
+.still-why{display:block;margin-top:4px;font-size:11.5px;color:var(--text-3);overflow-wrap:anywhere}
+.stage-note{white-space:normal;text-align:center;color:var(--text)}
+/* (round 10a) the version in the bar (also on a page that has stopped), a development build's as a badge; the safe start's
+   note with its offers; the last visit's record to read and copy; the version under the retry panel and in the About dialog */
+.mark .build{align-self:center;font-size:10.5px;letter-spacing:.02em;color:var(--text-3);font-weight:400}
+.mark .build.dev{padding:1px 7px;border-radius:999px;background:#7a2f5c;color:#fff;font-weight:500}
+.stage-ver{font-size:11px;color:var(--text-3)}
+.stage-safe{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:6;display:grid;gap:8px;width:min(460px,calc(100% - 2*var(--gx)));padding:10px 12px;border-radius:12px;background:rgba(12,15,23,.9);border:1px solid var(--line-2);font-size:12.5px;line-height:1.55;color:var(--text)}
+.stage-safe[hidden],.stage-log[hidden]{display:none}
+.safe-acts{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.safe-acts .icon-x{margin-left:auto}
+.stage-log{position:absolute;inset:12px;z-index:8;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;gap:8px;max-width:760px;margin:0 auto;padding:12px 14px;border-radius:12px;background:rgba(10,12,18,.96);border:1px solid var(--line-2);color:var(--text);font-size:12.5px}
+.stage-log .log-title{font-weight:600}
+.stage-log .log-note{color:var(--text-2)}
+.stage-log pre{overflow:auto;margin:0;padding:8px;border-radius:8px;background:rgba(255,255,255,.04);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}
+.about .about-ver{margin:-8px 0 16px;font-size:12px;color:#6a6f75}
+.about #logOpen{margin-left:6px;padding:1px 9px;min-height:0;border:1px solid var(--paper-line);border-radius:999px;color:var(--paper-accent);font-size:12px}
+.lab[data-state=loading] .stage-note.on{bottom:50%;transform:translate(-50%,50%);background:none;border:0;color:var(--text-2)}
+
+/* ---- the highlights (the dock, below the stage) ---- */
+.dock{grid-area:dock;display:grid;row-gap:6px;padding:10px var(--gx) calc(16px + env(safe-area-inset-bottom,0px)) max(var(--gx),env(safe-area-inset-left,0px));border-top:1px solid var(--line);background:var(--night);min-width:0}
+.route-row{display:flex;align-items:center;gap:10px;min-width:0}
+.steppers{display:flex;gap:2px;flex:none}
+.icon-button{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:999px;color:var(--text-2)}
+.icon-button:hover:not(:disabled){background:var(--wash);color:var(--text)}
+.icon-button:disabled{opacity:.3;cursor:default}
+.route{min-width:0;overflow-x:auto;scrollbar-width:none;mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent)}
+.route::-webkit-scrollbar{display:none}
+.route ol{display:flex;gap:2px;list-style:none;margin:0;padding:0 24px 0 0}
+.route button{display:flex;align-items:baseline;gap:7px;padding:6px 10px;border-radius:999px;font-size:13px;color:var(--text-3);white-space:nowrap;transition:color .2s,background-color .2s}
+.route button .n{font-size:11px;font-variant-numeric:tabular-nums;color:var(--text-3)}
+.route button:hover{color:var(--text-2);background:var(--wash)}
+.route button[aria-current=true]{color:var(--text);font-weight:600}
+.route button[aria-current=true] .n{color:var(--accent);opacity:1}
+.card{min-width:0;max-width:calc(72ch + 76px);padding-left:76px}
+.place-text{font-size:14.5px;line-height:1.7;color:var(--text-2);min-height:calc(3 * 1.7em);text-wrap:pretty}
+.lang-ja .place-text{font-size:14px;line-height:1.8;letter-spacing:.01em;min-height:calc(3 * 1.8em)}
+.place-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;min-height:34px}
+.still-note{margin-top:10px;font-size:13px;color:var(--text-3);max-width:60ch}
+.still-note button{margin-left:8px}
+
+/* ---- the sandbox (the rail, beside the stage) ---- */
+.rail{grid-area:rail;min-height:0;overflow-y:auto;border-left:1px solid var(--line);padding:2px max(18px,env(safe-area-inset-right,0px)) calc(30px + env(safe-area-inset-bottom,0px)) 18px;background:var(--night);scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent;
+  /* (a rail taller than the window fades out at the bottom, so that more is seen to follow; at the end the fade lies over the padding) */
+  -webkit-mask-image:linear-gradient(#000 calc(100% - 28px),transparent);mask-image:linear-gradient(#000 calc(100% - 28px),transparent)}
+.rail-sec{padding:10px 0 11px;border-top:1px solid var(--line)}
+.rail-sec:first-of-type{border-top:0}
+.rail h3{font-size:11px;font-weight:500;color:var(--text-3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+.lang-ja .rail h3{font-size:12px;letter-spacing:.1em;text-transform:none}
+.rail-note{font-size:12px;line-height:1.5;color:var(--text-3);margin-top:7px}
+/* (round 9) the top of the rail: what is kept on this device, and Reset */
+.rail-keep{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 10px;padding:10px 0 10px}
+.rail-keep .rail-note{margin:0}
+.rail-keep #resetNote{grid-column:1/-1;font-size:11.5px}
+.rail-keep .chip svg{width:13px;height:13px}
+.rail-version{margin:18px 0 26px;font-size:11px;letter-spacing:.02em;color:var(--text-3)}
+.rail-context:not(:empty){margin-top:8px;display:grid;gap:8px;justify-items:start}
+.time-row{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.time-row .segmented.small button{padding:4px 8px}
+.tool{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 8px;border-radius:999px;font-size:12.5px;color:var(--text-2);border:1px solid var(--line-2)}
+.tool:hover{background:var(--wash);color:var(--text)}
+#play .i-play{display:none}
+#play[data-paused] .i-play{display:block}
+#play[data-paused] .i-pause{display:none}
+#play .i-play path{fill:currentColor;stroke:none}
+
+/* segmented controls (the looks, the cut, the speed, the CO maps, the cut's quantities) */
+.segmented{display:inline-flex;flex-wrap:nowrap;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;max-width:100%}
+.segmented button{padding:6px 12px;border-radius:999px;font-size:13px;color:var(--text-2);white-space:nowrap;transition:background-color .2s,color .2s}
+.segmented button:hover{color:var(--text);background:var(--wash)}
+.segmented button[aria-pressed=true]{background:var(--selected);color:var(--on-selected);font-weight:500}
+.segmented button:disabled{opacity:.35;cursor:default}
+.segmented.small button{padding:4px 10px;font-size:12.5px}
+/* (round 7) the saved picture's size, under the save button */
+#saveSizeGroup{margin-top:8px}
+.segmented.looks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-radius:12px;width:100%}
+.segmented.looks button{border-radius:9px;padding:6px 4px;font-size:12.5px}
+.rail-context .segmented{flex-wrap:wrap;border-radius:14px}
+/* the cut's key: the lines on the faces as drawn, and what is left clear (round 6) */
+.cut-key{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:12px;line-height:1.45;color:var(--text-3)}
+.cut-key li{display:flex;align-items:baseline;gap:8px}
+.cut-key svg{width:24px;height:10px;flex:none;align-self:center;stroke-linecap:butt}
+.velocity{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2)}
+.velocity input{width:120px;accent-color:var(--accent)}
+.velocity output{font-variant-numeric:tabular-nums;min-width:6.6em;color:var(--text)}
+
+/* the places' actions, the rail's toggles and chips */
+.action,.chip,.toggle{display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:3px 10px;border:1px solid var(--line-2);border-radius:999px;font-size:12.5px;color:var(--text);transition:background-color .2s,border-color .2s;text-align:left}
+.action{min-height:32px;padding:5px 13px;font-size:13px}
+.action:hover,.chip:hover,.toggle:hover{background:var(--wash);border-color:rgba(255,255,255,.28)}
+.action:disabled{opacity:.4;cursor:default}
+.action[aria-pressed]::before,.toggle::before{content:'';width:8px;height:8px;border-radius:50%;border:1.5px solid var(--text-3);flex:none;transition:background-color .2s,border-color .2s}
+.action[aria-pressed=true]::before,.toggle[aria-pressed=true]::before{background:var(--accent);border-color:var(--accent)}
+.toggle[aria-pressed=false]{color:var(--text-2)}
+.action.quiet,.chip.quiet{border-color:transparent;color:var(--text-2)}
+.action.quiet:hover,.chip.quiet:hover{border-color:var(--line-2);color:var(--text)}
+.action svg{width:14px;height:14px}
+.action.next svg{width:12px;height:12px;margin-right:-2px}
+.place-actions>.quiet:first-child{margin-left:-13px}
+.toggles,.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips+.chips{margin-top:6px}
+.chip.quiet{padding-left:4px;padding-right:8px}
+.link-field{display:block;width:100%;margin-top:10px;padding:8px 10px;border-radius:8px;border:1px solid var(--line-2);background:rgba(0,0,0,.25);color:var(--text);font:12px/1.4 var(--sans)}
+
+/* the components (Show): a toggle each; turned on, its settings below it */
+.comps{display:grid;gap:5px}
+.comp{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:10px;row-gap:5px}
+.comp>.toggle{justify-self:start}
+.comp-opts{grid-column:1/-1;display:grid;gap:6px;justify-items:start;width:100%;margin:0 0 4px;padding:6px 0 7px 12px;border-left:1px solid var(--line-2)}
+.toggle.small{min-height:26px;padding:2px 9px;font-size:12px}
+.planet-list{display:grid;gap:4px;width:100%}
+/* (round 8) two lines: the toggle, the orbit's slider and the remove button; the mass and its slider */
+.planet-row{display:grid;grid-template-columns:6.6em minmax(0,1fr) 24px;align-items:center;gap:2px 6px;width:100%}
+.planet-row .toggle{min-width:6.6em;font-variant-numeric:tabular-nums;white-space:pre}
+.planet-row input{min-width:0;accent-color:var(--accent)}
+.planet-mass,.pop-mass{font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right;padding-right:4px}
+.planet-mass sub,.pop-mass sub{font-size:.75em}
+.icon-x{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;color:var(--text-3);font-size:15px;line-height:1}
+.icon-x:hover{background:var(--wash);color:var(--text)}
+#addPlanet[aria-pressed=true]{border-color:var(--accent);color:var(--text)}
+.lab.picking .disk-panel canvas{cursor:crosshair}
+.planet-pop{position:absolute;z-index:7;display:grid;grid-template-columns:auto minmax(0,1fr) 24px;align-items:center;gap:4px 8px;width:250px;padding:6px 6px 6px 12px;border-radius:12px;background:rgba(16,20,30,.92);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:12px;color:var(--text);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.planet-pop input{min-width:0;accent-color:var(--accent)}
+.pop-name{font-variant-numeric:tabular-nums;white-space:pre}
+/* the site's mark, white and faint, in the lower right of the stage (the saved pictures carry it too) */
+.watermark{position:absolute;right:14px;bottom:12px;z-index:3;width:56px;height:auto;opacity:.13;pointer-events:none;user-select:none}
+.rail-note.cite{line-height:1.55}
+.cite-line{color:var(--text-2)}
+.about .cite-line{font-size:13.5px;color:var(--ink-2)}
+
+/* ---- the two halves as tabs, on a narrow screen only ---- */
+.tabs{display:none}
+
+/* ---- states ---- */
+.lab[data-state=loading] .rail,.lab[data-state=loading] .place-actions{visibility:hidden}
+.lab[data-state=still]{grid-template-columns:minmax(0,1fr);grid-template-areas:"bar" "stage" "dock";grid-template-rows:auto auto minmax(0,1fr)}
+.lab[data-state=still] .rail,.lab[data-state=still] .tabs,.lab[data-state=still] .place-actions{display:none!important}
+.lab[data-state=still] .dock{display:grid!important}
+.lab[data-state=still] .disk-static{opacity:1}
+.lab[data-state=still] .disk-panel canvas,.lab[data-state=still] .disk-overlay{visibility:hidden}
+.lab[data-state=still] .stage{width:min(100%,calc((100vh - 260px) * var(--still-ar,2)));width:min(100%,calc((100dvh - 260px) * var(--still-ar,2)));aspect-ratio:var(--still-ar,2);justify-self:center}
+.lab[data-state=still] .disk-panel{height:100%!important}
+
+/* ---- the paper dialog ---- */
+.about{width:min(720px,calc(100% - 32px));max-height:calc(100% - 48px);padding:0;border:0;border-radius:14px;background:var(--paper);color:var(--ink);box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.about::backdrop{background:rgba(6,8,13,.62);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.about-inner{position:relative;padding:40px clamp(22px,5vw,56px) 44px;font-size:15px;line-height:1.75}
+.lang-ja .about-inner{font-size:14.5px;line-height:1.85}
+.about :focus-visible{outline-color:var(--paper-accent)}
+.about-close{position:absolute;top:14px;right:14px;color:var(--ink-2)}
+.about-close:hover:not(:disabled){background:var(--paper-line);color:var(--ink)}
+.about h2:focus{outline:none}
+.about h2{font-size:26px;font-weight:500;letter-spacing:-.015em;line-height:1.2;margin-bottom:18px}
+.about h3{font-size:13px;font-weight:600;letter-spacing:.04em;color:var(--paper-accent);margin:34px 0 10px}
+.about p+p{margin-top:12px}
+.about .lead{font-size:17px;line-height:1.7}
+.lang-ja .about .lead{font-size:16px;line-height:1.85}
+/* the one-line description (as in the page's meta description), above the lead, a little stronger */
+.about .tagline{font-size:17px;line-height:1.65;font-weight:600;color:#1f2327}
+.lang-ja .about .tagline{font-size:16px;line-height:1.8}
+.about .tagline+.lead{margin-top:10px}
+.about ul{margin:0;padding-left:1.1em}
+.about li{margin:6px 0}
+.facts{margin:0;display:grid;grid-template-columns:minmax(120px,11em) minmax(0,1fr);gap:10px 22px}
+.facts dt{font-weight:600;font-size:14px}
+.facts dd{margin:0;color:var(--ink-2)}
+.refs{font-size:13.5px;color:var(--ink-2)}
+.colophon{margin-top:28px;padding-top:14px;border-top:1px solid var(--paper-line);font-size:12px;color:#6a6f75}
+
+/* ---- the way in from the site and back (DESIGN.md, section 12): the card's picture grows into the stage while the paper
+   turns to night, and the reverse going back. The two ends are named in index.html for these moves only (the site's
+   styles.css has the same rules, for the way back); with reduced motion there is no transition. ---- */
+@media (prefers-reduced-motion:no-preference){
+  @view-transition{navigation:auto}
+}
+/* (the page goes down into the night and the other comes up out of it, rather than the two crossfading: the text of
+   both is never seen at once). data-leaving: on the way out the stage is captured with its poster in place of the live
+   canvas (index.html, pageswap) */
+::view-transition{background:#0c0f17}
+.lab[data-leaving] .disk-static{opacity:1;transition:none}
+.lab[data-leaving] .disk-panel>:not(.disk-static),.lab[data-leaving] .mat-key,.lab[data-leaving] .stage-hint,.lab[data-leaving] .planet-pop{visibility:hidden}
+::view-transition-group(disk-lab){animation-duration:.56s;animation-timing-function:cubic-bezier(.2,.7,.2,1)}
+::view-transition-old(disk-lab),::view-transition-new(disk-lab){height:100%;object-fit:cover;animation-duration:.3s}
+::view-transition-old(root){animation:disk-lab-out .26s ease-in both}
+::view-transition-new(root){animation:disk-lab-in .32s .2s ease-out both}
+@keyframes disk-lab-out{to{opacity:0}}
+@keyframes disk-lab-in{from{opacity:0}}
+
+/* ---- narrow screens: the stage above; below it, the sandbox or the highlights, as two tabs; nothing over the disk ---- */
+@media (max-width:860px){
+  .lab{--panel:min(36vh,290px);grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto var(--panel);grid-template-areas:"bar" "stage" "tabs" "panel"}
+  .bar{height:calc(48px + env(safe-area-inset-top,0px))}
+  .mark .home-name,.mark .slash{display:none}
+  .bar-end{gap:16px}
+  .tabs{grid-area:tabs;display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);padding:0 var(--gx)}
+  .tabs button{padding:10px 0 9px;font-size:13px;color:var(--text-3);border-bottom:2px solid transparent}
+  .tabs button[aria-selected=true]{color:var(--text);border-bottom-color:var(--accent);font-weight:500}
+  .rail{grid-area:panel;border-left:0;padding:2px var(--gx) calc(30px + env(safe-area-inset-bottom))}
+  .dock{grid-area:panel;border-top:0;overflow-y:auto;align-content:start;padding:8px var(--gx) calc(12px + env(safe-area-inset-bottom))}
+  .lab[data-tab=explore] .dock{display:none}
+  .lab[data-tab=tour] .rail{display:none}
+  .segmented.looks{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .segmented.looks button{padding:7px 2px;text-overflow:ellipsis;overflow:hidden}
+  .route-row{gap:4px;margin-left:-8px}
+  .card{padding-left:0;max-width:none}
+  .place-text{font-size:14px;line-height:1.6;min-height:0}
+  .lang-ja .place-text{font-size:13.5px;line-height:1.7;min-height:0}
+  .place-actions{margin-top:8px;min-height:40px}
+  .facts{grid-template-columns:minmax(0,1fr);gap:2px}
+  .facts dd{margin-bottom:10px}
+  .about{width:100%;max-width:100%;max-height:100%;height:100%;border-radius:0;margin:0}
+  .about-inner{padding-top:calc(40px + env(safe-area-inset-top,0px));padding-bottom:calc(44px + env(safe-area-inset-bottom,0px))}
+  .about-close{top:calc(14px + env(safe-area-inset-top,0px))}
+  .mat-key{top:8px;bottom:auto;right:8px;padding:5px 8px;font-size:10px;gap:2px}
+  .mat-list{gap:1px}
+  .stage-hint{bottom:40px;left:auto;right:10px;transform:none}
+  .watermark{width:44px;right:10px;bottom:10px}
+  .stage-note{top:8px;bottom:auto;left:8px;right:8px;transform:none;max-width:none;border-radius:10px;text-align:left;font-size:12.5px;line-height:1.55;padding:8px 12px}
+  .lab[data-state=loading] .stage-note.on{top:auto;left:50%;right:auto;transform:translate(-50%,50%)}
+  .lab[data-state=still]{grid-template-rows:auto auto minmax(0,1fr)}
+  /* (the still layout has no "panel" area: placed there, the dock would make the grid add unnamed columns and
+     squeeze the bar into one of zero width) */
+  .lab[data-state=still] .dock{grid-area:dock}
+}
+/* phones: the dialog's button by its short name, so that the mark, the title and the languages fit on one line */
+@media (max-width:400px){
+  .text-button .long{display:none}
+  .text-button .short{display:inline}
+}
+
+@media (pointer:coarse){
+  .icon-button{width:40px;height:40px}
+  .tool,.action,.chip,.toggle{min-height:40px}
+  .tool{height:40px}
+  .route button{padding:9px 12px}
+  .segmented button{padding-top:9px;padding-bottom:9px}
+}
+/* a short phone (or a phone on its side): let the page scroll so that the stage keeps its size */
+@media (max-height:560px){
+  body{overflow:auto}
+  .lab{height:auto;min-height:100dvh;grid-template-rows:auto 78vh auto auto}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before{transition:none!important;animation:none!important}
+}
