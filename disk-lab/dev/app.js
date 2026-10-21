@@ -4,17 +4,17 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=814f93ec9f';
-import { WORDS } from './words.js?v=f608a7fcff';
+import { WORDS } from './words.js?v=8b87d467ab';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng } from './capture.js?v=aa82de203b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=6984e6fe3f';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=36b8948b9b';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.8-dev.4', RELEASED = '2026-10-20';
+const VERSION = '1.8-dev.5', RELEASED = '2026-10-20';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
@@ -711,17 +711,26 @@ function renderQuality() {
   qualityButtons.forEach((b) => { b.textContent = w[b.dataset.quality]; });
   $('qualityGroup').setAttribute('aria-label', w.label);
 }
-const govRest = () => { if (gov) gov.pause(quality !== 'auto' || holdSharp); };
+// (round 10a, dev.5: Auto at rest is the ramp's (stillStep), not the frame rate's: the governor rests; its scale at the start,
+// runScale, is what the lighter picture while moving is taken from)
+const govRest = () => { if (gov) gov.pause(true); };
 // (the default Best's quiet step applies while the clock runs; a paused picture is drawn at the level itself)
 // (round 9: and within the guard, allowed: running frames under GUARD_MS, a still picture's within STILL_MS in bands)
-const fixedScale = () => Math.min(QUALITY[quality] || 1, qCap, bestDefault() && live() && !S().paused ? bestCap : 1, live() ? allowed() : 1);
+// (round 10a, dev.5, the owner after dev.4 on the iPhone: "at Best, no automatic change of the resolution". A fixed level is
+// fixed: the default Best's quiet step (bestCap) is no more, and the guard does not lower it while the clock runs: in the
+// looks drawn in kicks or in bands each piece of GPU work is within the budget whatever the scale, and the GPU rests between
+// them on a phone (the duty). What is left: the lighter picture while the view moves (the owner's own, see moving), the
+// level's scale reached a rung a picture once the view rests (the ramp, see stillStep), the safe start after a bad end
+// (Auto, with its "restore"), and the gas line's look, whose passes are not in kicks: the guard's cap there, as before)
+const fixedScale = () => Math.min(QUALITY[quality] || 1, qCap, live() ? allowed() : 1);
 // the scale a fixed level asks for now, set when it changed (the clock paused or running again; not while the view moves,
 // a still picture is sharpened, a measurement holds the governor or a picture is being saved)
 let fixedPaused = null, skipFrames = 0;
 function applyFixed() {
   if (quality === 'auto' || !live() || moveFrom || holdSharp || sharpFrom || saving || !calibrated || 'lost' in lab.dataset) return;
   const p = !!S().paused;
-  if (p !== fixedPaused) { fixedPaused = p; gc.still = 0; relaxGuard(); syncQuality(); }
+  // (round 10a, dev.5: the ramp goes on whether the clock runs or not: a pause, the idle rest's among them, keeps the picture)
+  if (p !== fixedPaused) { fixedPaused = p; relaxGuard(); syncQuality(); }
   const want = fixedScale();
   // (the frames still in flight were drawn at the scale left: not counted for the guards)
   if (Math.abs(box.diskScale() - want) > 0.004) { scaleTo(want); skipFrames = 3; }
@@ -750,8 +759,9 @@ function syncQuality() {
   qualityButtons.forEach((b) => pressed(b, b.dataset.quality === quality));
   const w = T().quality, n = $('qualityNote');
   if (quality === 'auto') n.textContent = w.autoNote;
-  else if (bestDefault()) n.textContent = fixedScale() < 1 ? w.bestCapped(Math.round(100 * fixedScale())) : w.bestNote;
-  else if (qCap < (QUALITY[quality] || 1) || fixedScale() < (QUALITY[quality] || 1) - 0.005) n.textContent = w.capped(Math.round(100 * fixedScale()));
+  // (round 10a, dev.5: a fixed level is the level, but in the gas line's look, where the guard still caps it)
+  else if (live() && S().look === 'co' && fixedScale() < (QUALITY[quality] || 1) - 0.005) n.textContent = w.coCapped(Math.round(100 * fixedScale()));
+  else if (bestDefault()) n.textContent = w.bestNote;
   else n.textContent = w.fixedNote(Math.round(100 * (QUALITY[quality] || 1)));
 }
 // the frames' intervals at a fixed level (consecutive frames: the clock running or a picture being averaged)
@@ -764,7 +774,8 @@ const bestDefault = () => quality === 'full' && !qChosen;
 function bestReset() { bestCap = 1; bestRuns.length = 0; bestHold = BEST_HOLD; bestUpAt = -1e9; bestChanged = 0; }
 // the default Best's quiet steps (see BEST_SLOW): from the frames of the running clock at a resting view, over 1.5 s
 function guardBest(dt) {
-  if (!bestDefault() || S().paused || S().look === 'co') { bestRuns.length = 0; return; }
+  // (round 10a, dev.5: Best is fixed, see fixedScale: no quiet steps)
+  bestRuns.length = 0; if (dt >= 0) return;
   if (!(dt > 0 && dt < 2000)) return;
   bestRuns.push(dt);
   const now = performance.now();
@@ -790,6 +801,8 @@ function guardBest(dt) {
 let bestLog = null;   // (for measurements: diskLab.bestLog(true) records each quiet step)
 function guardFixed(dt, acc, accMax, bands = 1) {
   if (quality === 'auto' || !live() || holdSharp || moveFrom) return;
+  // (round 10a, dev.5: a fixed level is not lowered for a slow frame but in the gas line's look, see fixedScale)
+  if (S().look !== 'co') { costs.length = 0; return; }
   guardBest(dt);
   // (round 9: a still picture's frame drawn in bands comes after several animation frames, its bands each within the
   // guard's budget: its interval is not the length of a piece of GPU work)
@@ -840,9 +853,15 @@ const factorOf = (k) => (FACTOR[k.replace(/:cut$/, '')] || 1) * (/:cut$/.test(k)
 // (a frame at scale s, the fixed share counted with the pixels: an overestimate going up, where it matters)
 const costAt = (s) => gc.c1 * s * s;
 const stepFor = (ms) => LADDER.reduce((m, l) => (costAt(l) <= ms ? l : m), LADDER[0]);
-const stillNow = () => live() && (!!S().paused || reduce) && !moveFrom;
+// (round 10a, dev.5: hands off, the view at rest, the clock running or not: the picture refined a rung a picture up to its level
+// (stillStep). The gas line's look as before (paused only) until its passes are in kicks)
+const stillNow = () => live() && !moveFrom && (S().look !== 'co' || !!S().paused || reduce);
 const capRun = () => gc.cap;
-function capStill() { if (!gc.still) gc.still = Math.max(gc.cap, stepFor(STILL_MS)); return gc.still; }
+// (the ramp's first rung: a paused picture's, where a still started (STILL_MS a frame); with the clock running, the rung at or
+// under the scale drawn now and the guard's cap for running frames (the lighter picture of a move just ended; after a switch of
+// look, the cap the switch set), a rung a picture from there)
+const rungUnder = (sc) => LADDER.reduce((m, l) => (l <= sc + 0.004 ? l : m), LADDER[0]);
+function capStill() { if (!gc.still) gc.still = S().paused || reduce || S().look === 'co' ? Math.max(gc.cap, stepFor(STILL_MS)) : rungUnder(Math.min(live() ? box.diskScale() : 1, gc.cap)); return gc.still; }
 // (round 10a, A4: the owner, trying dev.3 on the iPhone: 「静止時はもっとがんばっていいかも」) A still picture is refined step by
 // step up to its level's scale (Best: 1, the full canvas; Auto: 1): it starts where it did (capStill: STILL_MS a frame), and
 // once PROG_N frames are averaged at a step, the next step of LADDER. No total time: each frame's pieces stay within the
@@ -854,15 +873,25 @@ function capStill() { if (!gc.still) gc.still = Math.max(gc.cap, stepFor(STILL_M
 // cost four frames each, and on a phone's frame as WebKit on a GPU six times slower the still had not reached scale 1 after 4
 // minutes), and two steps of LADDER at a time (PROG_SKIP: each about 1.56 times the last, 2.4 times the pixels), the last to
 // the level's scale: the frames on the way cost some 0.9 of the last one's, where every step at four frames cost some 10)
-const PROG_N = 1, PROG_SKIP = 2;
+// (round 10a, dev.5, the owner: "refine step by step without stopping the clock, each picture may take longer") With the clock
+// running, a rung a picture (PROG_SKIP is a paused picture's), up to the level's scale; Auto up to the rung whose pictures come
+// within HANDSOFF_MS (?handsoff=ms), a rung down where they take over 1.5 times that: its pictures while the view moves are
+// still those of the frame rate (the lighter picture), at rest each may take a quarter of a second
+const PROG_N = 1, PROG_SKIP = 2, HANDSOFF_MS = Number(q.get('handsoff')) > 0 ? Number(q.get('handsoff')) : 250;
 const stillTop = () => (quality === 'auto' ? 1 : QUALITY[quality] || 1);
+let picMs = 0;   // (Auto at rest: the time between its pictures lately, ms)
 function stillStep(acc, accMax) {
   if (!stillNow() || !calibrated || saving || holdSharp || 'lost' in lab.dataset || S().look === 'co' || !gc.still) return false;
-  const s = box.diskScale(), top = stillTop();
-  if (gc.still >= top - 0.004 || s < gc.still - 0.004 || acc < Math.min(PROG_N, accMax || PROG_N)) return false;
+  const s = box.diskScale(), top = stillTop(), run = !S().paused && !reduce;
+  if (s < gc.still - 0.004 || acc < Math.min(PROG_N, accMax || PROG_N)) return false;
+  if (run && quality === 'auto' && picMs > 0) {
+    if (picMs > 1.5 * HANDSOFF_MS && gc.still > LADDER[0] + 0.004) { gc.still = LADDER.reduce((m, l) => (l < gc.still - 0.004 ? l : m), LADDER[0]); glog('ramp down'); return true; }
+    if (picMs > HANDSOFF_MS / 1.3) return false;
+  }
+  if (gc.still >= top - 0.004) return false;
   const i = LADDER.findIndex((l) => l > gc.still + 0.004);
   if (i < 0) return false;
-  const next = LADDER[Math.min(LADDER.length - 1, i + PROG_SKIP - 1)];
+  const next = LADDER[Math.min(LADDER.length - 1, i + (run ? 1 : PROG_SKIP) - 1)];
   gc.still = Math.min(top, next); glog('still up');
   return true;
 }
@@ -875,7 +904,7 @@ const glog = (what) => {
   if (l && l.k === 'g' && l.w === what && l.key === gc.key) { l.x = (l.x || 1) + 1; l.cap = gc.cap; l.sc = sc; flogSoon(); }
   else flogAdd({ k: 'g', w: what, key: gc.key, c1: Math.round(gc.c1), cap: gc.cap, st: gc.still || undefined, sc });
 };
-let bandsSet = 0;
+let bandsSet = 0, engFixed = null;
 // the scale now within what is allowed, and the bands: a still picture's, or a running frame's where even the lowest step
 // is over the budget (a frame in bands holds its moment to its end: no seams)
 function guardApply() {
@@ -886,6 +915,10 @@ function guardApply() {
   const c = costAt(box.diskScale());
   const n = Math.min(64, stillNow() || c > GUARD_MS ? Math.max(1, Math.ceil(UNEVEN * c / GUARD_MS)) : 1);
   if (n !== bandsSet) { bandsSet = n; box.diskBands(n, GUARD_MS / GPUX); }
+  // (round 10a, dev.5: hands off, the engine's own guard cuts a frame over the budget into bands rather than lowering its scale:
+  // the scale is the level's, or the ramp's (the gas line's look apart, see fixedScale))
+  const fix = stillNow() && S().look !== 'co';
+  if (fix !== engFixed && typeof box.diskGuard === 'function') { engFixed = fix; box.diskGuard({ fixed: fix }); }
 }
 // every scale the page asks for, within the guard
 function scaleTo(s) {
@@ -1483,6 +1516,7 @@ async function start() {
 // moves or anything changes), and on a guarded device the eddies' volume every other frame while only the clock moves
 function engineSettings() {
   if (typeof box.diskGuard !== 'function') return;
+  engFixed = null;   // (round 10a, dev.5: told again to an engine built anew, see guardApply)
   box.diskGuard({ ms: GUARD_MS / GPUX, key: gc.key, c1: gc.c1 / GPUX });   // (the engine's own guard, the same budget)
   if (typeof box.diskMarch === 'function') { if (guarded) box.diskMarch('cheap'); else predictTier(gc.key); }
   if (typeof box.diskFps === 'function') box.diskFps(SWITCH.fps > 0 ? SWITCH.fps : MOBILE || coarse ? FPS_STILL_PHONE : FPS_STILL);
@@ -1515,7 +1549,9 @@ box.addEventListener('diskframe', (e) => {
   // (round 10a, A4: a still refined to the next step, see stillStep; Auto by its own sharpening, onAccumulated. The view moved:
   // from its first step again)
   if (moveFrom && gc.still) gc.still = 0;
-  if (quality !== 'auto' && stillStep(acc, accMax)) { applyFixed(); sync(); }
+  if (!moveFrom && !S().paused && lastFrame && now - lastFrame < 5000) picMs = picMs ? 0.6 * picMs + 0.4 * (now - lastFrame) : now - lastFrame;
+  else if (moveFrom) picMs = 0;
+  if (stillStep(acc, accMax)) { if (quality === 'auto') scaleTo(capStill()); else applyFixed(); picMs = 0; sync(); }
   applyFixed();
   if (skipFrames > 0) { skipFrames--; costs.length = 0; }
   else guardFixed(lastFrame ? now - lastFrame : 0, acc, accMax, kicks ? Math.max(2, bands) : bands);   // (in kicks: no piece is the frame)
@@ -1578,7 +1614,8 @@ function endMoving() {
   if (!moveFrom) return;
   moveFrom = 0; skipFrames = 3;
   if (quality !== 'auto') relaxGuard();
-  if (live()) scaleTo(quality === 'auto' ? runScale : fixedScale());
+  // (round 10a, dev.5: the ramp from the lighter picture, a rung a picture, see stillStep; Auto's too)
+  if (live()) scaleTo(quality === 'auto' ? capStill() : fixedScale());
   govRest();
 }
 // A lost context usually comes back by itself within a second or two. If it has not after RETRY_AFTER, the stage offers
@@ -1983,23 +2020,25 @@ function logText(l) {
 // the front) starts the clock again, if it was this rest that stopped it; a pause chosen by the visitor stays. A press on
 // the play button itself is left to the button. data-idle="off" on the disk turns it off (the checks run without input).
 // (round 9: a phone or tablet rests sooner, IDLE_MS_PHONE)
-const IDLE_MS = 60000, IDLE_MS_PHONE = 30000, IDLE_BLUR_MS = 15000;
+const IDLE_MS = 60000, IDLE_MS_PHONE = 30000, IDLE_BLUR_MS = 15000, IDLE_TEST = Number(q.get('idle')) > 0 ? Number(q.get('idle')) : 0;   // (?idle=ms: for checks)
 let idleTimer = 0, restedByIdle = false;
 function armIdle() {
   clearTimeout(idleTimer);
   if (!live() || reduce || box.dataset.idle === 'off') return;
-  idleTimer = setTimeout(restIdle, document.hasFocus() ? (MOBILE || coarse ? IDLE_MS_PHONE : IDLE_MS) : IDLE_BLUR_MS);
+  idleTimer = setTimeout(restIdle, IDLE_TEST || (document.hasFocus() ? (MOBILE || coarse ? IDLE_MS_PHONE : IDLE_MS) : IDLE_BLUR_MS));
 }
 function restIdle() {
   if (!live() || reduce || box.dataset.idle === 'off' || 'lost' in lab.dataset) return;
   if (saving || moveFrom) return armIdle();
   if (S().paused) return;
-  restedByIdle = true; box.diskPlay(false); sync(); note(T().idleRest, 0);
+  // (round 10a, dev.5: no note on the picture: the owner, trying dev.4 on the iPhone, found it in the way; the play button
+  // shows the clock stopped, and any touch starts it again)
+  restedByIdle = true; box.diskPlay(false); sync();
 }
 function wake(e) {
   flog.inT = Date.now() - flog.t0;   // (round 10a: the last input, for the flight record)
   if (restedByIdle) {
-    restedByIdle = false; note('', 0);
+    restedByIdle = false;
     const onPlay = e && e.target && e.target.closest && e.target.closest('#play');
     if (!onPlay && live() && S().paused) { box.diskPlay(true); sync(); }
   }

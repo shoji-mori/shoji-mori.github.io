@@ -5675,7 +5675,7 @@ void main(){
     // by half a band from a time a kick took, the work of a kick raised to 1024 at a small still, a still refined to scale 1 sent
     // a kick of 639 ms; (2) the time over the band's pixels times the work, from small bands whose kicks were mostly their own
     // part, refused every larger band and lowered the work to 16: a frame of 17 bands, 330 to 400 s)
-    const kickT = {}, kickRowsOf = {}, KICK_MS_MIN = 8;
+    const kickT = {}, kickRowsOf = {}, KICK_MS_MIN = 8, KICK_RISE = 2;
     const kickMs = (key, K) => { const m = kickT[key]; return m && m.w === rW && m.h === rH && m.K === K && m.ts.length ? m.ts : null; };
     // (the predicted bound of a kick of R rows, ms; 0 where not measured at this size and work)
     const kickAt = (key, K, R) => { const ts = kickMs(key, K); return ts ? Math.min(...ts.map((x) => x.t * Math.max(1, R / x.rows))) : 0; };
@@ -5899,7 +5899,13 @@ void main(){
       // at all. Then as many as fit in the aim at the cost a kick had in the band's last piece, at once, at most the kicks its
       // kind's bands needed beyond these, or half as many again)
       const want = Math.max(4, needOf(j.key) - bd.k + 2, Math.ceil(bd.k / 2));
-      const more = Math.max(1, perKick > 0 ? Math.min(want, Math.floor(aim / perKick)) : 1);
+      // (round 10a, dev.5: a kick's cost is not the same all along the march: the first kicks go through the sky and the thin
+      // envelope, the later ones through the disk, its steps of the same weight dearer on the GPU. On the phone's frame (?guard=70)
+      // a piece of 28 kicks sized from the band's first piece at 1.2 ms a kick took 91 ms (3.2 ms a kick), one of 6 at scale 1
+      // 81 ms. So the last piece's cost a kick twice over (KICK_RISE), for the rise to come. (The band's dearest kick twice over,
+      // at most twice the kicks before, made pieces so small that the phone frame's mid-infrared cost 1.9 times its frame drawn
+      // whole, its pieces' fences counted many times)
+      const more = Math.max(1, perKick > 0 ? Math.min(want, Math.floor(aim / (KICK_RISE * perKick))) : 1);
       const t1 = kickAt(j.key, j.K, bd.y1 - bd.y0), rows1 = bd.y1 - bd.y0;
       const fit = t1 > 0 ? Math.max(1, Math.floor(aim / t1)) : 4;
       const first = Math.min(fit, t1 > 0 && rows1 <= kickT[j.key].top ? needOf(j.key) : 4);
@@ -6502,7 +6508,7 @@ void main(){
       gLast = { key: k, c1: ownC1(k) };
     }
     // (the bands the guard asks for this frame, 0 for none; set at the start of drawOnce)
-    let gBands = 0;
+    let gBands = 0, gFixed = false;
     function guardFrame() {
       gBands = 0;
       if (!(gBudget > 0) || fullFrame || snapping || warming) return;
@@ -6514,6 +6520,10 @@ void main(){
       // (round 9: a frame of the moments in passes, see coGrid, judged by a pass: its bands are the frame's shared among them)
       const parts = Math.max(1, coPassesNow()), k = kindNow(), c1 = gC1(k) / parts, p0 = c1 * opt.scale * opt.scale;
       if (!(p0 > GUARD_SLACK * gBudget)) return;
+      // (round 10a, dev.5: where the page keeps the scale (gFixed: a fixed level, or the ramp, the view at rest; not the gas line's
+      // look), a frame over the budget is cut into bands, never drawn at a lower scale: each band within the budget, the frame as
+      // long as it takes. Bands of whole rays: not for a look whose single ray is over the budget, the gas line's)
+      if (gFixed && lookNow !== 'co') { gBands = parts * Math.min(Math.max(1, Math.floor(rH / BAND_ROWS)), Math.ceil(2 * p0 / gBudget)); return; }
       // (a frame the page has cut into bands, a paused still: judged by its longest band, the one across the disk taken at
       // twice the mean as the page plans them; over, more bands rather than a lower scale, which the page sets back for a
       // still: round 9, a paused picture in the visible look was lowered here and set back every frame, never finished)
@@ -6538,7 +6548,7 @@ void main(){
     function bandStep() {
       const j = bandJob, q = j && !lost ? gtBegin() : null;
       if (j && !lost) recBand(j);
-      try { return bandStepIn(); } finally { if (q) lastBandGt = gtNote(gtEnd(q), { what: 'band', key: j.key, first: j.first ? 1 : 0, from: gtFrom() }); }
+      try { return bandStepIn(); } finally { if (q) lastBandGt = gtNote(gtEnd(q), { what: 'band', key: j.key, first: j.first ? 1 : 0, from: gtFrom(), sc: opt.scale, ...(j.split ? { kicks: j.lastKicks, K: j.K, rows: j.bd ? j.bd.y1 - j.bd.y0 : j.sent, bp: j.bd ? j.bd.pieces : 0 } : { rows: j.sent }) }); }
     }
     // (round 10a) A band about to be sent, told to the recorder (see rec) when it is dear: predicted over DEAR of the budget
     // (from the guard's cost of its kind, or, for a band sized as it goes, its dearest rows so far: near the budget, where a
@@ -6558,7 +6568,10 @@ void main(){
       const bdN = j.split && j.bd && !j.bd.done ? j.bd : null;
       const rows = bdN ? bdN.y1 - bdN.y0 : j.split ? Math.max(1, Math.min(rH - (j.y || 0), j.ad ? j.rows : Math.ceil(rH / Math.max(1, j.n)), stateRows()))
         : j.ad && !(sg && sg.p === 3) ? Math.max(1, Math.min(rH - (j.y || 0), j.rows)) : rH / Math.max(1, sg ? (sg.p === 3 ? 1 : j.nb) : j.n);
-      const pred = j.ad && j.st && j.st.perRow > 0 ? j.st.perRow * rows : !j.ad && c > 0 ? c * opt.scale * opt.scale * rows / rH / parts : 0;
+      // (round 10a, dev.5: a band sized as it goes with no row measured yet in this frame, from its kind's cost too: with the clock
+      // running at rest in bands (the ramp), every band of the model's look was told as unpredicted, written down at once, 10 times
+      // a second)
+      const pred = j.ad && j.st && j.st.perRow > 0 ? j.st.perRow * rows : c > 0 ? c * opt.scale * opt.scale * rows / rH / parts : 0;
       // (the rows the band covers, as bandStepIn will scissor them: [y0, y1) of the volume's rH, the full width rW; drawn
       // into the lower left rW x rH of accT and shown stretched over the canvas)
       const nb = sg ? (sg.p === 3 ? 1 : j.nb) : j.n, y0 = bdN ? bdN.y0 : j.split || (j.ad && !(sg && sg.p === 3)) ? (j.y || 0) : Math.floor(rH * (j.b || 0) / nb);
@@ -6889,7 +6902,7 @@ void main(){
           // (whether its fence was sent (att), and the pieces in flight then, the oldest's age: a fence never sent, or one waited
           // behind another that did not pass)
           if (e.fence == null) rec({ k: 'nofence', w: e.what, key: e.key, gpu: Math.round(e.res * 10) / 10, age: Math.round(now - e.t), att: e.att ? 1 : 0, fl: flight.length, f0: flight.length ? Math.round(now - flight[0].t) : 0, from: e.from });
-          if (e.res >= 0) box.dispatchEvent(new CustomEvent('diskgputime', { detail: { what: e.what, key: e.key, first: e.first, gpu: Math.round(e.res * 10) / 10, fence: e.fence == null ? null : Math.round(e.fence * 10) / 10, ...(e.fence == null ? { nofence: 1 } : {}) } }));
+          if (e.res >= 0) box.dispatchEvent(new CustomEvent('diskgputime', { detail: { what: e.what, key: e.key, first: e.first, gpu: Math.round(e.res * 10) / 10, fence: e.fence == null ? null : Math.round(e.fence * 10) / 10, ...(e.fence == null ? { nofence: 1 } : {}), sc: e.sc, kicks: e.kicks, K: e.K, rows: e.rows, bp: e.bp } }));
           continue;
         }
         i++;
@@ -6969,6 +6982,10 @@ void main(){
         else if (fpsCap > 0 && !paused && !urgent && !moving && !viewMoving() && !fstats && lastDrawT && t - lastDrawT < 1000 / fpsCap - 3) { if (!capT0) capT0 = t; }
         // (round 10a: and the GPU's duty, see duty: the next frame not before the last one's work, over the duty, has passed)
         else if (duty > 0 && !urgent && !viewMoving() && !fstats && lastDrawT && t - lastDrawT < lastGpuFrame / duty - 3) { if (!capT0) capT0 = t; }
+        // (round 10a, dev.5: FULL's warm, waiting for a moment with no frame in bands, taken here, between two frames: with the
+        // frames of the view at rest in bands one after another (the ramp), its timer never found one, and FULL was not warm after
+        // 10 s in a frame as WebKit on a GPU six times slower)
+        else if (warmQueued && !fullWarm && !warmSync && !bandJob && full !== false && (warmFull(), !!warmSync)) { /* (the warm sent) */ }
         else {
           heldNow = capT0 ? t - capT0 : 0; capT0 = 0; urgent = false; lastDrawT = t;
           // (the statistics and the adaptive scale count the frames drawn)
@@ -7827,8 +7844,9 @@ void main(){
     box.diskGuard = (o = {}) => {
       const ms = finiteNumber(o.ms), c1 = finiteNumber(o.c1);
       if (isFinite(ms) && ms >= 0) gBudget = ms;
+      if (o.fixed != null) gFixed = !!o.fixed;   // (round 10a, dev.5: see guardFrame)
       if (typeof o.key === 'string' && isFinite(c1) && c1 > 0) { gKnown[o.key] = { c: [c1], t: performance.now(), ub: 0, tub: 0 }; gLast = { key: o.key, c1 }; }
-      return { ms: gBudget, factors: { ...GFAC }, cut: GCUT, floor: GUARD_FLOOR, slack: GUARD_SLACK, last: { ...gLast } };
+      return { ms: gBudget, fixed: gFixed, factors: { ...GFAC }, cut: GCUT, floor: GUARD_FLOOR, slack: GUARD_SLACK, last: { ...gLast } };
     };
     // (round 9, for checks) Where a frame's work goes: one frame of the present view drawn whole, the volume pass writing for
     // each pixel the iterations of the main march (the visible and mid-infrared looks' continuum, the model's march), those

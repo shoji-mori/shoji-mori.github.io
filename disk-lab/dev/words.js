@@ -79,7 +79,6 @@ export const WORDS = {
     hintTouch: '1 本指で移動 · 2 本指で拡大と回転',
     loading: '準備しています…',
     reduced: '動きを減らす設定のため、時計を止めています。',
-    idleRest: 'しばらく操作がないので、時計を止めて GPU を休ませています。触ると再開します。',
     linkCopied: 'リンクをコピーしました。',
     linkShown: 'リンクを表示しました。選んでコピーしてください。',
     imageBusy: '画像を作っています…',
@@ -146,7 +145,8 @@ export const WORDS = {
       fixedNote: (pct) => `固定:画面の解像度の ${pct} % で描きます(自動の調整は止まります)。`,
       capped: (pct) => `この眺めでは重すぎるため、${pct} % に下げています(描画が止まらないように)。`,
       bestNote: '最高(既定):画面の解像度で描きます。重い眺めでは、動きが止まらないよう静かに一段ずつ下げます。',
-      bestCapped: (pct) => `最高(既定):この眺めは重いため、いまは ${pct} % で描いています。`
+      bestCapped: (pct) => `最高(既定):この眺めは重いため、いまは ${pct} % で描いています。`,
+      coCapped: (pct) => `ガス輝線の見え方では、いまは ${pct} % に抑えています(この見え方の計算はまだ短く区切っていないため)。`
     },
     // (round 8, the owner: "the citation in English in Japanese too": the lead stays Japanese, the line is the English one)
     cite: {
@@ -227,7 +227,6 @@ export const WORDS = {
     hintTouch: 'One finger moves · two zoom and turn',
     loading: 'Preparing…',
     reduced: 'Reduced motion is on, so the clock is stopped.',
-    idleRest: 'Left alone for a while, the clock is paused to rest the GPU. Move or touch to resume.',
     linkCopied: 'Link copied.',
     linkShown: 'The link is shown below; select it to copy.',
     imageBusy: 'Making the image…',
@@ -290,7 +289,8 @@ export const WORDS = {
       fixedNote: (pct) => `Fixed: drawn at ${pct}% of the screen’s resolution (the automatic steps stop).`,
       capped: (pct) => `Too heavy in this view: held at ${pct}% so that drawing does not stall.`,
       bestNote: 'Best (the default): drawn at the screen\u2019s resolution, stepped down quietly where a view is too heavy to move smoothly.',
-      bestCapped: (pct) => `Best (the default): this view is heavy, so it is drawn at ${pct}% for now.`
+      bestCapped: (pct) => `Best (the default): this view is heavy, so it is drawn at ${pct}% for now.`,
+      coCapped: (pct) => `In the gas line's look the picture is held at ${pct}% for now (its passes are not yet cut into short pieces).`
     },
     cite: {
       lead: 'Free to use in research and talks; please cite this page as the source.',
