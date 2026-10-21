@@ -145,8 +145,7 @@ export const WORDS = {
       fixedNote: (pct) => `固定:画面の解像度の ${pct} % で描きます(自動の調整は止まります)。`,
       capped: (pct) => `この眺めでは重すぎるため、${pct} % に下げています(描画が止まらないように)。`,
       bestNote: '最高(既定):画面の解像度で描きます。重い眺めでは、動きが止まらないよう静かに一段ずつ下げます。',
-      bestCapped: (pct) => `最高(既定):この眺めは重いため、いまは ${pct} % で描いています。`,
-      coCapped: (pct) => `ガス輝線の見え方では、いまは ${pct} % に抑えています(この見え方の計算はまだ短く区切っていないため)。`
+      bestCapped: (pct) => `最高(既定):この眺めは重いため、いまは ${pct} % で描いています。`
     },
     // (round 8, the owner: "the citation in English in Japanese too": the lead stays Japanese, the line is the English one)
     cite: {
@@ -289,8 +288,7 @@ export const WORDS = {
       fixedNote: (pct) => `Fixed: drawn at ${pct}% of the screen’s resolution (the automatic steps stop).`,
       capped: (pct) => `Too heavy in this view: held at ${pct}% so that drawing does not stall.`,
       bestNote: 'Best (the default): drawn at the screen\u2019s resolution, stepped down quietly where a view is too heavy to move smoothly.',
-      bestCapped: (pct) => `Best (the default): this view is heavy, so it is drawn at ${pct}% for now.`,
-      coCapped: (pct) => `In the gas line's look the picture is held at ${pct}% for now (its passes are not yet cut into short pieces).`
+      bestCapped: (pct) => `Best (the default): this view is heavy, so it is drawn at ${pct}% for now.`
     },
     cite: {
       lead: 'Free to use in research and talks; please cite this page as the source.',
