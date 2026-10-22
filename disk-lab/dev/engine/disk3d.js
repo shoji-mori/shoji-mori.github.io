@@ -1305,7 +1305,12 @@ ${Array.from({ length: nb }, (_, i) => `  o${i} = vec4(o[${i}], 0.0, 0.0);`).joi
         if (uCoRec > 0 && (vv.w < sLo || vv.x > sHi)) continue;   // (the four in ascending order)
         if (any(greaterThan(Tr[q], vec4(1e-4)))) {
           coNGrp += 1.0;
+#ifdef CO_STUDY
+          vec4 dt = d0 * (uCoBin > 0.0 && vv.y > vv.x ? coBinProfile(vv, uA, uB, w, uCoBin * (vv.y - vv.x), wide, ak, ek, g2, gk, uM)
+                                                      : wide ? ak * (erfA((vv - uA) * ek) - erfA((vv - uB) * ek)) : gk * exp(-0.5 * x * x / g2));
+#else
           vec4 dt = d0 * (wide ? ak * (erfA((vv - uA) * ek) - erfA((vv - uB) * ek)) : gk * exp(-0.5 * x * x / g2));
+#endif
           vec4 e = exp(-dt), a = absorptionFraction(dt);
           // (the source linear in the optical depth across the part: the far end's share)
           vec4 fl = mix(a / max(dt, vec4(1e-9)) - e, dt * (0.5 - dt / 3.0), step(dt, vec4(1e-3)));
@@ -2203,8 +2208,20 @@ uniform vec3 uCoIt, uCtIt;
 uniform int uCoRec;       // (round 9) the gas line's march rec (see CO_MARCH_GLSL), or 0 the one before it, to compare
 // (round 9) the moments' passes (see coGrid): uCoPass 2 a pass of sums from group uCoG0 (uCoP groups: 1 or 3), 3 the
 // composite, 0 none; uCoAcc the window and the sums so far; uCoDith the grid's offset
+// (round 10a, dev.7: uCoW the frame's weight in the average of the frames' sums, 1 / (acc + 1) as a still's colours were
+// averaged: see coRun)
 uniform int uCoPass, uCoG0, uCoP;
-uniform float uCoDith;
+uniform float uCoDith, uCoW;
+// (round 10a, dev.7 study of the moments' velocity integral, dev only (box.diskCoStudy): compiled in a program of its own, FULL
+// with CO_STUDY defined, made for the study; the product's FULL is the source it was without it. uCoWinK the window's margin
+// times this (0: 1), uCoBin each velocity's opacity averaged over its channel, this many of the grid's spacings wide (0: none),
+// uCoOne the four velocities of a group all the grid's velocity of index uCoOne - 1 (0: none), uCoRayPx and uCoRayN the ray of
+// one pixel dumped (uCoPass 7))
+#ifdef CO_STUDY
+uniform float uCoWinK, uCoBin, uCoRayN, uCoWinS;   // (uCoWinS: the window's search in steps of so many geometric steps, 0: the product's quarter; 3 was the search before dev.7)
+uniform int uCoOne;
+uniform vec2 uCoRayPx;
+#endif
 uniform highp sampler2D uCoAcc;
 const float LIGHT_MAX = 1e4, CONT_EPS = 3e-5;   // (round 9: the continuum's end, see main)
 uniform int uProbe;       // (round 9) 1: the volume pass writes the march's iterations instead of light (diskRayProbe); 2: the gas line's values
@@ -2462,6 +2479,18 @@ float gapSlope(float R){ return gapT(R).y; }
 // thermal and turbulent, sigma^2 = (0.025 sqrt(T))^2 + 0.011)
 // (round 9) a ray's counts for diskRayProbe: iterations, gas samples, groups' updates (see CO_MARCH_GLSL)
 float coNIt = 0.0, coNGas = 0.0, coNGrp = 0.0;
+#ifdef CO_STUDY
+float coWMin = 1e9;   // (the study: the narrowest line width the window's search met, see uCoPass 5)
+// (the study's D: the sweep's profile averaged over a channel bw wide around each velocity vv (see uCoBin): exact, from the
+// integral of erf, G(y) = y erf(k y) + exp(-k^2 y^2) / (k sqrt(pi)), and for the narrow form from erf itself)
+vec4 coGInt(vec4 y, float k){ return y * erfA(k * y) + exp(-k * k * y * y) * (0.5641896 / k); }
+vec4 coBinProfile(vec4 vv, float uA, float uB, float w, float bw, bool wide, float ak, float ek, float g2, float gk, float uM){
+  float h = 0.5 * bw;
+  if (wide) return max(ak / bw * (coGInt(vv + h - uA, ek) - coGInt(vv - h - uA, ek) - coGInt(vv + h - uB, ek) + coGInt(vv - h - uB, ek)), vec4(0.0));
+  float sg = sqrt(g2), kk = 0.70710678 / sg;
+  return max(gk * 1.2533141 * sg / bw * (erfA((vv - uM + h) * kk) - erfA((vv - uM - h) * kk)), vec4(0.0));
+}
+#endif
 const float CO_SKIP = 6.0;   // (round 9, rec: a group of velocities this many widths outside a segment's sweep is skipped)
 vec4 coGas(vec3 p, vec3 rd){
   coNGas += 1.0;
@@ -2514,8 +2543,16 @@ vec4 coGas(vec3 p, vec3 rd){
 // through the whole ray: on the M1 Max it cost 67.6 us per gas sample at the slowest ray edge-on, against 16.5 with 4,
 // 21.7 with 8 and 23.4 with 12 (the GPU's occupancy falls with the registers it needs; the gas samples are the same).
 // The velocities of group g: the window wv cut into CO_N equal parts, at their middles (uCoDith: an offset of the grid in
-// parts, 0; round 10 may move it frame to frame, here only)
+// parts, moved frame to frame since round 10a, dev.7, so that the frames averaged take the velocities between: coDithOf in
+// the script)
+#ifdef CO_STUDY
+vec4 coGrid(vec2 wv, int g){
+  if (uCoOne > 0) return vec4(wv.x + (wv.y - wv.x) / float(4 * CO_Q) * (float(uCoOne - 1) + 0.5 + uCoDith));   // (the study: see uCoOne)
+  return wv.x + (wv.y - wv.x) / float(4 * CO_Q) * (4.0 * float(g) + vec4(0.5, 1.5, 2.5, 3.5) + uCoDith);
+}
+#else
 vec4 coGrid(vec2 wv, int g){ return wv.x + (wv.y - wv.x) / float(4 * CO_Q) * (4.0 * float(g) + vec4(0.5, 1.5, 2.5, 3.5) + uCoDith); }
+#endif
 // one group of four velocities, given (the channel map's; a group of the moments' grid where a pass takes one): resumable (round
 // 10a, dev.6, see CO_MARCHK_GLSL), and drawn whole through the same function
 ${CO_MARCHK_GLSL}
@@ -2523,13 +2560,24 @@ ${CO_MARCHK_GLSL}
 ${CO_MARCH_GLSL('coMarch3', 3, 'vec2', 'vec2 wv, int g0', 'coGrid(wv, g0 + q)',
   'float s0 = 0.0, s1 = 0.0; for (int q = 0; q < 3; q++) { s0 += dot(I[q], vec4(1.0)); s1 += dot(I[q], coGrid(wv, g0 + q)); } return vec2(s0, s1);')}
 // (the channel map's four velocities: a channel 0.25 km/s wide around v; its intensity their mean)
+// (round 10a, dev.7, dev only: the study moves them by uCoDith quarters of the channel, to measure a shift frame to frame there)
+#ifdef CO_STUDY
+vec4 coChanVel(float v){ return v + (vec4(-1.5, -0.5, 0.5, 1.5) + uCoDith) * 0.0625; }
+#else
 vec4 coChanVel(float v){ return v + vec4(-0.09375, -0.03125, 0.03125, 0.09375); }
-// (the sums kept scaled, so that they also fit half floats where full ones cannot be drawn into: CO_SUM)
+#endif
+// (the sums kept scaled, so that they also fit half floats where full ones cannot be drawn into: CO_SUM; since round 10a, dev.7,
+// times the window's width too, see coWeight: moment 0 in K km/s and that times moment 1 over 50, some thousands at most)
 const vec2 CO_SUM = vec2(1.0 / float(4 * CO_Q), 1.0 / (50.0 * float(4 * CO_Q)));
 // the velocities the moments need along a ray: those of its gas with line opacity in front of the opaque pebble sheet,
-// from a march three times as coarse, widened by 6.5 line widths (and a little for what the coarse march may miss)
+// widened by 6.5 line widths (and a little for what the search may miss)
 // (round 10a, dev.6: resumable, as the march (see CO_MARCHK_GLSL): its place t, the velocities lo, hi and the widest width w so
 // far, the step's count and the sheet; true when done. coWindowOf: the window from them)
+// (round 10a, dev.7: searched every quarter of the geometric step (the march's own first step), where it took three: next to
+// the star a ray crosses the inner disk's gas, whose velocities change fast along it, within one or two of those steps, which
+// missed it whole, and the moments lost its lines (the study, DESIGN.md section 23: moment 0 wrong by 60 % at the 99th
+// percentile of the star's view, moment 1 by 13 km/s). The opacity's test still over three geometric steps, whatever the
+// search's own step: with the finer step it would count only denser gas)
 bool coWindowK(vec3 ro, vec3 rd, vec2 b, float tCross, inout float t, inout float lo, inout float hi, inout float w, inout float iF, inout bool sheetDone, int budget){
   int i0 = int(iF);
   for (int n = 0; n < budget; n++) {
@@ -2537,11 +2585,18 @@ bool coWindowK(vec3 ro, vec3 rd, vec2 b, float tCross, inout float t, inout floa
     if (i >= 32768 || t >= b.y) { iF = float(i); return true; }
     vec3 p = ro + rd * t;
     float R = max(length(p.xy), 0.05), Hs = H0 * pow(R, 1.25), az = abs(p.z);
-    float ds = 3.0 * clamp(max(0.4 * Hs, (az > 4.5 * Hs ? 0.25 : 0.18) * az), 0.004, max(0.4, 0.05 * length(p)));
+    float geoW = clamp(max(0.4 * Hs, (az > 4.5 * Hs ? 0.25 : 0.18) * az), 0.004, max(0.4, 0.05 * length(p))), ds = 0.25 * geoW, dsTest = 3.0 * geoW;
+#ifdef CO_STUDY
+    if (uCoWinS > 0.0) ds = uCoWinS * geoW;
+#endif
     ds = min(ds, b.y - t);
     vec3 pm = ro + rd * (t + 0.5 * ds);
     vec4 g = coGas(pm, rd);
-    if (K_CO * g.x * ds > 1e-3 && length(pm.xy) > MAG_RT * 0.9) { lo = min(lo, g.z); hi = max(hi, g.z); w = max(w, g.w); }
+#ifdef CO_STUDY
+    if (K_CO * g.x * dsTest > 1e-3 && length(pm.xy) > MAG_RT * 0.9) { lo = min(lo, g.z); hi = max(hi, g.z); w = max(w, g.w); coWMin = min(coWMin, g.w); }
+#else
+    if (K_CO * g.x * dsTest > 1e-3 && length(pm.xy) > MAG_RT * 0.9) { lo = min(lo, g.z); hi = max(hi, g.z); w = max(w, g.w); }
+#endif
     if (!sheetDone && t + ds >= tCross) {
       vec3 c0 = vec3(0.0), tr0 = vec3(1.0);
       sheet(ro + rd * tCross, rd, c0, tr0);
@@ -2555,23 +2610,35 @@ bool coWindowK(vec3 ro, vec3 rd, vec2 b, float tCross, inout float t, inout floa
 }
 vec2 coWindowOf(float lo, float hi, float w){
   if (lo > hi) return vec2(0.0, -1.0);
+#ifdef CO_STUDY
+  float m = (6.5 * w + 0.1 + 0.03 * max(abs(lo), abs(hi))) * (uCoWinK > 0.0 ? uCoWinK : 1.0);
+#else
   float m = 6.5 * w + 0.1 + 0.03 * max(abs(lo), abs(hi));
+#endif
   return vec2(lo - m, hi + m);
 }
+// (round 10a, dev.7) The frames' sums averaged, as a still's colours were (the study, DESIGN.md section 23: the frames' colours
+// averaged were up to 20 times as far from the true picture as the colours of the sums averaged, seen edge-on, where the frames'
+// own errors are large and the colour map is not linear): each pass adds its sums weighted by
+// uCoW and by the window's width, so that what is kept, (sum of I, sum of I v) times the width over CO_N, is moment 0 and moment
+// 0 times moment 1 (over 50) whatever the window of each frame (a still's frames are rays at other places in the pixel, the
+// clock's other moments); the first pass of a frame takes the average so far from the target the frame before ended in,
+// weighted 1 - uCoW (none at uCoW 1, a picture's first frame: what that target holds then is not read)
+vec2 coWeight(vec2 wv){ return CO_SUM * (uCoW * (wv.y - wv.x)); }
 // a pass of the moments (uCoPass 2, from group uCoG0): the window (found by the first pass) and the sums so far, with
 // this pass's added
 // (the full tier's pass of three groups; one group a pass, the cheaper tier's, goes through coRun: see below)
 vec4 coPass(vec3 ro, vec3 rd, vec2 b, float tCross, float jitter, bool hit){
-  vec4 a = uCoG0 > 0 ? texelFetch(uCoAcc, ivec2(gl_FragCoord.xy), 0) : vec4(0.0, -1.0, 0.0, 0.0);
+  vec4 a = texelFetch(uCoAcc, ivec2(gl_FragCoord.xy), 0);
+  if (uCoG0 == 0) a = vec4(0.0, -1.0, uCoW < 1.0 ? (1.0 - uCoW) * a.zw : vec2(0.0));
   if (hit && uCoG0 == 0) { float t = b.x, lo = 1e9, hi = -1e9, w = 0.0, iF = 0.0; bool sh = tCross <= b.x || tCross >= b.y; coWindowK(ro, rd, b, tCross, t, lo, hi, w, iF, sh, 1 << 30); a.xy = coWindowOf(lo, hi, w); }
-  if (hit && a.y > a.x) a.zw += coMarch3(ro, rd, b, tCross, jitter, a.xy, uCoG0) * CO_SUM;
+  if (hit && a.y > a.x) a.zw += coMarch3(ro, rd, b, tCross, jitter, a.xy, uCoG0) * coWeight(a.xy);
   return a;
 }
-// the moments from the sums (the composite): moment 0 in K km/s, moment 1 in km/s
+// the moments from the average of the sums (the composite): moment 0 in K km/s, moment 1 in km/s (CO_SUM.x CO_N is 1)
 vec4 coMomentsOf(vec4 a){
-  if (a.y <= a.x || a.z <= 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
-  vec2 s = a.zw / CO_SUM;
-  return vec4(s.x * (a.y - a.x) / float(4 * CO_Q), s.y / s.x, 0.0, 1.0);
+  if (a.z <= 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
+  return vec4(a.z, CO_SUM.x / CO_SUM.y * a.w / a.z, 0.0, 1.0);
 }
 // the CO picture for a ray within the marched cylinder, in display values
 vec3 coPicture(vec4 q){
@@ -2785,6 +2852,11 @@ bool coRun(vec3 ro, vec3 rd, vec2 bc, float tCross, float jitter, bool hit, vec3
   bool kick = uSplit == 1, chan = uCoMode == 0;
   vec4 a = vec4(0.0, -1.0, 0.0, 0.0);
   if (!chan && uCoPass == 2 && (kick || uCoG0 > 0)) a = texelFetch(uCoAcc, ivec2(gFc), 0);
+  // (round 10a, dev.7: the average so far, see coWeight: read by the window's pass in kicks, which passes it on as it is, and
+  // by the first group's pass drawn whole; the first group's pass weights it, in kicks or drawn whole, here, so that both ways
+  // do the same arithmetic on the same values)
+  else if (!chan && uCoW < 1.0) a.zw = texelFetch(uCoAcc, ivec2(gFc), 0).zw;
+  if (!chan && uCoPass == 2 && uCoG0 == 0) a.zw *= 1.0 - uCoW;
   vec4 I0 = vec4(0.0), Tr0 = vec4(1.0);
   float t = 0.0, dsP = 1e9, kP = 0.0, sP = 0.0, uP = 0.0, wP = 0.0, iF = 0.0, lo = 1e9, hi = -1e9, w = 0.0;
   bool sheet = false;
@@ -2809,7 +2881,7 @@ bool coRun(vec3 ro, vec3 rd, vec2 bc, float tCross, float jitter, bool hit, vec3
       fragColor = vec4(t, lo, hi, w); fragS1 = vec4(0.0); fragS2 = vec4(0.0); fragS3 = vec4(iF, float(PH_CO_WIN * 2048 + (sheet ? 1 : 0)), 0.0, 0.0);
       return true;
     }
-    a = vec4(coWindowOf(lo, hi, w), 0.0, 0.0);
+    a.xy = coWindowOf(lo, hi, w);   // (the average so far kept: see above)
     outC = a;
     if (uCoPass == 4 || a.y <= a.x) return false;
     // (drawn whole: the first group's march now, from the window)
@@ -2822,13 +2894,16 @@ bool coRun(vec3 ro, vec3 rd, vec2 bc, float tCross, float jitter, bool hit, vec3
     return true;
   }
   if (chan) { coChanI = dot(I0, vec4(0.25)); outC = vec4(max(coPicture(vec4(coChanI, 0.0, 0.0, 1.0)), bgD), 1.0); }
-  else { a.zw += vec2(dot(I0, vec4(1.0)), dot(I0, vel)) * CO_SUM; outC = a; }
+  else { a.zw += vec2(dot(I0, vec4(1.0)), dot(I0, vel)) * coWeight(a.xy); outC = a; }
   return false;
 }
 #endif
 void main(){
   gFc = gl_FragCoord.xy;
 #ifdef FULL
+#ifdef CO_STUDY
+  if (uCoPass == 7) gFc = uCoRayPx;   // (the study: one pixel's ray, see uCoRayPx)
+#endif
   // (the face alone, see faceAt)
   if (uFacePass == 1) { fragColor = faceAt(gl_FragCoord.xy); return; }
   if (uFacePass == 2) {
@@ -2952,6 +3027,30 @@ void main(){
     bool hit = bc.y > bc.x && !faceOpaque;
     vec4 q = vec4(0.0, 0.0, 0.0, 1.0);
     coNIt = 0.0; coNGas = 0.0; coNGrp = 0.0;
+    // (round 10a, dev.7 study, dev only: uCoPass 5, the window's search alone, its velocities and its widest and narrowest line
+    // widths (lo, hi, w, wmin) unwidened; uCoPass 7, the gas along one pixel's ray at uCoRayN points evenly in t over the
+    // cylinder (rho, T, u, w), row 1023 the ray (b, tCross and the pebble sheet's transmission there; ro; rd))
+#ifdef CO_STUDY
+    if (uCoPass == 5) {
+      float t = bc.x, lo = 1e9, hi = -1e9, w = 0.0, iF = 0.0; bool sh = tCross <= bc.x || tCross >= bc.y;
+      coWMin = 1e9;
+      if (hit) coWindowK(ro, rd, bc, tCross, t, lo, hi, w, iF, sh, 1 << 30);
+      fragColor = vec4(lo, hi, w, coWMin);
+      return;
+    }
+    if (uCoPass == 7) {
+      ivec2 ip = ivec2(gl_FragCoord.xy);
+      if (ip.y == 1023) {
+        float st = 1.0;
+        if (tCross > bc.x && tCross < bc.y) { vec3 c0 = vec3(0.0), tr0 = vec3(1.0); sheet(ro + rd * tCross, rd, c0, tr0); st = tr0.r; }
+        fragColor = ip.x == 0 ? vec4(bc, tCross, st) : ip.x == 1 ? vec4(ro, 0.0) : vec4(rd, 0.0);
+        return;
+      }
+      float i = float(ip.x + ip.y * 1024);
+      fragColor = i < uCoRayN && bc.y > bc.x ? coGas(ro + rd * (bc.x + (i + 0.5) / uCoRayN * (bc.y - bc.x)), rd) : vec4(0.0);
+      return;
+    }
+#endif
     // (round 10a, dev.6: one group (the channel, the cheaper tier's passes, the window's pass in kicks) through coRun)
     if (uCoMode == 0 || uCoPass == 4 || (uCoPass == 2 && uCoP == 1)) {
       vec4 o;
@@ -2965,7 +3064,9 @@ void main(){
     // the warm's draw, nothing)
     if (uCoPass == 2) { vec4 a = coPass(ro, rd, bc, tCross, jitter, hit); fragColor = uProbe == 1 ? vec4(coNIt, coNGas, coNGrp, 1.0) : a; return; }
     else if (uCoPass == 3) q = coMomentsOf(texelFetch(uCoAcc, ivec2(gl_FragCoord.xy), 0));
-    fragColor = vec4(max(hit ? coPicture(q) : vec3(0.0), bgD), 1.0);
+    // (round 10a, dev.7: the composite drawn from the average, wherever it holds gas, whether this frame's ray met the cylinder or
+    // not: a still's rays at the cylinder's edge, met by some of its frames)
+    fragColor = vec4(max(hit || q.x > 0.0 ? coPicture(q) : vec3(0.0), bgD), 1.0);
     // (round 9, diskRayProbe: the counts, or the line's values themselves)
     if (uProbe == 1) fragColor = vec4(coNIt, coNGas, coNGrp, 1.0);
     if (uProbe == 2) fragColor = q;
@@ -3677,6 +3778,8 @@ void main(){
     // told ('diskfence') with the calls that waited in the script between its sending and its seeing (syncLog: every call timed
     // here, with its start and length))
     let fenceLog = box.dataset.fencelog === '1';
+    // (round 10a, dev.7 study, dev only: the settings of the frame box.diskCoStudy draws, null otherwise; see diskCoStudy)
+    let coStudy = null;
     const syncLog = [];
     const slowSync = (w, t0) => {
       const now = performance.now(), ms = now - t0;
@@ -3738,7 +3841,7 @@ void main(){
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
     const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
-      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff'];
+      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW'];
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS, 'show'), progBloom = link(BLOOM_FS, 'bloom');
     // (round 8) the bloom's targets, a quarter of accT's size (made with it): A on unit 18 (for SHOW_FS), B on unit 19
@@ -3823,6 +3926,17 @@ void main(){
     // frame (reduced motion, a snapshot) waits for it, since no later frame would replace it.
     const pcomp = gl.getExtension('KHR_parallel_shader_compile');
     let full = null, fullP = null, fullWait = false, fullRec = null;
+    // (round 10a, dev.7 study, dev only: FULL with CO_STUDY, linked when the study first asks, see diskCoStudy)
+    let fullStudy = null;
+    function studyProgram() {
+      if (fullStudy) return fullStudy;
+      const p = gl.createProgram();
+      gl.attachShader(p, compile0(gl.VERTEX_SHADER, VS)); gl.attachShader(p, compile0(gl.FRAGMENT_SHADER, FSM.replace('#version 300 es\n', '#version 300 es\n#define FULL\n#define CO_STUDY\n')));
+      gl.linkProgram(p);
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { console.error('disk3d study:', gl.getProgramInfoLog(p)); return null; }
+      fullStudy = { prog: p, U: uniforms(p, UNAMES) };
+      return fullStudy;
+    }
     const startFull = () => {
       // (round 10a: told to the recorder before it is sent; its end when the status is known, below)
       fullRec = { id: ++recId, t0: performance.now() };
@@ -3831,6 +3945,11 @@ void main(){
       gl.attachShader(p, compile0(gl.VERTEX_SHADER, VS)); gl.attachShader(p, compile0(gl.FRAGMENT_SHADER, FSM.replace('#version 300 es\n', '#version 300 es\n#define FULL\n')));
       gl.linkProgram(p); fullP = p;
     };
+    // (its samplers' units, as FULL's: see fullProgram)
+    function fullUnits(P) {
+      gl.useProgram(P.prog); gl.uniform1i(gl.getUniformLocation(P.prog, 'uFaceA'), 12); gl.uniform1i(P.U.uDiskMap, 0); gl.uniform1i(P.U.uGapT, 14); gl.uniform1i(P.U.uThermo, 15); gl.uniform1i(P.U.uWindMap, 1); gl.uniform1i(P.U.uEnvMap, 3); gl.uniform1i(P.U.uTurb3, 4); gl.uniform1i(P.U.uEnv3, 7); gl.uniform1i(P.U.uWStr, 8); gl.uniform1i(P.U.uAccMap, 9); gl.uniform1i(P.U.uWindVel, 10);
+      gl.uniform1i(P.U.uSky, 16); gl.uniform1i(gl.getUniformLocation(P.prog, 'uCoAcc'), CO_UNIT); gl.uniform1i(gl.getUniformLocation(P.prog, 'uState'), SPLIT.UNIT);
+    }
     function fullProgram() {
       if (full !== null) return full;
       if (!fullP) startFull();
@@ -5877,7 +5996,7 @@ void main(){
     // (round 10a, dev.6: and the gas line's, in the cheaper tier (one group a pass: see coRun; the full tier's passes of three groups
     // would need 24 numbers of state, and its slowest whole rays, 63 to 81 ms on the M1 Max, are within a desktop's budget in
     // bands). coKicks: the gas line's frames now in kicks)
-    const coKicks = () => lookNow === 'co' && MARCH[rayBound ? march : 'full'].coP === 1;
+    const coKicks = () => lookNow === 'co' && marchNow().coP === 1;
     const splitLook = () => lookNow === 'optical' || lookNow === 'mir' || coKicks();
     const splitWants = (F) => splitOn && !!F && !fullFrame && !reduce && !probing && splitLook() && !splitBroken[frameKeyOf(F)] && !!stateFor();
     const needOf = (key) => { const r = kickNeed[key]; return r && r.length ? Math.max(...r) : SPLIT.N0; };
@@ -6001,9 +6120,7 @@ void main(){
             gl.bindFramebuffer(gl.FRAMEBUFFER, tg.fb); gl.viewport(0, 0, rW, rH);
             gl.uniform1i(j.U.uCoPass, 3); gl.uniform1i(j.U.uCoG0, 0); gl.uniform1i(j.U.uProbe, 0);
             gl.activeTexture(gl.TEXTURE0 + CO_UNIT); gl.bindTexture(gl.TEXTURE_2D, coAccT[nx.in].tex); gl.activeTexture(gl.TEXTURE2);
-            if (j.acc) { gl.enable(gl.BLEND); gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA); gl.blendColor(0, 0, 0, 1 / (j.acc + 1)); }
-            gl.drawArrays(gl.TRIANGLES, 0, 3);
-            gl.disable(gl.BLEND);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);   // (round 10a, dev.7: not blended, drawn from the average of the frames' sums: see coWeight)
             j.sentStage = j.si; j.pieces = (j.pieces || 0) + 1; j.n = j.bands;
             bandJob = null;
             gl.flush();
@@ -6299,11 +6416,17 @@ void main(){
       gl.viewport(0, 0, rW, rH);
       gl.useProgram(F ? F.prog : prog);
       gl.uniform1i(U.uBg, BG.MODES[opt.bg]);
-      gl.uniform1i(U.uRayB, rayBound ? 1 : 0);   // (round 9: see CO_IT, CT_IT)
+      gl.uniform1i(U.uRayB, coStudy && coStudy.rayB != null ? coStudy.rayB : rayBound ? 1 : 0);   // (round 9: see CO_IT, CT_IT)
       gl.uniform1i(U.uCtMax, ctMax);   // (round 10a: see box.diskCtMax)
       gl.uniform1i(U.uProbe, probing);
-      { const m = rayBound ? MARCH[march] : MARCH.full; gl.uniform4f(U.uMarch, m.sub, m.coStep, m.coRef, m.coThr); gl.uniform1i(U.uCoRec, m.coRec); gl.uniform1i(U.uCoP, m.coP); gl.uniform3fv(U.uCoIt, m.coIt); gl.uniform3fv(U.uCtIt, m.ctIt); }
-      gl.uniform1i(U.uCoPass, 0); gl.uniform1f(U.uCoDith, 0);
+      { const m = marchNow(); gl.uniform4f(U.uMarch, m.sub, m.coStep, m.coRef, m.coThr); gl.uniform1i(U.uCoRec, m.coRec); gl.uniform1i(U.uCoP, m.coP); gl.uniform3fv(U.uCoIt, m.coIt); gl.uniform3fv(U.uCtIt, m.ctIt); }
+      // (round 10a, dev.7: the moments' grid's offset for this frame, and the frame's weight in the average of the frames' sums, as a
+      // still's colours were weighted: see coDithOf, coWeight)
+      coDithLast = coStudy ? coStudy.dith || 0 : coDithOf(acc, clockOnly || !!coSim);
+      gl.uniform1i(U.uCoPass, 0); gl.uniform1f(U.uCoDith, coDithLast); gl.uniform1f(U.uCoW, 1 / (acc + 1));
+      // (round 10a, dev.7 study: its uniforms, 0 otherwise, see uCoWinK)
+      gl.uniform1f(U.uCoWinK, coStudy ? coStudy.winK || 0 : 0); gl.uniform1f(U.uCoBin, coStudy ? coStudy.bin || 0 : 0); gl.uniform1f(U.uCoWinS, coStudy ? coStudy.winS || 0 : 0);
+      gl.uniform1i(U.uCoOne, coStudy && coStudy.one != null ? coStudy.one + 1 : 0);
       gl.uniform1i(U.uNP, plNP); gl.uniform4fv(U.uPl, plData); gl.uniform2fv(U.uGapR, gapR);
       gl.uniform4fv(U.uPlTrap, plTrapD);
       gl.uniform4fv(U.uPlGap, plGapD);
@@ -6369,7 +6492,7 @@ void main(){
       gl.uniform1f(U.uEnv, envVis);
       // frame acc of a still picture: R2 and golden-ratio sequences (none for the first), weighted 1/(acc + 1); the
       // sequence runs on through the averaged frames while the clock moves (jitN)
-      const jn = acc || probeJit ? ++jitN : 0;   // (round 10a: diskRayProbe({ jitter }) draws with the next offset)
+      const jn = (acc || probeJit) && !jitOff ? ++jitN : 0;   // (round 10a: diskRayProbe({ jitter }) draws with the next offset; jitOff, see diskCoFrames)
       gl.uniform3f(U.uJit, jn ? (jn * 0.7548777) % 1 - 0.5 : 0, jn ? (jn * 0.5698403) % 1 - 0.5 : 0, (jn * 0.618034) % 1);
       // the cut face at the screen's resolution (the same program and uniforms, see faceAt), drawn again when the picture
       // starts over (it does not depend on a still's jitter), before the volume (which leaves out what lies behind it
@@ -6458,8 +6581,12 @@ void main(){
         coAccOf();
         const P = CO_Q / nPass;
         // (round 10a, dev.6: in kicks, the window found by a pass of its own (uCoPass 4) first, its sums zero; then a pass a group)
-        if (job.split) job.stages = [{ p: 4, out: 0 }].concat(Array.from({ length: nPass }, (_, k) => ({ p: 2, g0: k * P, out: (k + 1) % 2 }))).concat([{ p: 3, in: nPass % 2 }]);
-        else job.stages = Array.from({ length: nPass }, (_, k) => ({ p: 2, g0: k * P, out: k % 2 })).concat([{ p: 3, in: (nPass - 1) % 2 }]);
+        // (round 10a, dev.7: the first pass reads the target the frame before ended in, coCur, which holds the average so far (see
+        // coWeight); the passes then draw into the two targets in turn, and the frame ends in coOut)
+        const o = (i) => (1 - coCur + i) % 2;
+        if (job.split) job.stages = [{ p: 4, out: o(0) }].concat(Array.from({ length: nPass }, (_, k) => ({ p: 2, g0: k * P, out: o(k + 1) }))).concat([{ p: 3, in: o(nPass) }]);
+        else job.stages = Array.from({ length: nPass }, (_, k) => ({ p: 2, g0: k * P, out: o(k) })).concat([{ p: 3, in: o(nPass - 1) }]);
+        job.coOut = job.stages[job.stages.length - 1].in;
         if (job.split) job.kk = job.key + ':w';
         job.si = 0; job.nb = Math.max(1, Math.ceil(job.n / nPass)); job.n = nPass * job.nb + 1; job.probeAt = coProbeAt;
       }
@@ -6493,6 +6620,7 @@ void main(){
       bandJob = lastJob = job;
       job.finish = () => {
       accN = acc + 1;
+      if (job.stages) coCur = job.coOut;   // (round 10a, dev.7: the average so far, for the next frame's first pass)
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       // (round 8) the finish (see BLOOM): the glow of the bright parts and the tone curve, by the quality of the moment; in
       // the model's look only (the observed looks keep the stretch they are compared by: DESIGN.md, section 21)
@@ -6785,7 +6913,7 @@ void main(){
       if (j.split) return splitStep(j);   // (round 10a: see SPLIT)
       // (round 9: a frame of the moments in passes, see coGrid: the stage now, its target, its uniforms; a group pass reads
       // the other float target, never the one it draws into)
-      const sg = j.stages ? j.stages[j.si] : null, last = !sg || sg.p === 3;
+      const sg = j.stages ? j.stages[j.si] : null;
       const tg = sg && sg.p === 2 ? coAccT[sg.out] : probing === 2 && probeT ? probeT : testT || accT;   // (testT: diskSplitTest)
       gl.bindFramebuffer(gl.FRAMEBUFFER, tg.fb); gl.viewport(0, 0, rW, rH); gl.useProgram(j.prog);
       if (sg) {
@@ -6793,7 +6921,9 @@ void main(){
         gl.uniform1i(j.U.uProbe, probing === 1 && sg.p === 2 ? (j.probeAt === j.si ? 1 : 0) : probing);
         gl.activeTexture(gl.TEXTURE0 + CO_UNIT); gl.bindTexture(gl.TEXTURE_2D, coAccT[sg.p === 2 ? 1 - sg.out : sg.in].tex); gl.activeTexture(gl.TEXTURE2);
       }
-      if (j.acc && last) { gl.enable(gl.BLEND); gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA); gl.blendColor(0, 0, 0, 1 / (j.acc + 1)); }
+      // (round 10a, dev.7: the moments' composite drawn over the picture before, not blended: it is drawn from the average of the
+      // frames' sums, see coWeight)
+      if (j.acc && !sg) { gl.enable(gl.BLEND); gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA); gl.blendColor(0, 0, 0, 1 / (j.acc + 1)); }
       const nb = sg ? (sg.p === 3 ? 1 : j.nb) : j.n;
       if (j.ad && !(sg && sg.p === 3)) {
         const y1 = Math.min(rH, j.y + Math.max(1, j.rows));
@@ -6825,6 +6955,21 @@ void main(){
     const CO_UNIT = 17, CO_FMT = fbFloat ? gl.RGBA32F : gl.RGBA16F;
     const coAccT = [null, null];
     let coProbeAt = -1;   // (diskRayProbe: the pass whose counts are written; the frame ends there)
+    // (round 10a, dev.7) The frames' sums averaged in these targets (see coWeight): coCur the one the last frame ended in, read by
+    // the next frame's first pass. And the grid of velocities shifted frame to frame (uCoDith, in its spacings, see coGrid), so that
+    // the frames averaged take the velocities between the 24 (the study, DESIGN.md section 23): a still's 16 frames 1/16 of a
+    // spacing apart, 384 velocities when it is done (with the window's finer search, moment 0 within 1.1 % at the 99th percentile
+    // of the study's views, moment 1 within 0.075 km/s; dev.6's frame, 60 % and 13 km/s next to the star); while only the clock
+    // moves, 8 offsets in turn, which its average of the last frames takes (ema, see drawOnce); a frame alone, a moving view's,
+    // none. In an order that spreads them (CO_SPREAD: each first 2, 4, 8 of them evenly spread), so that a still stopped early or
+    // the clock's average of a few frames has its velocities spread too. (coSim, jitOff: dev only, for checks, see diskCoFrames)
+    let coCur = 1, coCyc = 0, coSim = null, jitOff = false, coDithLast = 0;
+    const CO_SPREAD = [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15];
+    const coDithOf = (acc, clock) => {
+      if (!acc) return 0;
+      const k = clock ? CO_SPREAD[coCyc++ % 8] : CO_SPREAD[acc % 16];
+      return k / 16 - (k >= 8 ? 1 : 0);
+    };
     function coAccOf() {
       for (let i = 0; i < 2; i++) {
         const t = coAccT[i];
@@ -7144,7 +7289,9 @@ void main(){
       cheap: { sub: 4, coStep: 0.5, coRef: 5, coThr: 0.12, coRec: 1, coP: 1, coIt: CO_IT, ctIt: [512, 128, 1024] },
       r9: { sub: 16, coStep: 0.25, coRef: 4, coThr: 0.04, coRec: 0, coP: 3, coIt: [512, 1024, 256], ctIt: [CT_IT[0], CT_IT[1], CT_IT[2]] } };
     // the moments' passes of a frame now: the group passes, then the composite (0 where the look is not the moments)
-    const coPassesNow = () => (lookNow === 'co' && opt.coMode !== 'chan' && full ? CO_Q / MARCH[rayBound ? march : 'full'].coP : 0);
+    const coPassesNow = () => (lookNow === 'co' && opt.coMode !== 'chan' && full ? (coStudy && coStudy.groups) || CO_Q / marchNow().coP : 0);
+    // (the march's tier now; round 10a, dev.7 study: or the study's)
+    function marchNow() { return (coStudy && coStudy.march) || (rayBound ? MARCH[march] : MARCH.full); }
     // (one animation chain: the queued callback is owned, so that stop and start cannot leave a second one; from dc55d44)
     let frameRequest = null;
     const scheduleFrame = () => { if (frameRequest === null && running && !lost) frameRequest = requestAnimationFrame(frame); };
@@ -8121,7 +8268,7 @@ void main(){
           const per = [], tot = new Float32Array(rW * rH * 4);
           for (let k = 0; k < nPass; k++) {
             await probeFrame(1, k); if (lost) return null;
-            const px = readF(coAccT[k % 2]);
+            const sg = lastJob && lastJob.stages ? lastJob.stages[k] : null, px = readF(coAccT[sg ? sg.out : k % 2]);
             for (let i = 0; i < px.length; i++) tot[i] += px[i];
             per.push(coCounts(px).most);
           }
@@ -8261,25 +8408,150 @@ void main(){
         // (o.maxMs: the test's time; its frame left at the end of it, and { timedOut } returned)
         const mT = finiteNumber(o.maxMs);
         if (isFinite(mT) && mT > 0) testTm = setTimeout(() => { testLate = true; if (bandJob) cancelJob(); }, mT);
-        const run = async (on) => { splitOn = on && fbFloat; [aeLn, aeGoal, coLn, coGoal] = e0; accN = 0; fadeT = 0; const ms = await scriptFrame('splittest', {}); return { ms, px: lost ? null : readF(testT), split: lastJob ? !!lastJob.split : false, kicks: lastJob ? lastJob.kicks || 0 : 0, bands: lastJob ? lastJob.n : 0, K: lastJob ? lastJob.K : 0, cancelled: !!(lastJob && lastJob.cancelled) }; };
+        // (round 10a, dev.7: o.frames, a still's first frames each way, the gas line's moments averaged over them (see coWeight): the
+        // last frame's picture compared, and the average of the sums, coCur)
+        // (each way from the same sub-pixel offsets of the still's sequence, jitN)
+        const nF = Math.max(1, Math.min(16, Math.round(finiteNumber(o.frames) || 1))), jit0 = jitN;
+        const run = async (on) => {
+          splitOn = on && fbFloat; jitN = jit0; let ms = 0, cancelled = false, split = true;
+          for (let f = 0; f < nF && !testLate; f++) {
+            [aeLn, aeGoal, coLn, coGoal] = e0; accN = f; fadeT = 0; ms += await scriptFrame('splittest', {});
+            cancelled = cancelled || !!(lastJob && lastJob.cancelled); split = split && !!(lastJob && lastJob.split) === on;
+          }
+          const co = lastJob && lastJob.stages && !lost;
+          return { ms, px: lost ? null : readF(testT), sums: co ? readF(coAccT[coCur]) : null, split: lastJob ? !!lastJob.split : false, allSplit: split, kicks: lastJob ? lastJob.kicks || 0 : 0, bands: lastJob ? lastJob.n : 0, K: lastJob ? lastJob.K : 0, cancelled };
+        };
         const a = await run(false); if (testLate) return { timedOut: true, at: 'whole' };
         const b = await run(true); if (testLate) return { timedOut: true, at: 'kicks', kicks: b.kicks, bands: b.bands };
         if (!a.px || !b.px) return null;
         // (the volume's size changed under the test (a scale set by the page or the guard), or a frame left: nothing to compare)
         if (rW !== w0 || rH !== h0 || a.cancelled || b.cancelled) return { changed: true, size: [w0, h0, rW, rH] };
-        let same = 0, mx = 0, sum = 0, nd = 0, nan = 0, at = -1;
-        for (let i = 0; i < a.px.length; i++) {
-          const x = a.px[i], y = b.px[i];
-          if (Object.is(x, y)) { same++; continue; }
-          if (!isFinite(x) || !isFinite(y)) { nan++; continue; }
-          const d = Math.abs(x - y); nd++; sum += d; if (d > mx) { mx = d; at = i >> 2; }
-        }
-        return { size: [rW, rH], key: kindNow(), scale: opt.scale, whole: { ms: Math.round(a.ms), split: a.split }, kicks: { ms: Math.round(b.ms), split: b.split, kicks: b.kicks, bands: b.bands, k: b.K },
-          n: a.px.length, same, differ: nd, nonFinite: nan, max: mx, mean: nd ? sum / nd : 0, at: at >= 0 ? [at % rW, Math.floor(at / rW)] : null };
+        const cmp = (pa, pb) => {
+          let same = 0, mx = 0, sum = 0, nd = 0, nan = 0, at = -1;
+          for (let i = 0; i < pa.length; i++) {
+            const x = pa[i], y = pb[i];
+            if (Object.is(x, y)) { same++; continue; }
+            if (!isFinite(x) || !isFinite(y)) { nan++; continue; }
+            const d = Math.abs(x - y); nd++; sum += d; if (d > mx) { mx = d; at = i >> 2; }
+          }
+          return { n: pa.length, same, differ: nd, nonFinite: nan, max: mx, mean: nd ? sum / nd : 0, at: at >= 0 ? [at % rW, Math.floor(at / rW)] : null };
+        };
+        return { size: [rW, rH], key: kindNow(), scale: opt.scale, frames: nF, whole: { ms: Math.round(a.ms), split: a.split, all: a.allSplit }, kicks: { ms: Math.round(b.ms), split: b.split, all: b.allSplit, kicks: b.kicks, bands: b.bands, k: b.K },
+          ...cmp(a.px, b.px), sums: a.sums && b.sums ? cmp(a.sums, b.sums) : null };
       } finally {
         splitOn = was; [aeLn, aeGoal, coLn, coGoal] = e0; testRows = 0; clearTimeout(testTm); testTm = 0; testLate = false;
         if (kickK !== k0 || kickAdapt !== a0) { kickK = k0; kickAdapt = a0; kickResetAll(); }
         if (testT) { gl.deleteFramebuffer(testT.fb); gl.deleteTexture(testT.tex); testT = null; }
+        stepping--; accN = 0; dirty = true;
+      }
+    };
+    // (round 10a, dev.7 study, dev only) The moments' velocity integral measured (ver2/docs, the study's note): diskCoStudy(cfg)
+    // draws one frame of the gas line's moments as frames are drawn (in kicks where the march takes one group a pass; a script's
+    // frame, each piece waited for), with the study's settings: dith, the grid's offset in its spacings; winK, the window's margin
+    // times this; bin (see uCoBin); one, a velocity's index for a frame of that velocity alone (one group pass); groups, the group
+    // passes; march, a tier's settings ({ sub, coStep, coRef, coThr, coRec, coP, coIt, ctIt }); rayB, the long rays' bounds (0 or
+    // 1). The exposure and the line's range held as they were. Returns the sums after the last group pass (lo, hi, sum of I and of
+    // I v, scaled by CO_SUM: see coMomentsOf), the composite's colours (display values) and the frame's time. A view's first call
+    // draws a frame; then cfg.info: the window's search alone (lo, hi, w, wmin, unwidened); cfg.ray [px, py]: the gas along that
+    // pixel's ray at 1024 x 1023 points evenly over the cylinder, and the ray (see uCoPass 7); cfg.compose: sums given turned into
+    // the composite's colours. (dev.7: in the channel map, a frame drawn whole, its channel's intensity in K returned (chan), the
+    // channel's four velocities moved by dith quarters of the channel: see coChanVel)
+    let coStudyKey = '';
+    box.diskCoStudy = async (cfg = {}) => {
+      if (lost || !fbFloat) return null;
+      await gpuDone(); stepping++;
+      const e0 = [aeLn, aeGoal, coLn, coGoal], full0 = full, var0 = [...variants], split0 = splitOn, chan = opt.coMode === 'chan';
+      let rayT = null;
+      try {
+        await warmNow(); if (lost) return null;
+        if (lookNow !== 'co' || !full || (chan && (cfg.info || cfg.ray || cfg.compose))) return { error: 'not the moments' };
+        // (the study's program in FULL's place for this call: see CO_STUDY. Its first frame is a first use, as FULL's was: its
+        // pipelines made then, that frame's pieces told as first)
+        const F = studyProgram();
+        if (!F) return { error: 'the study program did not link' };
+        if (!F.used) { fullUnits(F); F.used = true; for (const v of ['F', 'Fb', 'Fs', 'Fc', 'F8']) variants.delete(v); }
+        full = F;
+        testT = target(rW, rH, gl.RGBA32F, gl.CLAMP_TO_EDGE, gl.NEAREST);
+        const size = [rW, rH];
+        const pass = (fb, w, h, set) => {
+          gl.useProgram(F.prog); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.viewport(0, 0, w, h); gl.disable(gl.BLEND);
+          gl.uniform1i(F.U.uSplit, 0); gl.uniform1f(F.U.uRowOff, 0); gl.uniform1i(F.U.uProbe, 0); set();
+          gl.drawArrays(gl.TRIANGLES, 0, 3); gl.uniform1i(F.U.uCoPass, 0);
+        };
+        if (cfg.info) { pass(testT.fb, rW, rH, () => { gl.uniform1i(F.U.uCoPass, 5); gl.uniform1f(F.U.uCoWinS, cfg.winS || 0); }); return { size, info: readF(testT) }; }
+        if (cfg.ray) {
+          rayT = target(1024, 1024, gl.RGBA32F, gl.CLAMP_TO_EDGE, gl.NEAREST);
+          pass(rayT.fb, 1024, 1024, () => { gl.uniform1i(F.U.uCoPass, 7); gl.uniform2f(F.U.uCoRayPx, cfg.ray[0] + 0.5, cfg.ray[1] + 0.5); gl.uniform1f(F.U.uCoRayN, 1024 * 1023); });
+          const px = new Float32Array(1024 * 1024 * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, rayT.fb); gl.readPixels(0, 0, 1024, 1024, gl.RGBA, gl.FLOAT, px); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          return { size, n: 1024 * 1023, ray: px };
+        }
+        if (cfg.compose) {
+          coAccOf();
+          gl.activeTexture(gl.TEXTURE0 + CO_UNIT); gl.bindTexture(gl.TEXTURE_2D, coAccT[0].tex);
+          gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, rW, rH, gl.RGBA, gl.FLOAT, coSumsW(cfg.compose, 1));
+          gl.activeTexture(gl.TEXTURE2);
+          pass(testT.fb, rW, rH, () => { gl.uniform1i(F.U.uCoPass, 3); gl.uniform1i(F.U.uCoG0, 0); gl.activeTexture(gl.TEXTURE0 + CO_UNIT); gl.bindTexture(gl.TEXTURE_2D, coAccT[0].tex); gl.activeTexture(gl.TEXTURE2); });
+          return { size, colour: readF(testT) };
+        }
+        const key = JSON.stringify([cfg.march || null, cfg.rayB, cfg.groups || 0, cfg.bin || 0]);
+        if (key !== coStudyKey) { kickResetAll(); coStudyKey = key; }
+        coStudy = { ...cfg }; [aeLn, aeGoal, coLn, coGoal] = e0; accN = 0; fadeT = 0;
+        if (chan) { splitOn = false; probing = 2; }
+        const ms = await scriptFrame('costudy', {});
+        const j = lastJob;
+        if (!j || j.cancelled || rW !== size[0] || rH !== size[1]) return { changed: true };
+        if (chan) { const px = readF(probeT || testT), I = new Float32Array(rW * rH); for (let i = 0; i < I.length; i++) I[i] = px[4 * i]; return { size, ms: Math.round(ms), split: !!j.split, chan: I }; }
+        // (round 10a, dev.7: the sums as the study took them, without the window's width, see coWeight; the frame alone, uCoW 1)
+        return { size, ms: Math.round(ms), split: !!j.split, kicks: j.kicks || 0, pieces: j.pieces || 0, sums: j.stages ? coSumsW(readF(coAccT[j.coOut]), -1) : null, colour: readF(testT) };
+      } finally {
+        coStudy = null; [aeLn, aeGoal, coLn, coGoal] = e0; full = full0; for (const v of var0) variants.add(v);
+        if (chan) { splitOn = split0; probing = 0; }
+        if (testT) { gl.deleteFramebuffer(testT.fb); gl.deleteTexture(testT.tex); testT = null; }
+        if (rayT) { gl.deleteFramebuffer(rayT.fb); gl.deleteTexture(rayT.tex); }
+        stepping--; accN = 0; dirty = true;
+      }
+    };
+    // (the study's end: the guard's measures and the kicks' dropped, measured with the study's march)
+    box.diskCoStudyEnd = () => { coStudyKey = ''; kickResetAll(); for (const k in gKnown) delete gKnown[k]; dirty = true; };
+    // (round 10a, dev.7, for checks and the study) the moments' sums with their window's width put in (k 1) or taken out (k -1), see
+    // coWeight: (lo, hi, sum of I, sum of I v, scaled by CO_SUM) as the study took them, without it
+    function coSumsW(px, k) {
+      const out = new Float32Array(px);
+      for (let i = 0; i < out.length; i += 4) {
+        const w = out[i + 1] - out[i];
+        if (!(w > 0)) continue;
+        if (k > 0) { out[i + 2] *= w; out[i + 3] *= w; } else { out[i + 2] /= w; out[i + 3] /= w; }
+      }
+      return out;
+    }
+    // (round 10a, dev.7, for checks) Frames of the moments drawn by a script (each piece waited for) as the page draws a still's or
+    // the clock's: o.n frames, from a picture's first; o.ema, the clock's average of so many frames (see drawOnce), with the clock
+    // held (its offsets in turn, see coDithOf); o.dt, the clock moved by so much (times clockK, as the animation frames move it)
+    // before each frame, the engine's own average then; o.jit false, the rays through the pixels' centres (no still's sub-pixel
+    // offsets, as the study's reference); o.keep, the frames after which the average of the sums is read (coCur: moment 0 and
+    // moment 0 times moment 1 over 50, see coWeight). The exposure and the line's range held; the clock set back after.
+    box.diskCoFrames = async (o = {}) => {
+      if (lost || !fbFloat) return null;
+      await gpuDone(); stepping++;
+      const e0 = [aeLn, aeGoal, coLn, coGoal], t0 = time, n = Math.max(1, Math.min(256, Math.round(finiteNumber(o.n) || 1)));
+      const ema = Math.max(0, Math.round(finiteNumber(o.ema) || 0)), dt = finiteNumber(o.dt) || 0, keep = new Set(o.keep || [n - 1]);
+      try {
+        await warmNow(); if (lost) return null;
+        if (lookNow !== 'co' || opt.coMode === 'chan' || !full) return { error: 'not the moments' };
+        jitOff = o.jit === false; coSim = ema && !dt ? { ema } : null; accN = 0;
+        const w0 = rW, h0 = rH, out = { size: [rW, rH], frames: [], sums: {} };
+        for (let i = 0; i < n; i++) {
+          if (dt) { time += dt * clockK(); update(); } else accN = ema ? Math.min(i, ema) : i;
+          [aeLn, aeGoal, coLn, coGoal] = e0; fadeT = 0;
+          const ms = await scriptFrame('coframes', {}), j = lastJob;
+          if (lost || !j || j.cancelled || rW !== w0 || rH !== h0) return { changed: true, at: i };
+          out.frames.push({ ms: Math.round(ms), acc: j.acc, dith: coDithLast, split: !!j.split, time });
+          if (keep.has(i)) out.sums[i] = readF(coAccT[coCur]);
+        }
+        return out;
+      } finally {
+        jitOff = false; coSim = null; [aeLn, aeGoal, coLn, coGoal] = e0;
+        if (time !== t0) { time = t0; update(); }
         stepping--; accN = 0; dirty = true;
       }
     };
