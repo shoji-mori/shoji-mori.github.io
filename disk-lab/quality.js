@@ -30,23 +30,29 @@ function rendererOf(gl) {
 // { ok, reason: null | 'nogl' | 'software', renderer, timer }
 // (round 9: timer, whether the GPU's timer queries are offered: Chrome on a desktop has them, Safari does not; the page guards
 // more closely where they are missing, as on every phone, DESIGN.md section 22)
+// (round 10a: and, for the page's flight record, what the probe found: ctx 'ok', 'null' (no context given), 'lost' (given lost,
+// as when the browser's WebGL has stopped), 'nofloat' (no float targets); webgl1, whether WebGL 1 is given instead; err, an
+// exception's text)
 export function probe() {
   let gl = null, renderer = '';
+  const more = (o) => { try { if (o.ctx === 'null') { const c = document.createElement('canvas').getContext('webgl'); o.webgl1 = c ? 1 : 0; lose(c); } } catch { /* none */ } return o; };
   try {
     gl = document.createElement('canvas').getContext('webgl2', { failIfMajorPerformanceCaveat: true });
     if (!gl) {
       const any = document.createElement('canvas').getContext('webgl2');
-      if (!any) return { ok: false, reason: 'nogl', renderer };
+      if (!any) return more({ ok: false, reason: 'nogl', renderer, ctx: 'null' });
+      if (any.isContextLost()) { lose(any); return { ok: false, reason: 'nogl', renderer, ctx: 'lost' }; }
       renderer = rendererOf(any); lose(any);
-      return { ok: false, reason: 'software', renderer, caveat: true };
+      return { ok: false, reason: 'software', renderer, caveat: true, ctx: 'ok' };
     }
+    if (gl.isContextLost()) return { ok: false, reason: 'nogl', renderer, ctx: 'lost' };
     renderer = rendererOf(gl);
-    if (SOFTWARE.test(renderer)) return { ok: false, reason: 'software', renderer };
+    if (SOFTWARE.test(renderer)) return { ok: false, reason: 'software', renderer, ctx: 'ok' };
     // (the engine draws its lookup maps into float targets)
-    if (!gl.getExtension('EXT_color_buffer_float') && !gl.getExtension('EXT_color_buffer_half_float')) return { ok: false, reason: 'nogl', renderer };
-    return { ok: true, reason: null, renderer, timer: !!gl.getExtension('EXT_disjoint_timer_query_webgl2') };
-  } catch {
-    return { ok: false, reason: 'nogl', renderer };
+    if (!gl.getExtension('EXT_color_buffer_float') && !gl.getExtension('EXT_color_buffer_half_float')) return { ok: false, reason: 'nogl', renderer, ctx: 'nofloat', exts: (gl.getSupportedExtensions() || []).length };
+    return { ok: true, reason: null, renderer, timer: !!gl.getExtension('EXT_disjoint_timer_query_webgl2'), ctx: 'ok' };
+  } catch (e) {
+    return { ok: false, reason: 'nogl', renderer, ctx: 'error', err: String((e && e.message) || e).slice(0, 160) };
   } finally { lose(gl); }
 }
 

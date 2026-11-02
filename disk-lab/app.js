@@ -4,14 +4,23 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261017j';
-import { WORDS } from './words.js?v=20261020a';
+import { WORDS } from './words.js?v=20261020r10a';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261019b';
 import { snapshot, toPng } from './capture.js?v=20261016b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=e8d921e1c9';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=f9de6d9725';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
-const VERSION = '1.7', RELEASED = '2026-10-20';
+// (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
+// N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
+// the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
+const VERSION = '1.8', RELEASED = '2026-11-02';
+const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
+// (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
+// development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
+// settings never reach the public page on the same origin, nor the public page's its own
+const STORE = (document.querySelector('meta[name="disk-lab-store"]') || {}).content || '';
+const KEY = (k) => STORE + k;
 // The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
 // moves from its hidden address to its public one.
 const CITE_URL = 'https://shoji-mori.github.io/disk-lab/', CITE_YEAR = 2026;
@@ -55,17 +64,65 @@ let gov = null;
 let burstUntil = 0;
 const diag = { version: VERSION, engine: ENGINE_SRC, reduce, probe: null, calibration: null, timings: {} };
 const t0 = performance.now();
+// (round 10a, for checks) ?caps=webkit: the extensions that Safari on iOS lacks taken away from every WebGL2 context of the
+// page (getExtension gives null, getSupportedExtensions leaves them out), so that a desktop's Chrome draws as WebKit would
+// choose to: no GPU timer queries (the page then guards as on a phone, and measures by fences only), no parallel link
+// (FULL linked while the page waits). Joined with '+': lin, no OES_texture_float_linear; blend, no EXT_float_blend; half,
+// no EXT_color_buffer_float (half-float targets only). Set before the probe and the engine see a context.
+const CAPS = q.get('caps') || '';
+if (/webkit/.test(CAPS) && typeof WebGL2RenderingContext !== 'undefined') {
+  const drop = new Set(['EXT_disjoint_timer_query_webgl2', 'KHR_parallel_shader_compile']);
+  if (/lin/.test(CAPS)) drop.add('OES_texture_float_linear');
+  if (/blend/.test(CAPS)) drop.add('EXT_float_blend');
+  if (/half/.test(CAPS)) drop.add('EXT_color_buffer_float');
+  const P = WebGL2RenderingContext.prototype, getExt = P.getExtension, getAll = P.getSupportedExtensions;
+  P.getExtension = function (n) { return drop.has(n) ? null : getExt.call(this, n); };
+  P.getSupportedExtensions = function () { return (getAll.call(this) || []).filter((n) => !drop.has(n)); };
+}
+// (round 10a, for checks) ?caps=nogl: no WebGL2 context at all, as in a browser whose WebGL has stopped
+if (/nogl/.test(CAPS) && typeof HTMLCanvasElement !== 'undefined') {
+  const getCtx = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (t, a) { return t === 'webgl2' ? null : getCtx.call(this, t, a); };
+}
+// (round 10a) The GL objects this page's contexts make and free, by kind, and the bytes of textures and buffers allocated:
+// for the flight record, to see whether anything accumulates over a visit (the owner's iPhone lost its GPU some 20 s into
+// the visible look). Counted where they are made, in the page; no GL query
+const glc = { live: {}, made: {}, mb: 0 };
+if (typeof WebGL2RenderingContext !== 'undefined') {
+  const P = WebGL2RenderingContext.prototype, BPP = { 0x881a: 8, 0x8814: 16, 0x8058: 4, 0x822d: 2, 0x822f: 4, 0x822e: 4, 0x8230: 8, 0x8c43: 4 };
+  const add = (k, v) => { glc.live[k] = (glc.live[k] || 0) + v; if (v > 0) glc.made[k] = (glc.made[k] || 0) + 1; };
+  for (const kind of ['Texture', 'Buffer', 'Framebuffer', 'Renderbuffer', 'Program', 'Shader', 'Query', 'VertexArray', 'Sampler']) {
+    const mk = P['create' + kind], rm = P['delete' + kind];
+    if (mk) P['create' + kind] = function (...a) { add(kind, 1); return mk.apply(this, a); };
+    if (rm) P['delete' + kind] = function (o) { if (o) add(kind, -1); return rm.call(this, o); };
+  }
+  const fs = P.fenceSync, ds = P.deleteSync, ts2 = P.texStorage2D, ts3 = P.texStorage3D, bd = P.bufferData;
+  P.fenceSync = function (...a) { add('Sync', 1); return fs.apply(this, a); };
+  P.deleteSync = function (o) { if (o) add('Sync', -1); return ds.call(this, o); };
+  P.texStorage2D = function (t, l, f, w, h) { glc.mb += w * h * (BPP[f] || 4) / 1048576; return ts2.call(this, t, l, f, w, h); };
+  P.texStorage3D = function (t, l, f, w, h, d) { glc.mb += w * h * d * (BPP[f] || 4) / 1048576; return ts3.call(this, t, l, f, w, h, d); };
+  P.bufferData = function (t, x, ...r) { glc.mb += (typeof x === 'number' ? x : x && x.byteLength || 0) / 1048576; return bd.call(this, t, x, ...r); };
+}
+// (round 10a, switches to try on a phone, recorded with the visit) ?duty=off, or a fraction: the GPU's duty (see the engine's
+// diskDuty; a guarded device 0.5 by default); ?ctmax=N, the continuum's iterations at most; ?eddy=0, no eddies' volume;
+// ?fps=N, the frame rate while only the clock moves; ?split=0, the continuum's rays drawn whole, not in kicks (see the
+// engine's SPLIT); ?kick=N, the work of a kick
+const SWITCH = { duty: q.get('duty'), ctmax: Number(q.get('ctmax')) || 0, eddy: q.get('eddy') === '0', fps: Number(q.get('fps')) || 0, split: q.get('split') === '0', kick: Number(q.get('kick')) || 0, kadapt: q.get('kadapt') === '1' };
 // (round 9) the last visit's record (see record): a visit that ended with drawing stopped, or "Try again", starts safe
-const REC = 'disk-lab-session', BAD_END = ['starting', 'changing', 'lost', 'stuck', 'failed', 'blocked'];
-const prevRec = (() => { try { return JSON.parse(localStorage.getItem(REC) || 'null'); } catch { return null; } })();
-const crashed = !!(prevRec && BAD_END.includes(prevRec.phase)) || q.get('retry') === '1';
+// (round 10a: judged from its phase and its flight record, judgePrev: only what is broken counts, not a page closed or put
+// in the background while it started or changed its look)
+const REC = KEY('disk-lab-session'), BAD_END = ['starting', 'changing', 'lost', 'stuck', 'failed', 'blocked'];
+const readJSON = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
+const prevRec = readJSON(REC);
+const LOG = KEY('disk-lab-log'), LOG_BAD = KEY('disk-lab-log-bad');
+const prevLog = (() => { const l = readJSON(LOG); return l && Array.isArray(l.e) ? l : null; })();
+const verdict = judgePrev(prevRec, prevLog);
+const crashed = verdict.bad;
 let phase = '';
-// (round 9) the visitor's settings and view, kept on this device (see settingsNow); thrown away after a bad end
-const SET = 'disk-lab-settings';
-const saved = (() => {
-  if (crashed) { try { localStorage.removeItem(SET); } catch { /* none kept */ } return null; }
-  try { const v = JSON.parse(localStorage.getItem(SET) || 'null'); return v && v.v === 1 ? v : null; } catch { return null; }
-})();
+// (round 9) the visitor's settings and view, kept on this device (see settingsNow). (Round 10a: no longer thrown away
+// after a bad end: the safe start leaves them unapplied this once, and its note offers them back, restoreKept)
+const SET = KEY('disk-lab-settings');
+const saved = (() => { const v = readJSON(SET); return v && v.v === 1 ? v : null; })();
 
 // ---------- small helpers ----------
 const el = (tag, attrs = {}, ...kids) => {
@@ -232,6 +289,8 @@ function renderLooks() { lookButtons.forEach((b) => { b.textContent = T().looks[
 function setLook(k) {
   if (!live()) return;
   const s = S();
+  flogAdd({ k: 'set', look: k }); keeping = keeping || calibrated;   // (round 10a: see the flight recorder; a choice made after a safe start is kept)
+  if (keyOf({ ...s, look: k, slice: k === 'model' ? s.slice : 0 }) === gc.key) gc.hold = GUARD_HOLD;   // (round 10a: the same look chosen again: the cap's shortest hold)
   // (an observed look has no cut: close it where the camera is, rather than flying back to the whole disk as the engine
   // does when the look alone is changed)
   guardSwitch(keyOf({ ...s, look: k, slice: k === 'model' ? s.slice : 0 }));   // (round 9: before the engine draws it)
@@ -359,7 +418,9 @@ function cutKeyList(sq, shown) {
 // The CO line costs 7 (a channel) to 35 (its moments) times the model's look per frame: the governor's floor is lower
 // there (CO_FLOOR), and the scale starts from it, so that the first frames do not take a second each (the governor
 // climbs from there while the clock runs; a still picture is sharpened when complete). Leaving the CO line, the model
-// takes back the calibrated scale at once rather than climbing to it.
+// takes back the calibrated scale at once rather than climbing to it. (Round 10a, dev.6: in Auto; a fixed level holds its
+// own in the CO line too, the guard's cap (allowed) bounding the first frames and the ramp climbing, as in the other looks:
+// its passes are in kicks in the cheaper tier, in bands of whole rays in the full)
 const CO_FLOOR = 0.12;
 let wasCo = false;
 function sync() {
@@ -369,7 +430,7 @@ function sync() {
   // (a still picture's scale is for that picture: the clock started, or another look, by any way, ends it)
   if (sharpFrom && ((!s.paused && !reduce) || s.look + s.coMode !== sharpWhat)) unsharpen();
   const base = diag.calibration && diag.calibration.scale, co = s.look === 'co';
-  if (co !== wasCo && quality !== 'auto' && !holdSharp) { qCap = co ? CO_FLOOR : 1; costs.length = 0; scaleTo(fixedScale()); }
+  if (co !== wasCo && quality !== 'auto' && !holdSharp) { qCap = 1; costs.length = 0; scaleTo(fixedScale()); }
   else if (co && !wasCo && !sharpFrom && !holdSharp) runScale = scaleTo(CO_FLOOR);
   else if (!co && wasCo && !sharpFrom && !holdSharp && base) runScale = scaleTo(base);
   wasCo = co;
@@ -425,7 +486,7 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.speed) box.diskSpeed(Number(b.dataset.speed));
   else if (b.id === 'copyLink') copyLink();
   else if (b.id === 'saveImage') saveImage(b);
-  else if (b.dataset.saveSize) { saveSize = b.dataset.saveSize; try { sessionStorage.setItem('disk-lab-save-size', saveSize); } catch { /* for this view only */ } renderSaveSize(); }
+  else if (b.dataset.saveSize) { saveSize = b.dataset.saveSize; try { sessionStorage.setItem(KEY('disk-lab-save-size'), saveSize); } catch { /* for this view only */ } renderSaveSize(); }
   else if (b.dataset.quality) setQuality(b.dataset.quality);
   else if (b.id === 'citeCopy') copyCite();
   else if (b.dataset.planetOn != null) { const pl = S().planets; const i = Number(b.dataset.planetOn); if (pl[i]) { pl[i][1] = pl[i][1] ? 0 : 1; if (pl[i][1] && !roomFor(pl, pl[i][0], i, pl[i][2])) pl[i][1] = 0; box.diskSet({ planets: pl }); } }
@@ -619,7 +680,8 @@ stage.addEventListener('pointerdown', (e) => { if (!pop.hidden && !pop.contains(
 // Auto: the governor and the sharpening of still pictures. A fixed level holds the render scale, with the governor and
 // the sharpening at rest, unless the frames grow too long: then the scale is lowered so that a frame takes about 150 ms
 // (a frame of seconds can make the GPU drop the WebGL context; the CO line's moments at full resolution did), and the
-// note says so. In the CO look a fixed level starts from CO_FLOOR, as Auto does.
+// note says so. In the CO look a fixed level starts from CO_FLOOR, as Auto does. (Round 10a, dev.5: a fixed level is not
+// lowered for slow frames; dev.6: nor capped in the CO look, see sync)
 // Round 6: Best is the default (the owner: "the resolution can be the highest, basically"). Not chosen, it keeps the
 // picture moving: where frames take longer than BEST_SLOW while the clock runs and the view rests, it steps down quietly
 // to the fixed level whose frame is predicted under BEST_AIM (80 %, then 55 %, 35 %), and back up when a frame there
@@ -639,7 +701,9 @@ const BEST_SLOW = 70, BEST_AIM = 60, BEST_UP = 40, BEST_PACED = 22, BEST_STEPS =
 const BEST_HOLD = 3000, BEST_HOLD_MAX = 24000, BEST_UNDO = 8000;
 let quality = 'full', qCap = 1, qChosen = false, bestCap = 1;
 // (a level chosen: kept with the settings since round 9, for the visit before)
-{ let k = saved && saved.quality; try { k = k || sessionStorage.getItem('disk-lab-quality'); } catch { /* none */ } if (!crashed && k && (k === 'auto' || QUALITY[k])) { quality = k; qChosen = true; } }
+// (round 10a: after a bad end, not applied this once; kept, keptQuality, for the safe start's "restore")
+let keptQuality = null;
+{ let k = saved && saved.quality; try { k = k || sessionStorage.getItem(KEY('disk-lab-quality')); } catch { /* none */ } if (k && (k === 'auto' || QUALITY[k])) { keptQuality = k; if (!crashed) { quality = k; qChosen = true; } } }
 const qualityButtons = ['auto', 'low', 'mid', 'high', 'full'].map((k) => {
   const b = el('button', { type: 'button', 'data-quality': k, 'aria-pressed': String(k === quality) });
   $('qualityGroup').append(b);
@@ -650,25 +714,36 @@ function renderQuality() {
   qualityButtons.forEach((b) => { b.textContent = w[b.dataset.quality]; });
   $('qualityGroup').setAttribute('aria-label', w.label);
 }
-const govRest = () => { if (gov) gov.pause(quality !== 'auto' || holdSharp); };
+// (round 10a, dev.5: Auto at rest is the ramp's (stillStep), not the frame rate's: the governor rests; its scale at the start,
+// runScale, is what the lighter picture while moving is taken from)
+const govRest = () => { if (gov) gov.pause(!(quality === 'auto' && moveFrom && !holdSharp)); };
 // (the default Best's quiet step applies while the clock runs; a paused picture is drawn at the level itself)
 // (round 9: and within the guard, allowed: running frames under GUARD_MS, a still picture's within STILL_MS in bands)
-const fixedScale = () => Math.min(QUALITY[quality] || 1, qCap, bestDefault() && live() && !S().paused ? bestCap : 1, live() ? allowed() : 1);
+// (round 10a, dev.5, the owner after dev.4 on the iPhone: "at Best, no automatic change of the resolution". A fixed level is
+// fixed: the default Best's quiet step (bestCap) is no more, and the guard does not lower it while the clock runs: in the
+// looks drawn in kicks or in bands each piece of GPU work is within the budget whatever the scale, and the GPU rests between
+// them on a phone (the duty). What is left: the lighter picture while the view moves (the owner's own, see moving), the
+// level's scale reached a rung a picture once the view rests (the ramp, see stillStep), the safe start after a bad end
+// (Auto, with its "restore"), and the gas line's look, whose passes are not in kicks: the guard's cap there, as before)
+const fixedScale = () => Math.min(QUALITY[quality] || 1, qCap, live() ? allowed() : 1);
 // the scale a fixed level asks for now, set when it changed (the clock paused or running again; not while the view moves,
 // a still picture is sharpened, a measurement holds the governor or a picture is being saved)
 let fixedPaused = null, skipFrames = 0;
 function applyFixed() {
   if (quality === 'auto' || !live() || moveFrom || holdSharp || sharpFrom || saving || !calibrated || 'lost' in lab.dataset) return;
   const p = !!S().paused;
-  if (p !== fixedPaused) { fixedPaused = p; gc.still = 0; relaxGuard(); syncQuality(); }
+  // (round 10a, dev.5: the ramp goes on whether the clock runs or not: a pause, the idle rest's among them, keeps the picture)
+  if (p !== fixedPaused) { fixedPaused = p; relaxGuard(); syncQuality(); }
   const want = fixedScale();
   // (the frames still in flight were drawn at the scale left: not counted for the guards)
   if (Math.abs(box.diskScale() - want) > 0.004) { scaleTo(want); skipFrames = 3; }
 }
 // the visitor's choice (kept for the visit); applyQuality: the level applied, chosen or the default
 function setQuality(k) {
-  qChosen = true;
-  try { sessionStorage.setItem('disk-lab-quality', k); } catch { /* for this view only */ }
+  qChosen = true; keeping = keeping || calibrated;   // (round 10a: a choice made after a safe start is kept)
+  if (calibrated) guardAfresh();   // (round 10a: see guardAfresh)
+  flogAdd({ k: 'set', q: k });
+  try { sessionStorage.setItem(KEY('disk-lab-quality'), k); } catch { /* for this view only */ }
   keepSoon();
   applyQuality(k);
 }
@@ -678,7 +753,7 @@ function applyQuality(k) {
   if (live()) {
     box.diskSet({ fx: k === 'auto' ? fxAuto() : FX_OF[k] ?? 2 });   // (round 8: the finish, see FX_OF)
     if (k === 'auto') { const base = diag.calibration && diag.calibration.scale || 0.5; runScale = scaleTo(S().look === 'co' ? CO_FLOOR : base); }
-    else { qCap = S().look === 'co' ? CO_FLOOR : 1; scaleTo(fixedScale()); }
+    else { qCap = 1; scaleTo(fixedScale()); }   // (round 10a, dev.6: the gas line's too, its passes in kicks or in bands: its level, not CO_FLOOR)
   }
   govRest();
   sync();
@@ -687,13 +762,12 @@ function syncQuality() {
   qualityButtons.forEach((b) => pressed(b, b.dataset.quality === quality));
   const w = T().quality, n = $('qualityNote');
   if (quality === 'auto') n.textContent = w.autoNote;
-  else if (bestDefault()) n.textContent = fixedScale() < 1 ? w.bestCapped(Math.round(100 * fixedScale())) : w.bestNote;
-  else if (qCap < (QUALITY[quality] || 1) || fixedScale() < (QUALITY[quality] || 1) - 0.005) n.textContent = w.capped(Math.round(100 * fixedScale()));
+  else if (bestDefault()) n.textContent = w.bestNote;
   else n.textContent = w.fixedNote(Math.round(100 * (QUALITY[quality] || 1)));
 }
 // the frames' intervals at a fixed level (consecutive frames: the clock running or a picture being averaged)
-// the guard's cap back to the level's own (1, or CO_FLOOR in the CO look)
-function relaxGuard() { const base = live() && S().look === 'co' ? CO_FLOOR : 1; if (qCap < base) { qCap = base; costs.length = 0; } }
+// the guard's cap back to the level's own
+function relaxGuard() { if (qCap < 1) { qCap = 1; costs.length = 0; } }   // (round 10a, dev.6: the level's, in every look)
 const costs = [], bestRuns = [];
 let bestT = 0, bestChanged = 0, bestUpAt = -1e9, bestHold = BEST_HOLD;
 const bestDefault = () => quality === 'full' && !qChosen;
@@ -701,7 +775,8 @@ const bestDefault = () => quality === 'full' && !qChosen;
 function bestReset() { bestCap = 1; bestRuns.length = 0; bestHold = BEST_HOLD; bestUpAt = -1e9; bestChanged = 0; }
 // the default Best's quiet steps (see BEST_SLOW): from the frames of the running clock at a resting view, over 1.5 s
 function guardBest(dt) {
-  if (!bestDefault() || S().paused || S().look === 'co') { bestRuns.length = 0; return; }
+  // (round 10a, dev.5: Best is fixed, see fixedScale: no quiet steps)
+  bestRuns.length = 0; if (dt >= 0) return;
   if (!(dt > 0 && dt < 2000)) return;
   bestRuns.push(dt);
   const now = performance.now();
@@ -727,6 +802,9 @@ function guardBest(dt) {
 let bestLog = null;   // (for measurements: diskLab.bestLog(true) records each quiet step)
 function guardFixed(dt, acc, accMax, bands = 1) {
   if (quality === 'auto' || !live() || holdSharp || moveFrom) return;
+  // (round 10a, dev.5: a fixed level is not lowered for a slow frame, see fixedScale; dev.6: in the gas line's look neither, its
+  // passes in kicks (the cheaper tier) or in bands of whole rays within a desktop's budget)
+  costs.length = 0; if (dt >= 0) return;
   guardBest(dt);
   // (round 9: a still picture's frame drawn in bands comes after several animation frames, its bands each within the
   // guard's budget: its interval is not the length of a piece of GPU work)
@@ -777,12 +855,58 @@ const factorOf = (k) => (FACTOR[k.replace(/:cut$/, '')] || 1) * (/:cut$/.test(k)
 // (a frame at scale s, the fixed share counted with the pixels: an overestimate going up, where it matters)
 const costAt = (s) => gc.c1 * s * s;
 const stepFor = (ms) => LADDER.reduce((m, l) => (costAt(l) <= ms ? l : m), LADDER[0]);
-const stillNow = () => live() && (!!S().paused || reduce) && !moveFrom;
+// (round 10a, dev.5: hands off, the view at rest, the clock running or not: the picture refined a rung a picture up to its level
+// (stillStep). The gas line's look as before (paused only) until its passes are in kicks)
+const stillNow = () => live() && !moveFrom;   // (round 10a, dev.6: the gas line's look as the others)
 const capRun = () => gc.cap;
-function capStill() { if (!gc.still) gc.still = Math.max(gc.cap, stepFor(STILL_MS)); return gc.still; }
+// (the ramp's first rung: a paused picture's, where a still started (STILL_MS a frame); with the clock running, the rung at or
+// under the scale drawn now and the guard's cap for running frames (the lighter picture of a move just ended; after a switch of
+// look, the cap the switch set), a rung a picture from there)
+const rungUnder = (sc) => LADDER.reduce((m, l) => (l <= sc + 0.004 ? l : m), LADDER[0]);
+function capStill() { if (!gc.still) gc.still = S().paused || reduce ? Math.max(gc.cap, stepFor(STILL_MS)) : rungUnder(Math.min(live() ? box.diskScale() : 1, gc.cap)); return gc.still; }
+// (round 10a, A4: the owner, trying dev.3 on the iPhone: 「静止時はもっとがんばっていいかも」) A still picture is refined step by
+// step up to its level's scale (Best: 1, the full canvas; Auto: 1): it starts where it did (capStill: STILL_MS a frame), and
+// once PROG_N frames are averaged at a step, the next step of LADDER. No total time: each frame's pieces stay within the
+// budget whatever the scale (the engine's bands; in the visible and mid-infrared looks its kicks, a piece of which is bounded
+// whatever the ray), the GPU resting between them on a phone (its duty); the first touch, wheel or key leaves the frame and
+// brings the running scale back (the engine's leaveStill, and the page's lighter picture while the view moves). Not in the
+// gas line's look: its passes' slowest rays are not cut into kicks yet (STILL_MS, as before)
+// (round 10a, optimizing the time to the full scale: a step once one frame of it is done (PROG_N; 4 made the steps between
+// cost four frames each, and on a phone's frame as WebKit on a GPU six times slower the still had not reached scale 1 after 4
+// minutes), and two steps of LADDER at a time (PROG_SKIP: each about 1.56 times the last, 2.4 times the pixels), the last to
+// the level's scale: the frames on the way cost some 0.9 of the last one's, where every step at four frames cost some 10)
+// (round 10a, dev.5, the owner: "refine step by step without stopping the clock, each picture may take longer") With the clock
+// running, a rung a picture (PROG_SKIP is a paused picture's), up to the level's scale; Auto up to the rung whose pictures come
+// within HANDSOFF_MS (?handsoff=ms), a rung down where they take over 1.5 times that: its pictures while the view moves are
+// still those of the frame rate (the lighter picture), at rest each may take a quarter of a second
+const PROG_N = 1, PROG_SKIP = 2, HANDSOFF_MS = Number(q.get('handsoff')) > 0 ? Number(q.get('handsoff')) : 250;
+const stillTop = () => (quality === 'auto' ? 1 : QUALITY[quality] || 1);
+let picMs = 0;   // (Auto at rest: the time between its pictures lately, ms)
+function stillStep(acc, accMax) {
+  if (!stillNow() || !calibrated || saving || holdSharp || 'lost' in lab.dataset || !gc.still) return false;
+  const s = box.diskScale(), top = stillTop(), run = !S().paused && !reduce;
+  if (s < gc.still - 0.004 || acc < Math.min(PROG_N, accMax || PROG_N)) return false;
+  if (run && quality === 'auto' && picMs > 0) {
+    if (picMs > 1.5 * HANDSOFF_MS && gc.still > LADDER[0] + 0.004) { gc.still = LADDER.reduce((m, l) => (l < gc.still - 0.004 ? l : m), LADDER[0]); glog('ramp down'); return true; }
+    if (picMs > HANDSOFF_MS / 1.3) return false;
+  }
+  if (gc.still >= top - 0.004) return false;
+  const i = LADDER.findIndex((l) => l > gc.still + 0.004);
+  if (i < 0) return false;
+  const next = LADDER[Math.min(LADDER.length - 1, i + (run ? 1 : PROG_SKIP) - 1)];
+  gc.still = Math.min(top, next); glog('still up');
+  return true;
+}
 const allowed = () => (!calibrated ? 1 : stillNow() ? capStill() : capRun());
-const glog = (what) => { gc.log.push({ t: Math.round(performance.now()), what, key: gc.key, c1: Math.round(gc.c1), cap: gc.cap, still: gc.still, scale: live() ? box.diskScale() : 0 }); if (gc.log.length > 60) gc.log.shift(); };
-let bandsSet = 0;
+const glog = (what) => {
+  gc.log.push({ t: Math.round(performance.now()), what, key: gc.key, c1: Math.round(gc.c1), cap: gc.cap, still: gc.still, scale: live() ? box.diskScale() : 0 }); if (gc.log.length > 60) gc.log.shift();
+  // (round 10a: and in the flight record, the same decision again on the same kind counted in its entry, not repeated)
+  if (what === 'bands') return;
+  const l = flog.e[flog.e.length - 1], sc = live() ? box.diskScale() : 0;
+  if (l && l.k === 'g' && l.w === what && l.key === gc.key) { l.x = (l.x || 1) + 1; l.cap = gc.cap; l.sc = sc; flogSoon(); }
+  else flogAdd({ k: 'g', w: what, key: gc.key, c1: Math.round(gc.c1), cap: gc.cap, st: gc.still || undefined, sc });
+};
+let bandsSet = 0, engFixed = null;
 // the scale now within what is allowed, and the bands: a still picture's, or a running frame's where even the lowest step
 // is over the budget (a frame in bands holds its moment to its end: no seams)
 function guardApply() {
@@ -793,6 +917,10 @@ function guardApply() {
   const c = costAt(box.diskScale());
   const n = Math.min(64, stillNow() || c > GUARD_MS ? Math.max(1, Math.ceil(UNEVEN * c / GUARD_MS)) : 1);
   if (n !== bandsSet) { bandsSet = n; box.diskBands(n, GUARD_MS / GPUX); }
+  // (round 10a, dev.5: hands off, the engine's own guard cuts a frame over the budget into bands rather than lowering its scale:
+  // the scale is the level's, or the ramp's (the gas line's look apart, see fixedScale))
+  const fix = stillNow();
+  if (fix !== engFixed && typeof box.diskGuard === 'function') { engFixed = fix; box.diskGuard({ fixed: fix }); }
 }
 // every scale the page asks for, within the guard
 function scaleTo(s) {
@@ -807,10 +935,18 @@ function guardSwitch(key) {
   if (!key || key === gc.key) return;
   if (!(gc.c1 > 0)) { gc.key = key; return; }
   predictTier(key);   // (round 9: the cheaper march from the first frame where the slowest ray is predicted too long)
-  const k0 = known[key], up = factorOf(key) > factorOf(gc.key);
-  gc.c1 = Math.max(gc.c1 * factorOf(key) / factorOf(gc.key), k0 && performance.now() - k0.t < 30000 ? k0.c1 : 0);
+  const k0 = known[key], up = factorOf(key) > factorOf(gc.key), conv = gc.c1 * factorOf(key) / factorOf(gc.key);
+  // (round 10a) Going to a cheaper kind, the dearer kind's c1 divided by the ratio of the factors underestimates it: the
+  // factors were measured where the dear looks' frames are mostly their floor (the slowest rays, at the guard's lowest
+  // scales), and a dear look's c1 measured at a higher scale, its floor shared among more pixels, is several times smaller
+  // (the visible look's still at 0.32: c1 1109, so the model's 11 against the 30 to 45 measured, in round 10a's checks;
+  // the next switch back would predict the visible look from 11). So a cheaper kind takes its own last measure, whatever
+  // its age, or the model's (calibrated, then measured) times its factor, if larger: the cost of a kind on this device is
+  // its own, not another's scaled by the M1 Max's ratios. Going to a dearer kind, as before (the conversion overestimates)
+  gc.c1 = up ? Math.max(conv, k0 && performance.now() - k0.t < 30000 ? k0.c1 : 0) : Math.max(conv, k0 ? k0.c1 : 0, modelC1 * factorOf(key));
   Object.assign(gc, { key, measured: false, vals: [], scales: [], still: 0, hold: GUARD_HOLD, changed: performance.now(), upAt: -1e9 });
   releaseHeavy(key);
+  moveScale = 0;   // (round 10a, dev.6: another kind, Auto's lighter picture learned anew)
   gc.cap = Math.min(stepFor(GUARD_MS), guarded ? Math.max(LADDER[0], box.diskScale()) : 1);
   glog('switch');
   if (up) record('changing');
@@ -820,7 +956,10 @@ function guardSwitch(key) {
 box.addEventListener('diskguard', (e) => {
   const d = e.detail || {};
   if (!live() || !calibrated) return;
-  if (d.key && d.key !== gc.key) guardSwitch(d.key);
+  // (round 10a: only to the kind the state asks for: during a change of look the engine still draws the look before for
+  // 300 ms, and its guard's word on such a frame switched the page's guard back to the look left: in round 10a's checks
+  // the model shown with the guard on the visible look's key)
+  if (d.key && d.key !== gc.key && d.key === keyOf(S())) guardSwitch(d.key);
   const to = LADDER.reduce((m, l) => (l <= d.scale + 1e-6 ? l : m), LADDER[0]);
   if (gc.cap > to) { gc.cap = to; gc.changed = performance.now(); }
   if (runScale > gc.cap) runScale = gc.cap;
@@ -861,25 +1000,43 @@ let heavyHeld = '', heavyPlayed = '', heavyOver = 0;
 // intensity in 1 to 2 s a ray). DESIGN.md, section 22.
 // (the gas line's, round 9 at its end: rec, the moments in passes of three groups, their longest piece: 87, 125, 125 ms)
 const RAY_MPX = { optical: 2.3, mir: 2.0, 'co:chan': 1.5, 'co:m1': 2.2, 'co:m0': 2.2 };
-let tierOver = 0, modelPerMpx = 0;
+// (round 10a: not for the rest of the visit any more: the cheaper march is taken for the kind of frame measured over the
+// budget (cheapFor) and any predicted so; another kind, where the device is not guarded, starts from the full march again,
+// and a quality chosen or Reset gives every kind the full march back, to be measured anew (the owner: "nothing
+// irreversible"). A guarded device keeps the cheaper march throughout, as before: its first frames must be safe before
+// anything is measured)
+let tierOver = 0, modelPerMpx = 0, modelC1 = 0;   // (modelC1, round 10a: the model's c1 on this device, see guardSwitch)
+const cheapFor = new Set();
 const TIER_MS = () => GUARD_MS;
 const canvasMpx = () => { const c = box.querySelector(':scope > canvas'); return c ? c.width * c.height / 1e6 : 1; };
 function predictTier(key) {
-  if (!box.diskMarch || box.diskMarch() === 'cheap' || !(modelPerMpx > 0)) return;
-  const r = RAY_MPX[key.replace(/:cut$/, '')];
-  if (r && r * modelPerMpx > TIER_MS()) { box.diskMarch('cheap'); glog('cheap march (predicted ' + Math.round(r * modelPerMpx) + ' ms)'); diag.guard.march = 'cheap'; }
+  if (!box.diskMarch || !(modelPerMpx > 0)) return;
+  const k = key.replace(/:cut$/, ''), r = RAY_MPX[k];
+  if (cheapFor.has(k) || (r && r * modelPerMpx > TIER_MS())) {
+    if (box.diskMarch() !== 'cheap') { box.diskMarch('cheap'); glog('cheap march' + (cheapFor.has(k) ? '' : ' (predicted ' + Math.round(r * modelPerMpx) + ' ms)')); diag.guard.march = 'cheap'; }
+  } else if (!guarded && box.diskMarch() === 'cheap') { box.diskMarch('full'); tierOver = 0; glog('full march'); diag.guard.march = 'full'; }
 }
 function chooseTier(d) {
   if (!box.diskMarch || box.diskMarch() === 'cheap') return false;
   // (at the two lowest steps: the guard steps between them, and each step back up had set the count back)
-  if (box.diskScale() > LADDER[1] + 1e-3 || !(Math.max(d.band, d.bands > 1 ? 0 : d.ms) > TIER_MS())) { tierOver = 0; return false; }
+  if (box.diskScale() > LADDER[1] + 1e-3 || !(Math.max(d.vband, d.bands > 1 ? 0 : d.vol) > TIER_MS())) { tierOver = 0; return false; }
   if (++tierOver < 3) return false;
-  tierOver = 0; box.diskMarch('cheap'); glog('cheap march'); diag.guard.march = 'cheap';
+  tierOver = 0; cheapFor.add(gc.key.replace(/:cut$/, '')); box.diskMarch('cheap'); glog('cheap march'); diag.guard.march = 'cheap';
   return true;
+}
+// (round 10a) the visitor's choice of a quality, or Reset: the latches of the guard let go (the hold before the cap climbs
+// back to its shortest, a heavy look's held clock), to be measured anew. Not the kinds measured over the budget with the
+// full march (cheapFor): their floor is the slowest ray's, the same at any quality (round 10a's first try gave them the
+// full march back here, and the check of the guard read 260 ms pieces of the visible look on the M1 Max until it was
+// measured over again); Reset forgets them too
+function guardAfresh(all = false) {
+  tierOver = 0; heavyPlayed = '';
+  gc.hold = GUARD_HOLD; gc.upAt = -1e9;
+  if (all) { cheapFor.clear(); if (!guarded && box.diskMarch && box.diskMarch() === 'cheap') predictTier(gc.key); }
 }
 function holdHeavy(d) {
   if (chooseTier(d)) return;
-  if (!guarded || d.still || reduce || box.diskScale() > LADDER[0] + 1e-3 || !(Math.max(d.band, d.bands > 1 ? 0 : d.ms) > 1.5 * GUARD_MS)) { heavyOver = 0; return; }
+  if (!guarded || d.still || reduce || box.diskScale() > LADDER[0] + 1e-3 || !(Math.max(d.vband, d.bands > 1 ? 0 : d.vol) > 1.5 * GUARD_MS)) { heavyOver = 0; return; }
   if (++heavyOver < 3 || S().paused || heavyPlayed === gc.key) return;
   heavyHeld = gc.key; heavyOver = 0;
   box.diskPlay(false); glog('held still'); note(T().heavyStill, 9000); sync();
@@ -891,10 +1048,14 @@ function releaseHeavy(key) {
 }
 box.addEventListener('diskgpu', (e) => {
   const d = { ...e.detail }, key = String(d.key || '').replace(/:F$/, '');
-  d.ms *= GPUX; d.band *= GPUX;
+  d.ms *= GPUX; d.band *= GPUX; d.pre = (d.pre || 0) * GPUX; d.vband = d.vband != null ? d.vband * GPUX : d.band;
+  // (round 10a: the volume's cost, without the work before it, a piece of its own that does not grow with the pixels: see
+  // the engine's gNote)
+  d.vol = Math.max(0, d.ms - d.pre);
   // (a first use: the engine's program making its pipeline for a blend state, not the frame's cost; see the engine's warmFull)
-  if (mode !== 'live' || !(d.scale > 0) || !(d.ms > 0) || d.first || 'lost' in lab.dataset) return;
-  const c = d.ms / (d.scale * d.scale), now = performance.now();
+  // (round 10a: nor a frame drawn outside the animation frames (out: a resize's), see the engine's fence)
+  if (mode !== 'live' || !(d.scale > 0) || !(d.ms > 0) || d.first || d.out || 'lost' in lab.dataset) return;
+  const c = d.vol / (d.scale * d.scale), now = performance.now();
   if (d.bands === 1) known[key] = { c1: c, t: now };   // (a frame in bands carries the looks' delay in each band: see below)
   if (key !== gc.key) return;
   // (a frame in bands: each band's measure carries the delay of the looks for its fence, a few ms, so their sum grows with
@@ -902,9 +1063,9 @@ box.addEventListener('diskgpu', (e) => {
   // bounds the frame from above: cheap bands lower the estimate, so that fewer are used; a band past twice the budget
   // raises it, as the engine itself then cuts more)
   if (d.bands > 1) {
-    const cb = d.band * d.bands / (d.scale * d.scale), c0 = gc.c1;
-    if (d.band > 2 * GUARD_MS) gc.c1 = Math.max(gc.c1, cb / UNEVEN);
-    else if (d.band < 0.5 * GUARD_MS) gc.c1 = Math.min(gc.c1, cb);
+    const cb = d.vband * d.bands / (d.scale * d.scale), c0 = gc.c1;
+    if (d.vband > 2 * GUARD_MS) gc.c1 = Math.max(gc.c1, cb / UNEVEN);
+    else if (d.vband < 0.5 * GUARD_MS) gc.c1 = Math.min(gc.c1, cb);
     if (gc.c1 !== c0) glog('bands');
     guardApply();
     holdHeavy(d);
@@ -915,10 +1076,15 @@ box.addEventListener('diskgpu', (e) => {
   const med = gc.vals.slice().sort((a, b) => a - b)[gc.vals.length >> 1];
   // (one running frame far over the budget counts at once; otherwise the median of the last five: a light frame's
   // measure varies by half from one to the next, with the display's own work and the looks for the fence)
-  gc.c1 = d.ms > 2 * GUARD_MS && !d.still ? Math.max(c, med) : med;
+  gc.c1 = d.vol > 2 * GUARD_MS && !d.still ? Math.max(c, med) : med;
   gc.measured = gc.vals.length >= 3;
+  if (gc.measured && gc.key === 'model') modelC1 = gc.c1;   // (round 10a: see guardSwitch)
   const cap0 = gc.cap;
-  if (d.still) { if (gc.still && costAt(gc.still) > 1.5 * STILL_MS) { gc.still = stepFor(STILL_MS); glog('still lowered'); } }
+  // (round 10a: the hold, doubled each time a step up was taken back, halves again once the cap has stayed four holds)
+  if (gc.hold > GUARD_HOLD && now - gc.changed > 4 * gc.hold) { gc.hold = Math.max(GUARD_HOLD, gc.hold / 2); gc.changed = now; }
+  // (a still's frames are refined step by step whatever a frame costs, their pieces bounded by the engine's bands and kicks, see
+  // stillStep; round 10a, dev.6: the gas line's too)
+  if (d.still) { /* (not lowered) */ }
   else if (costAt(gc.cap) > GUARD_MS) {
     gc.cap = stepFor(GUARD_MS);
     // (a step up taken back soon: wait twice as long before the next, as Best's quiet steps do)
@@ -995,7 +1161,7 @@ let saving = false;
 // sent in a task of its own and waited for (the engine's snapshot); before, bands of 250 ms, all sent in one task.
 const SAVE_SIZES = ['1', '2', '4k'], SAVE_MPX = 12, SAVE_MS = 2000, SAVE_MS_SCREEN = 400, SAVE_FRAMES = 12, SAVE_HEAVY = 400, SAVE_NEAR = 2;
 let saveSize = '1';
-try { const k = sessionStorage.getItem('disk-lab-save-size'); if (SAVE_SIZES.includes(k)) saveSize = k; } catch { /* the default */ }
+try { const k = sessionStorage.getItem(KEY('disk-lab-save-size')); if (SAVE_SIZES.includes(k)) saveSize = k; } catch { /* the default */ }
 const saveSizeButtons = SAVE_SIZES.map((k) => {
   const b = el('button', { type: 'button', 'data-save-size': k, 'aria-pressed': String(k === saveSize) });
   $('saveSizeGroup').append(b);
@@ -1104,7 +1270,7 @@ narrow.addEventListener('change', tabRoles); tabRoles();
 // ---------- language ----------
 function setLang(l) {
   html.lang = l; html.classList.toggle('lang-ja', l === 'ja');
-  try { sessionStorage.setItem('site-language', l); } catch { /* the choice still applies to this page */ }
+  try { sessionStorage.setItem(KEY('site-language'), l); } catch { /* the choice still applies to this page */ }
   actionsKey = lookKey = cutKey = '';
   if (mode !== 'live' || 'lost' in lab.dataset) setPoster(PLACES[placeI].id);   // (the stills carry their labels)
   renderAll();
@@ -1168,12 +1334,14 @@ function unsharpen() {
   govRest();
 }
 function onAccumulated() {
-  if (!live() || sharpFrom || moveFrom || holdSharp || quality !== 'auto' || 'lost' in lab.dataset || !(S().paused || reduce) || saving || recent.length < 4) return;
+  if (!live() || moveFrom || holdSharp || quality !== 'auto' || 'lost' in lab.dataset || !(S().paused || reduce) || saving || recent.length < 4) return;
   // (round 9: as fine as the guard's still picture, capStill: STILL_MS a frame, drawn in bands of GUARD_MS; it was the scale
   // whose frame the accumulation's own intervals predicted at SHARP_MS, drawn whole)
+  // (round 10a, A4: and on, a step at a time up to 1, see stillStep)
+  if (box.diskScale() >= capStill() - 0.004) stillStep(PROG_N, PROG_N);
   const s = box.diskScale(), to = Math.min(1, capStill());
   if (to < 1.15 * s) return;
-  sharpFrom = s; recent.length = 0; sharpWhat = S().look + S().coMode;
+  sharpFrom = sharpFrom || s; recent.length = 0; sharpWhat = S().look + S().coMode;
   if (gov) gov.pause(true);
   scaleTo(to);
 }
@@ -1195,6 +1363,7 @@ function renderStillNote() {
   // (why it failed, small, so that a report can say: the engine's box.dataset.fallbackError, or the probe's reason)
   const why = ['failed', 'blocked'].includes(stillReason) ? (box.dataset.fallbackError || diag.failError || '') : '';
   if (why) kids.push(el('span', { class: 'still-why' }, '(' + why + ')'));
+  kids.push(el('span', { class: 'still-why' }, VERSION_LINE));   // (round 10a: the build, on every still screen)
   stillNote.replaceChildren(...kids.map((k) => (typeof k === 'string' ? document.createTextNode(k) : k)));
   stillNote.hidden = false;
 }
@@ -1205,6 +1374,11 @@ function enterStill(reason) {
   posterKey = ''; setPoster(PLACES[placeI].id);
   note('', 0);
   renderAll();
+  // (round 10a: where WebGL has stopped, what helps on the stage itself too, at its top: on a phone the note under the
+  // picture may lie under the browser's bar)
+  if (reason === 'blocked') note(T().still.blocked(T().still.restart[RESTART](APP)), 0);
+  showLogLink();   // (round 10a: the last bad end's record, in the About dialog)
+  flogDevice(null);   // (round 10a: the device, and why it shows stills, without the engine)
 }
 
 // ---------- starting ----------
@@ -1216,9 +1390,26 @@ function loadEngine() {
   });
 }
 
+// (round 10a) After a bad end whose record names what was in view (an observed look, the line's map, the cut: avoid), only
+// that is left out: the link or the kept settings are applied otherwise as they are (avoided), the model look in its place
+// and Auto this once. Where the record does not say, or it was the model look itself, the safe start of round 9: the whole
+// disk, the model look, no cut, Auto, whatever the address asks for.
+const avoid = (() => {
+  const k = crashed && verdict.culprit ? verdict.culprit.key : '';
+  const look = k.split(':')[0], cut = /:cut$/.test(k);
+  return k && LOOKS.includes(look) && (look !== 'model' || cut) ? { key: k, look, cut } : null;
+})();
+const avoided = (st) => {
+  if (!st || !avoid) return st;
+  const o = { ...st };
+  if (avoid.look !== 'model' && o.look === avoid.look) o.look = 'model';
+  if (avoid.cut) o.slice = 0;
+  return o;
+};
 async function start() {
-  // (round 9: after a visit that ended badly, the whole disk, whatever the address asks for)
-  const first = (!crashed && placeById(q.get('place'))) || PLACES[0];
+  // (round 9: after a visit that ended badly, the whole disk, whatever the address asks for; round 10a: see avoid)
+  const linkPlace = placeById(q.get('place')), placeOk = linkPlace && (!avoid || (!(avoid.cut && linkPlace.cut) && linkPlace.look !== avoid.look));
+  const first = ((!crashed || avoid) && placeOk && linkPlace) || PLACES[0];
   placeI = PLACES.indexOf(first);
   fitStage(); setPoster(first.id);
   renderAll();
@@ -1249,6 +1440,12 @@ async function start() {
   box.dataset.asym = 'off';
   // (round 9: the engine's first frames, and the calibration's, at a modest scale: lower where guarded)
   box.dataset.scale = guarded ? '0.35' : '0.5';
+  // (round 10a, for a comparison on the phone: ?math=safe, the engine's main programs compiled with safe math, see its
+  // SAFE_MATH; the record says which ran)
+  if (q.get('math') === 'safe') box.dataset.math = 'safe';
+  if (SWITCH.eddy) box.dataset.eddy = 'off';   // (round 10a: see SWITCH)
+  if (SWITCH.split) box.dataset.split = '0';
+  if (SWITCH.kick > 0) box.dataset.kick = String(Math.round(SWITCH.kick));
   box.setAttribute('data-disk3d', '');
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), DEF_KEYS);   // (the engine's own start: the defaults Reset returns to)
@@ -1275,36 +1472,39 @@ async function start() {
   // (the prediction's measure, from the calibration as the ratios were: the running model's c1 is several times higher, its
   // fixed costs divided by a small scale squared)
   if (gc.key === 'model') modelPerMpx = gc.c1 / canvasMpx();
+  modelC1 = gc.c1 / factorOf(gc.key);   // (round 10a: see guardSwitch)
   gc.cap = Math.min(stepFor(GUARD_MS), guarded ? RAMP * (ref[1] || 0.35) : 1);
   calibrated = true;
   glog('calibrated');
   // (round 9) the march's tier: the cheaper one from the start where guarded, before a kept or linked look is drawn (see
   // chooseTier)
-  if (guarded && typeof box.diskMarch === 'function') box.diskMarch('cheap');
-  box.diskGuard({ ms: GUARD_MS / GPUX, key: gc.key, c1: gc.c1 / GPUX });   // (the engine's own guard, the same budget)
+  engineSettings();
   // (round 9: with no link, the settings and view the visitor left, kept on this device: a link wins over them)
-  const linked = crashed ? null : stateFromLink() || (q.has('place') ? null : keptState());
+  // (round 10a: after a bad end, without what was in view then, avoided; none where the record does not say)
+  const linked = crashed && !avoid ? null : avoided(stateFromLink() || (q.has('place') ? null : keptState()));
   if (linked) { const s0 = S(); guardSwitch(keyOf({ ...s0, ...linked, slice: linked.slice != null ? Number(linked.slice) : s0.slice })); box.diskSet(linked); }
   if (linked && linked.place) { const i = PLACES.findIndex((p) => p.id === linked.place); if (i >= 0) { placeI = i; renderPlace(); } }
   defaults = { ...DEF0, quality: guarded ? 'auto' : 'full' };
-  keeping = true;
+  // (round 10a: after a safe start the kept settings are not written over until the visitor does something, so that they are
+  // still there to be offered back, or to come back by themselves at the next visit)
+  keeping = !crashed;
+  if (crashed) for (const t of ['pointerdown', 'keydown']) lab.addEventListener(t, () => { keeping = true; }, { capture: true, once: true });
   lab.dataset.state = 'live';
   note('', 0);
   runScale = Math.min(box.diskScale(), gc.cap);
   if (!reduce) gov = govern(box, { base: diag.calibration && diag.calibration.scale || 0.5, running: () => !S().paused,
-    floor: () => (S().look === 'co' ? CO_FLOOR : MIN_SCALE), cap: () => (stillNow() ? 1 : capRun()), onChange: (sc) => { runScale = sc; } });
+    // (round 10a, dev.6: the looks drawn in kicks down to the ladder's first step while moving, as their guard's cap allowed in dev.4)
+    floor: () => (S().look === 'co' ? CO_FLOOR : S().look === 'optical' || S().look === 'mir' ? LADDER[0] : MIN_SCALE), cap: () => (stillNow() ? 1 : capRun()), onChange: (sc) => { if (moveFrom) moveScale = sc; else runScale = sc; } });
   if (quality !== 'auto') applyQuality(quality);
   else { box.diskSet({ fx: fxAuto() }); scaleTo(box.diskScale()); }   // (round 8: the finish for Auto, see FX_OF)
-  // (round 9) the frame rate while only the clock moves: FPS_STILL (a phone or tablet FPS_STILL_PHONE); the display's own
-  // while the view moves or anything changes (the engine's diskFps)
-  if (typeof box.diskFps === 'function') box.diskFps(MOBILE || coarse ? FPS_STILL_PHONE : FPS_STILL);
-  // (round 9: and on a guarded device the eddies' volume every other frame while only the clock moves, see the engine)
-  if (typeof box.diskEddyEvery === 'function') box.diskEddyEvery(guarded ? 2 : 1);
+  // (round 9: the frame rate's cap, the eddies' cadence and the GPU timer: see engineSettings)
   // (for checks: ?gputime=1, each piece of GPU work timed on the GPU too, see the engine's diskGpuTime)
   if (q.get('gputime') === '1' && typeof box.diskGpuTime === 'function') box.diskGpuTime(1);
   diag.guard.march = typeof box.diskMarch === 'function' ? box.diskMarch() : null;
   record('live');
-  if (crashed) note(T().safeStart, 9000);
+  flogDevice(linked ? { look: linked.look, place: linked.place, slice: linked.slice, coMode: linked.coMode, d: linked.d, from: stateFromLink() ? 'link' : 'kept', avoided: avoid ? avoid.key : undefined } : crashed ? { safe: 1 } : null);
+  if (crashed) showSafe();
+  else showLogLink();
   if (reduce) { const r = $('reducedNote'); r.textContent = T().reduced; r.hidden = false; playBtn.hidden = true; $('speedGroup').hidden = true; }
   sync();
   hint(true);
@@ -1312,6 +1512,30 @@ async function start() {
   armIdle();
 }
 
+// (round 10a) What the page sets in the engine for this device, once the guard is calibrated, and again when the engine is
+// built anew after a lost context was given back (its build starts from its defaults: round 9 left the engine's own guard
+// off, the full march on a guarded device, no frame-rate cap and the eddies every frame after a restore): its guard's budget
+// and the kind measured, the march's tier (the cheaper on a guarded device; else for the kinds measured over the budget),
+// the frame rate while only the clock moves (FPS_STILL, a phone or tablet FPS_STILL_PHONE; the display's own while the view
+// moves or anything changes), and on a guarded device the eddies' volume every other frame while only the clock moves
+function engineSettings() {
+  if (typeof box.diskGuard !== 'function') return;
+  engFixed = null;   // (round 10a, dev.5: told again to an engine built anew, see guardApply)
+  box.diskGuard({ ms: GUARD_MS / GPUX, key: gc.key, c1: gc.c1 / GPUX });   // (the engine's own guard, the same budget)
+  if (typeof box.diskMarch === 'function') { if (guarded) box.diskMarch('cheap'); else predictTier(gc.key); }
+  if (typeof box.diskFps === 'function') box.diskFps(SWITCH.fps > 0 ? SWITCH.fps : MOBILE || coarse ? FPS_STILL_PHONE : FPS_STILL);
+  if (typeof box.diskEddyEvery === 'function') box.diskEddyEvery(guarded ? 2 : 1);
+  // (round 10a: on a guarded device the GPU rests between frames that only move the clock and between a still's bands: half
+  // the time at most busy, DUTY_GUARDED; see the engine's diskDuty)
+  if (typeof box.diskDuty === 'function') box.diskDuty(SWITCH.duty === 'off' ? 0 : Number(SWITCH.duty) > 0 ? Number(SWITCH.duty) : guarded ? DUTY_GUARDED : 0);
+  if (SWITCH.ctmax > 0 && typeof box.diskCtMax === 'function') box.diskCtMax(SWITCH.ctmax);
+  // (round 10a: the march in kicks, see the engine's SPLIT: a kick's work and the state's size by the device. Guarded (a phone),
+  // 32 steps a kick (5 to 7 ms at the slowest rays on the M1 Max) and 8 MB a set; else 48 steps (64 made a frame's GPU time 1.16
+  // times the rays drawn whole, where 32 made it 1.56, but its slowest kicks 9 to 14 ms) and 32 MB a set, so that a desktop's
+  // frame is one band, its slowest ray paid once)
+  // (round 10a, optimizing: ?kadapt=1, the work of a kick adapted by kind, see the engine's kickKOf; off unless asked)
+  if (typeof box.diskSplit === 'function') box.diskSplit({ k: SWITCH.kick > 0 ? SWITCH.kick : guarded ? 32 : 48, mb: guarded ? 8 : 32, adapt: SWITCH.kadapt });
+}
 // the engine's own changes (keys, a drag, the easter eggs, a restored context) reach the controls
 box.addEventListener('diskstate', () => sync());
 box.addEventListener('diskmode', () => sync());
@@ -1321,19 +1545,27 @@ box.addEventListener('diskframe', (e) => {
   // (the intervals between frames of one still picture, at one scale, are what a frame of it costs; a complete picture
   // may be sharpened)
   // (round 9: held, the time the frame waited for the frame rate's cap, is not its cost)
-  const { acc = 0, accMax = 0, bands = 1, held = 0 } = e.detail, now = performance.now() - held;
+  const { acc = 0, accMax = 0, bands = 1, held = 0, kicks = 0 } = e.detail, now = performance.now() - held;
   // (round 7: an interval after a complete still picture, or after the page was hidden, is a rest, not a frame's cost:
   // counted, the first frame after the clock started again took the scale to its floor)
   if (lastIdle) lastFrame = 0;
   lastIdle = !!S().paused && accMax > 0 && acc >= accMax;
+  // (round 10a, A4: a still refined to the next step, see stillStep; Auto by its own sharpening, onAccumulated. The view moved:
+  // from its first step again)
+  if (moveFrom && gc.still) gc.still = 0;
+  if (!moveFrom && !S().paused && lastFrame && now - lastFrame < 5000) picMs = picMs ? 0.6 * picMs + 0.4 * (now - lastFrame) : now - lastFrame;
+  else if (moveFrom) picMs = 0;
+  if (stillStep(acc, accMax)) { if (quality === 'auto') scaleTo(capStill()); else applyFixed(); picMs = 0; sync(); }
   applyFixed();
   if (skipFrames > 0) { skipFrames--; costs.length = 0; }
-  else guardFixed(lastFrame ? now - lastFrame : 0, acc, accMax, bands);
+  else guardFixed(lastFrame ? now - lastFrame : 0, acc, accMax, kicks ? Math.max(2, bands) : bands);   // (in kicks: no piece is the frame)
   // (what a frame costs now: consecutive frames, the clock running or a picture being averaged)
   if (bands === 1 && lastFrame && now - lastFrame < 3000 && (!S().paused || acc >= 2)) frameMs = frameMs ? 0.7 * frameMs + 0.3 * (now - lastFrame) : now - lastFrame;
   if (acc >= 2 && lastFrame) { recent.push(now - lastFrame); if (recent.length > 12) recent.shift(); }
   lastFrame = performance.now();
   if (accMax && acc >= accMax && lab.dataset.state === 'live') onAccumulated();
+  healthTick(e.detail);   // (round 10a: the picture's health, for the flight record)
+  flog.frT = Date.now() - flog.t0;   // (round 10a: the last frame finished: a picture still drawn but no input reaching the page, WebKit bug 306598, against nothing drawn)
   watchMoving(e.detail);
   renderMatKey(S());   // (the key's rows follow the distance: the envelope, the magnetosphere)
 });
@@ -1348,16 +1580,19 @@ box.addEventListener('diskframe', (e) => {
 // from frame to frame (the azimuth less the slow turn of the clock). data-move="off" on the disk turns it off, to compare.
 const MOVE_K = 0.65, MOVE_REST = 200, MOVE_FIXED = 0.55;
 // (round 9) the frame rate's cap while the clock runs and nothing else moves (item 3 of round 9, DESIGN.md section 22)
-const FPS_STILL = 30, FPS_STILL_PHONE = 20;
-let moveFrom = 0, moveTimer = 0, lastView = null;
+const FPS_STILL = 30, FPS_STILL_PHONE = 20, DUTY_GUARDED = 0.5;
+let moveFrom = 0, moveTimer = 0, lastView = null, moveScale = 0;   // (moveScale: Auto's lighter picture, as the governor left it in the last move)
 function moving() {
   if (holdSharp || box.dataset.move === 'off' || !live() || 'lost' in lab.dataset) return;
   if (!moveFrom) {
     unsharpen();
     moveFrom = box.diskScale();
-    const floor = S().look === 'co' ? CO_FLOOR : MIN_SCALE;
-    const to = quality === 'auto' ? Math.max(floor, Math.min(moveFrom, MOVE_K * runScale)) : Math.min(moveFrom, MOVE_FIXED);
-    if (gov) gov.pause(true);
+    const floor = S().look === 'co' ? CO_FLOOR : S().look === 'optical' || S().look === 'mir' ? LADDER[0] : MIN_SCALE;
+    const to = quality === 'auto' ? Math.max(floor, Math.min(moveFrom, moveScale > 0 ? moveScale : MOVE_K * runScale)) : Math.min(moveFrom, MOVE_FIXED);
+    // (round 10a, dev.6: Auto's lighter picture follows the frame rate while the view moves, the governor working then only (its
+    // runScale kept for the next move); at rest the ramp's. dev.5 left it at the scale measured at the start: on the phone's frame
+    // a drag in the model's look ran at 52 frames a second at the start's view and 34 next to the star, against dev.4's 55 and 37)
+    if (gov) gov.pause(quality !== 'auto' || holdSharp);
     gc.still = 0;   // (round 9: a still picture after the move is chosen anew)
     if (Math.min(to, capRun()) < moveFrom - 0.005) scaleTo(Math.round(to * 1000) / 1000);
   }
@@ -1386,7 +1621,8 @@ function endMoving() {
   if (!moveFrom) return;
   moveFrom = 0; skipFrames = 3;
   if (quality !== 'auto') relaxGuard();
-  if (live()) scaleTo(quality === 'auto' ? runScale : fixedScale());
+  // (round 10a, dev.5: the ramp from the lighter picture, a rung a picture, see stillStep; Auto's too)
+  if (live()) scaleTo(quality === 'auto' ? capStill() : fixedScale());
   govRest();
 }
 // A lost context usually comes back by itself within a second or two. If it has not after RETRY_AFTER, the stage offers
@@ -1417,6 +1653,11 @@ function showRetry(on) {
   stageRetry.hidden = !on;
 }
 box.addEventListener('disklost', (e) => {
+  // (round 10a: in the flight record, with the browser's message, what was in flight, and whether the page was hidden: WebKit
+  // takes back the context of a page in the background, which is not a fault)
+  const dl = e.detail || {};
+  if (dl.lost) flogAdd({ k: 'lost', key: dl.key, sc: dl.sc, msg: dl.msg || undefined, fl: dl.inFlight && dl.inFlight.length ? dl.inFlight : undefined, warming: dl.warming || undefined, hidden: document.hidden ? 1 : undefined }, true);
+  else flogAdd({ k: 'back' }, true);
   if (e.detail.lost) {
     record('lost');
     lab.dataset.lost = ''; posterKey = ''; setPoster(PLACES[placeI].id); note(T().still.lost, 0);
@@ -1434,6 +1675,7 @@ box.addEventListener('disklost', (e) => {
     gc.cap = Math.min(gc.cap, LADDER[4]);
     if (safe) box.diskSet({ look: 'model', slice: 0 });
     box.diskScale(Math.min(runScale || gc.cap, gc.cap)); bandsSet = 0; guardApply();
+    engineSettings();   // (round 10a: the engine built anew has its defaults, see engineSettings)
     record('live');
     if (safe) note(T().restoredSafe, 6000);
     sync();
@@ -1475,7 +1717,8 @@ function keptState() {
 }
 function resetAll() {
   if (!live() || !defaults) return;
-  try { localStorage.removeItem(SET); sessionStorage.removeItem('disk-lab-quality'); } catch { /* nothing kept */ }
+  guardAfresh(true);   // (round 10a)
+  try { localStorage.removeItem(SET); sessionStorage.removeItem(KEY('disk-lab-quality')); } catch { /* nothing kept */ }
   setPick(false); popClose(); unsharpen();
   qChosen = false;
   const d = { ...defaults };
@@ -1496,12 +1739,286 @@ function resetAll() {
 // A visit after one that ended starting, changing, lost, stuck, failed or blocked, or opened by "Try again", starts with
 // safe settings: the model look, no cut, Auto, the whole disk, whatever its address says (the owner: "then the earlier
 // settings must be thrown away"), and says so in one line.
+// (round 10a) The owner: "an irreversible change is not good, even to protect the user"; "tell 'it computes but takes
+// long or uses power' clearly apart from 'it cannot compute and stops'". The record now carries the kind of frame drawn
+// (key), and the next visit judges the last one from it and from the flight record (judgePrev): only what is broken starts
+// it safe, and then only without what was in view when it stopped, where the record says (the culprit: an observed look,
+// the line's map, the cut), the settings kept and offered back in one tap (restoreKept). DESIGN.md, section 23.
 function record(p) {
   phase = p;
-  try { localStorage.setItem(REC, JSON.stringify({ phase: p, t: Date.now(), v: VERSION })); } catch { /* not kept: the next visit starts as usual */ }
+  try { localStorage.setItem(REC, JSON.stringify({ phase: p, t: Date.now(), v: VERSION, key: gc.key || '' })); } catch { /* not kept: the next visit starts as usual */ }
+  flogAdd({ k: 'ph', p, key: gc.key || '' }, true);
 }
-addEventListener('pagehide', () => { if (phase === 'starting' || phase === 'changing') record('left'); });
-addEventListener('pageshow', (e) => { if (e.persisted && phase === 'left' && mode === 'live') record('live'); });
+addEventListener('pagehide', () => { if (phase === 'starting' || phase === 'changing') record('left'); flog.end = 'hide'; flogAdd({ k: 'hide', w: 'pagehide' }, true); });
+addEventListener('pageshow', (e) => { if (!e.persisted) return; flog.end = ''; flogClaim(); flogAdd({ k: 'show', w: 'back' }, true); if (phase === 'left' && mode === 'live') record('live'); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) flogAdd({ k: 'hide' }, true); else { flogClaim(); flogAdd({ k: 'show' }, true); } });
+
+// How the last visit ended: { bad, why, culprit, report } from its phase (REC) and its flight record (LOG). Slow is allowed,
+// broken is a bug. Broken (bad): the context lost and not given back while the page was in view ('lost', 'stuck'); the live
+// model unable to start ('failed', 'blocked'); a piece of GPU work told as hung that never ended ('hung'); the page
+// stopped while in view, its record ending without its being hidden or left (frozen, or its process ended): with a dear
+// step begun and not ended, or in a start or a change of look ('stopped'), or else ('died', the cause unknown). Not broken:
+// a page closed, reloaded or put in the background whatever it was doing (its record ends hidden); a context lost while
+// hidden (WebKit takes a hidden page's back); a slow piece that ended (late). A visit before 1.8, with no flight record,
+// is judged by its phase alone, as round 9 did. culprit: the kind of frame in view at the end (key) and the quality, where
+// the record says. report: the record is worth offering (broken, or values not finite seen in the picture). "Try again"
+// (retry=1) starts safe as before.
+function judgePrev(r, log) {
+  const OPEN_MS = 15000, retry = q.get('retry') === '1';
+  if (!log) { const bad = retry || !!(r && BAD_END.includes(r.phase)); return { bad, why: retry ? 'retry' : bad ? r.phase : '', culprit: null, report: false }; }
+  // (a record written within the last two heartbeats is of a page still running, in another tab or a frame: not judged)
+  const e = log.e, last = e[e.length - 1], hidden = log.end === 'hide' || !!(last && last.k === 'hide') || Date.now() - (log.alive || 0) < 6500;
+  // (a step begun and not ended counts only near the end: within OPEN_MS of the last sign of life)
+  const near = (x) => (log.alive || 0) - (log.t0 + x.t) < OPEN_MS;
+  const rev = e.slice().reverse(), open = rev.find((x) => x.open && near(x)), hung = rev.find((x) => x.k === 'hung' && x.ended == null), lostE = rev.find((x) => x.k === 'lost');
+  const ph = r ? r.phase : '';
+  const why = ph === 'failed' || ph === 'blocked' ? ph
+    : (ph === 'lost' || ph === 'stuck') && !(lostE && lostE.hidden) ? 'lost'
+    : hung && !hidden ? 'hung'
+    : hidden ? (retry ? 'retry' : '')
+    : open ? 'stopped' : ph === 'starting' || ph === 'changing' ? 'stopped' : ph === 'live' ? 'died' : retry ? 'retry' : '';
+  const k = String((lostE && why === 'lost' && lostE.key) || (why === 'hung' && hung.key) || (why === 'stopped' && open && open.key) || (r && r.key) || log.key || '').replace(/:pre$/, '').replace(/:F$/, '');
+  return { bad: !!why, why, culprit: why && k ? { key: k, q: log.q || '' } : null, report: !!why || !!log.broken, at: log.alive || 0 };
+}
+
+// ---------- the flight recorder (round 10a) ----------
+// The owner's phone stopped in the visible look with nothing to say why. The page keeps, on this device only (localStorage,
+// LOG; nothing is ever sent), a short record of what it and the engine are doing: the device (its browser, screen, the GPU's
+// name where given, the extensions and limits that change what the engine does, the settings it started with), and a ring
+// of the last LOG_N steps: the links of the shader programs, the warm, the pieces of GPU work that are dear (predicted over
+// 40 % of the budget, a first use, or not predicted; the engine's recBand), each written down before it is sent and
+// completed after; a piece not done after 2.5 s while the page runs (hung); the phases; the guard's decisions; a lost
+// context with what was in flight; a GL error; values not finite in the picture (the engine's HEALTH_FS); errors of the
+// script; the page hidden or shown. Where the page dies, the last step begun and not ended is what was running; the
+// heartbeat (alive, every HEART_MS while the page is shown) says how long it ran after. Each kind of frame is summed up
+// (sum: frames, the longest frame and band, the scales) without an entry each. The next visit judges the last from it
+// (judgePrev) and offers it to copy (the safe start's note, the About dialog; with ?diag=1 this visit's too). A few KB,
+// written at once before a dear step, otherwise within 2 s. No GL query is made for it in the frames.
+const LOG_N = 40, HEART_MS = 1000, HEALTH_MS = 10000, HEALTH_OBS_MS = 2000, HB_N = 30;
+const flog = { v: VERSION, eng: ENGINE_SRC.split('v=')[1], t0: Date.now(), alive: Date.now(), end: '', key: '', q: '', sc: 0, dev: null, sum: {}, health: null, broken: '', e: [] };
+let flogTimer = 0, baseE = null;
+// (one record for the device: the visit that holds it (LOG_OWNER, its t0) writes it, and a visit takes it when it starts and
+// whenever it is shown again, so that of two pages open at once the one in view keeps it, and a page that stops in view
+// has its own record there. A page in a frame (the checks') takes it from the page under it)
+const LOG_OWNER = KEY('disk-lab-log-owner');
+const flogClaim = () => { try { localStorage.setItem(LOG_OWNER, String(flog.t0)); } catch { /* none kept */ } };
+const flogMine = () => { try { return localStorage.getItem(LOG_OWNER) === String(flog.t0); } catch { return false; } };
+function flogSave() {
+  clearTimeout(flogTimer); flogTimer = 0;
+  flog.alive = Date.now(); flog.key = gc.key; flog.q = quality; flog.sc = live() ? box.diskScale() : 0;
+  // (round 10a: the clock, running or not, and its time; the GL objects alive by kind and the MB allocated so far)
+  if (live()) { const s0 = S(); flog.clock = { run: s0.paused ? 0 : 1, t: Math.round(s0.time * 10) / 10, sp: s0.speed, mode: s0.mode }; }
+  flog.gl = { live: glc.live, made: glc.made, mb: Math.round(glc.mb * 10) / 10 };
+  if (!flogMine()) return;
+  try { localStorage.setItem(LOG, JSON.stringify(flog)); } catch { /* not kept (full, or refused): the page goes on */ }
+}
+const flogSoon = () => { if (!flogTimer) flogTimer = setTimeout(flogSave, 2000); };
+function flogAdd(o, now = false) {
+  o.t = Date.now() - flog.t0; flog.e.push(o);
+  if (flog.e.length > LOG_N) flog.e.shift();
+  if (now) flogSave(); else flogSoon();
+  return o;
+}
+const flogFind = (id) => { for (let i = flog.e.length - 1; i >= 0; i--) if (flog.e[i].id === id || flog.e[i].rid === id) return flog.e[i]; return null; };
+const r1 = (v) => Math.round(v * 10) / 10;
+// (the last visit's record, kept apart when it ended badly or saw values not finite, for its report; then this visit's
+// record begins)
+if (prevLog && verdict.report) { try { localStorage.setItem(LOG_BAD, JSON.stringify({ ...prevLog, verdict })); } catch { /* not kept */ } }
+const badLog = readJSON(LOG_BAD);
+// (round 10a) the last three visits' records, the newest first, each with its judgement: a visit that stopped is not lost
+// to the visits after it that found WebGL stopped (on the owner's iPhone, until Safari was quit)
+const LOG_HIST = KEY('disk-lab-log-hist');
+const histLogs = (() => {
+  const h = readJSON(LOG_HIST), list = Array.isArray(h) ? h.filter((l) => l && Array.isArray(l.e)) : [];
+  if (prevLog && !list.some((l) => l.t0 === prevLog.t0)) { list.unshift({ ...prevLog, verdict }); list.length = Math.min(list.length, 3); try { localStorage.setItem(LOG_HIST, JSON.stringify(list)); } catch { /* not kept */ } }
+  return list;
+})();
+flogClaim(); flogSave();
+setInterval(() => { if (!document.hidden) flogSave(); }, HEART_MS);
+// (a hung piece ended after all: slow, not broken)
+const hungEnded = (ms, id) => { for (let i = flog.e.length - 1; i >= 0; i--) { const x = flog.e[i]; if (x.k === 'hung' && x.ended == null && (!id || !x.id || x.id === id)) { x.ended = r1(ms); return; } } };
+// the engine's steps (see its rec)
+const BASE_PROGS = new Set(['FS', 'disk', 'wind', 'env', 'turb3', 'shade3', 'wstr', 'show', 'bloom', 'ae', 'health']);
+box.addEventListener('diskrec', (ev) => {
+  const d = ev.detail || {};
+  if (d.k === 'link' && BASE_PROGS.has(d.w)) {
+    // (the programs made as the engine starts, in one entry: the one being made, their count and time)
+    if (!baseE || baseE.done) baseE = flogAdd({ k: 'link', w: 'base', n: 0, ms: 0 });
+    if (d.ph === 0) { baseE.at = d.w; baseE.open = 1; flogSave(); return; }
+    baseE.n++; baseE.ms = r1(baseE.ms + d.ms); delete baseE.open;
+    if (!d.ok) { baseE.ok = 0; baseE.log = d.log; flogSave(); } else flogSoon();
+    if (d.w === 'health') { baseE.done = 1; delete baseE.at; }
+  } else if (d.k === 'link' || d.k === 'warm') {
+    if (d.ph === 0) { flogAdd({ k: d.k, id: d.id, w: d.w, key: d.key, pc: d.pc, open: 1 }, true); return; }
+    const x = flogFind(d.id) || flogAdd({ k: d.k, id: d.id, w: d.w });
+    x.ms = r1(d.ms); delete x.open;
+    if (d.ok === 0) { x.ok = 0; x.log = d.log; flog.broken = flog.broken || 'link'; }
+    if (d.late) { x.late = 1; hungEnded(d.ms, d.id); }
+    flogSave();
+  } else if (d.k === 'piece') {
+    if (d.ph === 0) {
+      // (a frame's dear bands in one entry: bands sent b, done dn, the longest ms, the dearest prediction; and frames of one
+      // kind at one scale that follow each other, x of them, in one entry too)
+      let x = null;
+      for (let i = flog.e.length - 1; i >= Math.max(0, flog.e.length - 4); i--) {
+        const y = flog.e[i];
+        if (y.k === 'piece' && ((d.job && y.job === d.job) || (!y.open && y.key === d.key && y.sc === d.sc && y.n === d.n && !d.first && !y.first))) { x = y; break; }
+      }
+      if (x && x.job !== d.job) { x.x = (x.x || 1) + 1; x.job = d.job; x.t = Date.now() - flog.t0; }
+      if (!x) x = flogAdd({ k: 'piece', job: d.job, key: d.key, sc: d.sc, n: d.n, s: d.s || undefined, first: d.first || undefined, b: 0, dn: 0, ms: 0, pred: 0 });
+      x.rid = d.id; x.b++; x.pred = Math.max(x.pred, d.pred || 0); x.open = 1;
+      if (d.rows) x.rows = d.rows;   // (the band in flight: rows y0 to y1 of the volume's rH, its full width rW)
+      flogSave();
+    } else {
+      const x = flogFind(d.id); if (!x) return;
+      x.dn++; x.ms = Math.max(x.ms, r1(d.ms)); if (x.dn >= x.b) delete x.open;
+      if (d.late) { x.late = 1; hungEnded(d.ms, d.id); }
+      flogSoon();
+    }
+  } else if (d.k === 'hung') {
+    const x = d.id ? flogFind(d.id) : null; if (x) x.hung = r1(d.ms);
+    flogAdd({ k: 'hung', id: d.id || undefined, key: d.key || (x && x.key) || d.w || '', ms: r1(d.ms), sc: d.sc, n: d.n, first: d.first || undefined, pre: d.pre || undefined, s: d.s || undefined }, true);
+  } else if (d.k === 'late') { hungEnded(d.ms, d.id); flogAdd({ k: 'late', key: d.key || '', ms: r1(d.ms), s: d.s || undefined }); }
+  else if (d.k === 'oom' || d.k === 'glerr') { if (d.k === 'oom') flog.broken = flog.broken || 'oom'; flogAdd({ k: d.k, w: d.w, e: d.e }, true); }
+  else if (d.k === 'first') flogAdd({ k: 'first', w: d.w, key: d.key }, true);   // (a pipeline the GPU's process makes now)
+  // (round 10a: the march in kicks given up for a kind, a bug of the engine's (its state could not be made, or a band was
+  // given more kicks than its rays can need): written down at once)
+  else if (d.k === 'split') flogAdd({ k: 'split', ok: d.ok, broken: d.broken || undefined, stuck: d.stuck, key: d.key, rows: d.rows, w: d.w, h: d.h }, true);
+  // (round 10a: a piece of GPU work timed with no fence, an error of the engine's: see its GT_NOFENCE)
+  else if (d.k === 'nofence') flogAdd({ k: 'nofence', w: d.w, key: d.key, gpu: d.gpu, age: d.age, late: d.late, ms: d.ms }, true);
+  else if (d.k === 'sync') {
+    // (a call that waited for the GPU's process over 5 ms, see the engine's slowSync: one entry for a run of the same call,
+    // with their count and the longest)
+    let x = null;
+    for (let i = flog.e.length - 1; i >= Math.max(0, flog.e.length - 3); i--) if (flog.e[i].k === 'sync' && flog.e[i].w === d.w) { x = flog.e[i]; break; }
+    if (x) { x.n = (x.n || 1) + 1; x.ms = Math.max(x.ms, r1(d.ms)); flogSoon(); } else flogAdd({ k: 'sync', w: d.w, ms: r1(d.ms), key: gc.key }, d.ms > 500);
+  }
+});
+// (round 10a) A heartbeat a second (hb, the last HB_N): frames finished, pieces, the GPU's busy time (their sum, ms), the
+// longest piece, the scale, the kind, the clock running, the model's time, the components: the seconds before a loss; and
+// the dearest kick of the march in kicks (its piece's time over its kicks, ms; see the engine's SPLIT)
+const hbCur = { f: 0, p: 0, busy: 0, max: 0, kick: 0 };
+flog.hb = [];
+setInterval(() => {
+  if (document.hidden) return;
+  const s0 = live() ? S() : null;
+  flog.hb.push([Math.round((Date.now() - flog.t0) / 1000), hbCur.f, hbCur.p, Math.round(hbCur.busy), Math.round(hbCur.max), live() ? Math.round(box.diskScale() * 1000) / 1000 : 0, gc.key, s0 ? (s0.paused ? 0 : 1) : -1, s0 ? Math.round(s0.time) : 0, s0 ? s0.mode : 0, Math.round(hbCur.kick * 10) / 10]);
+  if (flog.hb.length > HB_N) flog.hb.shift();
+  hbCur.f = hbCur.p = hbCur.busy = hbCur.max = hbCur.kick = 0;
+}, 1000);
+// every frame summed up by its kind, no entry each (saved with the heartbeat)
+box.addEventListener('diskgpu', (ev) => {
+  const d = ev.detail || {}; if (!(d.ms > 0)) return;
+  hbCur.f++; hbCur.p += d.bands || 1; hbCur.busy += d.ms; hbCur.max = Math.max(hbCur.max, d.band || d.ms); hbCur.kick = Math.max(hbCur.kick, d.kick || 0);
+  const k = String(d.key || '').replace(/:F$/, ''), s = flog.sum[k] || (flog.sum[k] = { n: 0, ms: 0, band: 0, sc: 0, top: 0, pre: 0, first: 0 });
+  s.n++; s.ms = Math.max(s.ms, Math.round(d.ms)); s.band = Math.max(s.band, Math.round(d.band)); s.sc = d.scale; s.top = Math.max(s.top, d.scale); s.pre = Math.max(s.pre, Math.round(d.pre || 0)); if (d.first) s.first++;
+  // (round 10a: in kicks, the most a frame took, its dearest kick, and the dearest kick sent alone (ms))
+  if (d.kicks) { s.kicks = Math.max(s.kicks || 0, d.kicks); s.kick = Math.max(s.kick || 0, d.kick || 0); s.kick1 = Math.max(s.kick1 || 0, d.kick1 || 0); }
+});
+// the picture's health (the engine's HEALTH_FS): values not finite are a bug, said in the record and offered in the next visit
+let healthT = 0, healthKey = '';
+box.addEventListener('diskhealth', (ev) => {
+  const d = ev.detail || {};
+  flog.health = { key: d.key, sc: d.scale, acc: d.acc, bad: d.bad, neg: d.neg, worst: d.worst, max: d.max, cells: d.cells, t: Date.now() - flog.t0 };
+  // (where: the cells of a 32 x 18 grid over the picture, column and row from the top left, with values not finite; chans:
+  // which channels, 1 red, 2 green, 4 blue: green alone shows magenta)
+  if (d.bad || d.neg) { flog.broken = flog.broken || 'nonfinite'; flogAdd({ k: 'nf', key: d.key, sc: d.scale, acc: d.acc, size: d.size, bad: d.bad, neg: d.neg, worst: d.worst, max: d.max, chans: d.chans, where: d.where }, true); }
+});
+// (asked for: a still when complete, a new kind of frame once measured, every frame drawn in bands, and every HEALTH_MS while
+// the clock runs, HEALTH_OBS_MS in the observed looks: values not finite seen before a loss are then in the record)
+function healthTick(d) {
+  if (!live() || typeof box.diskHealth !== 'function' || 'lost' in lab.dataset) return;
+  const now = performance.now(), still = d.accMax > 0 && d.acc >= d.accMax, key = gc.key + (still ? ':still@' + box.diskScale() : '');
+  if ((still && key !== healthKey) || (gc.measured && !healthKey.startsWith(gc.key)) || d.bands > 1 || now - healthT > (gc.key === 'model' ? HEALTH_MS : HEALTH_OBS_MS)) { healthKey = key; healthT = now; box.diskHealth(); }
+}
+addEventListener('error', (e) => flogAdd({ k: 'err', m: String(e.message || e.error || '').slice(0, 160) }, true));
+addEventListener('unhandledrejection', (e) => flogAdd({ k: 'err', m: 'rejection: ' + String((e.reason && e.reason.message) || e.reason).slice(0, 150) }, true));
+// the device, once, when the engine has started (what the record's report begins with)
+function flogDevice(kept) {
+  const c = box.querySelector(':scope > canvas'), caps = typeof box.diskCaps === 'function' ? box.diskCaps() : null;
+  flog.dev = { ua: navigator.userAgent, dpr: devicePixelRatio, screen: [screen.width, screen.height], stage: [stage.clientWidth, stage.clientHeight], canvas: c ? [c.width, c.height] : null,
+    probe: diag.probe, caps, emu: CAPS || undefined, math: box.dataset.math || undefined, gpux: GPUX > 1 ? GPUX : undefined,
+    sw: Object.fromEntries(Object.entries(SWITCH).filter(([, v]) => v)), duty: typeof box.diskDuty === 'function' ? box.diskDuty() : undefined,
+    split: typeof box.diskSplit === 'function' ? (({ on, k, adapt }) => ({ on: on ? 1 : 0, k, adapt: adapt ? 1 : 0 }))(box.diskSplit()) : undefined,
+    still: mode === 'still' ? stillReason : undefined, fail: box.dataset.fallbackError || diag.failError || undefined, guarded, budget: GUARD_MS, march: diag.guard && diag.guard.march, quality, chosen: qChosen,
+    prev: { phase: prevRec && prevRec.phase, why: verdict.why, culprit: verdict.culprit }, kept };
+  flogSave();
+}
+// The safe start's note (round 10a): what happened, as far as the record says, and two offers: the settings kept on this
+// device back in one tap (restoreKept, through the guard as at any start), and the last visit's record to read and copy.
+// It stays until closed or used (30 s at most); the record stays offered in the About dialog.
+const stageSafe = $('stageSafe'), stageLog = $('stageLog');
+let safeTimer = 0;
+const lookName = (key) => { const [look, m] = key.split(':'), w = T(); return look === 'model' ? w.cutName : look === 'co' && w.coModes[m] ? `${w.looks.co.label}(${w.coModes[m]})` : (w.looks[look] || {}).label || look; };
+function showSafe() {
+  const w = T(), kids = [el('p', {}, avoid ? w.safeStartKnown(lookName(avoid.key)) : w.safeStart)];
+  const acts = [];
+  if (saved || keptQuality) acts.push(el('button', { type: 'button', class: 'chip', onclick: restoreKept }, w.safeRestore));
+  if (badLog || prevLog) acts.push(el('button', { type: 'button', class: 'chip quiet', onclick: () => showLog() }, w.log.show));
+  acts.push(el('button', { type: 'button', class: 'icon-x', 'aria-label': w.log.close, title: w.log.close, onclick: () => hideSafe() }, '×'));
+  kids.push(el('div', { class: 'safe-acts' }, ...acts));
+  stageSafe.replaceChildren(...kids); stageSafe.hidden = false;
+  clearTimeout(safeTimer); safeTimer = setTimeout(hideSafe, 30000);
+  showLogLink();
+}
+function hideSafe() { clearTimeout(safeTimer); stageSafe.hidden = true; }
+// the settings kept before the safe start, back: the place, the look, the view, what is shown, the quality chosen
+function restoreKept() {
+  hideSafe();
+  if (!live()) return;
+  const st = keptState();
+  if (st) {
+    const s0 = S();
+    guardSwitch(keyOf({ ...s0, ...st, slice: st.slice != null ? Number(st.slice) : s0.slice }));
+    box.diskSet({ ...st, fly: reduce ? 0 : 1 });
+    if (st.place) { const i = PLACES.findIndex((p) => p.id === st.place); if (i >= 0) { placeI = i; target = { ...S(), time: S().time }; renderPlace(); } }
+  }
+  if (keptQuality) { qChosen = true; applyQuality(keptQuality); }
+  else { qChosen = false; applyQuality(guarded ? 'auto' : 'full'); }   // (none chosen: the device's own)
+  keeping = true; keepNow();
+  flogAdd({ k: 'set', w: 'restored', look: st && st.look, q: keptQuality || undefined }, true);
+  sync(); note(T().restoredKept, 3000);
+}
+// the record offered in the About dialog: the last bad end's, if any (and with ?diag=1 always, with this visit's)
+function showLogLink() {
+  const b = $('logOpen');
+  if (!b || !(badLog || histLogs.some((l) => l.verdict && l.verdict.bad) || q.get('diag') === '1')) return;
+  b.textContent = T().log.show; b.hidden = false; b.onclick = () => { about.close(); showLog(); };
+}
+function showLog() {
+  // (round 10a: the last three visits, the newest first; and the last that ended badly if it is older; ?diag=1 this visit too)
+  const w = T().log, mine = q.get('diag') === '1', list = histLogs.slice();
+  if (badLog && !list.some((l) => l.t0 === badLog.t0)) list.push(badLog);
+  const text = [...(list.length ? list.map((l, i) => (i ? '\n--- ' + (i + 1) + ' ---\n' : '') + logText(l)) : [w.none]), ...(mine ? ['', '--- ' + w.mine + ' ---', logText(flog)] : [])].join('\n');
+  const pre = el('pre', {}, text);
+  const copy = el('button', { type: 'button', class: 'chip', onclick: async () => {
+    try { await navigator.clipboard.writeText(text); copy.textContent = w.copied; }
+    catch { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  } }, w.copy);
+  stageLog.replaceChildren(el('p', { class: 'log-title' }, w.title), el('p', { class: 'log-note' }, w.note), pre,
+    el('div', { class: 'safe-acts' }, copy, el('button', { type: 'button', class: 'chip quiet', onclick: () => { stageLog.hidden = true; } }, w.close)));
+  stageLog.hidden = false;
+}
+// the record as text, to read and paste (in English: it is for the author)
+function logText(l) {
+  if (!l || !Array.isArray(l.e)) return '';
+  const d = l.dev || {}, c = d.caps || {}, f = (o) => Object.entries(o).filter(([, v]) => v != null && v !== '').map(([k, v]) => k + ' ' + (typeof v === 'object' ? JSON.stringify(v) : v)).join(', ');
+  const when = new Date(l.t0), out = [];
+  out.push(`Disk Lab ${l.v} · engine ${l.eng} · ${when.toISOString().replace('T', ' ').slice(0, 19)} UTC · ran ${r1((l.alive - l.t0) / 1000)} s · ended ${l.end === 'hide' ? 'left or hidden' : 'in view (stopped?)'}${l.verdict ? ' · judged: ' + (l.verdict.why || 'fine') : ''}${l.broken ? ' · broken: ' + l.broken : ''}`);
+  if (d.ua) out.push(d.ua);
+  out.push(`dpr ${d.dpr} · screen ${(d.screen || []).join('x')} · stage ${(d.stage || []).join('x')} · canvas ${(d.canvas || []).join('x')} · ${c.renderer || (d.probe && d.probe.renderer) || '?'} · ${c.version || ''}`);
+  if (d.caps) out.push(`timer ${c.timer} pcomp ${c.pcomp} fLinear ${c.fLinear} cbFloat ${c.cbFloat} cbHalf ${c.cbHalf} fBlend ${c.fBlend} · maxTex ${c.maxTex} max3D ${c.max3D} maxRB ${c.maxRB} maxDB ${c.maxDB} view ${(c.maxView || []).join('x')} · exts ${c.nExt}`);
+  out.push(`start: ${f({ guarded: d.guarded, budget: d.budget, march: d.march, quality: d.quality, chosen: d.chosen, emu: d.emu, math: d.math, gpux: d.gpux })} · prev ${JSON.stringify(d.prev || {})} · kept ${JSON.stringify(d.kept || null)}`);
+  out.push('frames: ' + (Object.entries(l.sum || {}).map(([k, s]) => `${k} ${s.n} (max ${s.ms} ms, band ${s.band}, pre ${s.pre}, scale ${s.sc}/${s.top}${s.first ? ', first ' + s.first : ''})`).join('; ') || 'none'));
+  if (l.health) out.push('health: ' + f(l.health));
+  if (l.clock) out.push('clock: ' + f(l.clock) + (d.sw && Object.keys(d.sw).length ? ' · switches ' + JSON.stringify(d.sw) : '') + (d.duty != null ? ' · duty ' + d.duty : '') + (d.still ? ' · still ' + d.still : '') + (d.fail ? ' · fail ' + d.fail : ''));
+  else if (d.still || d.fail) out.push('still: ' + (d.still || '') + (d.fail ? ' · fail ' + d.fail : '') + (d.probe ? ' · probe ' + JSON.stringify(d.probe) : ''));
+  if (l.gl) out.push('gl: live ' + JSON.stringify(l.gl.live) + ' · made ' + JSON.stringify(l.gl.made) + ' · MB ' + l.gl.mb);
+  if (l.hb && l.hb.length) out.push('per second [s, frames, pieces, busy ms, longest ms, scale, kind, clock, time, mode, kick ms]: ' + l.hb.map((h) => '[' + h.join(',') + ']').join(' '));
+  out.push(`at the end: key ${l.key} · quality ${l.q} · scale ${l.sc} · last frame +${r1((l.frT || 0) / 1000)} s · last input +${r1((l.inT || 0) / 1000)} s · last sign of life +${r1((l.alive - l.t0) / 1000)} s`);
+  for (const x of l.e) { const { t, k, ...rest } = x; out.push(`+${(t / 1000).toFixed(1)} s ${k} ${f(rest)}`); }
+  return out.join('\n');
+}
 
 // ---------- resting when left alone ----------
 // A running clock keeps the GPU drawing every frame. Left alone for IDLE_MS (IDLE_BLUR_MS while the window is not the
@@ -1510,22 +2027,25 @@ addEventListener('pageshow', (e) => { if (e.persisted && phase === 'left' && mod
 // the front) starts the clock again, if it was this rest that stopped it; a pause chosen by the visitor stays. A press on
 // the play button itself is left to the button. data-idle="off" on the disk turns it off (the checks run without input).
 // (round 9: a phone or tablet rests sooner, IDLE_MS_PHONE)
-const IDLE_MS = 60000, IDLE_MS_PHONE = 30000, IDLE_BLUR_MS = 15000;
+const IDLE_MS = 60000, IDLE_MS_PHONE = 30000, IDLE_BLUR_MS = 15000, IDLE_TEST = Number(q.get('idle')) > 0 ? Number(q.get('idle')) : 0;   // (?idle=ms: for checks)
 let idleTimer = 0, restedByIdle = false;
 function armIdle() {
   clearTimeout(idleTimer);
   if (!live() || reduce || box.dataset.idle === 'off') return;
-  idleTimer = setTimeout(restIdle, document.hasFocus() ? (MOBILE || coarse ? IDLE_MS_PHONE : IDLE_MS) : IDLE_BLUR_MS);
+  idleTimer = setTimeout(restIdle, IDLE_TEST || (document.hasFocus() ? (MOBILE || coarse ? IDLE_MS_PHONE : IDLE_MS) : IDLE_BLUR_MS));
 }
 function restIdle() {
   if (!live() || reduce || box.dataset.idle === 'off' || 'lost' in lab.dataset) return;
   if (saving || moveFrom) return armIdle();
   if (S().paused) return;
-  restedByIdle = true; box.diskPlay(false); sync(); note(T().idleRest, 0);
+  // (round 10a, dev.5: no note on the picture: the owner, trying dev.4 on the iPhone, found it in the way; the play button
+  // shows the clock stopped, and any touch starts it again)
+  restedByIdle = true; box.diskPlay(false); sync();
 }
 function wake(e) {
+  flog.inT = Date.now() - flog.t0;   // (round 10a: the last input, for the flight record)
   if (restedByIdle) {
-    restedByIdle = false; note('', 0);
+    restedByIdle = false;
     const onPlay = e && e.target && e.target.closest && e.target.closest('#play');
     if (!onPlay && live() && S().paused) { box.diskPlay(true); sync(); }
   }
@@ -1551,12 +2071,17 @@ window.diskLab = {
   guard: () => ({ guarded, budget: GUARD_MS, march: box.diskMarch ? box.diskMarch() : null, modelPerMpx: Math.round(modelPerMpx), key: gc.key, c1: Math.round(gc.c1), measured: gc.measured, cap: gc.cap, still: gc.still, bands: bandsSet, phase, crashed, log: gc.log.slice() }),
   quality: () => ({ quality, chosen: qChosen, qCap, bestCap, hold: bestHold, scale: live() ? box.diskScale() : 0, paused: live() ? !!S().paused : null, moving: !!moveFrom, sharpened: !!sharpFrom, held: holdSharp, saving }),
   // (for checks: back to the default, Best not chosen)
-  defaultQuality: () => { qChosen = false; try { sessionStorage.removeItem('disk-lab-quality'); } catch { /* */ } applyQuality('full'); },
+  defaultQuality: () => { qChosen = false; try { sessionStorage.removeItem(KEY('disk-lab-quality')); } catch { /* */ } applyQuality('full'); },
   // (for checks: a picture with the mark, as saved)
   stamped: async () => { const c = await shot({}); if (c) await watermark(c); return c; },
   setLook, setLang, setTab: (t) => setTab(t), link: () => (live() ? linkFor(S()) : null), snapshot: (opts) => shot(opts),
-  resetAll: () => resetAll()   // (round 9: "Reset all", for checks)
+  resetAll: () => resetAll(),   // (round 9: "Reset all", for checks)
+  // (round 10a: the keys this build keeps on the device, the flight record now and the last visit's, its judgement, the
+  // version line; for checks, here or through a WebDriver session)
+  keys: { settings: SET, session: REC, log: LOG, logBad: LOG_BAD, logOwner: LOG_OWNER, quality: KEY('disk-lab-quality'), lang: KEY('site-language') },
+  flightLog: () => JSON.parse(JSON.stringify(flog)), flightText: () => logText(flog), lastLog: () => badLog || prevLog, verdict: () => ({ ...verdict, avoid }),
+  versionLine: VERSION_LINE, version: VERSION, showLog: () => showLog(), restoreKept: () => restoreKept()
 };
-$('colophon').textContent = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
-$('railVersion').textContent = `Disk Lab v${VERSION} · ${RELEASED}`;
+// (round 10a: the same line as index.html writes without the script; check.js compares them)
+document.querySelectorAll('[data-version]').forEach((e) => { e.textContent = VERSION_LINE; });
 start();

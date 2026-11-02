@@ -79,7 +79,6 @@ export const WORDS = {
     hintTouch: '1 本指で移動 · 2 本指で拡大と回転',
     loading: '準備しています…',
     reduced: '動きを減らす設定のため、時計を止めています。',
-    idleRest: 'しばらく操作がないので、時計を止めて GPU を休ませています。触ると再開します。',
     linkCopied: 'リンクをコピーしました。',
     linkShown: 'リンクを表示しました。選んでコピーしてください。',
     imageBusy: '画像を作っています…',
@@ -118,6 +117,17 @@ export const WORDS = {
     heavyStill: 'この見え方はこの端末で動かすには重いため、時計を止めて静止画で描いています(再生ボタンで動かすこともできます)。',
     safeStart: '前回は描画が止まったため、安全な設定(モデル、断面なし、画質は自動、全体の眺め)で始めました。',
     restoredSafe: '描画が中断したため、モデルの見え方に戻しました。',
+    // (round 10a) the safe start that leaves out only what was in view when drawing stopped, and offers the settings back;
+    // the flight record (kept on this device, nothing sent)
+    safeStartKnown: (what) => `前回は${what}の表示中に描画が止まったため、その表示を避けて始めました(画質は自動)。`,
+    safeRestore: '前の設定に戻す',
+    restoredKept: '前の設定に戻しました。',
+    cutName: '断面',
+    log: {
+      show: '前回の記録を見る', title: '前回の記録', mine: 'この訪問の記録',
+      note: 'この端末にだけ残した記録です。どこにも送っていません。不具合を知らせるときに貼り付けてください。',
+      copy: 'コピー', copied: 'コピーしました', close: '閉じる', none: '記録はありません。'
+    },
     ariaStage: '円盤のモデル',
     ariaRoute: '行き先',
     show: {
@@ -216,7 +226,6 @@ export const WORDS = {
     hintTouch: 'One finger moves · two zoom and turn',
     loading: 'Preparing…',
     reduced: 'Reduced motion is on, so the clock is stopped.',
-    idleRest: 'Left alone for a while, the clock is paused to rest the GPU. Move or touch to resume.',
     linkCopied: 'Link copied.',
     linkShown: 'The link is shown below; select it to copy.',
     imageBusy: 'Making the image…',
@@ -253,6 +262,15 @@ export const WORDS = {
     heavyStill: 'This look is too heavy to animate on this device, so the clock is paused and it is drawn as a still (the play button animates it anyway).',
     safeStart: 'Drawing stopped last time, so this visit starts with safe settings (the model look, no cut, Auto quality, the whole disk).',
     restoredSafe: 'Drawing was interrupted, so the model look is back.',
+    safeStartKnown: (what) => `Drawing stopped last time while showing ${what}, so this visit starts without it (Auto quality).`,
+    safeRestore: 'Restore my settings',
+    restoredKept: 'Your settings are back.',
+    cutName: 'the cut',
+    log: {
+      show: 'Show the last visit’s record', title: 'The last visit’s record', mine: 'This visit’s record',
+      note: 'Kept on this device only; nothing has been sent. Paste it into a report of the problem.',
+      copy: 'Copy', copied: 'Copied', close: 'Close', none: 'No record.'
+    },
     ariaStage: 'Model of a protoplanetary disk',
     ariaRoute: 'Places',
     show: {
