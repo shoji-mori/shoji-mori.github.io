@@ -1193,6 +1193,14 @@ ${Array.from({ length: nb }, (_, i) => `  o${i} = vec4(o[${i}], 0.0, 0.0);`).joi
   // and the segment's update inline (passed to functions, the arrays would be copied in and out at every call):
   // coChannel for the channel map (one group: the channel's width) and coMoments (CO_Q groups, CO_N = 4 CO_Q velocities)
   const CO_Q = 6;
+  // (round 10c) Moment 0's base range (K km/s): the top of its colours before the automatic range raises it (coAim), and with
+  // CO_MASK where moment 1 is left out; the colour bar's labels follow it. 900 until round 10c, whose line width and
+  // normalization (see CO_TH2) made moment 0 0.76 to 0.87 times as large over the disk (the median over the pixels of a view:
+  // face-on 0.76, at 45 degrees 0.80, the page's start at 16 degrees 0.87; seen face-on moment 0 goes nearly as the line's width,
+  // and the more inclined the view, the more the velocities' gradient along the ray widens the line instead). 730 keeps the
+  // mean of the colour map's argument, sqrt(moment 0 / CO_M0) at the base range, within 4 % of what it was in each of those
+  // views (DESIGN.md 24)
+  const CO_M0_JS = 730;
   // (round 9) A bound on each ray's work. A ray that grazes the inner disk's midplane (seen nearly edge-on from close by,
   // as the temperature's place, d 2.4 au at 6 degrees) met steps of 0.001 au (a quarter of the 0.004 au floor), halved up
   // to four times where the line-of-sight velocity sweeps by more than 4 % of the line width in a step (it does there all
@@ -2436,10 +2444,11 @@ vec4 sliceFace(vec3 pc){
 // model's line is CO's): a rotational line of carbon monoxide at millimetre wavelengths, as a channel map or as
 // moment maps. The gas emits in local thermodynamic equilibrium at its temperature (the brightness temperature, in K,
 // in the Rayleigh-Jeans limit). The line is optically thick: what is seen at a velocity comes from where the line's
-// optical depth along the ray, at that velocity, reaches about one, high in the disk (with the line-centre opacity
-// K_CO, the line's tau = 1 seen face-on lies at 3.6 H at 1 au, a little below the irradiation surface, where the gas is
-// between the interior's temperature and the surface's). The local profile is a Gaussian of thermal and turbulent
-// width (0.27 km/s at 100 K, so the full width is about the sound speed). The velocity along the ray (km/s, positive
+// optical depth along the ray, at that velocity, reaches about one, high in the disk (with the line's opacity K_CO, the
+// line's tau = 1 seen face-on lies at 3.5 H at 1 au, a little below the irradiation surface, where the gas is between the
+// interior's temperature and the surface's). The local profile is a Gaussian of the molecules' thermal motion (sigma
+// 0.17 km/s at 100 K, a full width of 0.41 km/s, 0.7 of the sound speed) and the gas's turbulent motion where the model
+// has turbulence (round 10c, see CO_TH2), normalized by its area (CO_WREF). The velocity along the ray (km/s, positive
 // away from the observer) is the gas's: Keplerian rotation for a star of one solar mass, a little slower above the
 // midplane and with the pressure gradient (the planet's gap makes it wiggle), the radial push of the planet's wake, the
 // inflow of the accretion layer(s), and in the wind its flow along the field lines (from the wind's velocity map),
@@ -2465,9 +2474,30 @@ uniform float uCoV;          // the channel's velocity (km/s)
 uniform float uCoRange;      // the range of the moment-1 colours (km/s)
 uniform float uCoK;          // the channel map's and moment 0's range, relative to CO_TB and CO_M0 (see coAim in the script)
 uniform sampler2D uWindVel;  // the wind's velocity (see WINDMAP_FS)
-const float K_CO = 6000.0, CO_WIND = 0.3, CO_TB = 220.0, CO_M0 = 900.0, CO_MASK = 0.02;
+const float K_CO = 6000.0, CO_WIND = 0.3, CO_TB = 220.0, CO_M0 = ${G(CO_M0_JS)}, CO_MASK = 0.02;
 const vec2 CO_SH = vec2(-7.0, -10.0);   // the CO: shielded above e^-7 of the density, dissociated below e^-10
 const int CO_Q = ${CO_Q};
+// (round 10c) The line's width (ver2/docs/gas-line-r10.md, 1 and 2): sigma^2 = kT / m_CO + alpha_t c_s^2, the molecules'
+// thermal motion and the gas's turbulent motion, with c_s^2 = kT / mu m_H from the local temperature (not from the model's H,
+// drawn 1.8 times as thick as the temperature holds it: see MODEL). CO_TH2 = k / m_CO (m_CO = 28.0101 u) and CO_CS2 = k / mu m_H
+// (mu = 2.34), in (km/s)^2 per K. alpha_t from the model's own regions (coAlpha): CO_ALPHA, its value in the thermally ionized
+// inner disk (THERMO.ALPHA, the alpha of its viscous heating), in the dead zone and in the outer disk (that alpha times the
+// squares of DZ_TURB and OUTER_TURB, the model's density fluctuations there relative to the inner disk's: delta v / c_s ~
+// delta rho / rho for the waves and the weak turbulence that stir them); the accretion layers, the wind-launching region and the
+// wind are laminar. The outer disk's 0.03 c_s is within the upper limits measured in CO at 2 to 3 H in four disks, 0.05 to
+// 0.12 c_s (Flaherty et al. 2015 to 2020). Until round 10c the width was sqrt(0.000625 T + 0.011): a thermal width with 0.3 c_s
+// of turbulence and 0.011 (km/s)^2 more of it, the turbulence counted twice (alpha 0.1 to 0.25); the new width is 0.43 to 0.72
+// of it, mostly 0.6 to 0.66, and the turbulence widens it by 6 % in the inner disk, by under 1 % elsewhere
+const float CO_TH2 = 2.9684e-4, CO_CS2 = 3.5255e-3;
+const vec3 CO_ALPHA = vec3(${G(THERMO.ALPHA)}, ${G(+(THERMO.ALPHA * NONIDEAL.DZ * NONIDEAL.DZ).toPrecision(4))}, ${G(+(THERMO.ALPHA * NONIDEAL.OUTER * NONIDEAL.OUTER).toPrecision(4))});
+// (round 10c) The profile normalized by its area: K_CO is the line-centre opacity (per au, per unit of the relative density) of
+// a line CO_WREF wide, and a line w wide has K_CO CO_WREF / w at its centre: the same opacity in all whatever the width (the
+// number of molecules sets it; the level populations' change with temperature left out, as the model leaves it out). CO_WREF,
+// the thermal width at the line's face-on tau = 1 height at 1 au (212 K), keeps the line-centre opacity there as it was.
+// Until round 10c the profile's peak was K_CO whatever the width, so that a narrower line took less opacity in all
+// (gas-line-r10.md, 5): now the cold outer disk's narrow line is thicker at its centre (its tau = 1 about 0.1 H higher at 30
+// au) and the hot inner disk's broad line thinner
+const float CO_WREF = 0.251;
 // erf, to 1.5e-7 (Abramowitz & Stegun 7.1.26)
 vec4 erfA(vec4 x){
   vec4 a = abs(x), t = 1.0 / (1.0 + 0.3275911 * a);
@@ -2475,8 +2505,8 @@ vec4 erfA(vec4 x){
 }
 // the gap's slope d ln Σ / d ln R (for the pressure gradient)
 float gapSlope(float R){ return gapT(R).y; }
-// the gas at p for the CO line: CO density (relative), temperature (K), velocity along rd (km/s), line width (km/s:
-// thermal and turbulent, sigma^2 = (0.025 sqrt(T))^2 + 0.011)
+// the gas at p for the CO line: CO density (relative; since round 10c times CO_WREF over the line width, so that K_CO times it
+// is the line-centre opacity: see CO_WREF), temperature (K), velocity along rd (km/s), line width (sigma, km/s: see CO_TH2)
 // (round 9) a ray's counts for diskRayProbe: iterations, gas samples, groups' updates (see CO_MARCH_GLSL)
 float coNIt = 0.0, coNGas = 0.0, coNGrp = 0.0;
 #ifdef CO_STUDY
@@ -2492,6 +2522,18 @@ vec4 coBinProfile(vec4 vv, float uA, float uB, float w, float bw, bool wide, flo
 }
 #endif
 const float CO_SKIP = 6.0;   // (round 9, rec: a group of velocities this many widths outside a segment's sweep is skipped)
+// (round 10c) alpha_t at R and z/H zh (see CO_TH2), joined smoothly across the regions' edges (over 0.25 H, as the regions' face,
+// layersFace, has them, and the accretion layer's ACC_W): the inner disk's wherever the magnetorotational instability stirs the
+// whole column (mriAmp); elsewhere the dead zone's below its top z_k and the outer disk's weak turbulence (outerAmp) above it,
+// none in the accretion layers (zu, zl: the offsets from the upper and the lower one in ACC_W, as coGas has them) nor above the
+// irradiation surface (zBase; lnR, cut: coGas's ln R and cutOut(R))
+float coAlpha(float R, float lnR, float cut, float zh, float zu, float zl){
+  float az = abs(zh), m = mriAmp(R), zk = zKinkH(R), zb = sqrt(2.0 * max(LNTAU1 - 1.25 * lnR - cut, 1.0));   // (zb: zBase(R) / H)
+  float dead = smoothstep(0.0, 0.5, zk) * (1.0 - smoothstep(zk - 0.25, zk + 0.25, az));
+  float acc = accAmp(R) * exp(-0.5 * min(zu * zu, zl * zl));
+  float disk = 1.0 - smoothstep(zb - 0.25, zb + 0.25, az);
+  return disk * (m * CO_ALPHA.x + (1.0 - m) * (dead * CO_ALPHA.y + (1.0 - dead) * outerAmp(R) * CO_ALPHA.z) * (1.0 - acc));
+}
 vec4 coGas(vec3 p, vec3 rd){
   coNGas += 1.0;
   float R = max(length(p.xy), 1e-3), lnR = log(R), H = H0 * exp(1.25 * lnR), zh = p.z / H, az = abs(p.z);
@@ -2533,7 +2575,10 @@ vec4 coGas(vec3 p, vec3 rd){
     v = (rD * v + rW * vw) / rS;
     T = (rD * Td + rW * tSurf(sqrt(R * R + az * az))) / rS;   // (the wind's gas at the superheated grains' temperature in full starlight)
   }
-  return vec4(rhoCO, T, dot(v, rd), sqrt(0.000625 * T + 0.011));
+  // (round 10c) the line's width from the temperature (the mixture's, where the wind's gas is mixed in) and the turbulence of
+  // the place (see CO_TH2), and the density scaled to the line-centre opacity of a line that wide (see CO_WREF)
+  float lw = sqrt((CO_TH2 + CO_CS2 * coAlpha(R, lnR, cut, zh, zu, zl)) * T);
+  return vec4(rhoCO * (CO_WREF / lw), T, dot(v, rd), lw);
 }
 // (round 9, at its end) The moments are drawn in passes (CO_PASSES in the script): each marches CO_P adjacent groups of
 // four of the CO_N velocities spread evenly over the ray's window (coGrid), and adds its sums (the intensities, and the
@@ -3723,6 +3768,139 @@ void main(){
   const CO_MODES = { chan: 0, m1: 1, m0: 2 };
   const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);   // (a name from outside: not one of Object's own)
   const ja = () => (document.documentElement.lang || '').toLowerCase().startsWith('ja');   // (ja, ja-JP, ...)
+
+  // --- (Round 11a) Flights along a smooth path, for talks (box.diskPath; ver2/docs/disk-lab-r11-camera.md, sections 3.2-3.5).
+  // The pure part: a plan from two poses, and the pose and the progress along it. ver2/tools/disk-lab-v2/path-check.mjs reads
+  // the lines between PATH-MATH and /PATH-MATH and checks them in Node, with no browser. A pose is { el, az, lnd, T }: the
+  // elevation and the azimuth (radians), ln of the distance (au) and the point looked at (au, [x, y, z]), in the frame of the
+  // destination (the one that turns with the view's slow spin, or with the planet's orbit when the destination follows it), in
+  // which the destination holds still while it is flown to, and is arrived at exactly.
+  // PATH-MATH
+  // RHO: van Wijk and Nuij's curvature (d3's interpolateZoom takes sqrt(2); lower is a flatter arc, the disk kept larger in the
+  // picture); KAPPA: the e-folds of zoom a radian of turn counts as; V: the cruise speed in that measure, a second (0.9: a
+  // decade of zoom in 2.56 s), times the page's pace; RAMP: the seconds a ramp from rest to V takes (the acceleration V / RAMP);
+  // DMIN, DMAX: a path's shortest and longest time from rest (s); MID_R, MID_H, MID_MAX: the midplane's rule (see pathMidplane),
+  // the camera kept outside 1.2 times the disk's radius (30 au) while within MID_H scale heights of the midplane, by a lift of at
+  // most MID_MAX e-folds. All to be tuned by eye with the owner (the design's section 8, risks)
+  const PATH = { RHO: 1.2, KAPPA: 2, V: 0.9, RAMP: 1.2, DMIN: 0.8, DMAX: 30, MID_R: 36, MID_H: 1.5, MID_MAX: 3 };
+  const pathWrap = (a) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+  const pathG = (x) => x * x * (3 - 2 * x), pathGI = (x) => x * x * x * (1 - 0.5 * x);   // a smooth ramp from 0 to 1, and its integral
+  // The zoom and the pan together (van Wijk & Nuij 2003, as d3-interpolate's zoom): the view's width w = 2 d tan(fov / 2), and
+  // the point looked at moved along the straight segment between the two, u of its length u1, at the path's parameter s:
+  //   b_i = (w1^2 - w0^2 +/- rho^4 u1^2) / (2 w_i rho^2 u1)  (+ for i = 0),  r_i = -asinh(b_i),  S = (r1 - r0) / rho,
+  //   w(s) = w0 cosh(r0) / cosh(rho s + r0),   u(s) = w0 sinh(rho s) / (rho^2 cosh(rho s + r0))
+  // (u in this form has no difference of large numbers; d3's w0 / rho^2 (cosh r0 tanh(rho s + r0) - sinh r0) is the same).
+  // The width has its one maximum inside and its minima at the ends: the camera never comes nearer than at the nearer end, and a
+  // far move of the point looked at from close by rises first (the star's view to the planet's: up to about 4 au and down to
+  // 1.6). With the point looked at kept (u1 under a millionth of the width), a pure log zoom: S = |ln(w1 / w0)| / rho.
+  function pathVW(w0, w1, u1, rho) {
+    if (!(u1 > 1e-6 * Math.max(w0, w1))) return { zoom: true, k: Math.log(w1 / w0), S: Math.abs(Math.log(w1 / w0)) / rho, rho };
+    const r2 = rho * rho, b0 = (w1 * w1 - w0 * w0 + r2 * r2 * u1 * u1) / (2 * w0 * r2 * u1), b1 = (w1 * w1 - w0 * w0 - r2 * r2 * u1 * u1) / (2 * w1 * r2 * u1);
+    const r0 = -Math.asinh(b0), r1 = -Math.asinh(b1);
+    return { zoom: false, w0, u1, r0, r1, S: (r1 - r0) / rho, rho };
+  }
+  // The progress in time along a path of length L (in the shared measure: e-folds of zoom, and KAPPA a radian of turn): the speed
+  // ramps from v0 (a path that takes over from a moving camera) to the cruise speed V at the acceleration A = V / RAMP, along the
+  // smooth ramp pathG (no jolt at either end), cruises, and ramps down to rest at the same rate; a short path ramps to a lower
+  // peak, sqrt(A L + v0^2 / 2); with no room to come to rest from v0 at that rate, it brakes harder. With dur (from rest), the
+  // cruise speed that fits it: dur = L / vc + vc / A. o: { V, ramp, v0, dur, dmin, dmax }; returns the profile { v0, vc, r1, c,
+  // r2, D, L }: the ramp up (s), the cruise (s), the ramp down (s), the whole time
+  function pathEase(L, o) {
+    if (!(L > 1e-9)) return { v0: 0, vc: 0, r1: 0, c: 0, r2: 0, D: 0, L: 0 };
+    const V = o.V, A = V / o.ramp, v0 = Math.max(0, o.v0 || 0);
+    const fit = (D) => {
+      const q = A * A * D * D - 4 * A * L;
+      if (q >= 0) { const vc = (A * D - Math.sqrt(q)) / 2; return { v0: 0, vc, r1: vc / A, c: D - 2 * vc / A, r2: vc / A }; }
+      return { v0: 0, vc: 2 * L / D, r1: D / 2, c: 0, r2: D / 2 };   // (a faster ramp: what has to fit in D)
+    };
+    let e;
+    if (o.dur > 0) e = fit(o.dur);
+    else if (v0 > 0 && L < v0 * v0 / (2 * A)) e = { v0, vc: v0, r1: 0, c: 0, r2: 2 * L / v0 };
+    else if (v0 >= V) e = { v0, vc: V, r1: (v0 - V) / A, c: (L - v0 * v0 / (2 * A)) / V, r2: V / A };
+    else {
+      const top = (2 * V * V - v0 * v0) / (2 * A);   // (the length the ramps to V and back take)
+      if (L >= top) e = { v0, vc: V, r1: (V - v0) / A, c: (L - top) / V, r2: V / A };
+      else { const vc = Math.sqrt(A * L + 0.5 * v0 * v0); e = { v0, vc, r1: (vc - v0) / A, c: 0, r2: vc / A }; }
+    }
+    e.D = e.r1 + e.c + e.r2;
+    if (!(o.dur > 0) && !v0 && (e.D < o.dmin || e.D > o.dmax)) { e = fit(Math.min(o.dmax, Math.max(o.dmin, e.D))); e.D = e.r1 + e.c + e.r2; }
+    e.L = L;
+    return e;
+  }
+  // the progress s (0 to 1) and the speed v (L a second) at t seconds into the profile e
+  function pathEaseAt(e, t) {
+    if (!(t < e.D)) return { s: 1, v: 0 };
+    if (!(t > 0)) return { s: 0, v: e.v0 };
+    let x, v;
+    if (t < e.r1) { const u = t / e.r1; x = e.r1 * (e.v0 * u + (e.vc - e.v0) * pathGI(u)); v = e.v0 + (e.vc - e.v0) * pathG(u); }
+    else if (t < e.r1 + e.c) { x = 0.5 * e.r1 * (e.v0 + e.vc) + e.vc * (t - e.r1); v = e.vc; }
+    else { const u = (e.D - t) / e.r2; x = e.L - e.vc * e.r2 * pathGI(u); v = e.vc * pathG(u); }
+    return { s: Math.min(1, Math.max(0, x / e.L)), v };
+  }
+  // The plan from pose a to pose b. o: { fov (radians), rho, kappa, V, ramp, dmin, dmax, v0, dur, turns (whole turns added to the
+  // azimuth's change: an orbit; else the shorter way round), star (the star in the frame), midR, midH, midMax, hOf (the disk's
+  // scale height at R) }. The elevation and the azimuth go linearly with the progress s, as van Wijk's parameter does, so that the
+  // motion is even in the shared measure; the elevation, linear, never overshoots through the midplane. The path's length,
+  //   L = sqrt((rho S + 2 b)^2 + (kappa dth)^2),
+  // with dth the turn about the point looked at (the azimuth's counted at the mean elevation) and b the midplane rule's lift (a
+  // zoom out and back of b e-folds), sets its time (pathEase)
+  function pathPlan(a, b, o) {
+    const th = Math.tan(o.fov / 2), dT = [b.T[0] - a.T[0], b.T[1] - a.T[1], b.T[2] - a.T[2]];
+    const p = { a, b, dT, del: b.el - a.el, daz: pathWrap(b.az - a.az) + 2 * Math.PI * Math.round(o.turns || 0), lift: null,
+      vw: pathVW(2 * th * Math.exp(a.lnd), 2 * th * Math.exp(b.lnd), Math.hypot(dT[0], dT[1], dT[2]), o.rho) };
+    pathMidplane(p, o);
+    const dth = Math.hypot(p.del, Math.cos(0.5 * (a.el + b.el)) * p.daz);
+    p.L = Math.hypot(o.rho * p.vw.S + 2 * (p.lift ? p.lift.b : 0), o.kappa * dth);
+    p.ease = pathEase(p.L, o);
+    return p;
+  }
+  // the pose at the progress s (0 to 1); lift: the midplane rule's (the plan's own unless given)
+  function pathAt(p, s, lift = p.lift) {
+    const vw = p.vw;
+    let lnd, u;
+    if (vw.zoom) { lnd = p.a.lnd + vw.k * s; u = s; }
+    else {
+      const x = s * (vw.r1 - vw.r0);
+      lnd = p.a.lnd + Math.log(Math.cosh(vw.r0) / Math.cosh(x + vw.r0));
+      u = vw.w0 * Math.sinh(x) / (vw.rho * vw.rho * Math.cosh(x + vw.r0) * vw.u1);
+    }
+    if (lift) lnd += lift.b * (s < lift.lo ? pathG(s / lift.lo) : s > lift.hi ? pathG((1 - s) / (1 - lift.hi)) : 1);
+    return { el: p.a.el + s * p.del, az: p.a.az + s * p.daz, lnd, T: [p.a.T[0] + u * p.dT[0], p.a.T[1] + u * p.dT[1], p.a.T[2] + u * p.dT[2]] };
+  }
+  // (The design's rule 2 of section 3.4) A path whose camera passes from one side of the disk to the other (its height above the
+  // midplane changes sign between the ends) through the disk's layers (within midH scale heights of the midplane, inside midR of
+  // the star's axis) is lifted there: ln d raised by b over a plateau [lo, hi] of the progress, on smooth ramps from the ends, so
+  // that the camera goes round the disk's edge rather than through its dust (an opaque picture, and the dearest rays in every
+  // look). The plateau covers where the camera would be inside; b, what takes it out to midR there; checked again with the lift
+  // (a few times: a panned point looked at does not scale with d; still inside on the plateau, b raised by what is left there;
+  // inside off it, on a ramp, the plateau widened). Within MID_H = 1.5 scale heights: the dense gas and the
+  // settled dust (a camera at 2 to 3 scale heights, as a low view of the disk's surface has it, is not passing through). No
+  // lift of more than midMax e-folds (20 times out): a crossing next to the star (0.15 au away: 5.5 e-folds to 36 au and back)
+  // goes through, as the flights do; the guard bounds its frames' pieces
+  function pathMidplane(p, o) {
+    if (!(o.midR > 0) || !o.star || !o.hOf) return;
+    const cam = (q) => { const d = Math.exp(q.lnd), c = Math.cos(q.el); return [q.T[0] + d * c * Math.cos(q.az) - o.star[0], q.T[1] + d * c * Math.sin(q.az) - o.star[1], q.T[2] + d * Math.sin(q.el) - o.star[2]]; };
+    if (!(cam(p.a)[2] * cam(p.b)[2] < 0)) return;
+    const N = 96, scan = (lift) => {
+      let lo = 1, hi = -1, need = 0;
+      for (let i = 0; i <= N; i++) {
+        const s = i / N, c = cam(pathAt(p, s, lift)), R = Math.hypot(c[0], c[1]);
+        if (R < o.midR && Math.abs(c[2]) < o.midH * o.hOf(Math.max(R, 0.05))) {
+          lo = Math.min(lo, s); hi = Math.max(hi, s);
+          if (!lift || (s >= lift.lo && s <= lift.hi)) need = Math.max(need, Math.log(o.midR / Math.max(R, 1e-3)));
+        }
+      }
+      return hi < 0 ? null : { lo, hi, need };
+    };
+    let lift = null, r = scan(null);
+    if (r && r.need > o.midMax) return;
+    for (let k = 0; r && k < 4; k++, r = scan(lift)) {
+      const lo = Math.max(0.1, Math.min(lift ? lift.lo : 1, r.lo)), hi = Math.min(0.9, Math.max(lift ? lift.hi : 0, r.hi));
+      lift = { lo, hi: Math.max(lo, hi), b: Math.min(1.5 * o.midMax, (lift ? lift.b : 0) + r.need) };
+    }
+    p.lift = lift;
+  }
+  // /PATH-MATH
 
   // reuse: the canvas, when the model is built anew on it after its WebGL context was lost and restored
   function init(box, reuse, restoredTime = 0) {
@@ -5035,9 +5213,19 @@ void main(){
     // duration grows with the size of the move, from FLY_MIN to FLY_MAX seconds, for an even pace. Flights aim at the
     // view as it is at each moment (the slow spin and the planet's orbit keep moving it). A drag or a pinch takes over:
     // the view stays where it is (the point looked at still settles). With reduced motion, views change at once.
+    // (Round 11a) One clock for everything that moves with time on the picture, nowMs (ms): the flights and paths, the fades
+    // (dtR), the look's dip and the scale bar's. It is the wall clock, or the page's own (diskManual): an exporter then moves it
+    // on a frame at a time (diskAdvance), with the model's clock. The measures of GPU work (fences, pieces, the guard) keep the
+    // wall clock, performance.now(): they time the device, not the picture.
+    let clockOff = 0, manualMs = null;
+    const nowMs = () => (manualMs === null ? performance.now() + clockOff : manualMs);
     const FLY_MIN = 0.35, FLY_MAX = 1.6, wrapPi = (a) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
     let follow = false, flyV = null, flyT = null, camT = [0, 0, 0], camEl = opt.el, camAz = opt.az, camD = opt.dist;
     let camV = [0, 0, 0], camTV = [0, 0, 0];   // velocities of the view and of the point looked at, per second
+    // (round 11a) a flight along a smooth path (diskPath, see PATH-MATH): { id, plan, t0 (ms, nowMs) }; its events told to the page
+    // ('diskpath') in a microtask, once the script that drew the frame has returned (or awaits), never from inside camera() or draw()
+    let path = null, pathN = 0;
+    const pathTell = (state, extra) => { const detail = { state, ...extra }; queueMicrotask(() => box.dispatchEvent(new CustomEvent('diskpath', { detail }))); };
     const viewOff = () => (follow ? planetPhi(time) : reduce ? 0 : opt.spin * time);
     let panV = [0, 0, 0];
     const PAN_MAX = 400;
@@ -5054,7 +5242,7 @@ void main(){
     const clampPan = (v) => { const m = Math.hypot(v[0], v[1], v[2]); return m > PAN_MAX ? v.map((x) => x * PAN_MAX / m) : v; };
     // position (out) and velocity (vel) along a flight now; true when it has arrived
     function hermite(fl, p1, out, vel) {
-      const u = Math.min(1, (performance.now() - fl.t0) / (1000 * fl.dur)), u2 = u * u, u3 = u2 * u;
+      const u = Math.min(1, (nowMs() - fl.t0) / (1000 * fl.dur)), u2 = u * u, u3 = u2 * u;
       const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = 3 * u2 - 2 * u3, d00 = 6 * u2 - 6 * u, d10 = 3 * u2 - 4 * u + 1, d01 = 6 * u - 6 * u2;
       for (let i = 0; i < p1.length; i++) {
         out[i] = h00 * fl.p0[i] + h10 * fl.dur * fl.v0[i] + h01 * p1[i];
@@ -5062,10 +5250,31 @@ void main(){
       }
       return u >= 1;
     }
+    // (round 11a) the camera on the path now, in the world: { T, v: [el, az, ln d] }, with its velocity in camV and camTV (for a
+    // flight that takes over, as from a flight); null once the path has ended: it is dropped and 'arrive' told, and the camera
+    // takes the state's view, which is the path's end (so that the still on arrival is the state's, bit for bit)
+    function pathNow() {
+      const t = (nowMs() - path.t0) / 1000, e = pathEaseAt(path.plan.ease, t);
+      if (e.s >= 1) { const id = path.id; path = null; camV = [0, 0, 0]; camTV = [0, 0, 0]; pathTell('arrive', { id }); return null; }
+      const a = viewOff(), c = Math.cos(a), s = Math.sin(a), B = follow ? planetPos(time) : [0, 0, 0];
+      const world = (P) => [B[0] + c * P[0] - s * P[1], B[1] + s * P[0] + c * P[1], B[2] + P[2]];
+      const q = pathAt(path.plan, e.s), ds = Math.min(1e-4, 1 - e.s), q2 = pathAt(path.plan, e.s + ds), k = ds > 0 ? e.v / path.plan.L / ds : 0;
+      const T = world(q.T), T2 = world(q2.T);
+      // (the velocity along the path; the frame's own turn left out, slow but for a planet followed)
+      camV = [(q2.el - q.el) * k, (q2.az - q.az) * k, (q2.lnd - q.lnd) * k];
+      camTV = [(T2[0] - T[0]) * k, (T2[1] - T[1]) * k, (T2[2] - T[2]) * k];
+      return { T, v: [q.el, q.az + a, q.lnd] };
+    }
+    // a path left (by a flight, a jump, a new path): told; the camera's velocity kept for a flight that takes over
+    const pathStop = (why = 'stop') => { if (!path) return; const id = path.id; path = null; pathTell(why, { id }); };
+    // the view taken from where the path has brought the camera, and the path left (a drag, the wheel, a key, a new view set
+    // with some of its keys: those left out are what is seen, as after a drag)
+    const pathGrab = () => { if (!path) return; elUser = clampEl(camEl); azUser = camAz - viewOff(); opt.dist = camD; panV = clampPan(panOf(camT)); pathStop(); };
     // start (or redirect) a flight from where the camera is to the view set now
     function startFly() {
+      pathStop();   // (round 11a: a flight takes over a path, from its pose and velocity)
       if (reduce || !W || !cam) { flyV = flyT = null; return; }
-      const now = performance.now(), p0 = [camEl, camAz, Math.log(camD)], to = [elUser, azUser + viewOff(), Math.log(opt.dist)];
+      const now = nowMs(), p0 = [camEl, camAz, Math.log(camD)], to = [elUser, azUser + viewOff(), Math.log(opt.dist)];
       to[1] = p0[1] + wrapPi(to[1] - p0[1]);
       const Tl = lookAt(), dT = Math.hypot(Tl[0] - camT[0], Tl[1] - camT[1], Tl[2] - camT[2]);
       const m = Math.abs(to[0] - p0[0]) + Math.abs(to[1] - p0[1]) * Math.cos(p0[0]) + Math.abs(to[2] - p0[2]) + dT / Math.max(1, Math.min(camD, opt.dist));
@@ -5076,8 +5285,9 @@ void main(){
     }
     // a drag or a pinch takes over: the view is left where the flight has brought it
     const takeOver = () => {
-      if (!flyT && !flyV) return;
+      if (!flyT && !flyV && !path) return;
       const before = [elUser, wrapPi(azUser + viewOff()), Math.log(opt.dist), ...lookAt()];
+      pathGrab();   // (round 11a: and a path)
       if (flyT) { panV = clampPan(panOf(camT)); flyT = null; camTV = [0, 0, 0]; }
       if (flyV) { elUser = clampEl(camEl); azUser = camAz - viewOff(); opt.dist = camD; flyV = null; camV = [0, 0, 0]; }
       const after = [elUser, wrapPi(azUser + viewOff()), Math.log(opt.dist), ...lookAt()];
@@ -5101,6 +5311,8 @@ void main(){
     function camera() {
       const Tl = lookAt(), vl = [elUser, azUser + viewOff(), Math.log(opt.dist)];
       let T = Tl, v = vl;
+      const q = path ? pathNow() : null;   // (round 11a: on a path, its pose; arrived, the state's, as with none)
+      if (q) { T = q.T; v = q.v; }
       if (flyT) { const o = [0, 0, 0]; if (hermite(flyT, Tl, o, camTV)) { flyT = null; camTV = [0, 0, 0]; } else T = o; }
       if (flyV) {
         vl[1] = flyV.p0[1] + wrapPi(vl[1] - flyV.p0[1]);
@@ -5415,7 +5627,7 @@ void main(){
     });
     // One definition for the CO bar and its accessible text; the scale is the shader's existing one.
     const coSpec = () => {
-      const rng = coRange(), mode = opt.coMode, top = (mode === 'm0' ? 900 : 220) * Math.exp(coLn);
+      const rng = coRange(), mode = opt.coMode, top = (mode === 'm0' ? CO_M0_JS : 220) * Math.exp(coLn);
       const div = (u) => { const v = 2 * u - 1, g = [0.60, 0.61, 0.64], b = [0.20, 0.36, 0.92], r = [0.88, 0.16, 0.12]; return g.map((c, i) => c + ((v < 0 ? b : r)[i] - c) * Math.abs(v)); };
       return mode === 'm1' ? { col: div, ticks: [[0, '−' + rng.toFixed(0)], [0.5, '0'], [1, '+' + rng.toFixed(0)]], title: ['平均の視線速度 (km/s、赤は遠ざかる)', 'mean line-of-sight velocity (km/s, red receding)'], units: 'km/s', min: -rng, max: rng,
         description: ['赤は遠ざかるガス、青は近づくガスです。', 'Red gas recedes; blue gas approaches.'] }
@@ -5596,8 +5808,8 @@ void main(){
     // moment 1's range: the line-of-sight speeds for the inclination, and faster closer in (the gas the camera frames
     // turns faster: up to twice as fast, as the square root of 30 au over the distance)
     const coRange = () => Math.max(2, 12 * Math.sqrt(Math.max(0, 1 - basis.f[2] * basis.f[2]))) * Math.min(2, Math.max(1, Math.sqrt(30 / camD)));
-    const fadesDone = () => !clumps.some((c) => c.gone && c.amp > 0) && jetAmp === (opt.mode & 64 ? 1 : 0) && fxAmp === opt.fx && COMP_BITS.every((b, i) => compAmp[i] === (opt.mode & b ? 1 : 0)) && modelAmp === (lookNow === 'model' ? 1 : 0) && performance.now() - sbT >= 250 && msAmp === (opt.ms ? 1 : 0) && asymAmp === (opt.asym ? 1 : 0) && marksAmp === (marksOn() ? 1 : 0) && wavesAmp === (opt.waves ? 1 : 0);
-    const lookDip = () => { const u = (performance.now() - lookT0) / 600; return reduce || u >= 1 || u <= 0 ? 1 : 1 - 0.92 * Math.sin(Math.PI * u); };
+    const fadesDone = () => !clumps.some((c) => c.gone && c.amp > 0) && jetAmp === (opt.mode & 64 ? 1 : 0) && fxAmp === opt.fx && COMP_BITS.every((b, i) => compAmp[i] === (opt.mode & b ? 1 : 0)) && modelAmp === (lookNow === 'model' ? 1 : 0) && nowMs() - sbT >= 250 && msAmp === (opt.ms ? 1 : 0) && asymAmp === (opt.asym ? 1 : 0) && marksAmp === (marksOn() ? 1 : 0) && wavesAmp === (opt.waves ? 1 : 0);
+    const lookDip = () => { const u = (nowMs() - lookT0) / 600; return reduce || u >= 1 || u <= 0 ? 1 : 1 - 0.92 * Math.sin(Math.PI * u); };
     const sliceOff = () => { const u = sliceU; return (1 - u * u * (3 - 2 * u)) * Math.min(Math.max(Math.hypot(cam[0], cam[1]), 2), SWEEP); };
     // the part of space kept by the cutaway: outside the part between the planes toward the camera
     const kept = (P) => {
@@ -5802,7 +6014,7 @@ void main(){
     const aeOn = () => lookNow === 'model' && !!cam && Math.hypot(cam[0], cam[1], cam[2]) < AE.D;
     const aeHeld = () => !!burst || lookDip() < 1;
     // (the view moving: a flight, a drag, a touch on the picture)
-    const viewMoving = () => !!flyV || !!flyT || dragging || touching;
+    const viewMoving = () => !!flyV || !!flyT || !!path || dragging || touching;
     function aePass() {   // the measurement of the frame in accT, into aeT
       firstUse('ae');
       gl.bindFramebuffer(gl.FRAMEBUFFER, aeT.fb); gl.viewport(0, 0, AE_W, AE_H);
@@ -6273,7 +6485,7 @@ void main(){
       // the planet's fade, in real time (so that it also completes while the model is paused); the step is at most 0.1 s,
       // since a paused model draws nothing until something changes and the first frame of a fade would otherwise jump
       // to its end
-      const now = performance.now(), dtR = fadeT ? Math.min(0.1, (now - fadeT) / 1000) : 0;
+      const now = nowMs(), dtR = fadeT ? Math.min(0.1, (now - fadeT) / 1000) : 0;
       fadeT = now;
       for (const p of planets) {
         const w = plWant(p);
@@ -6287,12 +6499,12 @@ void main(){
       cutA = reduce || sliceU <= 0 ? CUT_A[opt.cut] : toward(cutA, CUT_A[opt.cut], dtR, 0.9 * 4 / Math.PI);
       const wantA = opt.ann ? 1 : 0;
       annAmp = reduce ? wantA : wantA > annAmp ? Math.min(wantA, annAmp + dtR / 0.4) : Math.max(wantA, annAmp - dtR / 0.4);
-      if (lookNow !== opt.look && (reduce || performance.now() - lookT0 >= 300)) {
+      if (lookNow !== opt.look && (reduce || nowMs() - lookT0 >= 300)) {
         // (round 9: an observed look waits for FULL, linked and warmed; the picture held at the dip's darkest meanwhile)
         // (round 10a, dev.6: with reduced motion too, and until the warm's pipelines are made, see fullReady)
         const f = opt.look === 'model' ? true : fullProgram();
         if (f === true || f === false || (f && fullReady())) { lookNow = opt.look; kickResetAll(); }   // (round 10a: see kickKOf)
-        else lookT0 = performance.now() - 300;
+        else lookT0 = nowMs() - 300;
       }
       guardFrame();   // (round 9: the engine's own guard, see GFAC)
       const wantF = showField && lookNow === 'model' ? 1 : 0;
@@ -6735,8 +6947,8 @@ void main(){
       let Lb = 0.005; for (const c of [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]) if (c * pxAu <= 150) Lb = c;
       // (the clock's rate, slower zoomed in (clockK), is not written on the picture: Disk Lab says it beside its clock,
       // from diskframe's detail.clock)
-      if (Lb !== sbLb) { if (sbLb && !reduce) { sbOld = sbLb; sbT = performance.now(); } sbLb = Lb; }
-      const sbU = Math.min(1, (performance.now() - sbT) / 250), x0 = 18, y0 = Hh - 18;
+      if (Lb !== sbLb) { if (sbLb && !reduce) { sbOld = sbLb; sbT = nowMs(); } sbLb = Lb; }
+      const sbU = Math.min(1, (nowMs() - sbT) / 250), x0 = 18, y0 = Hh - 18;
       const bar = (g, L, a) => {
         const [hl, ln, tx] = g.children;
         if (L * pxAu > 320) a = 0;   // (the bar fading out after a big zoom would be drawn across the panel: not at all)
@@ -7081,7 +7293,7 @@ void main(){
     }
     // a flight, a fade or the sweep under way
     const plShown = () => planets.filter((p) => p.amp > 0.5).map((p) => +p.a.toFixed(p.a < 10 ? 1 : 0));
-    const busy = () => !!(flyV || flyT) || planets.some((p) => p.amp !== plWant(p)) || envAmp !== ((opt.mode & 32) ? 1 : 0) || sliceU !== (opt.slice ? 1 : 0) || (sliceU > 0 && cutA !== CUT_A[opt.cut])
+    const busy = () => !!(flyV || flyT || path) || planets.some((p) => p.amp !== plWant(p)) || envAmp !== ((opt.mode & 32) ? 1 : 0) || sliceU !== (opt.slice ? 1 : 0) || (sliceU > 0 && cutA !== CUT_A[opt.cut])
       || annAmp !== (opt.ann ? 1 : 0) || lookNow !== opt.look || waitShown || lookDip() < 1 || fieldAmp !== (showField && lookNow === 'model' ? 1 : 0) || !fadesDone()
       || (!aeHeld() && aeGoal !== aeLn) || coGoal !== coLn           // (the automatic exposure and the CO line's range on their way,
       || (aeOn() && !aeHeld() && !aeFresh) || (coOn() && !coHold && coSavedKey !== coKey && !coFresh) || !!coPending;  // or finding their levels)
@@ -7319,7 +7531,8 @@ void main(){
       if (!fullWarm && !warmQueued && !lost && full !== false && lastDrawT) { warmQueued = true; warmLater(warmFull); }
       const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
       if (fstats) { dirty = true; if (t >= fstats.until) fsDone(); }
-      if (!paused) { time += dt * speed * clockK(); if (burst) burst.age += dt * speed; update(); dirty = true; }
+      // (round 11a: on the page's own clock, diskManual, the model's clock moves with diskAdvance only)
+      if (!paused && manualMs === null) { time += dt * speed * clockK(); if (burst) burst.age += dt * speed; update(); dirty = true; }
       const moving = busy();
       if (moving) dirty = true;   // flights, fades and the sweep run in real time (see draw)
       // (round 9) a frame being drawn in bands goes on, one band at a time, each waited for (see bandsFor)
@@ -7510,7 +7723,7 @@ void main(){
     const touched = () => { dirty = true; urgent = true; if (reduce) drawOut(); };
     // tells the page that the view or the components changed from inside (keys, tour, easter eggs, a drag)
     const emitState = () => { if (box.diskState) box.dispatchEvent(new CustomEvent('diskstate', { detail: box.diskState() })); };
-    const zoomBy = (f) => { const d = Math.min(DMAX, Math.max(dmin(), opt.dist * f)); if (d !== opt.dist && (coPending || coSavedKey || coHold)) coResume(); opt.dist = d; startFly(); touched(); };
+    const zoomBy = (f) => { pathGrab(); const d = Math.min(DMAX, Math.max(dmin(), opt.dist * f)); if (d !== opt.dist && (coPending || coSavedKey || coHold)) coResume(); opt.dist = d; startFly(); touched(); };
     // the outburst (a click on the star, the B key): its clock is the model's, so a paused model starts again (the page's
     // button follows); none with reduced motion, where the clock does not run
     const burstNow = () => { if (reduce) return; if (paused) { paused = false; emitState(); } startBurst(); touched(); };
@@ -7740,6 +7953,7 @@ void main(){
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       const k = e.key; let used = true;
       const view = (st) => { if (opt.slice) box.diskSlice(false); box.diskSet({ ...st, fly: 1 }); };
+      if (path && (k.startsWith('Arrow') || k === '+' || k === '=' || k === '-' || k === '_')) pathGrab();   // (round 11a: a step from what is seen)
       if (k.startsWith('Arrow') && (coPending || coSavedKey || coHold)) coResume();
       if (e.shiftKey && k.startsWith('Arrow')) { const a = 0.1 * Hh; panBy(k === 'ArrowLeft' ? -a : k === 'ArrowRight' ? a : 0, k === 'ArrowUp' ? -a : k === 'ArrowDown' ? a : 0); startFly(); }
       else if (k === 'ArrowLeft') { azUser += 0.08; startFly(); } else if (k === 'ArrowRight') { azUser -= 0.08; startFly(); }
@@ -7791,7 +8005,7 @@ void main(){
     canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();   // (so that the browser restores it)
       const inFlight = flight.map((f) => (f.pre ? 'pre:' : '') + f.key + '@' + f.scale + (f.n > 1 ? '/' + f.n : '') + (f.rect ? ' rows ' + f.rect[0] + '-' + f.rect[1] + ' of ' + f.rect[3] + ' x' + f.rect[2] : '') + ' ' + Math.round(performance.now() - f.t) + 'ms');
-      lost = true; stop(); stopTour(true); hush(); stillShown(true); lostEvent(true, { msg: String(e.statusMessage || ''), key: kindNow(), sc: opt.scale, inFlight, warming: warmSync ? 1 : 0 });
+      lost = true; stop(); stopTour(true); hush(); stillShown(true); pathStop(); lostEvent(true, { msg: String(e.statusMessage || ''), key: kindNow(), sc: opt.scale, inFlight, warming: warmSync ? 1 : 0 });
       if (bandJob) { bandJob.cancelled = true; bandJob = null; }   // (round 10a: see cancelJob)
     }, on);
     canvas.addEventListener('webglcontextrestored', () => {
@@ -7868,7 +8082,11 @@ void main(){
     box.diskSet = (raw) => {
       const st = checked(raw || {});
       const coBefore = [elUser, wrapPi(azUser + viewOff()), opt.dist, follow, ...panV, opt.look, opt.coMode, opt.coV];
-      const mode0 = opt.mode, slice0 = opt.slice, asym0 = opt.asym, waves0 = opt.waves;
+      const mode0 = opt.mode, slice0 = opt.slice, asym0 = opt.asym, waves0 = opt.waves, follow0 = follow;
+      // (round 11a: a new view on a path is taken from where the path has brought the camera, as after a drag: the keys left out
+      // are what is seen)
+      const viewSet = st.el != null || st.az != null || st.d != null || st.p != null || st.tx != null || st.ty != null || st.tz != null;
+      if (viewSet) pathGrab();
       // the slice and following the planet first (they exclude each other), since they set how close the camera may come
       // slice: 0 closed, 1 the 1/2 cut, 2 the 1/4 cut
       if (st.slice != null) { const k = Number(st.slice); opt.slice = k > 0; if (k > 0) opt.cut = k === 2 ? 'quarter' : 'half'; if (opt.slice) follow = false; }
@@ -7908,14 +8126,19 @@ void main(){
       if (st.coV != null && isFinite(Number(st.coV))) opt.coV = Math.max(-20, Math.min(20, Math.round(Number(st.coV) * 100) / 100));
       // the look: the slice belongs to the model's look (opening it returns there; an observed look closes it)
       if (st.look != null && own(LOOKS, st.look) && st.look !== opt.look) {
-        opt.look = st.look; lookT0 = performance.now();
+        opt.look = st.look; lookT0 = nowMs();
         if (opt.look !== 'model' && opt.slice && st.slice == null) box.diskSlice(false);
       }
-      if (opt.slice && opt.look !== 'model') { opt.look = 'model'; lookT0 = performance.now(); }
+      if (opt.slice && opt.look !== 'model') { opt.look = 'model'; lookT0 = nowMs(); }
       if (st.speed) speed = Number(st.speed);
       if (st.paused != null) paused = !!Number(st.paused);
       // a new view: with fly the camera flies there from where it is, otherwise it is there at once
-      if (st.el != null || st.az != null || st.d != null || st.p != null || st.slice != null || st.tx != null || st.ty != null || st.tz != null) { if (Number(st.fly)) startFly(); else flyV = flyT = null; }
+      // (round 11a: a cut alone leaves a path under way, as long as the planet is followed or not as before, the path's frame: the
+      // player of a sequence sets the cut with its scene, the cut's sweep a picture's change, not the view's)
+      if (viewSet || st.slice != null) {
+        if (!viewSet && path && follow === follow0) { /* (the path goes on) */ }
+        else if (Number(st.fly)) startFly(); else { flyV = flyT = null; pathStop(); }
+      }
       const coAfter = [elUser, wrapPi(azUser + viewOff()), opt.dist, follow, ...panV, opt.look, opt.coMode, opt.coV];
       // (round 9) a jump: see probeNext
       // (the view's own jump: a turn of more than 5 degrees, a tenth of the distance, following a planet or not; not the small
@@ -7960,6 +8183,76 @@ void main(){
     box.diskCenter = () => { box.diskSet({ tx: 0, ty: 0, tz: 0, fly: 1 }); emitState(); };
     // the first view and the star (the Home key, the page's button): the slice closed, the point looked at the star
     box.diskHome = () => { box.diskSet({ p: 0, slice: 0, el: el0 * 180 / Math.PI, az: az0 * 180 / Math.PI, d: dist0, tx: 0, ty: 0, tz: 0, fly: 1 }); emitState(); };
+    // (Round 11a) diskPath(view, o): a flight along a smooth path (see PATH-MATH), for talks: from where the camera is (a flight or
+    // a path under way: its pose, and its speed along the new way) to the view { el, az, d, tx, ty, tz, p, pi } (diskSet's view
+    // keys; those left out as they are), which is set at once, as a flight sets it (not a jump: the guard keeps its measures).
+    // o: { speed (the pace: times the cruise speed, 0.25 to 4), dur (s, from rest), rho (the arc's curvature), turns (whole turns
+    // more round: an orbit) }. The camera is moved in the frame of the destination (the view's slow spin, or the planet's orbit
+    // when following it), on nowMs. Its frames are the animation frames', as a flight's: the view moving (diskframe's moving), the
+    // page draws them at its moving scale, in kicks or bands within the guard; the path's end is the state's view, exactly. A
+    // still being refined is left at once (leaveStill). A drag, the wheel, a key or a new view takes over, as from a flight;
+    // a cut alone does not end it. 'diskpath' tells { state: 'start' | 'arrive' | 'stop', id, dur, L }. With reduced motion,
+    // the view at once and 'arrive'. Returns { id, dur, L, lift } (s; the path's length; the midplane rule's lift, e-folds);
+    // without a view, the path under way: { id, t, dur, s, L, lift } or null; false: the path left where the camera is (a page's
+    // stop button), 'stop' told
+    box.diskPath = (view, o = {}) => {
+      if (view === false) { if (path) { pathGrab(); touched(); emitState(); } return null; }
+      if (view == null) { if (!path) return null; const t = (nowMs() - path.t0) / 1000; return { id: path.id, t, dur: path.plan.ease.D, s: pathEaseAt(path.plan.ease, t).s, L: path.plan.L, lift: path.plan.lift ? path.plan.lift.b : 0 }; }
+      const st = checked(view), keys = {};
+      for (const k of ['el', 'az', 'd', 'tx', 'ty', 'tz', 'p', 'pi']) if (st[k] != null) keys[k] = st[k];
+      const id = ++pathN, from = cam ? { el: camEl, az: camAz, lnd: Math.log(camD), T: camT.slice(), v: camV.slice(), tv: camTV.slice() } : null;
+      box.diskSet({ ...keys, fly: 1 });   // (the destination, as a flight sets it; a path under way taken over from what is seen)
+      flyV = flyT = null; pathStop();   // (a path under way to the same view (no view keys): left for this one)
+      if (reduce || !from || !W) { pathTell('arrive', { id, dur: 0, L: 0 }); return { id, dur: 0, L: 0, lift: 0 }; }
+      // the two ends in the frame of the destination (the state's now: following a planet or not)
+      const a0 = viewOff(), c = Math.cos(a0), s = Math.sin(a0), B = follow ? planetPos(time) : [0, 0, 0];
+      const local = (P) => { const x = P[0] - B[0], y = P[1] - B[1]; return [c * x + s * y, -s * x + c * y, P[2] - B[2]]; };
+      const pa = { el: from.el, az: from.az - a0, lnd: from.lnd, T: local(from.T) }, pb = { el: elUser, az: azUser, lnd: Math.log(opt.dist), T: panV.slice() };
+      const sp = finiteNumber(o.speed), dur = finiteNumber(o.dur), rho = finiteNumber(o.rho), turns = finiteNumber(o.turns);
+      const po = { fov: opt.fov, rho: rho > 0.2 && rho < 4 ? rho : PATH.RHO, kappa: PATH.KAPPA, V: PATH.V * (sp > 0 ? Math.min(4, Math.max(0.25, sp)) : 1), ramp: PATH.RAMP,
+        dmin: PATH.DMIN, dmax: PATH.DMAX, dur: dur > 0 && dur <= 600 ? dur : 0, turns: isFinite(turns) ? Math.max(-8, Math.min(8, Math.round(turns))) : 0, v0: 0,
+        star: local([0, 0, 0]), midR: PATH.MID_R, midH: PATH.MID_H, midMax: PATH.MID_MAX, hOf: Hof };
+      const plan = pathPlan(pa, pb, po);
+      // (a moving camera's speed taken on: its part along the path's first direction, in the shared measure (KAPPA a radian of
+      // turn, an e-fold of zoom, a view's width of pan), so that the speed on the screen carries on; from rest with dur)
+      const v = from.v, tv = local([from.T[0] + from.tv[0], from.T[1] + from.tv[1], from.T[2] + from.tv[2]]).map((x, i) => x - pa.T[i]);
+      if (!(po.dur > 0) && plan.L > 0 && Math.hypot(v[0], v[1], v[2], tv[0], tv[1], tv[2]) > 0) {
+        const q0 = pathAt(plan, 0), q1 = pathAt(plan, 1e-4), w = 2 * Math.tan(opt.fov / 2) * camD, ce = Math.cos(pa.el);
+        const m = (dEl, dAz, dLn, dT) => [PATH.KAPPA * dEl, PATH.KAPPA * ce * dAz, dLn, dT[0] / w, dT[1] / w, dT[2] / w];
+        const mt = m((q1.el - q0.el) / 1e-4, (q1.az - q0.az) / 1e-4, (q1.lnd - q0.lnd) / 1e-4, q1.T.map((x, i) => (x - q0.T[i]) / 1e-4)), mv = m(v[0], v[1], v[2], tv);
+        const nt = Math.hypot(...mt), along = nt > 0 ? mt.reduce((acc, x, i) => acc + x * mv[i], 0) / nt : 0;
+        if (along > 0) { po.v0 = along * plan.L / nt; plan.ease = pathEase(plan.L, po); }
+      }
+      if (!(plan.ease.D > 0)) { pathTell('arrive', { id, dur: 0, L: 0 }); return { id, dur: 0, L: 0, lift: 0 }; }
+      leaveStill();
+      path = { id, plan, t0: nowMs() };
+      touched();
+      pathTell('start', { id, dur: plan.ease.D, L: plan.L });
+      return { id, dur: plan.ease.D, L: plan.L, lift: plan.lift ? plan.lift.b : 0 };
+    };
+    // (round 11a, for checks) The state's picture as a still's first frame (no jitter, nothing averaged, no fade moving on), drawn
+    // as frames are (a script's frame, through the guard, in kicks or bands, each piece waited for) into a 32-bit float target and
+    // read back, with the exposure and the line's range given (o.expo, as an earlier call returned it) or as they are: two ways
+    // to the same state compared bit for bit (check.js: a path's arrival against a jump, as diskSplitTest compares kicks and
+    // whole rays). { busy: true } while a flight, a path or a look's switch is under way
+    box.diskFrameRead = async (o = {}) => {
+      if (lost || !fbFloat) return null;
+      await gpuDone(); stepping++;
+      const e0 = [aeLn, aeGoal, coLn, coGoal], ex = Array.isArray(o.expo) && o.expo.length === 4 && o.expo.every((x) => Number.isFinite(x)) ? o.expo.slice() : e0.slice();
+      try {
+        await warmNow(); if (lost) return null;
+        if (flyV || flyT || path || lookNow !== opt.look || lookDip() < 1) return { busy: true };
+        testT = target(rW, rH, gl.RGBA32F, gl.CLAMP_TO_EDGE, gl.NEAREST);
+        [aeLn, aeGoal, coLn, coGoal] = ex; accN = 0; fadeT = 0;
+        const ms = await scriptFrame('frameread', {});
+        if (lost) return null;
+        return { px: readF(testT), size: [rW, rH], scale: opt.scale, key: kindNow(), expo: ex, ms: Math.round(ms), split: !!(lastJob && lastJob.split), cancelled: !!(lastJob && lastJob.cancelled) };
+      } finally {
+        [aeLn, aeGoal, coLn, coGoal] = e0;
+        if (testT) { gl.deleteFramebuffer(testT.fb); gl.deleteTexture(testT.tex); testT = null; }
+        stepping--; accN = 0; dirty = true;
+      }
+    };
     // --- the tour: chapters may be selected by the visitor, or advanced automatically by the legacy diskTour(true).
     // Each chapter establishes the view/components its existing text describes, even when entered directly from an
     // observed look or with components disabled. Direct model input pauses advancement, keeping the chapter and its
@@ -8075,6 +8368,27 @@ void main(){
     // (the speed as diskSet takes it: a finite number, positive, 0.1 to 10; the zoom's factor finite and positive, 0.01
     // to 100, the distance then held within its range: anything else is left out)
     box.diskSpeed = (x) => { const st = checked({ speed: x }); if (st.speed != null) speed = st.speed; };
+    // (round 11a) The page's own clock (see nowMs), for an exporter that draws a frame at a time: diskManual(true) holds the clock
+    // where it is (the flights, the paths, the fades and the look's dip wait with it, and the animation frames no longer move the
+    // model's clock); diskAdvance(dt) moves it on by dt seconds (0 to 10), the model's clock with it as an animation frame would
+    // (dt x the speed x clockK, the outburst's age; not while paused); diskManual(false) gives it back to the wall clock from where
+    // it stands, so that nothing jumps. Neither draws: the frames are the animation frames' or a script's (diskSettle, diskSnapshot).
+    // No argument reads it.
+    box.diskManual = (on) => {
+      if (on != null && !!on !== (manualMs !== null)) {
+        if (on) manualMs = nowMs(); else { clockOff = manualMs - performance.now(); manualMs = null; }
+        dirty = true;
+      }
+      return manualMs !== null;
+    };
+    box.diskAdvance = (dt) => {
+      const s = finiteNumber(dt);
+      if (manualMs === null || !isFinite(s) || s < 0 || s > 10) return null;
+      manualMs += 1000 * s;
+      if (!paused) { time += s * speed * clockK(); if (burst) burst.age += s * speed; update(); }
+      dirty = true;
+      return { ms: manualMs, time };
+    };
     box.diskZoom = (f) => { const k = typeof f === 'number' || typeof f === 'string' ? Number(f) : NaN; if (isFinite(k) && k > 0) zoomBy(Math.min(100, Math.max(0.01, k))); };
     // for checks: render n frames (the model clock advances 0.05 per frame) and return the cost of a frame
     // in ms (medians), with the canvas size, render scale and steps they were measured at:
@@ -8402,7 +8716,7 @@ void main(){
         // and kicks of 16 to 96 at the same views settled. So no fade moves on in either draw (fadeT: their step, dtR, is the time
         // since the last frame; every fade of the picture goes by it), the exposure and the line's range are those of the start
         // (e0), and the two draws are compared only where no flight is under way nor a look's switch, whose dip goes by the clock)
-        if (flyV || flyT || lookNow !== opt.look || lookDip() < 1) return { changed: true, busy: true };
+        if (flyV || flyT || path || lookNow !== opt.look || lookDip() < 1) return { changed: true, busy: true };
         if (isFinite(kT) && kT > 0) { kickK = Math.min(4096, Math.max(4, Math.round(kT))); kickAdapt = false; kickResetAll(); }
         testRows = isFinite(rT) && rT >= 1 ? Math.round(rT) : 0;
         // (o.maxMs: the test's time; its frame left at the end of it, and { timedOut } returned)

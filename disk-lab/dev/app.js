@@ -4,17 +4,18 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=814f93ec9f';
-import { WORDS } from './words.js?v=caf1a324dc';
+import { WORDS } from './words.js?v=7a794e5842';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng } from './capture.js?v=aa82de203b';
+import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash } from './seq.js?v=8885a02a7b';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=f9de6d9725';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=ff17405380';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.8-dev.7', RELEASED = '2026-10-20';
+const VERSION = '1.9-dev.1', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
@@ -206,15 +207,21 @@ const routeButtons = PLACES.map((p, i) => {
 $('prev').addEventListener('click', () => goPlace(placeI - 1));
 $('next').addEventListener('click', () => goPlace(placeI + 1));
 
+// the engine's state for arriving at a place now (its distance fitted to the stage), with the planets its text needs
+// (round 11a: shared with the scenes of the places, see placeScene)
+function placeStateNow(pl) {
+  const st = placeState(pl, S().mode, aspect());
+  // (the planet's place shows the first planet at 3 au, as its text says; others are kept)
+  // (round 8: a Jupiter, as the place's text says)
+  if (pl.id === 'planet') { const ps = S().planets.filter((p, j) => j > 0 && roomFor([[3, 1, 1]], p[0], -1, p[2])); st.planets = [[3, 1, 1], ...ps].slice(0, 4); st.pi = 0; }
+  else if ((pl.needs & 16) && !S().planets.some((p) => p[1])) st.planets = [[3, 1, 1]];
+  return st;
+}
 function goPlace(i, { fly = true } = {}) {
   placeI = Math.min(PLACES.length - 1, Math.max(0, i));
   const pl = PLACES[placeI];
   if (live()) {
-    const st = placeState(pl, S().mode, aspect());
-    // (the planet's place shows the first planet at 3 au, as its text says; others are kept)
-    // (round 8: a Jupiter, as the place's text says)
-    if (pl.id === 'planet') { const ps = S().planets.filter((p, j) => j > 0 && roomFor([[3, 1, 1]], p[0], -1, p[2])); st.planets = [[3, 1, 1], ...ps].slice(0, 4); st.pi = 0; }
-    else if ((pl.needs & 16) && !S().planets.some((p) => p[1])) st.planets = [[3, 1, 1]];
+    const st = placeStateNow(pl);
     guardSwitch(keyOf({ ...S(), ...st }));   // (round 9: the scale lowered first if the place's look or cut is dearer)
     box.diskSet({ ...st, fly: fly && !reduce ? 1 : 0 });
     target = { ...st, time: S().time };
@@ -276,6 +283,7 @@ function renderAll() {
   renderSaveSize();
   renderCite();
   renderStillNote();
+  renderTalk();   // (round 11a)
   sync();
 }
 
@@ -1510,6 +1518,10 @@ async function start() {
   hint(true);
   diag.timings.live = Math.round(performance.now() - t0);
   armIdle();
+  // (round 11a: a link's scenes, #seq=; ?present=1 opens the presenter, full screen at the first key or click where the browser
+  // asks for one)
+  seqOpenHash();
+  if (q.get('present') === '1') present(true);
 }
 
 // (round 10a) What the page sets in the engine for this device, once the guard is calibrated, and again when the engine is
@@ -2020,6 +2032,351 @@ function logText(l) {
   return out.join('\n');
 }
 
+// ---------- talks (round 11a): moves, scenes and the presenter ----------
+// The owner: 「研究じゃなくていい、プレゼンに使われるといい」「視点移動アニメーションの実装かなあ」 (ver2/docs/disk-lab-roadmap.md);
+// the design, ver2/docs/disk-lab-r11-camera.md; the supervisor's choices on its open questions, disk-lab-handoff.md section 6.
+// "Moves and talks" in the rail (closed until opened, so that the sandbox is as the visitor knows it): the built-in moves, each
+// played at once from the view as it is; the scenes (seq.js): "Add this view", renamed, reordered, removed, played, kept on this
+// device, saved as a JSON file and opened again, shared as a #seq= link; and the presenter: the picture alone, full screen, the
+// scenes stepped through with a clicker's keys (with no scenes of one's own, the nine places). Every flight is the engine's smooth
+// path (diskPath): to the engine a flight, its frames drawn at the moving scale within the guard (moving, here), and the still on
+// arrival refined to the level chosen (the ramp), as after any flight. The look the presenter chose is kept while flying (no switch
+// to the model look): a scene's look, cut and line map are set before the flight where they cost less than what is shown, on
+// arrival where they cost more (the guard's factors), so that no flight is dearer than both its ends. DESIGN.md, section 25.
+const SEQ_KEY = KEY('disk-lab-seq'), SEQ_PREV = KEY('disk-lab-seq-prev'), HOLD_S = 3;
+const seqNew = () => ({ v: SEQ_V, app: 'disk-lab', engine: '', made: '', pace: 'normal', keys: [] });
+let seq = checkSeq(readJSON(SEQ_KEY)) || seqNew();
+let seqFromLink = false;   // (a link's scenes on show: the device's own kept as they were until these are changed)
+const talk = $('talk'), seqList = $('seqList');
+// the scenes kept on this device (the first change to a link's scenes keeps the device's own beside them, SEQ_PREV); a link's
+// fragment, once its scenes are changed, taken out of the address, so that a reload keeps the change
+function seqKeep() {
+  try {
+    if (seqFromLink) { const own = localStorage.getItem(SEQ_KEY); if (own) localStorage.setItem(SEQ_PREV, own); seqFromLink = false; }
+    localStorage.setItem(SEQ_KEY, JSON.stringify(seq));
+  } catch { /* not kept: this visit's only */ }
+  if (/^#seq=/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+}
+function seqChanged() { seqKeep(); renderTalk(); }
+const seqOut = () => ({ ...seq, engine: ENGINE_SRC.split('v=')[1], made: new Date().toISOString().slice(0, 10) });
+// a scene of a place, as goPlace sets it (its distance fitted to the stage now)
+function placeScene(i) {
+  const pl = PLACES[i], st = placeStateNow(pl);
+  return { label: T().places[pl.id].title, place: pl.id, aspect: aspect(), view: pick(st, VIEW_KEYS), look: st.look, set: pick(st, ['mode', 'field', 'slice', 'sq', 'planets']) };
+}
+// what is played or presented: the scenes, or with none, the places
+const scenes = () => (seq.keys.length ? seq.keys : live() ? PLACES.map((_, i) => placeScene(i)) : []);
+
+// The flight under way to a scene, { id, done(arrived) }: its end told by the engine ('diskpath': arrived, or left)
+let flying = null;
+box.addEventListener('diskpath', (e) => {
+  const d = e.detail || {};
+  if (!flying || d.id !== flying.id || d.state === 'start') return;
+  const f = flying; flying = null; f.done(d.state === 'arrive');
+});
+const leaveFlight = () => { if (flying) { const f = flying; flying = null; f.done(false); } };
+// To a scene (or a move's leg, a scene of some parts): what is shown, the planets and the options set first (they fade in or out
+// as it goes; a planet followed must be there), the look, cut and line map before if cheaper and on arrival if dearer, the
+// camera on its path, the clock (paused or running, its speed) on arrival. The clock's time is not set live: a jump of the eddies
+// and the planet on arrival (it is kept in the scene for the video export to come). Resolves true on arrival, false when left
+// (another scene, a drag, the wheel, a key, a lost context). cut, or reduced motion: there at once, no flight
+function flyTo(k, { cut = false } = {}) {
+  leaveFlight();
+  if (!live() || 'lost' in lab.dataset) return Promise.resolve(false);
+  const s0 = S(), set = k.set || {}, look = k.look || s0.look, coMode = k.coMode || s0.coMode;
+  const slice = look !== 'model' ? 0 : set.slice != null ? set.slice : s0.slice;
+  const later = factorOf(keyOf({ ...s0, look, coMode, slice })) > factorOf(keyOf(s0));
+  // (only what changes: a cut set again, as it is, would end a flight under way, and a look set again would dip)
+  const lookSet = { ...(look !== s0.look ? { look } : {}), ...(coMode !== s0.coMode ? { coMode } : {}), ...(slice !== s0.slice ? { slice } : {}), ...(k.coV != null ? { coV: k.coV } : {}), ...(set.sq ? { sq: set.sq } : {}) };
+  if (look !== s0.look) flogAdd({ k: 'set', look, path: 1 });   // (the flight record: see setLook)
+  const before = {};
+  for (const x of ['planets', 'mode', 'field', 'ann', 'marks', 'waves', 'asym', 'ms', 'bg']) if (set[x] != null) before[x] = set[x];
+  if (Object.keys(before).length) box.diskSet(before);
+  if (quality !== 'auto') relaxGuard();
+  const setLooks = () => { guardSwitch(keyOf({ ...S(), look, coMode, slice })); if (Object.keys(lookSet).length) box.diskSet(lookSet); };
+  if (!later) setLooks();
+  // (a stage narrower than the one the scene was made on: the camera moved back, as the places are fitted; the field of view is
+  // vertical)
+  const view = { ...k.view };
+  if (view.d && k.aspect && aspect() < k.aspect - 1e-3) view.d = Math.min(600, Math.round(view.d * k.aspect / aspect() * 1000) / 1000);
+  const arrive = () => {
+    if (later) setLooks();
+    if (k.clock) { const c = {}; if (k.clock.paused != null) c.paused = k.clock.paused; if (k.clock.speed != null) c.speed = k.clock.speed; box.diskSet(c); }
+    if (k.place) { const i = PLACES.findIndex((p) => p.id === k.place); if (i >= 0) { placeI = i; target = { ...S(), time: S().time }; renderPlace(); } }
+    sync();
+  };
+  if (cut || reduce) { box.diskSet({ ...view, fly: 0 }); arrive(); return Promise.resolve(true); }
+  moving();   // (the lighter picture at once: a still being refined is left before the first moving frame, as a drag leaves it)
+  const mv = k.move || {}, r = box.diskPath(view, { speed: (PACES[seq.pace] || 1) * (mv.speed || 1), dur: mv.dur, turns: mv.turns });
+  return new Promise((resolve) => { flying = { id: r.id, done: (ok) => { if (ok) arrive(); else sync(); resolve(ok); } }; });
+}
+
+// The built-in moves (the design's section 4), one click each, from the view as it is: legs flown one after another with no rest
+// between, or the clock or the look changed with the camera held. Pressed again, or another move, a scene, the presenter or a
+// drag: stopped where it is
+const MOVES = ['orbit', 'rise', 'powers', 'planet', 'timelapse', 'looks'];
+const TIMELAPSE = { speed: 10, ms: 10000 }, LOOK_MS = 4000, LOOK_TOUR = ['model', 'optical', 'mir', 'mm'];
+let playToken = 0, playing = '', timeLapse = null;   // playing: a move's name, 'play' (the scenes one after another), or ''
+const sleepers = new Set();
+const sleep = (ms) => new Promise((r) => { const w = () => { clearTimeout(t); sleepers.delete(w); r(); }; const t = setTimeout(w, ms); sleepers.add(w); });
+// what plays, stopped: its waits woken, its flight left (where the camera is, unless a flight to a scene takes over), the clock
+// given back from a time-lapse
+function stopPlay(grab = true) {
+  playToken++;
+  for (const w of [...sleepers]) w();
+  if (flying) { leaveFlight(); if (grab && live()) box.diskPath(false); }
+  endTimeLapse();
+  if (playing) { playing = ''; renderTalk(); }
+}
+function endTimeLapse() {
+  const tl = timeLapse; timeLapse = null;
+  if (!tl || !live()) return;
+  // (the clock as it was, unless it was changed meanwhile)
+  if (Math.abs(S().speed - TIMELAPSE.speed) < 1e-6) box.diskSpeed(tl.speed);
+  if (tl.paused && !S().paused) box.diskPlay(false);
+  sync();
+}
+// each move's legs, from the state now. Orbit: one turn round the point looked at, at the elevation and distance as they are, 24
+// s (15 degrees a second); rise: to edge-on (2 degrees), then up to face-on (89) in 6 s; powers (of ten): out to afar (340 au, the
+// envelope on), then in to the star (0.15 au), some 10 s at the normal pace; planet: out to the disk's edge on the planet's side,
+// following it (the point looked at 17 au outside it, 40 au away), then in to the planet's place, van Wijk's arc turning round to
+// its view. The camera holds for the clock's time-lapse (10 times, 10 s) and the looks in turn (the model's, visible, mid-infrared,
+// millimetre, 4 s each, back to the look before)
+function moveLegs(name) {
+  const s = S();
+  if (name === 'orbit') return [{ view: {}, move: { dur: 24, turns: 1 } }];
+  if (name === 'rise') return [...(Math.abs(s.el - 2) > 1 ? [{ view: { el: 2 } }] : []), { view: { el: 89 }, move: { dur: 6 } }];
+  if (name === 'powers') return [{ view: { p: 0, el: 14, az: s.az, d: 340, tx: 0, ty: 0, tz: 0 }, set: { mode: s.mode | 32 } }, { view: { el: 22, d: 0.15 } }];
+  if (name === 'planet') {
+    const st = placeStateNow(placeById('planet'));
+    return [{ view: { p: 1, pi: 0, el: 16, az: 0, d: 40, tx: 17, ty: 0, tz: 0 }, set: { mode: st.mode, planets: st.planets } }, { view: pick(st, VIEW_KEYS) }];
+  }
+  return [];
+}
+async function runMove(name) {
+  if (!live()) return;
+  const again = playing === name;
+  stopPlay();
+  if (again || !MOVES.includes(name)) return;
+  const token = playToken;
+  playing = name; renderTalk(); flogAdd({ k: 'set', move: name });
+  if (name === 'timelapse') {
+    const s0 = S(); timeLapse = { speed: s0.speed, paused: !!s0.paused };
+    box.diskSet({ paused: 0, speed: TIMELAPSE.speed }); sync();
+    await sleep(TIMELAPSE.ms);
+    if (token === playToken) endTimeLapse();
+  } else if (name === 'looks') {
+    const order = LOOK_TOUR.filter((k) => k !== S().look).concat(S().look);
+    for (let i = 0; i < order.length && token === playToken; i++) { setLook(order[i]); if (i < order.length - 1) await sleep(LOOK_MS); }
+  } else {
+    for (const leg of moveLegs(name)) if (token !== playToken || !(await flyTo(leg))) break;
+  }
+  if (token === playToken) { playing = ''; renderTalk(); }
+}
+// the scenes one after another (with none of one's own, the places), each held HOLD_S (its own hold, if it has one) once there
+async function playScenes() {
+  const again = playing === 'play';
+  stopPlay();
+  if (again || !live()) return;
+  const token = playToken, list = scenes();
+  playing = 'play'; renderTalk();
+  for (let i = 0; i < list.length && token === playToken; i++) {
+    sceneI = i; renderSeq();
+    if (!(await flyTo(list[i])) || token !== playToken) break;
+    if (i < list.length - 1) await sleep(1000 * (list[i].hold ?? HOLD_S));
+  }
+  if (token === playToken) { playing = ''; renderTalk(); }
+}
+
+// The presenter (the design's section 5.2; for laptops and desktops, the owner's choice: phones are the audience's): the stage
+// alone, full screen where the browser allows it (else the window), the watermark kept. → ↓ Page Down Enter the next scene,
+// ← ↑ Page Up Backspace the one before, Home and End the first and the last, Space the clock, B or . a black screen, F full
+// screen again, Esc out (the browser's own Esc leaves full screen, and the presenter with it). The keys are taken before the
+// canvas's (a capture on the window), so that its Space, arrows and B (the outburst) do not act as well, and a clicker's F5 (its
+// "start the slides") does not reload the page in a talk. A drag still turns the view, and the next press flies on from where it
+// is. A second press within 0.4 s of the one before, while flying: there at once. The idle rest is off while presenting; the
+// screen is kept awake where the browser can (Screen Wake Lock).
+let presenting = false, sceneI = -1, sceneMoved = false, lastPress = 0, wasFull = false, hudT = 0, ctlT = 0, wakeLock = null;
+const presentHud = $('presentHud');
+const fullEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+function fullscreen(on) {
+  const de = document.documentElement, f = on ? de.requestFullscreen || de.webkitRequestFullscreen : document.exitFullscreen || document.webkitExitFullscreen;
+  if (!f || !!fullEl() === on) return;
+  try { const p = f.call(on ? de : document, on ? { navigationUI: 'hide' } : undefined); if (p && p.catch) p.catch(() => {}); } catch { /* the window, then */ }
+}
+function present(on) {
+  on = !!on;
+  if (on === presenting || (on && !live())) return;
+  stopPlay();
+  presenting = on; sceneI = -1; sceneMoved = false;
+  lab.toggleAttribute('data-present', on); flogAdd({ k: 'set', present: on ? 1 : 0 });
+  // (the focus off the rail's button: Space or Enter must not press a hidden button meanwhile)
+  if (on && document.activeElement && document.activeElement !== document.body && document.activeElement.blur) document.activeElement.blur();
+  if (on) { fullscreen(true); clearTimeout(idleTimer); keepAwake(true); hud(T().talk.presentHint, ''); }
+  else { fullscreen(false); black(false); keepAwake(false); hud('', ''); armIdle(); }
+  renderTalk();
+}
+for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => {
+  const full = !!fullEl();
+  if (presenting && wasFull && !full) present(false);   // (the browser's Esc left full screen: the presenter too)
+  wasFull = full && presenting;
+});
+function black(on) { lab.toggleAttribute('data-black', !!on); }
+// the scene's name and its number, for 4 s
+function hud(caption, count) {
+  $('presentCap').textContent = caption; $('presentN').textContent = count;
+  presentHud.classList.toggle('on', !!(caption || count));
+  clearTimeout(hudT);
+  if (caption || count) hudT = setTimeout(() => presentHud.classList.remove('on'), 4000);
+}
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && navigator.wakeLock && document.visibilityState === 'visible') { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    else if (!on && wakeLock) { const w = wakeLock; wakeLock = null; await w.release(); }
+  } catch { wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => { if (presenting && !document.hidden) keepAwake(true); });
+function goScene(i) {
+  const list = live() ? scenes() : [];
+  if (!list.length) return;
+  i = Math.max(0, Math.min(list.length - 1, i));
+  const now = performance.now();
+  if (i === sceneI && !sceneMoved && !flying) { if (i === list.length - 1) hud(T().talk.last, `${i + 1} / ${list.length}`); return; }
+  const cut = !!flying && now - lastPress < 400;
+  lastPress = now; sceneI = i; sceneMoved = false;
+  if (playing || timeLapse) stopPlay(false);   // (a move or the autoplay left; its flight taken over by this one)
+  hud(list[i].label || T().talk.viewN(i + 1), `${i + 1} / ${list.length}`);
+  renderSeq();
+  flyTo(list[i], { cut }).then((ok) => { if (!ok && sceneI === i) sceneMoved = true; });
+}
+window.addEventListener('keydown', (e) => {
+  if (!presenting || e.altKey || e.ctrlKey || e.metaKey) return;
+  const k = e.key, step = { ArrowRight: 1, ArrowDown: 1, PageDown: 1, Enter: 1, ArrowLeft: -1, ArrowUp: -1, PageUp: -1, Backspace: -1 }[k];
+  let used = true;
+  if (e.repeat && (step || k === ' ')) { /* (a key held: one step) */ }
+  else if (step) goScene(sceneI + step);
+  else if (k === 'Home') goScene(0);
+  else if (k === 'End') goScene(scenes().length - 1);
+  else if (k === ' ') { if (live()) playBtn.click(); }
+  else if (k === 'b' || k === 'B' || k === '.') black(!lab.hasAttribute('data-black'));
+  else if (k === 'Escape') present(false);
+  else if (k === 'f' || k === 'F') fullscreen(true);
+  else if (k === 'F5') { /* (a clicker's "start the slides": no reload in a talk) */ }
+  else used = false;
+  if (used) { e.preventDefault(); e.stopPropagation(); }
+}, { capture: true });
+// (a drag or the wheel on the picture: the scene left, the next press flies to it again; the buttons in the corner, for a mouse,
+// shown while it moves, and the cursor hidden when it rests)
+stage.addEventListener('pointerdown', (e) => { if (presenting && e.target === box.querySelector(':scope > canvas')) sceneMoved = true; }, { capture: true, passive: true });
+stage.addEventListener('wheel', () => { if (presenting) sceneMoved = true; }, { capture: true, passive: true });
+stage.addEventListener('pointermove', () => {
+  if (!presenting) return;
+  lab.dataset.pointer = ''; clearTimeout(ctlT); ctlT = setTimeout(() => { delete lab.dataset.pointer; }, 2500);
+}, { passive: true });
+$('presentPrev').addEventListener('click', () => goScene(sceneI - 1));
+$('presentNext').addEventListener('click', () => goScene(sceneI + 1));
+$('presentExit').addEventListener('click', () => present(false));
+
+// the rail's part: the moves and the pace (made here, named in words.js), the scenes' list and its buttons
+// (with reduced motion no orbit and no time-lapse: there are no flights, and the clock does not run)
+const moveButtons = MOVES.filter((m) => !reduce || (m !== 'orbit' && m !== 'timelapse')).map((m) => { const b = el('button', { type: 'button', class: 'chip', 'data-move': m, 'aria-pressed': 'false' }); $('moveGroup').append(b); return b; });
+const paceButtons = Object.keys(PACES).map((k) => { const b = el('button', { type: 'button', 'data-pace': k, 'aria-pressed': 'false' }); $('paceGroup').append(b); return b; });
+let clearAt = -1e9;
+function renderTalk() {
+  const w = T().talk;
+  moveButtons.forEach((b) => { b.textContent = w.moves[b.dataset.move]; pressed(b, playing === b.dataset.move); });
+  paceButtons.forEach((b) => { b.textContent = w.pace[b.dataset.pace]; pressed(b, seq.pace === b.dataset.pace); });
+  $('paceGroup').setAttribute('aria-label', w.pace.label);
+  $('seqPlay').textContent = playing === 'play' ? w.stop : w.play;
+  $('seqClear').textContent = performance.now() - clearAt < 4000 ? w.clearAgain : w.clear;
+  $('seqClear').disabled = !seq.keys.length;
+  renderSeq();
+}
+function renderSeq() {
+  const w = T().talk, n = seq.keys.length, cur = presenting || playing === 'play' ? sceneI : -1;
+  seqList.replaceChildren(...seq.keys.map((k, i) => el('li', { class: 'seq-row', 'aria-current': i === cur ? 'true' : null },
+    el('span', { class: 'n', 'aria-hidden': 'true' }, String(i + 1)),
+    el('input', { type: 'text', value: k.label || '', placeholder: w.viewN(i + 1), maxlength: '80', 'aria-label': w.nameOf(i + 1), 'data-seq-name': String(i) }),
+    el('button', { type: 'button', class: 'icon-chip', 'data-seq-up': String(i), 'aria-label': w.up(i + 1), disabled: i === 0 }, '↑'),
+    el('button', { type: 'button', class: 'icon-chip', 'data-seq-down': String(i), 'aria-label': w.down(i + 1), disabled: i === n - 1 }, '↓'),
+    el('button', { type: 'button', class: 'icon-chip', 'data-seq-remove': String(i), 'aria-label': w.remove(i + 1) }, '×'),
+    el('button', { type: 'button', class: 'chip quiet', 'data-seq-go': String(i), 'aria-label': w.goTo(i + 1) }, w.go))));
+  $('seqNone').hidden = n > 0;
+}
+// the view as it is, a scene: named after the place if the view has not left it (else "View n" until named)
+function addView() {
+  if (!live()) return;
+  if (seq.keys.length >= SEQ_MAX) { note(T().talk.full(SEQ_MAX)); return; }
+  const at = away() ? null : PLACES[placeI].id, k = keyFrom(S(), { label: at ? T().places[at].short : '', place: at, aspect: aspect() });
+  if (k) { seq.keys.push(k); seqChanged(); }
+}
+function moveKey(i, by) {
+  const j = i + by;
+  if (j < 0 || j >= seq.keys.length) return;
+  [seq.keys[i], seq.keys[j]] = [seq.keys[j], seq.keys[i]]; seqChanged();
+}
+// "Remove all": a second press within 4 s
+function seqClear() {
+  if (!seq.keys.length) return;
+  if (performance.now() - clearAt > 4000) { clearAt = performance.now(); renderTalk(); setTimeout(renderTalk, 4100); return; }
+  clearAt = -1e9; seq.keys = []; seqChanged();
+}
+function seqSave() {
+  const out = seqOut(), a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' })), download: `disk-lab-scenes-${out.made}.json` });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+async function seqLink() {
+  const u = new URL(location.pathname, location.href); u.searchParams.set('lang', L());
+  const href = u.href + await seqToHash(seqOut()), field = $('seqLinkField');
+  try { await navigator.clipboard.writeText(href); field.hidden = true; note(T().talk.linkCopied); }
+  catch { field.value = href; field.hidden = false; field.focus(); field.select(); note(T().linkShown, 4000); }
+}
+// a link's scenes (#seq=), at the start and when the fragment changes: shown, the section opened; the device's own kept
+async function seqOpenHash() {
+  if (!/^#seq=/.test(location.hash) || !live()) return;
+  const o = await seqFromHash(location.hash);
+  if (!o || !o.keys.length) { note(T().talk.linkFailed, 4000); return; }
+  stopPlay();
+  seq = o; seqFromLink = true; talk.open = true; renderTalk();
+  note(T().talk.fromLink(o.keys.length), 5000);
+}
+window.addEventListener('hashchange', seqOpenHash);
+talk.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.move) runMove(b.dataset.move);
+  else if (b.dataset.pace) { seq.pace = b.dataset.pace; seqChanged(); }
+  else if (b.dataset.seqUp != null) moveKey(Number(b.dataset.seqUp), -1);
+  else if (b.dataset.seqDown != null) moveKey(Number(b.dataset.seqDown), 1);
+  else if (b.dataset.seqRemove != null) { seq.keys.splice(Number(b.dataset.seqRemove), 1); seqChanged(); }
+  else if (b.dataset.seqGo != null) { stopPlay(); const i = Number(b.dataset.seqGo); if (seq.keys[i]) { sceneI = i; flyTo(seq.keys[i]); } }
+  else if (b.id === 'seqAdd') addView();
+  else if (b.id === 'seqPlay') playScenes();
+  else if (b.id === 'presentBtn') present(true);
+  else if (b.id === 'seqSave') seqSave();
+  else if (b.id === 'seqLoad') $('seqFile').click();
+  else if (b.id === 'seqLink') seqLink();
+  else if (b.id === 'seqClear') seqClear();
+});
+// a scene renamed: kept (the list not made again, the field keeps its focus)
+talk.addEventListener('change', (e) => {
+  const t = e.target, k = t.dataset && t.dataset.seqName != null ? seq.keys[Number(t.dataset.seqName)] : null;
+  if (!k) return;
+  const v = t.value.trim().slice(0, 80);
+  if (v) k.label = v; else delete k.label;
+  seqKeep();
+});
+$('seqFile').addEventListener('change', async (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  let o = null;
+  try { if (f.size < 1 << 20) o = checkSeq(JSON.parse(await f.text())); } catch { o = null; }
+  if (!o || !o.keys.length) { note(T().talk.loadFailed, 4000); return; }
+  stopPlay();
+  seq = o; seqChanged(); note(T().talk.loaded(o.keys.length));
+});
+
 // ---------- resting when left alone ----------
 // A running clock keeps the GPU drawing every frame. Left alone for IDLE_MS (IDLE_BLUR_MS while the window is not the
 // focused one), the clock is paused: the picture is then finished at full resolution (onAccumulated) and the engine draws
@@ -2031,11 +2388,11 @@ const IDLE_MS = 60000, IDLE_MS_PHONE = 30000, IDLE_BLUR_MS = 15000, IDLE_TEST = 
 let idleTimer = 0, restedByIdle = false;
 function armIdle() {
   clearTimeout(idleTimer);
-  if (!live() || reduce || box.dataset.idle === 'off') return;
+  if (!live() || reduce || box.dataset.idle === 'off' || presenting) return;   // (round 11a: not in a talk)
   idleTimer = setTimeout(restIdle, IDLE_TEST || (document.hasFocus() ? (MOBILE || coarse ? IDLE_MS_PHONE : IDLE_MS) : IDLE_BLUR_MS));
 }
 function restIdle() {
-  if (!live() || reduce || box.dataset.idle === 'off' || 'lost' in lab.dataset) return;
+  if (!live() || reduce || box.dataset.idle === 'off' || 'lost' in lab.dataset || presenting) return;
   if (saving || moveFrom) return armIdle();
   if (S().paused) return;
   // (round 10a, dev.5: no note on the picture: the owner, trying dev.4 on the iPhone, found it in the way; the play button
@@ -2080,7 +2437,15 @@ window.diskLab = {
   // version line; for checks, here or through a WebDriver session)
   keys: { settings: SET, session: REC, log: LOG, logBad: LOG_BAD, logOwner: LOG_OWNER, quality: KEY('disk-lab-quality'), lang: KEY('site-language') },
   flightLog: () => JSON.parse(JSON.stringify(flog)), flightText: () => logText(flog), lastLog: () => badLog || prevLog, verdict: () => ({ ...verdict, avoid }),
-  versionLine: VERSION_LINE, version: VERSION, showLog: () => showLog(), restoreKept: () => restoreKept()
+  versionLine: VERSION_LINE, version: VERSION, showLog: () => showLog(), restoreKept: () => restoreKept(),
+  // (round 11a: the talks, for checks: the scenes (a copy; set checks them as a file's), a #seq= link to them, the moves, the
+  // presenter and its scene, the flight under way)
+  talk: {
+    scenes: () => JSON.parse(JSON.stringify(seq)), setScenes: (o) => { const v = checkSeq(o); if (v) { stopPlay(); seq = v; seqChanged(); } return !!v; },
+    add: () => addView(), link: async () => { const u = new URL(location.pathname, location.href); u.searchParams.set('lang', L()); return u.href + await seqToHash(seqOut()); },
+    move: (name) => runMove(name), play: () => playScenes(), stop: () => stopPlay(), go: (i) => goScene(i), fly: (k) => flyTo(k),
+    present: (on) => present(on), state: () => ({ presenting, scene: sceneI, moved: sceneMoved, playing, flying: flying ? flying.id : 0, black: lab.hasAttribute('data-black'), pace: seq.pace, n: seq.keys.length || PLACES.length })
+  }
 };
 // (round 10a: the same line as index.html writes without the script; check.js compares them)
 document.querySelectorAll('[data-version]').forEach((e) => { e.textContent = VERSION_LINE; });

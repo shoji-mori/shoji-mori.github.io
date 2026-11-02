@@ -147,6 +147,23 @@ export const WORDS = {
       bestNote: '最高(既定):画面の解像度で描きます。重い眺めでは、動きが止まらないよう静かに一段ずつ下げます。',
       bestCapped: (pct) => `最高(既定):この眺めは重いため、いまは ${pct} % で描いています。`
     },
+    // (round 11a) moves and talks: the built-in moves, the pace, the scenes and the presenter (app.js)
+    talk: {
+      moves: { orbit: 'ぐるりと 1 周', rise: '真横から真上へ', powers: '遠くから星まで', planet: '円盤に沿って惑星へ', timelapse: '時間を早送り', looks: '見え方を順に' },
+      pace: { label: '動きの速さ', slow: 'ゆっくり', normal: 'ふつう', fast: '速く' },
+      viewN: (n) => `眺め ${n}`,
+      nameOf: (n) => `場面 ${n} の名前`, up: (n) => `場面 ${n} を上へ`, down: (n) => `場面 ${n} を下へ`, remove: (n) => `場面 ${n} を外す`,
+      go: '行く', goTo: (n) => `場面 ${n} へ行く`,
+      play: '再生', stop: '止める', clear: 'すべて外す', clearAgain: 'もう一度押すと外します',
+      full: (n) => `場面は ${n} までです。`,
+      linkCopied: '場面の並びのリンクをコピーしました。',
+      linkFailed: 'このリンクの場面の並びは読めませんでした。',
+      fromLink: (n) => `リンクの ${n} 場面を開きました(「動きと発表」)。`,
+      loaded: (n) => `${n} 場面を開きました。`,
+      loadFailed: 'Disk Lab の場面の並びのファイルではありません。',
+      presentHint: '→ で次の場面へ · Esc で終わり',
+      last: '最後の場面です。'
+    },
     // (round 8, the owner: "the citation in English in Japanese too": the lead stays Japanese, the line is the English one)
     cite: {
       lead: '研究や発表での利用は自由です。出典として、このページを引用してください。',
@@ -289,6 +306,22 @@ export const WORDS = {
       capped: (pct) => `Too heavy in this view: held at ${pct}% so that drawing does not stall.`,
       bestNote: 'Best (the default): drawn at the screen\u2019s resolution, stepped down quietly where a view is too heavy to move smoothly.',
       bestCapped: (pct) => `Best (the default): this view is heavy, so it is drawn at ${pct}% for now.`
+    },
+    talk: {
+      moves: { orbit: 'Orbit once', rise: 'Edge-on to face-on', powers: 'From afar to the star', planet: 'Along the disk to the planet', timelapse: 'Speed up time', looks: 'Each look in turn' },
+      pace: { label: 'Pace of the moves', slow: 'Slow', normal: 'Normal', fast: 'Quick' },
+      viewN: (n) => `View ${n}`,
+      nameOf: (n) => `Name of scene ${n}`, up: (n) => `Move scene ${n} up`, down: (n) => `Move scene ${n} down`, remove: (n) => `Remove scene ${n}`,
+      go: 'Go', goTo: (n) => `Go to scene ${n}`,
+      play: 'Play', stop: 'Stop', clear: 'Remove all', clearAgain: 'Press again to remove all',
+      full: (n) => `${n} scenes at most.`,
+      linkCopied: 'A link to these scenes is copied.',
+      linkFailed: 'The scenes in this link could not be read.',
+      fromLink: (n) => `${n} scenes opened from the link (under Moves and talks).`,
+      loaded: (n) => `${n} scenes opened.`,
+      loadFailed: 'This file is not a list of scenes from Disk Lab.',
+      presentHint: '→ for the next scene · Esc to end',
+      last: 'This is the last scene.'
     },
     cite: {
       lead: 'Free to use in research and talks; please cite this page as the source.',

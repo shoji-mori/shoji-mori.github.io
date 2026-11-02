@@ -23,7 +23,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-wave.png?v=a5-bold-20261015">
 <link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="disk-lab.css?v=abf34b2a11">
+<link rel="stylesheet" href="disk-lab.css?v=e65544c08c">
 <!-- (round 10a) the prefix of the keys this build keeps on the device: none for the public page; a development build's own
      (ver2/tools/disk-lab-v2/make-dev.sh), so that nothing of it reaches the public page on the same origin -->
 <meta name="disk-lab-store" content="disk-lab-dev:">
@@ -88,12 +88,12 @@
   })();
 </script>
 <link rel="expect" href="#posterFirst" blocking="render">
-<script type="module" src="app.js?v=e7c9059242"></script>
+<script type="module" src="app.js?v=bf1ad8fec0"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
   <header class="bar">
-    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build dev" data-version-tag>開発版 1.8-dev.7</span></p>
+    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build dev" data-version-tag>開発版 1.9-dev.1</span></p>
     <div class="bar-end">
       <button type="button" class="text-button" id="aboutOpen" aria-haspopup="dialog"><span class="en" lang="en"><span class="long">About this model</span><span class="short">About</span></span><span class="ja" lang="ja"><span class="long">このモデルについて</span><span class="short">解説</span></span></button>
       <div class="lang-switch" role="group" aria-label="Language">
@@ -112,10 +112,18 @@
       <ul class="mat-list" id="matList"></ul>
     </div>
     <img class="watermark" id="watermark" src="logo-white.svg" alt="" aria-hidden="true" width="88" height="32">
+    <!-- (round 11a) the presenter's: a black screen (B), the scene's name and number for a moment, and buttons for a mouse -->
+    <div class="present-black" aria-hidden="true"></div>
+    <div class="present-hud" id="presentHud" aria-live="polite"><p class="present-cap" id="presentCap"></p><p class="present-n" id="presentN"></p></div>
+    <div class="present-ctl">
+      <button type="button" class="icon-button" id="presentPrev" data-aria-en="Previous scene" data-aria-ja="前の場面"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
+      <button type="button" class="icon-button" id="presentNext" data-aria-en="Next scene" data-aria-ja="次の場面"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
+      <button type="button" class="icon-button" id="presentExit" data-aria-en="End presenting" data-aria-ja="発表を終える"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
+    </div>
     <p class="stage-hint" id="stageHint" aria-hidden="true"></p>
     <div class="planet-pop" id="planetPop" hidden></div>
     <p class="stage-note" id="stageNote" role="status" aria-live="polite"></p>
-    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.8-dev.7 (2026-10-20) · engine f9de6d9725</p></div>
+    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.9-dev.1 (2026-11-02) · engine ff17405380</p></div>
     <!-- (round 10a) the safe start's note, with its offers; the last visit's record to read and copy -->
     <div class="stage-safe" id="stageSafe" role="status" hidden></div>
     <div class="stage-log" id="stageLog" role="dialog" aria-modal="false" hidden></div>
@@ -185,6 +193,29 @@
         <button type="button" class="chip quiet" id="resetView"><span class="en" lang="en">Start again</span><span class="ja" lang="ja">最初の眺めへ</span></button>
       </div>
     </section>
+    <!-- (round 11a) moves and talks: closed until opened, so that the sandbox is as the visitor knows it -->
+    <section class="rail-sec" id="talkSection">
+      <details class="talk" id="talk">
+        <summary><h3><span class="en" lang="en">Moves and talks</span><span class="ja" lang="ja">動きと発表</span></h3></summary>
+        <div class="chips" id="moveGroup"></div>
+        <div class="segmented small talk-pace" role="group" id="paceGroup"></div>
+        <p class="rail-note"><span class="en" lang="en">Each move starts from the view as it is, at the pace chosen; a drag, or the same button again, stops it.</span><span class="ja" lang="ja">どの動きも今の眺めから、選んだ速さで始まります。ドラッグするか、同じボタンをもう一度押すと止まります。</span></p>
+        <h4 class="talk-sub"><span class="en" lang="en">Scenes</span><span class="ja" lang="ja">場面</span></h4>
+        <div class="chips seq-edit"><button type="button" class="chip" id="seqAdd"><span class="en" lang="en">+ Add this view</span><span class="ja" lang="ja">+ この眺めを加える</span></button></div>
+        <ol class="seq-list seq-edit" id="seqList"></ol>
+        <p class="rail-note seq-edit" id="seqNone"><span class="en" lang="en">No scenes yet: set up a view (the look, what is shown, the cut, the clock) and add it. Without scenes of your own, Play and Present go through the nine highlights.</span><span class="ja" lang="ja">まだ場面がありません。眺め(見え方、見せるもの、断面、時計)を決めて加えてください。場面がなければ、再生と発表は見どころの 9 か所をたどります。</span></p>
+        <div class="chips seq-run"><button type="button" class="chip" id="seqPlay"></button><button type="button" class="chip present-only" id="presentBtn"><span class="en" lang="en">Present</span><span class="ja" lang="ja">発表する</span></button></div>
+        <div class="chips seq-edit">
+          <button type="button" class="chip quiet" id="seqSave"><span class="en" lang="en">Save as a file</span><span class="ja" lang="ja">ファイルに保存</span></button>
+          <button type="button" class="chip quiet" id="seqLoad"><span class="en" lang="en">Open a file</span><span class="ja" lang="ja">ファイルを開く</span></button>
+          <button type="button" class="chip quiet" id="seqLink"><span class="en" lang="en">Copy a link</span><span class="ja" lang="ja">リンクをコピー</span></button>
+          <button type="button" class="chip quiet" id="seqClear"></button>
+        </div>
+        <input type="file" id="seqFile" accept=".json,application/json" hidden>
+        <input class="link-field" id="seqLinkField" type="text" readonly hidden data-aria-en="Link to these scenes" data-aria-ja="場面の並びのリンク">
+        <p class="rail-note present-only"><span class="en" lang="en">Present shows the picture alone, full screen: → or Page Down for the next scene, ← or Page Up to go back, Space pauses the clock, B blacks out the screen, Esc ends. The scenes are kept on this device; a file or a link takes them to another.</span><span class="ja" lang="ja">「発表する」で絵だけを全画面に出します。→ か Page Down で次の場面、← か Page Up で前の場面、スペースで時計を止め、B で画面を黒く、Esc で終わります。場面はこの端末に残ります。ファイルかリンクで別の端末へ運べます。</span></p>
+      </details>
+    </section>
     <section class="rail-sec">
       <h3><span class="en" lang="en">Background</span><span class="ja" lang="ja">背景</span></h3>
       <div class="segmented small" role="group" id="bgGroup" data-aria-en="Background" data-aria-ja="背景">
@@ -205,7 +236,7 @@
       <input class="link-field" id="linkField" type="text" readonly hidden data-aria-en="Link to this view" data-aria-ja="この眺めのリンク">
       <p class="rail-note cite" id="citeRail"></p>
     </section>
-    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.8-dev.7 (2026-10-20) · engine f9de6d9725</p>
+    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.9-dev.1 (2026-11-02) · engine ff17405380</p>
   </aside>
 
   <section class="dock" id="dock" aria-labelledby="dockTitle">
@@ -231,7 +262,7 @@
   <div class="about-inner">
     <button type="button" class="icon-button about-close" id="aboutClose" data-aria-en="Close" data-aria-ja="閉じる"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
     <h2 id="aboutTitle" tabindex="-1" autofocus><span class="en" lang="en">About this model</span><span class="ja" lang="ja">このモデルについて</span></h2>
-    <p class="about-ver"><span data-version>Disk Lab v1.8-dev.7 (2026-10-20) · engine f9de6d9725</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
+    <p class="about-ver"><span data-version>Disk Lab v1.9-dev.1 (2026-11-02) · engine ff17405380</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
     <p class="tagline"><span class="en" lang="en">An interactive, physics-based visualization of protoplanetary disks, from magnetic fields and disk winds to planet formation and observational signatures.</span><span class="ja" lang="ja">磁場と円盤風から、惑星の形成、観測で見える姿まで。原始惑星系円盤を物理にもとづいて描き、操作しながら見られるようにしたものです。</span></p>
     <p class="lead"><span class="en" lang="en">The model is schematic: the equations and solutions come from the literature; strengths, colours and other settings are chosen so that the structure reads clearly. It is not the output of a simulation.</span><span class="ja" lang="ja">ただし模式的なモデルです。式と解は文献のものを使い、強さや色などの値は構造が読み取りやすいように選んでいます。シミュレーションの結果そのものではありません。</span></p>
     <p><span class="en" lang="en">It is drawn on your GPU: along each line of sight the light emitted and absorbed is added up (volume rendering). Field lines and labels are drawn over it as vector lines. Made by Shoji Mori.</span><span class="ja" lang="ja">ブラウザーの GPU で、視線に沿って光の放射と吸収を足し合わせて描いています(ボリュームレンダリング)。磁力線と注釈はベクトルの線で重ねています。作成:森 昇志。</span></p>
@@ -283,6 +314,7 @@
       <li><span class="en" lang="en">On a touch screen, as on a map: one finger moves, two fingers zoom and turn, two fingers moved up or down tilt; double-tap to zoom in.</span><span class="ja" lang="ja">タッチでは地図と同じです。1 本指で移動、2 本指で拡大と回転、2 本そろえて上下に動かすと傾きが変わります。ダブルタップで拡大。</span></li>
       <li><span class="en" lang="en">With the picture focused (Tab): arrows turn, + and − zoom, Home returns to the first view, space pauses, 1–5 set the angle, P goes to the planet, F field lines, S the cut, A labels.</span><span class="ja" lang="ja">図にフォーカスがあるとき(Tab):矢印で回転、+ と − で拡大・縮小、Home で最初の視点、スペースで一時停止、1〜5 で角度、P で惑星へ、F で磁力線、S で断面、A で注釈。</span></li>
       <li><span class="en" lang="en">Planets: turn them on under Show; click a planet in the picture to move its orbit, or place more with “Place a planet” (up to four).</span><span class="ja" lang="ja">惑星:「見せるもの」でオンにします。絵の中の惑星をクリックすると軌道半径を動かせ、「惑星を置く」で増やせます(4 つまで)。</span></li>
+      <li><span class="en" lang="en">For talks, under “Moves and talks”: moves that start with one click from the view as it is; scenes of your own, kept on this device, saved as a file or shared as a link; and “Present”, the picture alone, full screen, stepped through with a presentation clicker (→ ← Page Down Page Up; Space pauses the clock, B blacks out the screen, Esc ends).</span><span class="ja" lang="ja">発表のために(「動きと発表」):今の眺めから一押しで始まる動き、自分で加える場面(この端末に残り、ファイルに保存したり、リンクで渡したりできます)、そして「発表する」:絵だけを全画面に出し、プレゼン用のリモコンで場面を進めます(→ ← Page Down Page Up。スペースで時計を止め、B で画面を黒く、Esc で終わります)。</span></li>
       <li><span class="en" lang="en">Click the star and see what happens. With “Tap to drop pebbles” (under Pebbles), a click on the disk drops pebbles there; keep at it.</span><span class="ja" lang="ja">星をクリックすると、何かが起きます。「小石」の下の「タップで小石を置く」をオンにすると、円盤をクリックした所に小石を置けます(続けてみてください)。</span></li>
     </ul>
 
@@ -307,7 +339,7 @@
       <li>Ansdell, M. et al. 2018, ApJ, 859, 21</li>
       <li>Cieza, L. A. et al. 2016, Nature, 535, 258 <span class="en" lang="en">(the snow line of V883 Ori in outburst)</span><span class="ja" lang="ja">(増光中の V883 Ori のスノーライン)</span></li>
     </ul>
-    <p class="colophon" id="colophon" data-version>Disk Lab v1.8-dev.7 (2026-10-20) · engine f9de6d9725</p>
+    <p class="colophon" id="colophon" data-version>Disk Lab v1.9-dev.1 (2026-11-02) · engine ff17405380</p>
   </div>
 </dialog>
 <script id="posterFirst">
