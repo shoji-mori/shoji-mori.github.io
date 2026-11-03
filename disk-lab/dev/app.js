@@ -4,21 +4,25 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=814f93ec9f';
-import { WORDS } from './words.js?v=27bd0238d4';
+import { WORDS } from './words.js?v=87371f1b21';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=05481e7755';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=34fc894cb3';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=c975c4b47b';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.13', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.15', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
+// (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
+// switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
+// puts the defaults back.
+const MODEL_UI = true;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
 // settings never reach the public page on the same origin, nor the public page's its own
@@ -267,14 +271,18 @@ function away() {
 }
 
 // ---------- text ----------
+// (round 14a) the numbers the places' texts quote, from the model's parameters (the defaults' before the engine has said them,
+// and in the still pictures, which show the defaults)
+const approx = (v) => (v >= 10 ? String(Math.round(v)) : v >= 0.1 ? v.toFixed(1) : v.toFixed(2));
+const placeNums = () => ({ snow: approx(parDerived ? parDerived.snow : 1.149), rTI: approx(parDerived ? parDerived.rTI : 0.688) });
 function renderPlace() {
-  const pl = PLACES[placeI], w = T().places[pl.id];
+  const pl = PLACES[placeI], w = T().places[pl.id], text = typeof w.text === 'function' ? w.text(placeNums()) : w.text;
   placeTitle.textContent = w.title;
   // (a new text comes in softly, unless motion is reduced)
-  if (placeText.textContent !== w.text && placeText.textContent && !reduce && placeText.animate) {
+  if (placeText.textContent !== text && placeText.textContent && !reduce && placeText.animate) {
     placeText.animate([{ opacity: 0, transform: 'translateY(3px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.7,.2,1)' });
   }
-  placeText.textContent = w.text;
+  placeText.textContent = text;
   routeButtons.forEach((b, i) => {
     b.querySelector('.name').textContent = T().places[PLACES[i].id].short;
     b.setAttribute('aria-current', String(i === placeI));
@@ -297,6 +305,7 @@ function renderAll() {
   renderPlace();
   renderLooks();
   renderComps();
+  renderParams(); renderWind();   // (round 14a)
   renderQuality();
   renderSaveSize();
   renderCite();
@@ -526,6 +535,8 @@ rail.addEventListener('click', (e) => {
   else if (b.id === 'addPlanet') setPick(box.dataset.pick === 'planet' ? false : 'planet');
   else if (b.dataset.cpdAuto != null) box.diskSet({ cpdMdot: 0 });   // (round 13e: the planets' accretion rate back to auto)
   else if (b.dataset.colReset) resetCols(b.dataset.colReset);   // (round 13a: a component's colours back to the default)
+  else if (b.dataset.mpReset) setParam(b.dataset.mpReset, parDef && parDef[b.dataset.mpReset]);   // (round 14a: a parameter back to its default)
+  else if (b.dataset.windReset) { windGain = 1; applyWind(); keepSoon(); }   // (round 14a: the wind's brightness)
   sync();
 });
 // (round 9) a planet's slider: while it is dragged, the engine makes the gap's starlight anew at most every 120 ms and the
@@ -536,6 +547,8 @@ rail.addEventListener('input', (e) => {
   else if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value), true);
   else if (t.dataset.planetM != null) massPlanet(Number(t.dataset.planetM), mOf(t.value), true);
   else if (t.dataset.cpdMdot != null) { moving(); box.diskSet({ cpdMdot: mdOf(t.value) }); cpdRowSync(S()); }   // (round 13e)
+  else if (t.dataset.mp) setParam(t.dataset.mp, mpOf(t.dataset.mp, t.value), true);   // (round 14a: a parameter, see setParam)
+  else if (t.dataset.windGain) { windGain = wbOf(t.value); applyWind(true); }
 });
 rail.addEventListener('change', (e) => {
   const t = e.target; if (!live()) return;
@@ -543,6 +556,8 @@ rail.addEventListener('change', (e) => {
   else if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value));
   else if (t.dataset.planetM != null) massPlanet(Number(t.dataset.planetM), mOf(t.value));
   else if (t.dataset.cpdMdot != null) { box.diskSet({ cpdMdot: mdOf(t.value) }); sync(); }   // (round 13e)
+  else if (t.dataset.mp) setParam(t.dataset.mp, mpOf(t.dataset.mp, t.value));
+  else if (t.dataset.windGain) { windGain = wbOf(t.value); applyWind(); keepSoon(); }
 });
 
 // ---------- the components (Show): each a toggle; turned on, its settings open below it ----------
@@ -558,6 +573,15 @@ rail.addEventListener('change', (e) => {
 // show the gas's motion, drawn while the gas is shown.)
 // (round 13a) cols: the materials whose colour in the model look is chosen beside the toggle (the engine's MAT keys; see the
 // model look's colours): the gas, the pebbles' rock and ice, the wind, the jet, the envelope
+// (round 14a) the wind's brightness in the model look, a row under the wind's settings (see the wind's brightness below):
+// made here, with the components, its elements kept in wbEls
+const wbEls = {};
+function wbRow() {
+  Object.assign(wbEls, { name: el('label', { class: 'mp-name', for: 'windGain' }), input: el('input', { type: 'range', id: 'windGain', min: '0', max: '1000', step: '1', 'data-wind-gain': '1' }),
+    val: el('span', { class: 'mp-val' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-wind-reset': '1', hidden: true }) });
+  wbEls.row = el('div', { class: 'mp-row gain-row', hidden: true }, wbEls.name, wbEls.input, wbEls.val, wbEls.chip);
+  return wbEls.row;
+}
 const COMPS = [
   { key: 'gas', bit: 3, opts: ['marks'], cols: ['disk'] }, { key: 'pebbles', bit: 4, opts: ['drop'], cols: ['rock', 'ice'] },
   { key: 'wind', bit: 8, opts: ['asym'], cols: ['wind'] }, { key: 'jet', bit: 64, cols: ['jet'] }, { key: 'field', opt: 'field' },
@@ -572,6 +596,7 @@ const compEls = COMPS.map((c) => {
   if (c.planets) box_.append(el('div', { class: 'cpd-mdot' }, el('span', { class: 'cpd-mdot-k', 'data-cpd-k': '' }), el('span', { class: 'cpd-mdot-v', 'data-cpd-v': '' }),
     el('input', { type: 'range', min: '0', max: '1000', step: '1', 'data-cpd-mdot': '' }), el('button', { type: 'button', class: 'chip quiet', 'data-cpd-auto': '', hidden: true })),
   el('p', { class: 'rail-note cpd-note', 'data-cpd-note': '' }));
+  if (c.key === 'wind') box_.append(wbRow());   // (round 14a: its brightness in the model look)
   if (c.planets) box_.append(el('p', { class: 'rail-note planets-note' }));
   // (round 13a) beside the toggle, its colours (shown in the model look once the engine has started) and the chip back to the
   // default (shown while one of them is changed)
@@ -692,6 +717,8 @@ function syncComps(s) {
     if (opts) opts.hidden = !on;
     if (cs) cs.hidden = s.look !== 'model' || !colDef;   // (round 13a: the colours are the model look's)
   }
+  // (round 14a: the wind's brightness, as the colours, the model look's)
+  if (wbEls.row) wbEls.row.hidden = s.look !== 'model' || typeof box.diskWindGain !== 'function';
   // (round 8: the pebbles' tap mode ends with the pebbles, as its button goes with their settings)
   if (box.dataset.pick === 'pebbles' && !(s.mode & 4)) { delete box.dataset.pick; lab.classList.remove('picking'); note('', 0); }
   // the planets' rows (rebuilt when the list changes)
@@ -781,6 +808,173 @@ function resetCols(key) {
 // the colours kept with the settings on this device (none: the defaults)
 const keptCols = () => (saved && typeof saved.col === 'string' && colDef ? colFromLink(saved.col, colDef) : {});
 
+// ---------- the model's parameters (round 14a) ----------
+// The owner: "let the model's parameters be changed" (DESIGN.md section 34). The rail's Model section, closed until opened: a row
+// for each parameter the engine offers (box.diskParams; its spec gives the default, the range and whether the slider is on a log
+// scale), with its name, a slider, the value with its unit and, while it is changed, a chip back to the default; under each group
+// the numbers that follow (the engine's derived: the edge of the thermally ionized disk, the snow line, what reaches the star, the
+// wind's share). They go to the engine in one call (each parameter not chosen at its default), are kept with the settings on this
+// device (settingsNow, under KEY), written into a link as one parameter, mp= (MP-LINK), and put back by Reset all. The
+// development switches before round 14a, ?mdot=, ?lam=a,b, ?lamin= and ?chic=, are aliases of the parameters (a link's mp=
+// wins); ?mflux=0 and ?lam=old stay switches. Not in the scenes (a scene is a view). Applied after a safe start too, as the
+// colours: they change the picture's cost little. MODEL_UI shows the section.
+// MP-LINK
+// The parameters a link carries, each by a name of two letters: mp= holds the name and the value of each one not at its default,
+// joined by '_' (a value with three significant figures at most, written the shortest way: 3e-7, 0.015, 1.2), e.g.
+// mp=md3e-7_ls10; no mp= at all is every default. Read back, a pair whose name is not known, or whose value is not a number, is
+// passed over (that parameter at its default); the engine holds each one within its range.
+const MP_KEYS = { md: 'mdot', ls: 'lum', ts: 'tstar', ai: 'alphaIn', ti: 'tTI', li: 'lamIn', lt: 'lamTI', lo: 'lamOut', cc: 'chic', ga: 'alphaGap' };
+const MP_NAME = Object.fromEntries(Object.entries(MP_KEYS).map(([n, k]) => [k, n]));
+// a value as a link writes it: three significant figures at most
+const mpNum = (v) => String(Number(Number(v).toPrecision(3)));
+// the parameters chosen ({ key: value }): only the engine's keys and finite numbers, none at its default (def, by key)
+function mpClean(par, def) {
+  const out = {};
+  for (const k of Object.values(MP_KEYS)) {
+    const v = par && par[k] != null && par[k] !== '' ? Number(par[k]) : NaN;
+    if (Number.isFinite(v) && !(def && v === def[k])) out[k] = v;
+  }
+  return out;
+}
+// the parameters chosen as a link's value ('' when every one is at its default)
+const mpToLink = (par, def) => Object.entries(mpClean(par, def)).map(([k, v]) => MP_NAME[k] + mpNum(v)).join('_');
+// a link's value back as the parameters chosen (only those not at the default)
+function mpFromLink(v, def) {
+  const out = {};
+  for (const pair of typeof v === 'string' ? v.split('_') : []) {
+    const k = MP_KEYS[pair.slice(0, 2)], x = pair.length > 2 ? Number(pair.slice(2)) : NaN;
+    if (k && Number.isFinite(x)) out[k] = x;
+  }
+  return mpClean(out, def);
+}
+// /MP-LINK
+// the development switches before round 14a, as the parameters they set (see SWITCH)
+function mpAliases() {
+  const o = {}, m = /^\s*(\d*\.?\d+)\s*,\s*(\d*\.?\d+)\s*$/.exec(SWITCH.lam || '');
+  if (SWITCH.mdot) o.mdot = Number(SWITCH.mdot);
+  if (m) { o.lamTI = Number(m[1]); o.lamOut = Number(m[2]); }
+  if (SWITCH.lamin) o.lamIn = Number(SWITCH.lamin);
+  if (SWITCH.chic) o.chic = Number(SWITCH.chic);
+  return o;
+}
+// the parameters chosen (only those not at the default), and the engine's defaults, spec and the numbers that follow (null until
+// the engine has started)
+let params = {}, parDef = null, parSpec = null, parDerived = null;
+// into the engine, in one call, and into the rail, the places' texts and the probe's panel; on release (fin) the guard measures
+// the frames afresh
+function applyParams(fin = true) {
+  if (typeof box.diskParams !== 'function') return;
+  const r = box.diskParams(params);
+  parDef = r.def; parSpec = r.spec; parDerived = r.derived; params = mpClean(r.now, r.def);
+  if (fin && calibrated) guardAfresh();
+  renderParams();
+  renderPlace();
+  if (probeLast) probeRender();
+}
+// a parameter set by its slider (drag: while it is held: the picture at the moving scale, the engine told at most every
+// MP_DRAG_MS, since it makes the temperature's table and the wind map again; in full on release) or by its chip
+const MP_DRAG_MS = 150;
+let mpLast = 0, mpTimer = 0;
+function setParam(k, v, drag = false) {
+  if (!parDef || !(k in parDef) || !Number.isFinite(v)) return;
+  if (v === parDef[k]) delete params[k]; else params[k] = v;
+  clearTimeout(mpTimer);
+  if (drag) {
+    moving();
+    const wait = MP_DRAG_MS - (performance.now() - mpLast);
+    if (wait > 0) { mpTimer = setTimeout(() => { mpLast = performance.now(); applyParams(false); }, wait); renderParams(); return; }
+    mpLast = performance.now(); applyParams(false); return;
+  }
+  applyParams();
+  keepSoon();
+}
+// a slider's position (0 to 1000) for a value, and the value for a position, on the spec's scale (the default's own position
+// gives the default exactly; elsewhere three significant figures, as a link writes them)
+const mpPos = (k, v) => { const sp = parSpec[k], u = sp.log ? Math.log(v / sp.min) / Math.log(sp.max / sp.min) : (v - sp.min) / (sp.max - sp.min); return Math.round(1000 * Math.min(1, Math.max(0, u))); };
+const mpOf = (k, pos) => {
+  const sp = parSpec[k], u = Number(pos) / 1000;
+  if (Number(pos) === mpPos(k, parDef[k])) return parDef[k];
+  return Number((sp.log ? sp.min * Math.pow(sp.max / sp.min, u) : sp.min + (sp.max - sp.min) * u).toPrecision(3));
+};
+// a value as the rail writes it, with its unit
+const MP_SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const mpSci = (v) => { const e = Math.floor(Math.log10(v) + 1e-9), m = v / Math.pow(10, e); return (Math.abs(m - 1) < 5e-3 ? '' : m.toFixed(1) + ' × ') + '10' + String(e).replace(/./g, (c) => MP_SUP[c]); };
+function mpText(k, v) {
+  const t = k === 'mdot' || k === 'alphaIn' || k === 'alphaGap' ? mpSci(v) : k === 'tstar' || k === 'tTI' ? String(Math.round(v)) : mpNum(v);
+  return t + ({ mdot: L() === 'ja' ? ' M☉/年' : ' M☉/yr', lum: ' L☉', tstar: ' K', tTI: ' K' }[k] || '');
+}
+// the rail's rows by group (the engine's keys)
+const MP_GROUPS = [['star', ['lum', 'tstar']], ['heat', ['mdot', 'alphaIn', 'tTI']], ['wind', ['lamIn', 'lamTI', 'lamOut', 'chic']], ['planets', ['alphaGap']]];
+// the numbers under a group, from the engine's derived
+function mpDerivedText(g) {
+  const d = parDerived, w = T().model, au = (v) => (v >= 10 ? String(Math.round(v)) : v >= 1 ? v.toFixed(2) : v.toPrecision(2));
+  if (!d) return '';
+  if (g === 'heat') return w.heat({ rTI: au(d.rTI), snow: au(d.snow), burst: au(d.snowBurst), t1: String(Math.round(d.tMid1)) });
+  if (g === 'wind') return d.mdotStar == null ? w.windOff : (SWITCH.lam === 'old' ? w.lamOld + ' ' : '') + w.wind({ star: mpSci(d.mdotStar), fStar: String(Math.round(100 * d.fStar)), share: String(Math.round(100 * d.windShare)) });
+  if (g === 'planets') return w.planets;
+  return '';
+}
+let mpEls = null;
+// the section's rows, made once the engine has said its parameters
+function buildParams() {
+  const body = $('modelBody');
+  if (!body || !parSpec) return;
+  $('modelSection').hidden = !MODEL_UI;
+  mpEls = { rows: {}, groups: {}, note: el('p', { class: 'rail-note' }) };
+  body.replaceChildren(mpEls.note, ...MP_GROUPS.map(([g, keys]) => {
+    const head = el('h4', { class: 'talk-sub' }), der = el('p', { class: 'rail-note mp-derived' });
+    mpEls.groups[g] = { head, der };
+    return el('div', { class: 'mp-group' }, head, ...keys.filter((k) => parSpec[k]).map((k) => {
+      const r = { name: el('label', { class: 'mp-name', for: 'mp-' + k }), input: el('input', { type: 'range', id: 'mp-' + k, min: '0', max: '1000', step: '1', 'data-mp': k }),
+        val: el('span', { class: 'mp-val' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-mp-reset': k, hidden: true }) };
+      mpEls.rows[k] = r;
+      return el('div', { class: 'mp-row' }, r.name, r.input, r.val, r.chip);
+    }), der);
+  }));
+  renderParams();
+}
+// the rows as the parameters are (a slider being dragged keeps its own place), in the language now
+function renderParams() {
+  if (!mpEls || !parSpec) return;
+  const w = T().model;
+  mpEls.note.textContent = w.note;
+  for (const [g] of MP_GROUPS) { const G = mpEls.groups[g]; G.head.textContent = w.groups[g]; G.der.textContent = mpDerivedText(g); G.der.hidden = !G.der.textContent; }
+  for (const k in mpEls.rows) {
+    const r = mpEls.rows[k], v = k in params ? params[k] : parDef[k], pos = String(mpPos(k, v)), t = mpText(k, v);
+    r.name.textContent = w.names[k];
+    if (document.activeElement !== r.input && r.input.value !== pos) r.input.value = pos;
+    r.input.setAttribute('aria-valuetext', t);
+    r.val.textContent = t;
+    r.chip.hidden = !(k in params);
+    r.chip.textContent = w.def; r.chip.setAttribute('aria-label', w.reset(w.names[k]));
+  }
+}
+// the parameters kept with the settings on this device (none: the defaults)
+const keptParams = () => (saved && typeof saved.mp === 'string' && parDef ? mpFromLink(saved.mp, parDef) : {});
+// (round 14a) The wind's brightness in the model look, as the viewer chooses it under the wind's settings (the engine's
+// box.diskWindGain: a factor on the wind's glow, WB_RANGE, 1 by default): a display choice, the owner tuning the wind's look.
+// Kept with the settings on this device, in a link as wb= (none: 1), put back by Reset all; not in the scenes.
+const WB_RANGE = [0.3, 10];
+let windGain = 1;
+const wbPos = (k) => String(Math.round(1000 * Math.log(k / WB_RANGE[0]) / Math.log(WB_RANGE[1] / WB_RANGE[0])));
+const wbOf = (pos) => (String(pos) === wbPos(1) ? 1 : Number((WB_RANGE[0] * Math.pow(WB_RANGE[1] / WB_RANGE[0], Number(pos) / 1000)).toPrecision(2)));
+const wbFrom = (v) => { const x = v != null && v !== '' ? Number(v) : NaN; return Number.isFinite(x) ? Math.min(WB_RANGE[1], Math.max(WB_RANGE[0], x)) : 1; };
+const keptWind = () => (saved && saved.wb ? wbFrom(saved.wb) : 1);
+function applyWind(drag = false) {
+  if (typeof box.diskWindGain === 'function') windGain = box.diskWindGain(windGain);
+  if (drag) moving();
+  renderWind();
+}
+function renderWind() {
+  if (!wbEls.row) return;
+  const w = T().show, t = '× ' + (windGain >= 1 ? windGain.toFixed(1) : windGain.toFixed(2));
+  if (document.activeElement !== wbEls.input && wbEls.input.value !== wbPos(windGain)) wbEls.input.value = wbPos(windGain);
+  wbEls.name.textContent = w.windGain;
+  wbEls.input.setAttribute('aria-label', w.windGainOf); wbEls.input.setAttribute('aria-valuetext', t);
+  wbEls.val.textContent = t;
+  wbEls.chip.hidden = windGain === 1; wbEls.chip.textContent = w.gainDefault; wbEls.chip.setAttribute('aria-label', w.windGainReset);
+}
+
 // what a click on the disk does (the engine's data-pick): 'planet', place a planet (the engine sends diskpick); 'pebbles'
 // (round 8, the owner: "no pebbles on a tap by default; a mode of the pebbles"), drop a clump of pebbles there, three near one
 // radius growing a planet; neither, nothing (a click on the star or a planet still does its own). One at a time: either
@@ -832,6 +1026,11 @@ function probeRender() {
   const panel = $('probePanel');
   if (!probeLast || !live() || typeof box.diskProbe !== 'function') { panel.hidden = true; return; }
   const w = T().probe, p = box.diskProbe(probeLast.R, 0, probeLast.phi), r = fmtA(probeLast.R);
+  // (round 14a: the numbers the region's sentence and the note quote, from the model's parameters: the thermal ionization's
+  // temperature, the alphas (the outer disk's in its ratio to the inner's), the disk drawn thicker than its temperature holds up)
+  const mp = typeof box.diskParams === 'function' ? box.diskParams() : null, a0 = mp ? mp.now.alphaIn : 0.01;
+  const nums = { tTI: String(Math.round(mp ? mp.now.tTI : 1000)), aIn: String(Number(a0.toPrecision(1))), aOut: String(Number((mp && mp.derived.alphaOut != null ? mp.derived.alphaOut : 0.09 * a0).toPrecision(1))), hf: (mp ? mp.derived.hFactor : 1.71).toFixed(1) };
+  const said = (v) => (typeof v === 'function' ? v(nums) : v);
   const row = (k, v, title) => el('div', { class: 'probe-row', ...(title ? { title } : {}) }, el('span', { class: 'probe-k' }, k), el('span', { class: 'probe-v' }, v));
   // (inside the magnetosphere, the cavity, there is no disk gas: only the orbit's numbers; a density of 0 is said so too)
   const gas = p.region !== 'cavity', num = (v, f) => (gas && v > 0 ? f(v) : w.none);
@@ -860,8 +1059,8 @@ function probeRender() {
   panel.replaceChildren(
     el('div', { class: 'probe-head' }, el('span', { class: 'probe-title' }, w.title(r)), el('button', { type: 'button', class: 'icon-x', 'aria-label': w.close, title: w.close, onclick: () => setPick(false) }, '×')),
     ...rows,
-    el('p', { class: 'probe-physics' }, w.physics[p.region] || ''),
-    el('p', { class: 'probe-note' }, w.model));
+    el('p', { class: 'probe-physics' }, said(w.physics[p.region]) || ''),
+    el('p', { class: 'probe-note' }, said(w.model)));
   panel.hidden = false;
   // beside the point, inside the stage; along the bottom edge of a narrow stage
   const sw = stage.clientWidth, sh = stage.clientHeight, docked = sw < 560;
@@ -1364,6 +1563,9 @@ function linkFor(s) {
   if (s.bg && s.bg !== 'stars') u.searchParams.set('bg', s.bg);   // (round 8: the background, when not the stars)
   const cl = colDef ? colToLink(cols, colDef) : '';
   if (cl) u.searchParams.set('col', cl);   // (round 13a: the model look's colours, when not all the defaults; see COL-LINK)
+  const mp = parDef ? mpToLink(params, parDef) : '';
+  if (mp) u.searchParams.set('mp', mp);   // (round 14a: the model's parameters, when not all the defaults; see MP-LINK)
+  if (windGain !== 1) u.searchParams.set('wb', mpNum(windGain));   // (round 14a: the wind's brightness)
   // (round 8: with each planet's mass in M_J; a link without it is read as Jupiter's)
   if (s.planets.length) u.searchParams.set('pl', s.planets.map(([a, on, m]) => a + ':' + on + ':' + m).join(','));
   if (s.cpdMdot > 0) u.searchParams.set('pmd', String(s.cpdMdot));   // (round 13e: the planets' accretion rate, M_J/yr, when not auto)
@@ -1643,6 +1845,15 @@ $('aboutOpen').addEventListener('click', () => { about.showModal(); });
 $('aboutClose').addEventListener('click', () => about.close());
 about.addEventListener('click', (e) => { if (e.target === about) about.close(); });   // (a click on the backdrop)
 about.addEventListener('close', () => $('aboutOpen').focus({ preventScroll: true }));
+// (2026-11-04, the owner) the record of updates (changelog.html) in a dialog of its own, beside About; its frame loads when first opened
+const histDlg = $('history');   // (not "history": that name is the window's, used for the address)
+if (histDlg && $('historyOpen')) {
+  const frame = $('historyFrame');
+  $('historyOpen').addEventListener('click', () => { if (frame && !frame.src) frame.src = frame.dataset.src; histDlg.showModal(); });
+  $('historyClose').addEventListener('click', () => histDlg.close());
+  histDlg.addEventListener('click', (e) => { if (e.target === histDlg) histDlg.close(); });
+  histDlg.addEventListener('close', () => $('historyOpen').focus({ preventScroll: true }));
+}
 
 // ---------- the stage's hint, and the wheel ----------
 let hintTimer = 0;
@@ -1792,6 +2003,9 @@ async function start() {
   // (round 10a, for a comparison on the phone: ?math=safe, the engine's main programs compiled with safe math, see its
   // SAFE_MATH; the record says which ran)
   if (q.get('math') === 'safe') box.dataset.math = 'safe';
+  // (round 14a, for the check of the default picture: ?mpconst=1, the shaders with the model's parameters at their defaults as
+  // constants, as until round 14, the parameters then reaching the script only; see the engine's MP_CONST and DESIGN.md section 34)
+  if (q.get('mpconst') === '1') box.dataset.mpconst = '1';
   if (SWITCH.eddy) box.dataset.eddy = 'off';   // (round 10a: see SWITCH)
   if (SWITCH.split) box.dataset.split = '0';
   if (SWITCH.kick > 0) box.dataset.kick = String(Math.round(SWITCH.kick));
@@ -1816,6 +2030,17 @@ async function start() {
     cols = q.has('col') || stateFromLink() || q.has('place') ? colFromLink(q.get('col') || '', colDef) : keptCols();
     applyCols();
   }
+  // (round 14a) the model's parameters, before the first picture: a link's mp= (a link without it: the defaults), else those kept on
+  // this device, with the development switches' aliases between (mp= wins); and the wind's brightness, a link's wb= or the one kept.
+  // Also after a safe start, as the colours (see the model's parameters)
+  if (typeof box.diskParams === 'function') {
+    const p0 = box.diskParams(), fromLink = q.has('mp') || stateFromLink() || q.has('place');
+    parDef = p0.def; parSpec = p0.spec;
+    params = { ...(fromLink ? {} : keptParams()), ...mpAliases(), ...(fromLink ? mpFromLink(q.get('mp') || '', parDef) : {}) };
+    applyParams(false);
+    buildParams();
+  }
+  if (typeof box.diskWindGain === 'function') { windGain = q.has('wb') || stateFromLink() || q.has('place') ? wbFrom(q.get('wb')) : keptWind(); applyWind(); }
   if (typeof box.diskGuard === 'function') { const g0 = box.diskGuard(); Object.assign(FACTOR, g0.factors); CUT_F = g0.cut; }
   diag.timings.engine = Math.round(performance.now() - t0);
   // (the probe found WebGL2 with float targets, but the engine's own context came out lost or without them: the browser's
@@ -2076,7 +2301,9 @@ let DEF0 = null, defaults = null, keeping = false, keepTimer = 0;
 function settingsNow() {
   const s = S();
   // (round 13a: col, the model look's colours as a link writes them, '' for the defaults; see COL-LINK)
-  return talkHeld({ v: 1, place: PLACES[placeI].id, ...pick(s, DEF_KEYS), ...pick(s, VIEW_KEYS), quality: qChosen ? quality : null, col: colDef ? colToLink(cols, colDef) : '' });   // (round 11a: see talkHeld)
+  // (round 14a: mp, the model's parameters as a link writes them, '' for the defaults, see MP-LINK; wb, the wind's brightness)
+  return talkHeld({ v: 1, place: PLACES[placeI].id, ...pick(s, DEF_KEYS), ...pick(s, VIEW_KEYS), quality: qChosen ? quality : null, col: colDef ? colToLink(cols, colDef) : '',
+    mp: parDef ? mpToLink(params, parDef) : '', wb: windGain !== 1 ? mpNum(windGain) : '' });   // (round 11a: see talkHeld)
 }
 function keepNow() {
   clearTimeout(keepTimer); keepTimer = 0;
@@ -2105,6 +2332,7 @@ function resetAll() {
   box.diskSet({ ...pick(d, DEF_KEYS), paused: 0 });
   box.diskSpeed(d.speed || 1);
   cols = {}; applyCols();   // (round 13a: the model look's colours, the defaults)
+  params = {}; applyParams(); windGain = 1; applyWind();   // (round 14a: the model's parameters and the wind's brightness, the defaults)
   applyQuality(d.quality);
   goPlace(0);
   keepNow();

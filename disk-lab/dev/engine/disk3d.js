@@ -122,12 +122,15 @@
   // (Round 13c, the owner, after 1.9-dev.8 found the wind darker than expected: Mdot = 1e-7 M_sun/yr, for the heating as for
   // the wind's mass budget (see MFLUX), the temperature's change accepted. R_TI moves out to 0.69 au and the snow line to
   // 1.15 au; the midplane is 174 K at 1 au, 1490 K at 0.3 au, and the accretion's share of T^4 at 1 au 37 % (8 % before; DESIGN.md,
-  // section 33.10). The page's ?mdot= (data-mdot on the disk, read here when
-  // the script runs, as THERMO sets the shaders' constants) sets it for both; ?mdot=1.5e-8 gives the values above.)
-  const THERMO = (() => {
-    // (the page's data-mdot; none where there is no page, as in the Node checks)
-    const MDOT_PAGE = (() => { try { const b = document.querySelector('[data-disk3d]'), v = b && b.dataset.mdot ? Number(b.dataset.mdot) : NaN; return Number.isFinite(v) && v > 0 ? Math.min(1e-5, Math.max(1e-10, v)) : 0; } catch (e) { return 0; } })();
-    const L = 2.7, T_STAR = 4300, MDOT = MDOT_PAGE || 1e-7, KAPPA_R = 5, ALPHA = 1e-2, TAU_HEAT = 2, T_TI = 1000, T_SUB = 1500, T_FLOOR = 10;
+  // section 33.10). ?mdot=1.5e-8 gives the values above.)
+  // (Round 14a: the laws as a function of their inputs, so that the page can change them (box.diskParams, PAR below; DESIGN.md
+  // section 34); THERMO_DEF the defaults, THERMO the laws now, set again in place when the parameters change. The page's ?mdot=
+  // reaches it as the parameter Mdot, for the heating and the budget alike; it was data-mdot, read here when the script ran.
+  // L stays THERMO_DEF.L, the temperature's table's own: the star's luminosity chosen enters as a factor with the outburst's,
+  // uLum, see lumBase.)
+  const THERMO_DEF = { L: 2.7, T_STAR: 4300, MDOT: 1e-7, KAPPA_R: 5, ALPHA: 1e-2, TAU_HEAT: 2, T_TI: 1000, T_SUB: 1500, T_FLOOR: 10 };
+  const thermoLaws = (o) => {
+    const { L, T_STAR, MDOT, KAPPA_R, ALPHA, TAU_HEAT, T_TI, T_SUB, T_FLOOR } = o;
     const sig = 5.6704e-5, au = 1.496e13, Lsun = 3.828e33, Msun = 1.989e33, yr = 3.156e7, Gc = 6.674e-8, k = 1.3807e-16, mH = 1.6726e-24, mu = 2.34;
     const Md = MDOT * Msun / yr, Om1 = Math.sqrt(Gc * Msun / (au * au * au));
     const KI = L * Lsun / (16 * Math.PI * sig * au * au);                                     // T_i^4 = KI beta / R^2
@@ -135,7 +138,8 @@
     const KM = 3 * Md * Om1 * Om1 / (32 * Math.PI * sig) * (TAU_HEAT + 1 / Math.sqrt(3));      // T_acc^4 = KM / R^3
     const KV = Math.pow(3 * KAPPA_R * Md * Md * Om1 * Om1 * Om1 * mu * mH / (128 * Math.PI * Math.PI * sig * ALPHA * k), 0.2);   // T_vis = KV R^-0.9
     return { L, T_STAR, MDOT, KAPPA_R, ALPHA, TAU_HEAT, T_TI, T_SUB, T_FLOOR, KI, KDS5, KM, KV, R_TI: Math.pow(KV / T_TI, 10 / 9) };
-  })();
+  };
+  const THERMO = thermoLaws(THERMO_DEF);
   const G = (v) => Number.isInteger(v) ? v.toFixed(1) : String(v);   // a JS number as a GLSL float literal
   // The marched region: a cylinder past the disk's edge (RB) and up to the top of the drawn wind (ZB), in au. The disk was
   // 8 au in radius until the seventh round, 30 au since; the outer parts of the picture that scale with it (the wind's and
@@ -226,6 +230,9 @@
   // flow arrows keep it where it is. data-acc="on" (the page's ?acc=1, a development switch) draws it as before, to compare.
   // (round 13c, after Mdot 1e-7 moved R_TI out: the accretion flow's marks end where the thermally ionized disk begins, 1.2 R_TI, not at a fixed 0.4 au)
   const ACC = { K_SYM: 2, K_ASYM: 4, W: 0.3, OFF: 0.3, SIG: 0.02, R_END: Math.max(0.4, 1.2 * NONIDEAL.R_TI), C_SYM: 0.6, C_ASYM: 1.6 };
+  // (round 13c) the eddies' volume over the thermally ionized disk: R from 0.05 au to 0.6 au or twice R_TI, its span in ln R
+  // (round 14a: a function, as R_TI follows the parameters; the shaders take it in uMP, see CONST_GLSL)
+  const ln3Span = () => Math.log(Math.max(0.6, 2 * NONIDEAL.R_TI) / 0.05);
   // The star's magnetosphere (round 7), drawn close up only (it fades in as the camera comes within SHOW au of the star,
   // and costs nothing from farther). A T Tauri star of one solar mass and radius RS = 2 R_sun = 0.0093 au with a dipole
   // field of about 1 kG at its surface truncates the gas disk where the field's pressure balances the inflow's ram
@@ -526,8 +533,8 @@
   //     see coGas; the flow arrows, the cut's Regions and the temperature's heating layer are unchanged).
   // MF: this page's settings, from its development switches (mfluxSet, called by init before the wind map is drawn):
   // data-mflux="0" all the prescriptions of before (round 8's density and lambda, chi_c 0.03, the gas line's inflow of the
-  // layers' whole gas); data-lam="old", or "lo,hi"; data-mdot, M_sun/yr, the budget's only (THERMO's heating keeps
-  // THERMO.MDOT); data-chic. MF.tab: the budget's I = ln(Mdot_acc / Mdot_TI) and its slope dI/dln r at N nodes in ln r from
+  // layers' whole gas); data-lam="old", or "lo,hi"; data-mdot, M_sun/yr; data-chic. (Round 14a: called by parApply from the
+  // model's parameters, PAR, which the numbers among these switches only set as aliases; Mdot is THERMO's too.) MF.tab: the budget's I = ln(Mdot_acc / Mdot_TI) and its slope dI/dln r at N nodes in ln r from
   // X0 to X1, for a cubic Hermite (the wind map's and the script's); MF.tabV the same at NV nodes, for the gas line's sheet
   // (within 6 % of the other next to R_TI, less farther out; the sheet's own effect is 1e-3 to 1e-2 of the flow). K: the solar mass in the model's unit,
   // Sigma(1 au) au^2, for Sigma(1 au) = 1700 g cm^-2 (PROBE.SIG1, the probe's scale: the model's own Sigma is dimensionless).
@@ -682,7 +689,20 @@ const float RB = ${G(RB_JS)}, ZB = ${G(ZB_JS)};   // marched cylinder (au): past
 const float RB_OBS = ${G(RB_OBS)}, ZB_OBS = ${G(ZB_OBS)};   // (round 8) the observed looks' own, the cylinder before round 8
 // non-ideal MHD (see NONIDEAL in the script): the thermally ionized inner disk inside R_TI, the dead zone's top z_k (in
 // units of H; 0 where there is none) and the height over which the field bends above it (DZ_BEND H)
-const float R_TI = ${G(NONIDEAL.R_TI)}, R_DZ = ${G(NONIDEAL.R_DZ)}, DZ_Q = ${G(NONIDEAL.Q)}, DZ_BEND = ${G(NONIDEAL.BEND)}, DZ_TI = ${G(NONIDEAL.TI)};
+// (round 14a) The model's parameters the page may change (PAR in the script, box.diskParams) reach the shaders in uMP:
+// uMP[0] = (R_TI, the eddies' volume's span in ln R LN3_SPAN, the star's colour temperature over its default MP_TS, -),
+// uMP[1] = (the turbulence's alpha in the thermally ionized disk, the dead zone and the outer disk: CO_ALPHA, -). With
+// MP_CONST (the page's ?mpconst=1, to compare the default picture with that of before) they are the defaults as constants,
+// as until round 14, and the parameters do not reach the shaders.
+#ifdef MP_CONST
+const float R_TI = ${G(NONIDEAL.R_TI)};
+#define MP_TS 1.0
+#else
+uniform vec4 uMP[2];
+#define R_TI uMP[0].x
+#define MP_TS uMP[0].z
+#endif
+const float R_DZ = ${G(NONIDEAL.R_DZ)}, DZ_Q = ${G(NONIDEAL.Q)}, DZ_BEND = ${G(NONIDEAL.BEND)}, DZ_TI = ${G(NONIDEAL.TI)};
 float mriAmp(float R){ return 1.0 - smoothstep(0.75 * R_TI, 1.15 * R_TI, R); }   // where the magnetorotational instability stirs the gas
 // (Disk Lab v2) and where it stirs the outer disk a little, at OUTER_TURB of the inner disk's strength (see NONIDEAL)
 const float OUTER_TURB = ${G(NONIDEAL.OUTER)}, DZ_TURB = ${G(NONIDEAL.DZ)}, R_OT0 = ${G(NONIDEAL.R_OT[0])}, R_OT1 = ${G(NONIDEAL.R_OT[1])};
@@ -852,7 +872,12 @@ float turb3Amp(float R, float zeta){ return A3_IN * mriAmp(R) * (1.0 - smoothste
   //     to the foot), the travel time of a gas parcel up to that point, and the gas density of the wind.
   const MAP_GLSL = `
 const float LNR_MIN = ${G(Math.log(0.05))}, LNR_SPAN = ${G(Math.log(42 / 0.05))};   // disk map: R from 0.05 to 42 au
-const float LN3_MIN = ${G(Math.log(0.05))}, LN3_SPAN = ${G(Math.log(Math.max(0.6, 2 * NONIDEAL.R_TI) / 0.05))};       // the eddies' volume: R from 0.05 to 0.6 au (round 13c: or twice R_TI, 1.37 au with Mdot = 1e-7)
+const float LN3_MIN = ${G(Math.log(0.05))};   // the eddies' volume: R from 0.05 to 0.6 au (round 13c: or twice R_TI, 1.37 au with Mdot = 1e-7; ln3Span)
+#ifdef MP_CONST
+const float LN3_SPAN = ${G(ln3Span())};
+#else
+#define LN3_SPAN uMP[0].y
+#endif
 const float LNW_MIN = ${G(Math.log(0.04))}, LNW_SPAN = ${G(Math.log(120.0 / 0.04))};   // wind map: r from 0.04 to 120 au (70 before round 8)
 const float RHO_B = ${G(Math.exp(-MODEL.LNTAU1) / (Math.sqrt(2 * Math.PI) * MODEL.H0))};   // gas density at the irradiation surface at 1 au
 const float CHI_C = 0.03, WIND_BLEED = 0.03;   // wind density: held below CHI_C, fading into the disk below the base (units of r0)
@@ -1695,6 +1720,7 @@ const float MS_A = 0.5, MS_C = 0.04;
 // show well above the disk, as a display choice like the softened falloff with distance (not in the observed looks).
 // The extinction stays rho.
 const float G_WIND = 450.0, WIND_NEAR = 0.35, G_WIND_OBS = 200.0, WIND_RISE = 0.15;
+uniform float uWindK;   // (round 14a) the wind's brightness as the viewer chose it (box.diskWindGain), a factor on G_WIND in the model's look
 // The wind's asymmetry (an option, on by default; see opt.asym): with the field aligned with the rotation the wind is
 // much weaker on one side, the side where the current layer and the surface accretion are (Mori, Bai & Tomida 2025:
 // the mass-loss rate there an order of magnitude lower). uWindLow: the lower side's wind relative to the upper, WIND_LOW
@@ -1951,10 +1977,10 @@ float subCap(float T){ if (T <= 900.0) return T; float r = T / TH_TSUB; r *= r; 
 float tempAt(float R, float lnR, float zh, float x){
   float t4 = tInt4(lnR, zh);
   // (below tau* = 20 the superheated term is under e^-20 of T_ds^5: nothing)
-  return subCap(x > 3.0 ? sqrt(sqrt(t4)) : pow(t4 * sqrt(sqrt(t4)) + TH_KDS5 * uLum * exp(-2.0 * lnR - exp(x)), 0.2));
+  return subCap(x > 3.0 ? sqrt(sqrt(t4)) : pow(t4 * sqrt(sqrt(t4)) + TH_KDS5 * uLum * MP_TS * exp(-2.0 * lnR - exp(x)), 0.2));
 }
 float tMid(float R, float lnR){ return subCap(sqrt(sqrt(tInt4(lnR, 0.0)))); }
-float tSurf(float R){ return subCap(pow(TH_KDS5 * uLum / (R * R), 0.2)); }   // the superheated grains in full starlight
+float tSurf(float R){ return subCap(pow(TH_KDS5 * uLum * MP_TS / (R * R), 0.2)); }   // the superheated grains in full starlight (round 14a: MP_TS, T* over its default)
 #ifdef FULL
 // in the part cut away the disk is left out (gDiskOff, see cutWind): its gas, its lit surface, the accretion layers and
 // the vapour; the wind and the envelope stay
@@ -2127,7 +2153,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     vec4 w = windMap(R, z);             // ln r0, azimuth relative to the foot, travel time, ln density
     // the grains that scatter and absorb: none where the gas left the disk inside about 2.5 R_IN (sublimated)
     float r0w = exp(w.x), r = length(p), rho = exp(w.w) * gapFactor(r0w) * (z > 0.0 ? 1.0 : uWindLow) * smoothstep(R_IN, 2.5 * R_IN, r0w);
-    float gw = G_WIND, rise = WIND_RISE;
+    float gw = G_WIND * uWindK, rise = WIND_RISE;
 #ifdef FULL
     // (round 8: in their cylinder of before, with the wind's fade of before toward its top and side)
     if (uLook != 0) { gw = G_WIND_OBS * exp(-5.0 * smoothstep(0.55 * ZB_OBS, ZB_OBS, az) - 5.0 * smoothstep(0.55 * RB_OBS, RB_OBS, R)); rise = 0.0; }
@@ -2669,7 +2695,12 @@ const int CO_Q = ${CO_Q};
 // of turbulence and 0.011 (km/s)^2 more of it, the turbulence counted twice (alpha 0.1 to 0.25); the new width is 0.43 to 0.72
 // of it, mostly 0.6 to 0.66, and the turbulence widens it by 6 % in the inner disk, by under 1 % elsewhere
 const float CO_TH2 = 2.9684e-4, CO_CS2 = 3.5255e-3;
+#ifdef MP_CONST
 const vec3 CO_ALPHA = vec3(${G(THERMO.ALPHA)}, ${G(+(THERMO.ALPHA * NONIDEAL.DZ * NONIDEAL.DZ).toPrecision(4))}, ${G(+(THERMO.ALPHA * NONIDEAL.OUTER * NONIDEAL.OUTER).toPrecision(4))});
+#else
+// (round 14a: the inner disk's alpha a parameter, the others in their ratios to it; see mpValues)
+#define CO_ALPHA uMP[1].xyz
+#endif
 // (round 10c) The profile normalized by its area: K_CO is the line-centre opacity (per au, per unit of the relative density) of
 // a line CO_WREF wide, and a line w wide has K_CO CO_WREF / w at its centre: the same opacity in all whatever the width (the
 // number of molecules sets it; the level populations' change with temperature left out, as the model leaves it out). CO_WREF,
@@ -4186,13 +4217,115 @@ void main(){
   }
   // /TILT-RULE
 
+  // ---- (Round 14a) The model's parameters as settings (box.diskParams; DESIGN.md section 34) ----
+  // PARAMS
+  // The owner: "let the model's parameters be changed". The ones the page may change: their defaults (the model's values above:
+  // THERMO_DEF, MFLUX, GAP_ALPHA's first value), ranges and scales (PAR_SPEC, from which the page builds its sliders: one source),
+  // and their values now (PAR), at the module's level, so that an engine built again after a lost context keeps them (as MAT keeps
+  // the colours). parApply() sets in the script everything that follows from them: THERMO's laws (the same function as at the
+  // start; its L stays the table's own), NONIDEAL.R_TI (rounded as at the start), ACC.R_END, the eddies' span (ln3Span), GAP_ALPHA,
+  // the star's luminosity over THERMO's (lumBase: it scales the reprocessed starlight and the superheated grains as the outburst
+  // does, in uLum and the mirrors' lum), and the mass budget (mfluxSet; the page's data-mflux and data-lam="old" stay switches).
+  // The mirrors (tempJS, probeJS, regionJS, windLine and the rest) read the same objects, so they follow by construction; the
+  // shaders take R_TI, the span, T* over its default and the alphas in uMP (mpValues), and the temperature's table is made again
+  // from the same laws (thermoTableData). parDerived(): the numbers the page shows with them.
+  const PAR_SPEC = {
+    mdot: { def: THERMO_DEF.MDOT, min: 1e-9, max: 3e-7, log: true },       // M_sun/yr: the heating and the wind's budget alike
+    lum: { def: THERMO_DEF.L, min: 0.2, max: 20, log: true },              // L_sun
+    tstar: { def: THERMO_DEF.T_STAR, min: 3000, max: 10000, log: false },  // K: the superheated grains only (T_ds^5 ∝ L T*)
+    alphaIn: { def: THERMO_DEF.ALPHA, min: 1e-3, max: 0.1, log: true },    // the thermally ionized disk's (the dead zone's and the outer disk's in their ratios to it)
+    tTI: { def: THERMO_DEF.T_TI, min: 800, max: 1300, log: false },        // K: where the alkali metals ionize (below the dust's 1500 K cap)
+    lamIn: { def: MFLUX.LAM_IN, min: 1.5, max: 6, log: false },            // the lever arm at the dust's inner edge R_IN
+    lamTI: { def: MFLUX.LAM_LO, min: 1.05, max: 3, log: false },           // at R_TI
+    lamOut: { def: MFLUX.LAM_HI, min: 1.5, max: 10, log: false },          // at the disk's edge R_OUT
+    chic: { def: MFLUX.CHI_C, min: 1e-4, max: 0.05, log: true },           // where the wind's base is held (units of its base radius)
+    alphaGap: { def: GAP_ALPHA, min: 1e-4, max: 1e-2, log: true }          // the viscosity the planets' gaps assume
+  };
+  const PAR_DEF = Object.fromEntries(Object.keys(PAR_SPEC).map((k) => [k, PAR_SPEC[k].def]));
+  const PAR = { ...PAR_DEF };
+  // parGen: one more each time the parameters change (the still picture's signature and the cut's lines key on it); lumBase: the
+  // star's luminosity over THERMO's; parFolded: the page's switches taken in (parFold)
+  let parGen = 0, lumBase = 1, parFolded = false;
+  // a value of the parameter k: a finite number within its range (the nearest end outside it), else the default
+  const parClamp = (k, v) => { const s = PAR_SPEC[k], x = v == null || v === '' || typeof v === 'boolean' ? NaN : Number(v); return Number.isFinite(x) ? Math.min(s.max, Math.max(s.min, x)) : s.def; };
+  // the page's development switches before round 14a, aliases of the parameters now (data-mdot, data-lam with two numbers,
+  // data-lamin, data-chic): taken into PAR when the engine is first built, unless box.diskParams has set it already. (The page
+  // folds them itself, with its mp=, and calls box.diskParams before the first picture; this is for a page or a check that does not.)
+  function parFold(d) {
+    if (parFolded) return;
+    parFolded = true;
+    const m = /^\s*([0-9.]+)\s*,\s*([0-9.]+)\s*$/.exec(d.lam || '');
+    for (const [k, v] of [['mdot', d.mdot], ['lamIn', d.lamin], ['chic', d.chic], ['lamTI', m && m[1]], ['lamOut', m && m[2]]]) if (v != null && v !== '') PAR[k] = parClamp(k, v);
+  }
+  // the page's switches that stay switches (for mfluxSet): data-mflux="0" and data-lam="old", the prescriptions of round 8
+  const parSw = (d) => ({ mflux: d.mflux, lam: d.lam === 'old' ? 'old' : '' });
+  // everything in the script that follows from PAR (sw: parSw)
+  function parApply(sw = {}) {
+    Object.assign(THERMO, thermoLaws({ ...THERMO_DEF, T_STAR: PAR.tstar, MDOT: PAR.mdot, ALPHA: PAR.alphaIn, T_TI: PAR.tTI }));
+    NONIDEAL.R_TI = +THERMO.R_TI.toFixed(3);
+    ACC.R_END = Math.max(0.4, 1.2 * NONIDEAL.R_TI);
+    lumBase = PAR.lum / THERMO_DEF.L;
+    if (GAP_ALPHA !== PAR.alphaGap) { GAP_ALPHA = PAR.alphaGap; gapKMemo.clear(); trapMemo.clear(); gapLightMemo.clear(); }
+    mfluxSet({ mflux: sw.mflux, lam: sw.lam === 'old' ? 'old' : PAR.lamTI + ',' + PAR.lamOut, lamin: PAR.lamIn, chic: PAR.chic, mdot: PAR.mdot });
+    parGen++;
+  }
+  // the shaders' uMP (see CONST_GLSL): R_TI, the eddies' span, T* over its default; the alphas of coAlpha, rounded as CO_ALPHA was
+  // written into the GLSL until round 14 (so that the defaults are the same numbers)
+  const mpValues = () => new Float32Array([NONIDEAL.R_TI, ln3Span(), PAR.tstar / THERMO_DEF.T_STAR, 0,
+    THERMO.ALPHA, +(THERMO.ALPHA * NONIDEAL.DZ * NONIDEAL.DZ).toPrecision(4), +(THERMO.ALPHA * NONIDEAL.OUTER * NONIDEAL.OUTER).toPrecision(4), 0]);
+  // (round 7) the temperature's table (tInt4 in the GLSL, uThermo on unit 15), from the script's own laws (tInt4JS): T_acc with the
+  // floor, and T_i for THERMO's luminosity, in K (half floats, linearly filtered): TT_NR radii uniform in ln R from 0.02 to 40 au by
+  // TT_NZ heights from 0 to 8 H. (Round 14a: a function, made again when the parameters change; it was a block of init.)
+  const TT_NR = 512, TT_NZ = 128;
+  function thermoTableData() {
+    const NR = TT_NR, NZ = TT_NZ, ln0 = Math.log(0.02), dln = Math.log(2000) / (NR - 1), d = new Float32Array(NR * NZ * 2);
+    for (let j = 0; j < NR; j++) {
+      // (as tInt4JS, with what depends on R alone taken out of the loop over the heights)
+      const R = Math.exp(ln0 + j * dln), ti = Math.pow(THERMO.KI * betaIrrJS(R) / (R * R), 0.25), m = mriAmpJS(R), za = zAccHJS(R);
+      const ua = Math.max(1 - erfJS(za * Math.SQRT1_2), 1e-6), tm4 = THERMO.KM / (R * R * R), tv = THERMO.KV * Math.pow(R, -0.9), tv4 = tv * tv * tv * tv, f4 = Math.pow(THERMO.T_FLOOR, 4);
+      for (let k = 0; k < NZ; k++) {
+        const az = k * 8 / (NZ - 1), u = 1 - erfJS(az * Math.SQRT1_2);
+        const acc = (1 - m) * tm4 * (az < za ? 1 : (THERMO.TAU_HEAT * u / ua + 0.57735) / (THERMO.TAU_HEAT + 0.57735)) + m * tv4 * (2 * u - u * u + 0.003) / 1.003 + f4;
+        d[2 * (k * NR + j)] = Math.pow(acc, 0.25);
+        d[2 * (k * NR + j) + 1] = ti;
+      }
+    }
+    return d;
+  }
+  // the numbers that follow from the parameters, for the page: R_TI (au); the snow line at the star's luminosity and in an outburst
+  // (30 times it; au); the midplane at 1 au (K) and how much thicker the disk is drawn than that temperature holds up (H0 over
+  // c_s / v_K at 1 au); and from the mass budget (none with data-mflux="0"): the accretion rate that reaches the star (where the gas
+  // disk ends, at the magnetosphere's r_T; M_sun/yr) and its share of Mdot (at R_TI), the rate at the disk's edge R_OUT, and the
+  // share of what comes in there that the wind takes away before the star
+  function parDerived() {
+    const tMid1 = tMidJS(1, lumBase), hGas = Math.sqrt(PROBE.k * tMid1 / (PROBE.mu * PROBE.mH)) / 1e5 / PROBE.vK1;
+    const out = { rTI: NONIDEAL.R_TI, snow: snowR(lumBase), snowBurst: snowR(30 * lumBase), tMid1, hFactor: MODEL.H0 / hGas,
+      alphaDead: THERMO.ALPHA * NONIDEAL.DZ * NONIDEAL.DZ, alphaOut: THERMO.ALPHA * NONIDEAL.OUTER * NONIDEAL.OUTER };   // (the dead zone's and the outer disk's alphas, in their ratios to the inner disk's, as coAlpha)
+    if (MF && MF.on) { const s = mdotAccJS(MAG.RT), o = mdotAccJS(MODEL.R_OUT); Object.assign(out, { mdotStar: s, fStar: s / MF.mdot, mdotOut: o, windShare: 1 - s / o }); }
+    return out;
+  }
+  // (round 14a) The wind's brightness as the viewer chose it in the model look (box.diskWindGain): a factor on G_WIND, a display
+  // choice (the owner tunes the wind's look), kept here so that an engine built again keeps it
+  const WIND_GAIN = { k: 1, MIN: 0.3, MAX: 10 };
+  // /PARAMS
+
   // reuse: the canvas, when the model is built anew on it after its WebGL context was lost and restored
   function init(box, reuse, restoredTime = 0) {
     // data-static renders one frame (used for the fallback image and screenshots)
     const reduce = reduceOS || 'static' in box.dataset;
-    // (round 13c) the mass budget's settings from the page's development switches (data-mflux, -lam, -mdot, -chic; see MFLUX),
-    // before anything asks for a line's solution or draws the wind map
-    mfluxSet(box.dataset);
+    // (round 13c) the mass budget's settings, before anything asks for a line's solution or draws the wind map. (Round 14a: from the
+    // model's parameters, PAR, which an engine built again after a lost context keeps; the page's development switches data-mdot,
+    // -lam (two numbers), -lamin and -chic taken in once, as aliases of the parameters; data-mflux and data-lam="old" switches still)
+    parFold(box.dataset);
+    parApply(parSw(box.dataset));
+    // (round 14a) data-mpconst="1" (the page's ?mpconst=1): the shaders built with the parameters' defaults as constants, as until
+    // round 14 (see CONST_GLSL), to compare the default picture with that of the uniforms; the parameters then do not reach them.
+    // MPV: uMP's values now; mpTo(p): into the program p (the programs without it, or with MP_CONST, have no location)
+    const mpConst = box.dataset.mpconst === '1';
+    const mpHdr = (src) => (mpConst && !src.includes('#define MP_CONST') ? src.replace('#version 300 es\n', '#version 300 es\n#define MP_CONST\n') : src);
+    let MPV = mpValues();
+    const mpLoc = new Map();
+    const mpTo = (p) => { if (!mpLoc.has(p)) mpLoc.set(p, gl.getUniformLocation(p, 'uMP')); const l = mpLoc.get(p); if (l) { gl.useProgram(p); gl.uniform4fv(l, MPV); } };
     const canvas = reuse || document.createElement('canvas');
     // an application (its keys reach it under a screen reader), named shortly and described by two hidden texts: the
     // picture (see the end of draw; written only when it changes) and the keys
@@ -4264,9 +4397,10 @@ void main(){
       rec({ k: 'link', ph: 0, id, w: name });
       try {
         const p = gl.createProgram();
-        gl.attachShader(p, compile(gl.VERTEX_SHADER, VS)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+        gl.attachShader(p, compile(gl.VERTEX_SHADER, VS)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, mpHdr(fs))); gl.linkProgram(p);
         if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(p));
         rec({ k: 'link', ph: 1, id, w: name, ms: performance.now() - t0, ok: 1 });
+        mpTo(p);   // (round 14a: the parameters, see CONST_GLSL)
         return p;
       } catch (e) { rec({ k: 'link', ph: 1, id, w: name, ms: performance.now() - t0, ok: 0, log: String(e && e.message || e).slice(0, 300) }); throw e; }
     };
@@ -4300,7 +4434,7 @@ void main(){
     }
     const uniforms = (p, names) => Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)]));
     // (round 10a: with data-math="safe", the main programs with SAFE_MATH, see the end of FS)
-    const FSM = box.dataset.math === 'safe' ? FS.replace('#version 300 es\n', '#version 300 es\n#define SAFE_MATH\n') : FS;
+    const FSM = mpHdr(box.dataset.math === 'safe' ? FS.replace('#version 300 es\n', '#version 300 es\n#define SAFE_MATH\n') : FS);   // (round 14a: and MP_CONST, see mpHdr)
     const prog = link(FSM, 'FS'), progDisk = link(DISKMAP_FS, 'disk'), progWind = link(WINDMAP_FS, 'wind'), progEnv = link(ENVMAP_FS, 'env');
     // the eddies' volume texture (TURB3_FS, then SHADE3_FS), NB3 layers per draw: 8 where the driver allows, else 4
     const NB3 = gl.getParameter(gl.MAX_DRAW_BUFFERS) >= 8 && gl.getParameter(gl.MAX_COLOR_ATTACHMENTS) >= 8 ? 8 : 4;
@@ -4309,7 +4443,7 @@ void main(){
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
     const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
-      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV'];
+      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV', 'uMP', 'uWindK'];
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS, 'show'), progBloom = link(BLOOM_FS, 'bloom');
     // (round 8) the bloom's targets, a quarter of accT's size (made with it): A on unit 18 (for SHOW_FS), B on unit 19
@@ -4403,6 +4537,7 @@ void main(){
       gl.linkProgram(p);
       if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { console.error('disk3d study:', gl.getProgramInfoLog(p)); return null; }
       fullStudy = { prog: p, U: uniforms(p, UNAMES) };
+      gl.useProgram(p); gl.uniform4fv(fullStudy.U.uMP, MPV);   // (round 14a: the parameters)
       return fullStudy;
     }
     const startFull = () => {
@@ -4432,6 +4567,7 @@ void main(){
       gl.uniform1i(full.U.uSky, 16);   // (round 8: the sky's map, see BG)
       gl.uniform1i(gl.getUniformLocation(fullP, 'uCoAcc'), CO_UNIT);   // (round 9: the moments' sums, see coAccOf)
       gl.uniform1i(gl.getUniformLocation(fullP, 'uState'), SPLIT.UNIT);   // (round 10a: the march's state in kicks, see SPLIT)
+      gl.uniform4fv(full.U.uMP, MPV);   // (round 14a: the parameters; the frames send them too)
       return full;
     }
     // (round 9) The FULL program's first use. Linking it is not all: ANGLE's Metal backend builds a pipeline state for each
@@ -4460,27 +4596,18 @@ void main(){
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 128, PLANETS.MAX, 0, gl.RED, gl.FLOAT, new Float32Array(128 * PLANETS.MAX).fill(1));
     gl.useProgram(progDisk); gl.uniform1i(UD.uPlLight, 13); gl.uniform1i(UD.uGapT, 14);
-    // (round 7) the temperature's table (see tInt4 in the GLSL), on unit 15, from the script's own laws (tInt4JS): T_acc with
-    // the floor, and T_i for the star's own luminosity, in K (half floats, linearly filtered)
-    {
-      const NR = 512, NZ = 128, ln0 = Math.log(0.02), dln = Math.log(2000) / (NR - 1), d = new Float32Array(NR * NZ * 2);
-      for (let j = 0; j < NR; j++) {
-        // (as tInt4JS, with what depends on R alone taken out of the loop over the heights)
-        const R = Math.exp(ln0 + j * dln), ti = Math.pow(THERMO.KI * betaIrrJS(R) / (R * R), 0.25), m = mriAmpJS(R), za = zAccHJS(R);
-        const ua = Math.max(1 - erfJS(za * Math.SQRT1_2), 1e-6), tm4 = THERMO.KM / (R * R * R), tv = THERMO.KV * Math.pow(R, -0.9), tv4 = tv * tv * tv * tv, f4 = Math.pow(THERMO.T_FLOOR, 4);
-        for (let k = 0; k < NZ; k++) {
-          const az = k * 8 / (NZ - 1), u = 1 - erfJS(az * Math.SQRT1_2);
-          const acc = (1 - m) * tm4 * (az < za ? 1 : (THERMO.TAU_HEAT * u / ua + 0.57735) / (THERMO.TAU_HEAT + 0.57735)) + m * tv4 * (2 * u - u * u + 0.003) / 1.003 + f4;
-          d[2 * (k * NR + j)] = Math.pow(acc, 0.25);
-          d[2 * (k * NR + j) + 1] = ti;
-        }
-      }
-      const t = gl.createTexture();
-      gl.activeTexture(gl.TEXTURE15); gl.bindTexture(gl.TEXTURE_2D, t);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, NR, NZ, 0, gl.RG, gl.FLOAT, d);
-    }
+    // (round 7) the temperature's table (see tInt4 in the GLSL and thermoTableData), on unit 15. (Round 14a: sent again when the
+    // parameters change, thermoUpload, the texture kept on its unit)
+    const thermoT = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE15); gl.bindTexture(gl.TEXTURE_2D, thermoT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, TT_NR, TT_NZ, 0, gl.RG, gl.FLOAT, thermoTableData());
+    const thermoUpload = () => {
+      gl.activeTexture(gl.TEXTURE15); gl.bindTexture(gl.TEXTURE_2D, thermoT);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TT_NR, TT_NZ, gl.RG, gl.FLOAT, thermoTableData());
+      gl.activeTexture(gl.TEXTURE2);
+    };
     // the gaps' table (see gapT): ln of the factor and the slope, on unit 14
     const gapTT = gl.createTexture(), gapTD = new Float32Array(2 * GT_N);
     gl.activeTexture(gl.TEXTURE14); gl.bindTexture(gl.TEXTURE_2D, gapTT);
@@ -4575,10 +4702,15 @@ void main(){
     gl.useProgram(progWind);
     gl.uniform1i(gl.getUniformLocation(progWind, 'uBPT'), 2);
     gl.uniform4fv(gl.getUniformLocation(progWind, 'uBPL'), new Float32Array(BPL.flatMap((T) => [T.LAM, T.A0, T.B0, 0])));
-    // (round 13c) the mass budget's settings and table (see MFLUX), for this build
-    gl.uniform4f(gl.getUniformLocation(progWind, 'uLamP'), MF.rise ? 1 : 0, MF.lo, MF.hi, MF.lin);
-    gl.uniform4f(gl.getUniformLocation(progWind, 'uMflux'), MF.on ? 1 : 0, MF.chic, MF.mdot, 0);
-    gl.uniform4fv(gl.getUniformLocation(progWind, 'uMdotT'), MF.tab);
+    // (round 13c) the mass budget's settings and table (see MFLUX). (Round 14a: sent again when the parameters change, mpUpload)
+    const UWB = uniforms(progWind, ['uLamP', 'uMflux', 'uMdotT']);
+    const windBudget = () => {
+      gl.useProgram(progWind);
+      gl.uniform4f(UWB.uLamP, MF.rise ? 1 : 0, MF.lo, MF.hi, MF.lin);
+      gl.uniform4f(UWB.uMflux, MF.on ? 1 : 0, MF.chic, MF.mdot, 0);
+      gl.uniform4fv(UWB.uMdotT, MF.tab);
+    };
+    windBudget();
     gl.uniform2f(gl.getUniformLocation(progWind, 'uMapRes'), windMapT.w, windMapT.h);
     // the wind map (and its velocities) for the asymmetry's share now; drawn again when it changes (during its fade)
     const uAsymSW = gl.getUniformLocation(progWind, 'uAsymS');
@@ -4592,6 +4724,18 @@ void main(){
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
     drawWindMap(0);   // (the first frame draws it for the state's asymmetry)
+    // (round 14a) after the parameters change (box.diskParams), at the next frame that draws the maps and before them: uMP into the
+    // programs that keep it (the main programs take it with each frame's uniforms), the temperature's table, the wind map's budget,
+    // and the wind map drawn again
+    let mpDirty = false;
+    function mpUpload() {
+      mpDirty = false;
+      MPV = mpValues();
+      for (const p of [progDisk, progWind, progEnv, progT3, progS3, progWS]) mpTo(p);
+      thermoUpload();
+      windBudget();
+      windMapS = null;
+    }
     // (round 8) the sky of a star-forming region (see BG, SKY_FS): drawn once, the first time it is asked for, on unit 16
     // (an empty texture there until then)
     let skyT = null;
@@ -5277,7 +5421,9 @@ void main(){
     // back (in V883 Ori, in outburst, ALMA found the snow line near 40 au; Cieza et al. 2016).
     // (Disk Lab v2: the outburst keeps its own clock, burst.age, real seconds times the speed, since the model's clock
     // slows as the view closes in: at the snow line's view it would have taken a quarter of an hour)
-    let burst = null, rSn = snowR(1), lumNow = 1;
+    // (round 14a: lumNow the star's luminosity over THERMO's, lumBase (the parameter, see PAR) times the outburst's; the shaders'
+    // uLum, the mirrors' lum)
+    let burst = null, rSn = snowR(lumBase), lumNow = lumBase;
     const burstL = () => {
       if (!burst) return 1;
       const dt = burst.age;
@@ -5285,7 +5431,7 @@ void main(){
       // (the decay tapered to nothing from 40 to 60 s, so that the exposure and the snow line do not step at its end)
       return 1 + 29 * ss(0, 1.5, dt) * (dt < 5.5 ? 1 : Math.exp(-(dt - 5.5) / 9)) * (1 - ss(40, 60, dt));
     };
-    const snowNow = () => { const l = burstL(); if (l !== lumNow || !rSn) { lumNow = l; rSn = snowR(l); } };
+    const snowNow = () => { const l = lumBase * burstL(); if (l !== lumNow || !rSn) { lumNow = l; rSn = snowR(l); } };
     // a short explanation in the panel, faded in and out
     const toast = document.createElement('div');
     toast.className = 'disk-toast'; toast.setAttribute('role', 'status'); toast.setAttribute('aria-live', 'polite');
@@ -5330,10 +5476,13 @@ void main(){
     const startBurst = () => {
       if (reduce || (burst && burst.age < 8)) return;   // the clock does not run with reduced motion
       burst = { age: 0 };
-      say('FU オリオン型の増光:星への降着が一時的に急増して、星が約 30 倍明るくなりました。円盤が温まってスノーラインが約 4 au まで外へ動き、小石の氷が昇華します。降着が収まると暗くなり、水は再び凍ります(実際の増光は数十年続きます。オリオン座 V883 では、増光中のスノーラインが約 40 au にあります)。',
-        'An FU Orionis outburst: accretion onto the star surges and it brightens about thirtyfold. The disk warms, the snow line moves out to about 4 au and the pebbles\u2019 ice sublimates; as the accretion calms down the star dims and the water freezes again (real outbursts last decades; in V883 Ori the snow line lies near 40 au during the outburst).', 14000,
-        'FU オリオン型の増光:星が約 30 倍明るくなり、スノーラインが約 4 au まで外へ動きます(降着が収まると元に戻ります)。',
-        'An FU Orionis outburst: the star brightens about thirtyfold and the snow line moves out to about 4 au (it returns as the accretion calms down).');
+      // (round 14a: the snow line in the outburst from the model, snowR at 30 times the star's luminosity: 5.1 au with the
+      // defaults; the text said "about 4 au", the number of round 7's thinner disk)
+      const sb = snowR(30 * lumBase), au = sb >= 10 ? String(Math.round(sb)) : sb.toFixed(1);
+      say('FU オリオン型の増光:星への降着が一時的に急増して、星が約 30 倍明るくなりました。円盤が温まってスノーラインが約 ' + au + ' au まで外へ動き、小石の氷が昇華します。降着が収まると暗くなり、水は再び凍ります(実際の増光は数十年続きます。オリオン座 V883 では、増光中のスノーラインが約 40 au にあります)。',
+        'An FU Orionis outburst: accretion onto the star surges and it brightens about thirtyfold. The disk warms, the snow line moves out to about ' + au + ' au and the pebbles\u2019 ice sublimates; as the accretion calms down the star dims and the water freezes again (real outbursts last decades; in V883 Ori the snow line lies near 40 au during the outburst).', 14000,
+        'FU オリオン型の増光:星が約 30 倍明るくなり、スノーラインが約 ' + au + ' au まで外へ動きます(降着が収まると元に戻ります)。',
+        'An FU Orionis outburst: the star brightens about thirtyfold and the snow line moves out to about ' + au + ' au (it returns as the accretion calms down).');
     };
     // Growing a planet: three clumps of pebbles dropped near one radius (within a tenth of it, 0.3 au at 3 au) in 20 s of
     // the model clock, where a planet may be (within PLANETS.RANGE, no shown planet nearer than the mutual Hill rule in the
@@ -5852,7 +6001,8 @@ void main(){
     }
     const logspace = (a, b, n) => Array.from({ length: n }, (_, i) => a * Math.pow(b / a, i / (n - 1)));
     function buildSlice(q) {
-      const key = q + ':' + planetsKey() + ':' + rSn.toFixed(3) + ':' + (opt.asym ? 1 : 0);
+      // (round 14a: and the model's parameters, parGen, which move the dead zone, the layers, the wind's lines and density, the gaps)
+      const key = q + ':' + planetsKey() + ':' + rSn.toFixed(3) + ':' + (opt.asym ? 1 : 0) + ':' + parGen;
       if (sliceGeom.key === key) return sliceGeom.g;
       const g = { lines: [], labels: [] };
       const curve = (f, R0, R1) => logspace(R0, R1, 160).map((R) => [R, f(R)]).filter((pt) => !isNaN(pt[1]));
@@ -7017,7 +7167,7 @@ void main(){
       const bgK = bgMoves() ? 0 : bgLeft(), bgA = bgMoves() ? 0 : viewOff() + bgK;
       // a still picture (see ACC_MAX): the same state as the last frame, drawn by the same program
       const sig = [time, ...cam, ...basis.f, rW, rH, canvas.width, opt.steps, opt.fov, opt.seed, starL, LOOKS[lookNow], rSn, opt.mode, BG.MODES[opt.bg], bgK, ...compAmp, ...opt.gain,
-        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), colGen, cpdMdot, coLn, expo];   // (round 13a: colGen, the materials' colours, see box.diskColours; round 13e: cpdMdot, the planets' disks)
+        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), parGen, colGen, cpdMdot, coLn, expo];   // (round 13a: colGen, the materials' colours, see box.diskColours; round 14a: parGen, the model's parameters, see box.diskParams)
       // (a new view: the exposure is measured afresh, with its moves counted anew; a new exposure or CO range: measured again)
       const ne = sig.length - 2, viewNew = sig.length !== lastSig.length || sig.some((v, i) => i < ne && v !== lastSig[i]);
       // (Disk Lab v2) While only the clock moves, the picture is not started over but averaged with the last few frames
@@ -7056,6 +7206,7 @@ void main(){
       lastSig = sig;
       const acc = accN, mapsDue = !acc || clockOnly;   // (the maps follow the clock)
       if (mapsDue) {
+        if (mpDirty) mpUpload();   // (round 14a: the parameters changed)
         drawWindMap(Math.round(ASYM_F_JS * asymSm() * 100) / 100);
         // (round 9: while only the clock moves, the eddies drawn every eddyEvery frames: 2 on a guarded device, a phone's
         // power; they move on orbital time scales, and 15 updates a second at 30 frames do not show. 1 elsewhere)
@@ -7102,6 +7253,7 @@ void main(){
       gl.uniform1f(U.uTanHalf, Math.tan(opt.fov / 2));
       gl.uniform1f(U.uRSnow, rSn);
       gl.uniform1f(U.uLum, lumNow);
+      gl.uniform4fv(U.uMP, MPV); gl.uniform1f(U.uWindK, WIND_GAIN.k);   // (round 14a: the model's parameters, see CONST_GLSL; the wind's brightness, box.diskWindGain)
       gl.uniform1f(U.uExposure, expo);   // brighter starlight, compressed by the stretch
       gl.uniform1f(U.uStar, starL);
       // the dipole: tilted toward the azimuth the star has turned to (it turns with the star, MAG.SPIN)
@@ -8550,6 +8702,42 @@ void main(){
       }
       return { now: Object.fromEntries(MAT.map(([key, hex]) => [key, hex])), def: { ...MAT_DEF } };
     };
+    // (round 14a, the owner: "let the model's parameters be changed") The model's parameters (PAR, PAR_SPEC) in one call:
+    // { key: value } for PAR_SPEC's keys; a key left out, or not a finite number, takes its default, a value outside its range the
+    // nearest end, so that each call says all of them and the same call twice is the same model. What follows is set at once in the
+    // script (parApply: THERMO, R_TI, the budget, the mirrors; here the snow line and the field lines' shapes), and in the shaders,
+    // the temperature's table and the wind map at the next frame (mpUpload); a still picture and the cut's lines start over
+    // (parGen). Nothing is kept here but PAR: the page keeps them with its settings and in its links (mp=). Without an argument it
+    // changes nothing. Returns { now, def, spec, derived } (derived: parDerived, the numbers that follow).
+    const paramsTouched = (gapChanged) => {
+      mpDirty = true; linesS = null; rSn = 0; snowNow();
+      if (gapChanged) { planets.forEach((p) => { p.dSet = -1; }); plRows = ''; }
+      touched();
+    };
+    box.diskParams = (set) => {
+      if (set !== undefined) {
+        const o = set && typeof set === 'object' ? set : {};
+        const next = Object.fromEntries(Object.keys(PAR_SPEC).map((k) => [k, parClamp(k, o[k])]));
+        parFolded = true;
+        if (Object.keys(next).some((k) => next[k] !== PAR[k])) {
+          const gapChanged = next.alphaGap !== PAR.alphaGap;
+          Object.assign(PAR, next);
+          parApply(parSw(box.dataset));
+          paramsTouched(gapChanged);
+        }
+      }
+      return { now: { ...PAR }, def: { ...PAR_DEF }, spec: JSON.parse(JSON.stringify(PAR_SPEC)), derived: parDerived() };
+    };
+    // (round 14a) The wind's brightness in the model look, as the viewer chose it (a factor on G_WIND, WIND_GAIN.MIN to MAX; 1 the
+    // default): a display choice for the owner's tuning of the wind's look, kept by the page with its settings and in its links (wb=).
+    // No argument reads it.
+    box.diskWindGain = (k) => {
+      if (k != null) {
+        const v = finiteNumber(k);
+        if (isFinite(v)) { const c = Math.min(WIND_GAIN.MAX, Math.max(WIND_GAIN.MIN, v)); if (c !== WIND_GAIN.k) { WIND_GAIN.k = c; colGen++; touched(); } }
+      }
+      return WIND_GAIN.k;
+    };
     // A state from outside (a link, the page, a script) is checked first: the numbers must be finite (a link copied with
     // text after it, or edited by hand, must not poison the picture: a NaN in the camera or the clock would blank it),
     // the distance and the speed positive, the components a mask of the six, the time within [0, TIME_MAX] (the shader's
@@ -8674,7 +8862,9 @@ void main(){
     box.diskGapAlpha = (a) => {
       if (a == null) return GAP_ALPHA;
       const v = finiteNumber(a);
-      if (isFinite(v) && v >= 1e-5 && v <= 0.1) { GAP_ALPHA = v; gapKMemo.clear(); trapMemo.clear(); gapLightMemo.clear(); planets.forEach((p) => { p.dSet = -1; }); plRows = ''; dirty = true; }
+      // (round 14a: the parameter alphaGap too, and the cut's lines with it (parGen), which this did not start over; its own range
+      // is wider than the page's slider's)
+      if (isFinite(v) && v >= 1e-5 && v <= 0.1) { GAP_ALPHA = PAR.alphaGap = v; gapKMemo.clear(); trapMemo.clear(); gapLightMemo.clear(); planets.forEach((p) => { p.dSet = -1; }); plRows = ''; parGen++; dirty = true; }
       return GAP_ALPHA;
     };
     // (round 8) the smallest ratio of radii between neighbouring planets of masses m1 and m2 (M_J), see MASS

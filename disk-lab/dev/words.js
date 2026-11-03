@@ -14,13 +14,14 @@ export const WORDS = {
       wind: { short: '磁場と風', title: '磁場と円盤風',
         text: '円盤を貫く磁力線は、回転にねじられながら外へ開きます。ガスはこの線に沿って加速し、風となって上下に吹き出します。磁場が回転と同じ向きなら、片側が強くなります。' },
       snow: { short: 'スノーライン', title: 'スノーライン',
-        text: '約 1.1 au の破線がスノーライン。その外では、赤道面の小石が氷をまといます。すぐ外に小石が少したまり、内側では氷が昇華して岩の粒になります。' },
+        // (round 14a: from the model, n.snow; the dashed ring went in round 13a, the name stays)
+        text: (n) => `スノーラインは約 ${n.snow} au にあります。その外では、赤道面の小石が氷をまといます。すぐ外に小石が少したまり、内側では氷が昇華して岩の粒になります。` },
       planet: { short: '惑星', title: '惑星',
         text: '3 au を回る木星質量の惑星。ガスを押しのけてギャップを開け、自分の小さな円盤を持ちます。奥で明るいのは、星に照らされたギャップの外壁です。' },
       mm: { short: 'ミリ波', title: 'ミリ波で見る',
         text: 'ミリ波(ALMA の波長)では、赤道面の小石が光ります。惑星のギャップは暗い溝に、そのすぐ外にたまった小石は明るい環になります。' },
       heat: { short: '温度', title: '円盤の中の温度',
-        text: '手前の半分を切り取り、切り口を温度で塗りました。白い線(τ* = 1)より上では星の光で塵が熱く、その下の内部はぬるいまま。約 0.7 au より内側だけは降着の熱で赤道面が最も熱くなります。' },
+        text: (n) => `手前の半分を切り取り、切り口を温度で塗りました。白い線(τ* = 1)より上では星の光で塵が熱く、その下の内部はぬるいまま。約 ${n.rTI} au より内側だけは降着の熱で赤道面が最も熱くなります。` },   // (round 14a: n.rTI from the model)
       deadzone: { short: 'デッドゾーン', title: 'デッドゾーン',
         text: '右手前の 4 分の 1 を切り取り、何が起きている所かで塗り分けました。紺のデッドゾーンでは磁場がガスをつかめず、乱流も起きません。降着はそのすぐ上の薄い層(琥珀色)を流れ、そこで磁力線が折れ曲がります。その上は円盤風の根元です。' },
       star: { short: '星のそば', title: '星のすぐそば',
@@ -158,7 +159,22 @@ export const WORDS = {
       // (round 13e) the planets' accretion rate, which sets their own disks (app.js, the planets' panel)
       cpdMdot: '惑星への降着率', cpdMdotOf: 'すべての惑星への降着率(対数)', cpdAuto: (v) => `自動(円盤の降着率の 1/10:${v})`, cpdAutoBtn: '自動に戻す',
       cpdNote: '惑星のまわりの円盤(周惑星円盤)の温度・厚さ・ミリ波での明るさは、この降着率と惑星の質量から決まります。軽い惑星や外側の惑星(熱質量が小さい)では、円盤でなく丸い包みになります。',
+      // (round 14a) the wind's brightness in the model look, under the wind's settings (app.js, wbEls)
+      windGain: '明るさ', windGainOf: 'モデルの見え方での円盤風の明るさ', windGainReset: '円盤風の明るさを既定に戻す', gainDefault: '既定',
       planetsNote: '軌道半径 0.05〜20 au(内側の端は、星の磁場が円盤を切り取る所)、質量は地球の 10 倍から木星の 3 倍(重いほどギャップが深く広く、小石の環は孤立質量を超えるとできます)。隣どうしは相互ヒル半径の 4 倍以上離します(近すぎる軌道は不安定です)。絵の中の惑星をクリックしても動かせます。'
+    },
+    // (round 14a) the model's parameters, the rail's Model (app.js; the engine's box.diskParams)
+    model: {
+      note: '物理の値を変えると、温度、電離、円盤風が式に従って変わります。既定は文献に合わせた値です。変えた値は端末に残り、リンクにも入ります。',
+      groups: { star: '星', heat: '降着と温度', wind: '円盤風', planets: '惑星' },
+      names: { lum: '光度 L*', tstar: '色温度 T*', mdot: '降着率 Ṁ', alphaIn: '乱流の強さ α(熱電離した内側円盤)', tTI: '熱電離の温度',
+        lamIn: 'レバーアーム λ(塵の内縁 0.08 au)', lamTI: 'レバーアーム λ(熱電離の縁)', lamOut: 'レバーアーム λ(円盤の縁 30 au)', chic: '風の根元 χ_c(r₀ を単位に)', alphaGap: 'ギャップの粘性 α' },
+      def: '既定', reset: (name) => `${name}を既定に戻す`,
+      heat: (d) => `熱電離の縁 ${d.rTI} au、スノーライン ${d.snow} au(増光すると ${d.burst} au)、1 au の赤道面 ${d.t1} K。デッドゾーンと外側円盤の α は内側との比のまま動きます。`,
+      wind: (d) => `星へ届く降着 ${d.star} M☉/年(Ṁ の ${d.fStar} %)。円盤の縁 30 au から入る流れのうち、${d.share} % を風が運び去ります。`,
+      windOff: '前の処方(?mflux=0)の間は、ここの値は風に効きません。',
+      lamOld: '?lam=old の間は、λ の三つの値は効きません(第 8 巡の λ)。',
+      planets: '惑星の数、軌道、質量は「見せるもの」の惑星で変えられます。'
     },
     quality: {
       label: '画質', auto: '自動', low: '低', mid: '中', high: '高', full: '最高',
@@ -218,12 +234,12 @@ export const WORDS = {
       laminar: 'なし(層流)', none: '—(円盤のガスはない)', days: '日', yr: '年',
       regions: { inner: '熱で電離した内側の円盤', dead: 'デッドゾーン', acc: '降着層', base: '風の吹き出す層', wind: '円盤風', outer: '弱い乱流の外側円盤', hall: 'ホール効果で巻かれた層', cavity: '磁気圏の空洞', jet: 'ジェット', envelope: 'エンベロープ' },
       physics: {
-        inner: '1000 K を超えてアルカリ金属が電離し、磁場がガスと結びつきます。磁気回転不安定で強く乱れ(α ≈ 0.01)、降着の熱で円盤が自らを温めています。',
+        inner: (n) => `${n.tTI} K を超えてアルカリ金属が電離し、磁場がガスと結びつきます。磁気回転不安定で強く乱れ(α ≈ ${n.aIn})、降着の熱で円盤が自らを温めています。`,
         dead: '電離が弱く、オーム散逸で磁場がガスと結びつかないため、乱流のない静かな層です(磁気回転不安定が働かない)。降着は上の降着層が担い、小石は赤道面に沈んで内側へ流れていきます。',
         acc: '磁場が曲がり電流が流れる層です。円盤風に角運動量を奪われたガスが、薄い層流となって星へ流れ込みます(ジュール加熱の場所)。デッドゾーンの外では赤道面にあります。',
         base: '磁場が開き、ガスがゆっくり持ち上げられて円盤風になる手前の層です(両極性拡散が効き、乱流はありません)。',
         wind: '星の紫外線で電離したガスが、磁力線に沿って吹き出しています。円盤風は角運動量を運び去り、円盤の降着を駆動します。',
-        outer: '宇宙線が赤道面まで届き磁場は結びつきますが、両極性拡散のため乱流は弱いままです(α ≈ 0.001)。',
+        outer: (n) => `宇宙線が赤道面まで届き磁場は結びつきますが、両極性拡散のため乱流は弱いままです(α ≈ ${n.aOut})。`,
         hall: '磁場が回転と同じ向きのとき、ホール効果で電流の層が片側へ押しやられ、その下で磁場が一方向に巻かれています。',
         cavity: '星の磁場がガス円盤を切り取った内側です。ガスは磁力線に沿って星へ落ちていきます。',
         jet: '星のそばから軸に沿って細く速く吹き出すジェットです。',
@@ -233,7 +249,7 @@ export const WORDS = {
       gap: (a, f) => `${a} au の惑星のギャップの中:ガスは周りの ${f} %`, trap: (a) => `${a} au の惑星の外側の圧力の山:小石が集まります`,
       // (round 13e) inside a planet's own disk (or envelope)
       cpd: (o) => `${o.a} au の惑星(${o.m})の${o.kind === 'disk' ? '周惑星円盤' : 'まわりの包み'}の中:惑星から ${o.r}(${o.rH} R_H、外縁は ${o.rOut} R_H)、${o.T} K、H/r ${o.Hr}、降着率 ${o.mdot}`,
-      model: 'モデルの値です(円盤の厚みは見やすさのため温度の示す 1.8 倍、面密度は 1 au で 1700 g/cm² とした場合)。'
+      model: (n) => `モデルの値です(円盤の厚みは見やすさのため温度の示す ${n.hf} 倍、面密度は 1 au で 1700 g/cm² とした場合)。`   // (round 14a: n from the model's parameters)
     },
     // (round 8, the owner: "the citation in English in Japanese too": the lead stays Japanese, the line is the English one)
     cite: {
@@ -262,13 +278,13 @@ export const WORDS = {
       wind: { short: 'Field & wind', title: 'Field and wind',
         text: 'Field lines threading the disk are wound up by its rotation and open outward. Gas speeds up along them and leaves both faces as a wind; with the field aligned with the rotation, one side blows harder.' },
       snow: { short: 'Snow line', title: 'The snow line',
-        text: 'The dashed ring near 1.1 au is the snow line: beyond it, the pebbles at the midplane are coated in ice. They pile up a little just outside it; inside, the ice sublimates and the grains are bare rock.' },
+        text: (n) => `The snow line lies near ${n.snow} au: beyond it, the pebbles at the midplane are coated in ice. They pile up a little just outside it; inside, the ice sublimates and the grains are bare rock.` },   // (round 14a: from the model; the ring went in round 13a)
       planet: { short: 'Planet', title: 'The planet',
         text: 'A Jupiter-mass planet at 3 au pushes the gas aside into a gap and keeps a small disk of its own. Behind it, starlight catches the outer wall of the gap.' },
       mm: { short: 'Millimetre', title: 'In millimetre light',
         text: 'At millimetre wavelengths (ALMA\u2019s) the pebbles at the midplane glow. The planet\u2019s gap shows as a dark lane; the pebbles trapped just outside it form a bright ring.' },
       heat: { short: 'Heat', title: 'Heat inside the disk',
-        text: 'The near half cut away through the star, the face coloured by temperature. Above the white line (\u03c4* = 1) starlight makes the dust hot; the interior below stays cool. Only inside about 0.7 au does accretion make the midplane the hottest.' },
+        text: (n) => `The near half cut away through the star, the face coloured by temperature. Above the white line (\u03c4* = 1) starlight makes the dust hot; the interior below stays cool. Only inside about ${n.rTI} au does accretion make the midplane the hottest.` },   // (round 14a: n.rTI from the model)
       deadzone: { short: 'Dead zone', title: 'The dead zone',
         text: 'A quarter cut away, coloured by what happens there. In the navy dead zone the field cannot grip the gas, and nothing stirs; accretion runs in a thin layer just above it (amber), where the field lines bend, and above that the wind is launched.' },
       star: { short: 'The star', title: 'Next to the star',
@@ -398,7 +414,22 @@ export const WORDS = {
       // (round 13e) the planets' accretion rate, which sets their own disks (app.js, the planets' panel)
       cpdMdot: 'Accretion onto the planets', cpdMdotOf: 'The planets’ accretion rate (all of them, log scale)', cpdAuto: (v) => `Auto (a tenth of the disk’s accretion rate: ${v})`, cpdAutoBtn: 'Back to auto',
       cpdNote: 'The temperature, thickness and millimetre brightness of each planet’s own disk (its circumplanetary disk) follow from this rate and the planet’s mass; a light or distant planet (of few thermal masses) wears a round envelope rather than a disk.',
+      // (round 14a) the wind's brightness in the model look, under the wind's settings (app.js, wbEls)
+      windGain: 'Brightness', windGainOf: 'Brightness of the wind in the model look', windGainReset: 'Wind: back to the default brightness', gainDefault: 'Default',
       planetsNote: 'Orbits of 0.05 to 20 au (the inner end is where the star\u2019s magnetic field cuts off the disk); masses of 10 Earths to 3 Jupiters (heavier planets open deeper, wider gaps, and those above the pebble isolation mass ring their gaps with pebbles). Neighbours are kept at least four mutual Hill radii apart (closer orbits are unstable). A planet in the picture can be clicked to move it too.'
+    },
+    // (round 14a) the model's parameters, the rail's Model (app.js; the engine's box.diskParams)
+    model: {
+      note: 'Change a physical value and the temperature, the ionization and the wind follow by the model\u2019s equations. The defaults are the values from the papers it follows. What you change is kept on this device and goes into links.',
+      groups: { star: 'The star', heat: 'Accretion and heat', wind: 'The wind', planets: 'Planets' },
+      names: { lum: 'Luminosity L*', tstar: 'Colour temperature T*', mdot: 'Accretion rate Ṁ', alphaIn: 'Turbulence α (the thermally ionized inner disk)', tTI: 'Thermal ionization temperature',
+        lamIn: 'Lever arm λ (the dust\u2019s inner edge, 0.08 au)', lamTI: 'Lever arm λ (the thermal ionization edge)', lamOut: 'Lever arm λ (the disk\u2019s edge, 30 au)', chic: 'Wind base χ_c (in units of r₀)', alphaGap: 'Gap viscosity α' },
+      def: 'Default', reset: (name) => `${name}: back to the default`,
+      heat: (d) => `Thermal ionization edge ${d.rTI} au; snow line ${d.snow} au (${d.burst} au in an outburst); the midplane at 1 au ${d.t1} K. The dead zone\u2019s and the outer disk\u2019s α keep their ratios to the inner disk\u2019s.`,
+      wind: (d) => `Reaching the star: ${d.star} M☉/yr (${d.fStar} % of Ṁ). Of the flow coming in at the disk\u2019s edge, 30 au, the wind carries away ${d.share} %.`,
+      windOff: 'With the prescriptions of before (?mflux=0) these values do not act on the wind.',
+      lamOld: 'With ?lam=old the three λ values have no effect (round 8\u2019s λ).',
+      planets: 'The planets\u2019 number, orbits and masses are under Show, Planets.'
     },
     quality: {
       label: 'Quality', auto: 'Auto', low: 'Low', mid: 'Medium', high: 'High', full: 'Best',
@@ -454,12 +485,12 @@ export const WORDS = {
       laminar: 'none (laminar)', none: '— (no disk gas)', days: 'days', yr: 'yr',
       regions: { inner: 'thermally ionized inner disk', dead: 'dead zone', acc: 'accretion layer', base: 'wind-launching region', wind: 'disk wind', outer: 'weakly turbulent outer disk', hall: 'Hall-wound layer', cavity: 'magnetospheric cavity', jet: 'jet', envelope: 'envelope' },
       physics: {
-        inner: 'Above 1000 K the alkali metals ionize and the field couples to the gas: the magnetorotational instability stirs it strongly (α ≈ 0.01), and the accretion’s heat warms the disk from within.',
+        inner: (n) => `Above ${n.tTI} K the alkali metals ionize and the field couples to the gas: the magnetorotational instability stirs it strongly (α ≈ ${n.aIn}), and the accretion’s heat warms the disk from within.`,
         dead: 'Too weakly ionized for the field to couple (Ohmic diffusion): no magnetorotational turbulence, the gas is quiet. The accretion goes on in the layer above; pebbles settle to the midplane and drift inward.',
         acc: 'Where the field bends and a current flows: the gas, losing angular momentum to the wind, flows in toward the star in a thin laminar layer (heated by the current). Beyond the dead zone it lies at the midplane.',
         base: 'The field opens out and the gas is slowly lifted toward the wind (ambipolar diffusion dominates; no turbulence).',
         wind: 'Ionized by the star’s ultraviolet light, the gas flows out along the field lines: the disk wind carries angular momentum away and drives the accretion.',
-        outer: 'Cosmic rays reach the midplane, so the field couples, but ambipolar diffusion keeps the turbulence weak (α ≈ 0.001).',
+        outer: (n) => `Cosmic rays reach the midplane, so the field couples, but ambipolar diffusion keeps the turbulence weak (α ≈ ${n.aOut}).`,
         hall: 'With the field aligned with the rotation, the Hall effect pushes the current layer to one side; below it the field is wound one way.',
         cavity: 'Inside the star’s magnetosphere, which truncates the gas disk: the gas falls onto the star along the field lines.',
         jet: 'The narrow, fast jet launched along the axis close to the star.',
@@ -469,7 +500,7 @@ export const WORDS = {
       gap: (a, f) => `in the gap of the planet at ${a} au: the gas at ${f} % of its surroundings`, trap: (a) => `at the pressure maximum outside the planet at ${a} au: pebbles collect here`,
       // (round 13e) inside a planet's own disk (or envelope)
       cpd: (o) => `inside the ${o.kind === 'disk' ? 'circumplanetary disk' : 'envelope'} of the planet at ${o.a} au (${o.m}): ${o.r} from the planet (${o.rH} R_H; its edge at ${o.rOut} R_H), ${o.T} K, H/r ${o.Hr}, accreting ${o.mdot}`,
-      model: 'The model’s values (the disk drawn 1.8 times as thick as its temperature holds it, for the picture; the surface density taken as 1700 g/cm² at 1 au).'
+      model: (n) => `The model’s values (the disk drawn ${n.hf} times as thick as its temperature holds it, for the picture; the surface density taken as 1700 g/cm² at 1 au).`   // (round 14a: n from the model's parameters)
     },
     cite: {
       lead: 'Free to use in research, talks, teaching and materials; no credit required. If you cite it, this line will do.',

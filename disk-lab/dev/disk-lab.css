@@ -118,6 +118,13 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .stage-log .log-note{color:var(--text-2)}
 .stage-log pre{overflow:auto;margin:0;padding:8px;border-radius:8px;background:rgba(255,255,255,.04);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}
 .about .about-ver{margin:-8px 0 16px;font-size:12px;color:#6a6f75}
+/* (2026-11-04) the record of updates in a dialog beside About: dark like the record page it frames */
+.about.history{background:#0c0f17;color:var(--text)}
+.about.history .about-close{color:var(--text-2)}
+.about.history .history-inner{padding:36px clamp(14px,3vw,28px) 24px}
+.about.history h2{color:var(--text);font-size:17px;margin:0 0 12px}
+.history-frame{display:block;width:100%;height:min(72vh,900px);border:1px solid var(--line-2);border-radius:8px;background:#0c0f17}
+.about.history .about-log{margin:12px 0 0}
 .about .about-log{margin:-12px 0 16px;font-size:12px}
 .about .about-log a{color:var(--accent);text-decoration:none}
 .about .about-log a:hover{text-decoration:underline}
@@ -239,6 +246,18 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .cpd-mdot-v{font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;text-align:right}
 .cpd-mdot-v sub{font-size:.75em}
 .cpd-mdot input{grid-column:1/2;min-width:0;width:100%;accent-color:var(--accent)}
+/* (round 14a) the model's parameters (the rail's Model) and the wind's brightness under the wind: the name over a slider, its value
+   with its unit and, while it is changed, the chip back to the default */
+.mp-group{margin:2px 0 6px}
+.mp-group .talk-sub{margin:10px 0 4px}
+.mp-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:1px 8px;width:100%;margin:4px 0}
+.mp-row[hidden]{display:none}
+.mp-name{grid-column:1/-1;font-size:12px;color:var(--text-2)}
+.mp-row input[type=range]{min-width:0;width:100%;accent-color:var(--accent)}
+.mp-val{font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.mp-row .chip{min-height:24px;padding:1px 8px;font-size:11.5px}
+.mp-derived{margin:4px 0 2px;font-size:11.5px}
+.gain-row{margin:2px 0 0}
 .icon-x{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;color:var(--text-3);font-size:15px;line-height:1}
 .icon-x:hover{background:var(--wash);color:var(--text)}
 #addPlanet[aria-pressed=true]{border-color:var(--accent);color:var(--text)}
@@ -452,6 +471,7 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   .tool,.action,.chip,.toggle{min-height:40px}
   .comp-cols input[type=color]{width:40px;height:34px}
   .comp-cols .chip{min-height:40px}
+  .mp-row .chip{min-height:40px}
   .tool{height:40px}
   .route button{padding:9px 12px}
   .segmented button{padding-top:9px;padding-bottom:9px}
