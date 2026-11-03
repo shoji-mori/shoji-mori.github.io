@@ -414,8 +414,14 @@
   // Tabone et al. 2022): the density along a line is rho0 (ETA / kappa) (lambda_ref - 1) / (lambda - 1), with rho0 at the
   // irradiation surface's density at 1 au, where lambda = LAM.REF = 2, as RHO_B before. Lines from neighbouring feet do not
   // cross (R at fixed height grows with Rf: checked over the drawn region, see the notes).
+  // (Round 13c, the owner's choice: lambda rising outward instead, see MFLUX below. It reverses the reasoning above; with
+  // data-mflux="0" or data-lam="old" the profile of round 8 is kept.)
   const LAM = { A: 1.5, B: 0.5, MIN: 1.8, MAX: 4, REF: 2 };
-  const lamOf = (Rf) => Math.min(LAM.MAX, Math.max(LAM.MIN, LAM.A + LAM.B / Math.sqrt(Rf)));
+  // (round 13c) the mass budget's settings (see MFLUX), and lambda rising in ln R from lo at R_TI to hi at R_OUT (held beyond)
+  let MF = null;
+  const lamRise = (lo, hi, R) => lo + (hi - lo) * Math.min(Math.max(Math.log(R / NONIDEAL.R_TI) / Math.log(MODEL.R_OUT / NONIDEAL.R_TI), 0), 1);
+  // the lines' lambda: with the budget's rising profile (MF.rise) that one, else round 8's; within the tables' range either way
+  const lamOf = (Rf) => Math.min(LAM.MAX, Math.max(LAM.MIN, MF && MF.rise ? lamRise(MF.lo, MF.hi, Rf) : LAM.A + LAM.B / Math.sqrt(Rf)));
   const BPL = [
     { LAM: 1.8, KAP: 15.0, A0: 1.847397, B0: -11.98951, // table-l1.8-k15.json
       XI: [1, 1.0411, 1.0837, 1.1281, 1.1742, 1.2224, 1.2726, 1.325, 1.3798, 1.4371, 1.4969, 1.5596, 1.6251, 1.6937, 1.7656, 1.8408, 1.9195, 2.002, 2.0884, 2.1788, 2.2735, 2.3725, 2.4762, 2.5845, 2.6979, 2.8163, 2.9399, 3.0689, 3.2035, 3.3438, 3.4898, 3.6417, 3.7995, 3.9633, 4.1331, 4.3089, 4.4907, 4.6782, 4.8715, 5.0702, 5.2741, 5.483, 5.6963, 5.9136, 6.1344, 6.358, 6.5836, 6.8104, 7.0374, 7.2636, 7.4877, 7.7083, 7.9241, 8.1335, 8.3346, 8.5258, 8.7049, 8.8698, 9.0183, 9.1478, 9.2559, 9.3396, 9.396, 9.4219],
@@ -463,6 +469,83 @@
   for (const T of BPL) T.LNEK = T.ETA.map((e) => Math.log(e / T.KAP) + Math.log((LAM.REF - 1) / (T.LAM - 1)));
   // ln(ETA / kappa) at chi = 0.03 (CHI_C) for the reference lever arm LAM.REF: the wind's density there is RHO_B r0^-3/2
   const LNREF = (() => { const T = BPL.find((t) => t.LAM === LAM.REF), f = Math.log(1 + 0.03 / BP.C0) * (63 / BP.SMAX), i = Math.floor(f); return T.LNEK[i] + (T.LNEK[i + 1] - T.LNEK[i]) * (f - i); })();
+  // (Round 13c, the owner: "does the accretion velocity satisfy steady mass conservation, d/dr (2 pi r Sigma v_r) + [2 pi r
+  // rho v_z]_bottom^top = 0?") It did not (ver2/docs/accretion-mass-flux.md): the inflow's speed, the column it moved and the
+  // wind's loading were set apart, and the loading of round 8 (rho0 at tau* = 1 times 1 / (lambda - 1)) asks, through the
+  // wind's torque, for an accretion rate that does not change with radius, which the mass the wind takes forbids. Now one
+  // budget sets the wind and the inflow (P-B', the owner's choice; DESIGN.md, section 33), mass and angular momentum together,
+  // taken at the radius r where the wind leaves the disk (its base):
+  //   the accretion rate grows outward by what the wind takes, d ln Mdot_acc / d ln r = g / 2 (lambda - 1), from Mdot_TI =
+  //     THERMO.MDOT at R_TI, where the layers hand their inflow to the turbulent inner disk (g = exp(-cutOut(r)): the disk's
+  //     edge; inside R_TI the same law carries on, the turbulent disk's own inflow, which is not drawn);
+  //   the wind takes W(r) = Mdot_acc(r) g(r) / 2 (lambda(r) - 1) r per unit radius, both sides together (the torque of a wind
+  //     that carries lambda times the specific angular momentum where it leaves, Bai et al. 2016, eq. 25, which round 8 cited
+  //     for the loading; with mass conservation, dMdot_acc/dr = W);
+  //   its density at the base is that flux over the base's speed, rho_b = q / v_K(r0) F(chi_c), q = W share / 2 pi r the flux
+  //     per unit area (share: a half each with the symmetric wind; with the asymmetry 1 / (1 + WIND_LOW) above and WIND_LOW of
+  //     that below), and along the line it keeps the solution's flux, rho = rho_b (F xi J)(chi_c) / (F xi J)(chi), J = xi -
+  //     chi dxi/dchi (ETA = kappa / (xi J F), the self-similar profile, without the tables' first row, which stands for the
+  //     divergence at rest); held at rho_b below chi_c;
+  //   chi_c = CHI_C, 0.003 (0.03 until now): the base at tau* = 1 is below the sonic point, the gas starts ten times slower,
+  //     so that the base's density stays near the disk's at tau* = 1 while the wind carries only W (above it, rho is the flux
+  //     over the speed, whatever chi_c);
+  //   lambda rising outward, from LAM_LO at R_TI to LAM_HI at the disk's edge R_OUT, in ln R and held beyond (the owner's:
+  //     round 8 had it falling, see LAM): the lines take the tables' solution for their foot's lambda, within the tables' 1.8
+  //     to 4 (lamOf), the budget the lambda itself at the base's radius (lamBud: down to 1.5, where a cold solution would need
+  //     more than 3/2, so the lines inside about 1.2 au are those of 1.8);
+  //   the accretion layers keep their speed K c_s and their place: the column that moves is the budget's, Sigma_s =
+  //     Mdot_acc / 2 pi R sum_s w_s K_s c_s on each layer, a thin sheet where the field bends (the gas line's inflow follows it,
+  //     see coGas; the flow arrows, the cut's Regions and the temperature's heating layer are unchanged).
+  // MF: this page's settings, from its development switches (mfluxSet, called by init before the wind map is drawn):
+  // data-mflux="0" all the prescriptions of before (round 8's density and lambda, chi_c 0.03, the gas line's inflow of the
+  // layers' whole gas); data-lam="old", or "lo,hi"; data-mdot, M_sun/yr, the budget's only (THERMO's heating keeps
+  // THERMO.MDOT); data-chic. MF.tab: the budget's I = ln(Mdot_acc / Mdot_TI) and its slope dI/dln r at N nodes in ln r from
+  // X0 to X1, for a cubic Hermite (the wind map's and the script's); MF.tabV the same at NV nodes, for the gas line's sheet
+  // (within 0.2 % of the other from 0.34 to 35 au; the sheet's own effect is 1e-3 of the flow). K: the solar mass in the model's unit,
+  // Sigma(1 au) au^2, for Sigma(1 au) = 1700 g cm^-2 (PROBE.SIG1, the probe's scale: the model's own Sigma is dimensionless).
+  const MFLUX = { LAM_LO: 1.5, LAM_HI: 2.5, CHI_C: 0.003, N: 128, NV: 16, X0: Math.log(0.04), X1: Math.log(128), K: 1.989e33 / (1700 * 1.496e13 * 1.496e13) };
+  const RHO_B_JS = Math.exp(-MODEL.LNTAU1) / (Math.sqrt(2 * Math.PI) * MODEL.H0);   // (as RHO_B in the GLSL: the gas at tau* = 1 at 1 au)
+  // the budget's lambda at the radius where the wind leaves: the rising profile unclamped, or round 8's as the lines have it
+  const lamBud = (r) => (MF.rise ? lamRise(MF.lo, MF.hi, r) : Math.min(LAM.MAX, Math.max(LAM.MIN, LAM.A + LAM.B / Math.sqrt(r))));
+  const mfSlope = (x) => { const r = Math.exp(x); return Math.exp(-cutOut(r)) / (2 * (lamBud(r) - 1)); };   // dI/dln r
+  // I at r from n nodes (tab: I and its slope, interleaved), by the cubic Hermite, as mfHermite in the GLSL
+  const mfHerm = (tab, n, r) => {
+    const d = (MFLUX.X1 - MFLUX.X0) / (n - 1), f = Math.min(Math.max((Math.log(r) - MFLUX.X0) / d, 0), n - 1.001), k = Math.floor(f), t = f - k, t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * tab[2 * k] + (t3 - 2 * t2 + t) * d * tab[2 * k + 1] + (3 * t2 - 2 * t3) * tab[2 * k + 2] + (t3 - t2) * d * tab[2 * k + 3];
+  };
+  const mfI = (r) => mfHerm(MF.tab, MFLUX.N, r);
+  const mdotAccJS = (r) => MF.mdot * Math.exp(mfI(r));                                                // M_sun/yr
+  const windWJS = (r) => mdotAccJS(r) * Math.exp(-cutOut(r)) / (2 * (lamBud(r) - 1) * r);             // M_sun/yr per au, both sides
+  function mfluxSet(d = {}) {
+    const num = (v, lo, hi, def) => { const x = Number(v); return v != null && v !== '' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : def; };
+    const on = d.mflux !== '0', m = /^\s*([0-9.]+)\s*,\s*([0-9.]+)\s*$/.exec(d.lam || '');
+    MF = { on, rise: on && d.lam !== 'old', lo: m ? num(m[1], 1.1, LAM.MAX, MFLUX.LAM_LO) : MFLUX.LAM_LO, hi: m ? num(m[2], 1.1, LAM.MAX, MFLUX.LAM_HI) : MFLUX.LAM_HI,
+      chic: num(d.chic, 1e-4, 0.05, MFLUX.CHI_C), mdot: num(d.mdot, 1e-10, 1e-5, THERMO.MDOT) };
+    // the nodes: I = 0 at R_TI, by Simpson's rule from node to node (steps of at most 0.004 in ln r)
+    const xTI = Math.log(NONIDEAL.R_TI);
+    const simpson = (a, b, n) => { const h = (b - a) / n; let t = mfSlope(a) + mfSlope(b); for (let i = 1; i < n; i++) t += (i % 2 ? 4 : 2) * mfSlope(a + i * h); return t * h / 3; };
+    const nodes = (n) => {
+      const dx = (MFLUX.X1 - MFLUX.X0) / (n - 1), sub = 2 * Math.ceil(dx / 0.008), x = (k) => MFLUX.X0 + k * dx, I = new Float64Array(n), out = new Float32Array(2 * n);
+      const k0 = Math.floor((xTI - MFLUX.X0) / dx);
+      I[k0] = -simpson(x(k0), xTI, sub);
+      for (let k = k0 + 1; k < n; k++) I[k] = I[k - 1] + simpson(x(k - 1), x(k), sub);
+      for (let k = k0 - 1; k >= 0; k--) I[k] = I[k + 1] - simpson(x(k), x(k + 1), sub);
+      for (let k = 0; k < n; k++) { out[2 * k] = I[k]; out[2 * k + 1] = mfSlope(x(k)); }
+      return out;
+    };
+    MF.tab = nodes(MFLUX.N); MF.tabV = nodes(MFLUX.NV);
+    bpMemo.clear();   // (the lines' solutions follow lambda)
+    return MF;
+  }
+  // (round 13c) the budget in the GLSL: I at r from the nodes in the uniform array u (n of them, two to an element), the cubic
+  // Hermite of mfHerm; and the budget's lambda at the base's radius, from uLamP (see lamOf in FIELD_GLSL)
+  const mfHermite = (fn, u, n) => `float ${fn}(float r){
+  const float D = ${G(+((MFLUX.X1 - MFLUX.X0) / (n - 1)).toPrecision(8))};
+  float f = clamp((log(r) - (${G(+MFLUX.X0.toPrecision(8))})) / D, 0.0, ${G(n - 1.001)}), t = f - floor(f), t2 = t * t, t3 = t2 * t;
+  int k = int(f); vec4 a = ${u}[k / 2], b = ${u}[(k + 1) / 2];
+  vec2 p = k % 2 == 0 ? a.xy : a.zw, q = k % 2 == 0 ? a.zw : b.xy;   // (I, dI/dln r) at the nodes k and k + 1
+  return (2.0 * t3 - 3.0 * t2 + 1.0) * p.x + (t3 - 2.0 * t2 + t) * D * p.y + (3.0 * t2 - 2.0 * t3) * q.x + (t3 - t2) * D * q.y;
+}`;
   const FIELD_GLSL = `
 // (round 8) the solutions for several lever arms (BPL in the script) as a texture, NBP rows of (xi, PHI, TAU, ln(ETA / kappa)
 // with the loading's factor) at chi_i = C0 (e^(s_i) - 1), s_i = i SMAX / 63, and NBP more of (F, G, XIP); uBPL[j]: the
@@ -474,7 +557,10 @@ uniform vec4 uBPL[NBP];
 const float C0 = ${G(BP.C0)}, SMAX = ${G(BP.SMAX)}, CHIMAX = ${G(BP.CHIMAX)};
 float cutOut(float R){ return pow(R / R_OUT, P_OUT); }      // -ln of the density cutoff
 float zBase(float Rf){ float H = H0 * pow(Rf, 1.25); return H * sqrt(2.0 * max(${G(MODEL.LNTAU1)} - 1.25 * log(Rf) - cutOut(Rf), 1.0)); }
-float lamOf(float Rf){ return clamp(${G(LAM.A)} + ${G(LAM.B)} * inversesqrt(Rf), ${G(LAM.MIN)}, ${G(LAM.MAX)}); }
+// (round 13c) the lever arm's profile (MF in the script): uLamP.x 1, rising in ln Rf from uLamP.y at R_TI to uLamP.z at R_OUT;
+// 0, round 8's; the lines' solutions within the tables' range (set in the wind map, the one program that asks for it)
+uniform vec4 uLamP;
+float lamOf(float Rf){ return clamp(uLamP.x > 0.5 ? mix(uLamP.y, uLamP.z, clamp(log(Rf / R_TI) / log(R_OUT / R_TI), 0.0, 1.0)) : ${G(LAM.A)} + ${G(LAM.B)} * inversesqrt(Rf), ${G(LAM.MIN)}, ${G(LAM.MAX)}); }
 // the rows of the line with foot Rf: j, and the share of row j + 1
 vec2 lamRow(float Rf){
   float l = lamOf(Rf); int j = 0;
@@ -889,9 +975,13 @@ layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec4 fragVel;   // the gas velocity in units of v_K(r0): (v_R, v_phi, v_z), for the CO line
 uniform vec2 uMapRes;
 uniform float uAsymS;                    // the asymmetry's share of the dead zone's field now (ASYM_F times its fade)
+uniform vec4 uMflux;                     // (round 13c) x: 1 the mass budget (see MFLUX in the script), 0 round 8's density; y: chi_c; z: Mdot_TI (M_sun/yr)
+uniform vec4 uMdotT[${MFLUX.N / 2}];             // the budget's I = ln(Mdot_acc / Mdot_TI) and dI/dln r at its nodes, two to an element
 ${CONST_GLSL}
 ${FIELD_GLSL}
 ${MAP_GLSL}
+${mfHermite('mfI', 'uMdotT', MFLUX.N)}
+float lamBud(float r){ return uLamP.x > 0.5 ? mix(uLamP.y, uLamP.z, clamp(log(r / R_TI) / log(R_OUT / R_TI), 0.0, 1.0)) : clamp(${G(LAM.A)} + ${G(LAM.B)} * inversesqrt(r), ${G(LAM.MIN)}, ${G(LAM.MAX)}); }
 void main(){
   // (both hemispheres: theta from -90 to 90 degrees; the lower one's lines bend as the side s says)
   float r = exp(LNW_MIN + gl_FragCoord.x / uMapRes.x * LNW_SPAN), th = (gl_FragCoord.y / uMapRes.y - 0.5) * PI;
@@ -909,6 +999,18 @@ void main(){
   float lnrho = log(RHO_B) - 1.5 * log(r0) + tabAt(max(chi, CHI_C), Rf).w - ${G(+LNREF.toFixed(6))} + min(chi, 0.0) / WIND_BLEED - cutOut(r0)
               - 5.0 * smoothstep(0.55 * ZB, ZB, h) - 5.0 * smoothstep(0.55 * RB, RB, R)
               + log(max(smoothstep(R_IN * 0.8, R_IN * 1.3, r0) * (1.0 - smoothstep(0.85 * ZB, ZB, h)) * (1.0 - smoothstep(0.85 * RB, RB, R)), 1e-30));
+  // (round 13c, P-B': see MFLUX in the script) the density from the mass budget instead: the flux per unit area at the base,
+  // q = W share / 2 pi rb with W = Mdot_acc g / 2 (lambda - 1) rb (rb = r0 xi(chi_c), where the line leaves), over the speed
+  // there, v_K(r0) F (au a year: 2 pi r0^-1/2), times the solution's (F xi J)(chi_c) / (F xi J)(chi); round 8's part is taken
+  // back out (the fades and the inner edge stay, the disk's edge is the budget's g at rb)
+  if (uMflux.x > 0.5) {
+    float cc = uMflux.y, ch = max(chi, cc);
+    vec4 tc = tabAt(cc, Rf), vc = tabVAt(cc, Rf), tt = tabAt(ch, Rf), vt = tabVAt(ch, Rf);
+    float rb = r0 * tc.x, share = 1.0 / (2.0 - ${G(+(1 - WIND_LOW_JS).toFixed(6))} * uAsymS / ASYM_F);
+    lnrho += log(${G(+MFLUX.K.toPrecision(7))} * uMflux.z * share * tc.x * (tc.x - cc * vc.z) / (TAU * TAU * (2.0 * lamBud(rb) - 2.0) * rb * rb * vt.x * tt.x * (tt.x - ch * vt.z)))
+           + mfI(rb) - cutOut(rb) + 0.5 * log(r0)
+           - (log(RHO_B) - 1.5 * log(r0) + tabAt(max(chi, CHI_C), Rf).w - ${G(+LNREF.toFixed(6))} - cutOut(r0));
+  }
   // ln r0, azimuth of the line relative to its foot, travel time of the gas from the base, ln density
   fragColor = vec4(log(r0), fieldRP(Rf, h, s).y, tabAt(max(chi, 0.0), Rf).z, lnrho);
   // the velocity along the line, v_K(r0) (F dxi/dchi, G, F) in (R, phi, z) above the base; below it the gas turns with
@@ -1437,6 +1539,9 @@ uniform sampler2D uDiskMap;
 uniform sampler2D uAccMap;   // the accretion layers' streaks (upper, lower), on the disk map's grid
 uniform vec2 uAcc;           // the accretion layers' strengths (upper, lower): with the wind's asymmetry only the lower
 uniform vec2 uAccV;          // their inflow (upper, lower), in units of the sound speed (see ACC)
+uniform vec4 uMflux;         // (round 13c) the mass budget (see MFLUX in the script): x 1 on; z Mdot_TI (M_sun/yr)
+uniform vec4 uMdotV[${MFLUX.NV / 2}];      // its I at NV nodes, for the gas line's sheet (see coGas)
+${mfHermite('mfIV', 'uMdotV', MFLUX.NV)}
 uniform sampler2D uWindMap;
 uniform sampler2D uEnvMap;
 uniform highp sampler3D uTurb3;   // the eddies (see CELLS3): density factor, extra optical depth toward the star
@@ -2574,6 +2679,16 @@ vec4 coGas(vec3 p, vec3 rd){
   // map's gas factor is the wake's); the accretion layer(s) flow inward
   float vR = R > 0.6 ? 0.5 * cs * (dm.r - 1.0) : 0.0;
   float zu = (zh - zAccH(R)) / ACC_W, zl = (zh + zAccLow(R, asymF())) / ACC_W;
+  // (round 13c, P-B': see MFLUX in the script) with the mass budget only its column moves at the layers' speed, a thin sheet
+  // on each layer, Sigma_s = Mdot_acc / 2 pi R sum_s w_s K_s c_s (c_s in au a year, (H/R) 2 pi R^-1/2), of density Sigma_s
+  // e^(-u^2/2) / (sqrt(2 pi) ACC_W H) within the gas there: the gas's mean inflow is K c_s times the sheet's share of its density
+  // (10^-3 to 10^-2 of K c_s at the layers' centres: the inflow all but leaves the gas line). Without it, round 8's inflow of
+  // the layers' whole gas
+  if (uMflux.x > 0.5) {
+    float ks = uAcc.x * uAccV.x + uAcc.y * uAccV.y;
+    float sh = ${G(+MFLUX.K.toPrecision(7))} * uMflux.z * exp(mfIV(R)) / (39.478418 * max(ks, 1e-3) * h * sqrt(R)) / (2.5066 * ACC_W * H * max(rhoD, 1e-30));
+    vR -= accAmp(R) * cs * (uAcc.x * uAccV.x * min(sh * exp(-0.5 * zu * zu), 1.0) + uAcc.y * uAccV.y * min(sh * exp(-0.5 * zl * zl), 1.0));
+  } else
   vR -= accAmp(R) * cs * (uAcc.x * uAccV.x * exp(-0.5 * zu * zu) + uAcc.y * uAccV.y * exp(-0.5 * zl * zl));
   vec3 v = vec3(vR * er + vphi * ep, 0.0);
   // (the components: the disk's gas and the wind's, each with its button; the velocity and the temperature are their
@@ -3777,6 +3892,20 @@ void main(){
     return T;
   }
   const r0Of = (Rf, s = 0) => { const zb = zBase(Rf); return Rf + bpOf(Rf).A0 * bendQ(Rf, zb, zb, s); };
+  // (round 13c) the wind's density (ln, the model's unit) as WINDMAP_FS draws it, on the line with foot Rf on the side of s for
+  // the asymmetry's share a (0 to 1; the lower side's WIND_LOW is the caller's), without the fades at the marched cylinder's top
+  // and side (the cut's face takes them out): the mass budget's (MF.on, see MFLUX) or round 8's. windLine: what does not
+  // change along the line (rb: where it leaves the disk); windLnRho: at chi r0 above the base
+  function windLine(Rf, s = 0, a = 0) {
+    const T = bpOf(Rf), r0 = r0Of(Rf, s), inner = Math.log(Math.max(ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, r0), 1e-30));
+    if (!MF.on) return { T, r0, cc: 0.03, rb: r0 * tabF(T.XI, tabS(0.03)), base: Math.log(RHO_B_JS) - 1.5 * Math.log(r0) - LNREF - cutOut(r0) + inner };
+    const cc = MF.chic, fc = tabS(cc), xc = tabF(T.XI, fc), jc = xc - cc * tabF(T.XIP, fc), rb = r0 * xc, share = 1 / (2 - (1 - WIND_LOW_JS) * a);
+    return { T, r0, cc, rb, base: Math.log(MFLUX.K * MF.mdot * share * xc * jc / (4 * Math.PI * Math.PI * (2 * lamBud(rb) - 2) * rb * rb)) + mfI(rb) - cutOut(rb) + 0.5 * Math.log(r0) + inner };
+  }
+  function windLnRho(L, chi) {
+    const ch = Math.max(chi, L.cc), f = tabS(ch), T = L.T, xi = tabF(T.XI, f);
+    return L.base + (MF.on ? -Math.log(tabF(T.F, f) * xi * (xi - ch * tabF(T.XIP, f))) : tabF(T.LNEK, f)) + Math.min(chi, 0) / 0.03;
+  }
   // (the lower side's lowest point of the bend, with the asymmetry's share s < 0: round 8)
   function diskHeights(Rf, s = 0) {
     const zb = zBase(Rf), H = Hof(Rf), d = Math.min(NONIDEAL.BEND * H, 0.5 * zb);
@@ -4007,6 +4136,9 @@ void main(){
   function init(box, reuse, restoredTime = 0) {
     // data-static renders one frame (used for the fallback image and screenshots)
     const reduce = reduceOS || 'static' in box.dataset;
+    // (round 13c) the mass budget's settings from the page's development switches (data-mflux, -lam, -mdot, -chic; see MFLUX),
+    // before anything asks for a line's solution or draws the wind map
+    mfluxSet(box.dataset);
     const canvas = reuse || document.createElement('canvas');
     // an application (its keys reach it under a screen reader), named shortly and described by two hidden texts: the
     // picture (see the end of draw; written only when it changes) and the keys
@@ -4123,7 +4255,7 @@ void main(){
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
     const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
-      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter'];
+      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV'];
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS, 'show'), progBloom = link(BLOOM_FS, 'bloom');
     // (round 8) the bloom's targets, a quarter of accT's size (made with it): A on unit 18 (for SHOW_FS), B on unit 19
@@ -4389,6 +4521,10 @@ void main(){
     gl.useProgram(progWind);
     gl.uniform1i(gl.getUniformLocation(progWind, 'uBPT'), 2);
     gl.uniform4fv(gl.getUniformLocation(progWind, 'uBPL'), new Float32Array(BPL.flatMap((T) => [T.LAM, T.A0, T.B0, 0])));
+    // (round 13c) the mass budget's settings and table (see MFLUX), for this build
+    gl.uniform4f(gl.getUniformLocation(progWind, 'uLamP'), MF.rise ? 1 : 0, MF.lo, MF.hi, 0);
+    gl.uniform4f(gl.getUniformLocation(progWind, 'uMflux'), MF.on ? 1 : 0, MF.chic, MF.mdot, 0);
+    gl.uniform4fv(gl.getUniformLocation(progWind, 'uMdotT'), MF.tab);
     gl.uniform2f(gl.getUniformLocation(progWind, 'uMapRes'), windMapT.w, windMapT.h);
     // the wind map (and its velocities) for the asymmetry's share now; drawn again when it changes (during its fade)
     const uAsymSW = gl.getUniformLocation(progWind, 'uAsymS');
@@ -5593,16 +5729,17 @@ void main(){
           if (c.length > 2) g.lines.push({ pts: c, quads: ALL, lr });
         }
         // (the lower side has its own contours, at 0.1 of the upper with the wind's asymmetry, and its lines' own bases)
-        const lowW = opt.asym ? WIND_LOW_JS : 1, sideS = opt.asym ? ASYM_F_JS : 0;
+        // (round 13c: the density as the wind map draws it, windLnRho, the mass budget's or round 8's; it falls along the line
+        // from chi_c, so the contour's chi is bisected over the table's rows from there)
+        const lowW = opt.asym ? WIND_LOW_JS : 1, sideS = opt.asym ? ASYM_F_JS : 0, aS = opt.asym ? 1 : 0, lnMid = Math.log(Math.sqrt(2 * Math.PI) * MODEL.H0);
         for (const [lr, low, lower] of [[-6, 1, 0], [-9, 1, 0], [-6, lowW, 1], [-9, lowW, 1]]) {
           const c = [];
           for (const Rf of logspace(0.07, 30, 180)) {
-            const zb = zBase(Rf), r0 = r0Of(Rf, lower ? -sideS : sideS), T = bpOf(Rf), lnEta = T.LNEK;   // (round 8: the line's own solution)
-            const base = -MODEL.LNTAU1 - 1.5 * Math.log(r0) - LNREF - cutOut(r0) + gapLnAll(r0) + Math.log(Math.max(ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, r0) * low, 1e-30));
-            const want = lr * LN10 - base;   // ln (ETA / kappa) with the loading's factor at the contour
-            if (want > tabF(lnEta, tabS(CHI_C)) || want < lnEta[NT - 1]) continue;
-            let lo = tabS(CHI_C), hi = NT - 1.001;
-            for (let k = 0; k < 30; k++) { const m = 0.5 * (lo + hi); if (tabF(lnEta, m) > want) lo = m; else hi = m; }
+            const L = windLine(Rf, lower ? -sideS : sideS, aS), zb = zBase(Rf), r0 = L.r0, T = L.T;   // (round 8: the line's own solution)
+            const off = gapLnAll(r0) + Math.log(low) + lnMid - lr * LN10, f = (m) => windLnRho(L, chiOfS(m)) + off;   // (> 0 below the contour)
+            let lo = tabS(L.cc), hi = NT - 1.001;
+            if (f(lo) < 0 || f(hi) > 0) continue;
+            for (let k = 0; k < 30; k++) { const m = 0.5 * (lo + hi); if (f(m) > 0) lo = m; else hi = m; }
             const chi = chiOfS(0.5 * (lo + hi)), z = zb + r0 * chi;
             if (z < ZB_JS) c.push([r0 * tabF(T.XI, tabS(chi)), z]);
           }
@@ -6860,6 +6997,7 @@ void main(){
       gl.uniform2fv(U.uAcc, accW());
       gl.uniform2fv(U.uAccV, accK());
       gl.uniform1f(U.uAccDraw, opt.accDraw ? 1 : 0); gl.uniform1f(U.uGasOuter, opt.gasOuter ? 1 : 0);   // (round 13a: see ACC, uGasOuter)
+      gl.uniform4f(U.uMflux, MF.on ? 1 : 0, MF.chic, MF.mdot, 0); gl.uniform4fv(U.uMdotV, MF.tabV);   // (round 13c: see MFLUX, coGas)
       gl.uniform1i(U.uCoMode, CO_MODES[opt.coMode]);
       gl.uniform1f(U.uCoV, opt.coV);
       gl.uniform1f(U.uCoRange, coRange());
