@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=814f93ec9f';
-import { WORDS } from './words.js?v=ef9bfd4551';
+import { WORDS } from './words.js?v=969ed56957';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=05481e7755';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=1dfda0c78b';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=8dd4984116';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.8', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.9', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
@@ -116,8 +116,9 @@ if (typeof WebGL2RenderingContext !== 'undefined') {
 // (round 13c, the mass budget P-B', to compare on the development build: ?mflux=0, all the prescriptions of before (the wind's
 // density and lambda of round 8, chi_c 0.03, the gas line's inflow of the layers' whole gas); ?lam=old, round 8's lambda in the
 // budget, or ?lam=1.5,2.5, lambda at R_TI and at the disk's edge; ?lamin=1.2, lambda at the dust's inner edge (4 by default;
-// 1.9-dev.7 is ?lam=1.5,2.5&lamin=1.5); ?mdot=3e-8, the budget's accretion rate at R_TI (M_sun/yr; the
-// temperature keeps its own); ?chic=0.03, where the wind's base is held. See the engine's MFLUX and DESIGN.md section 33. Only
+// 1.9-dev.7 is ?lam=1.5,2.5&lamin=1.5); ?mdot=1.5e-8, the accretion rate (M_sun/yr; 1e-7 by default) for the heating and the
+// budget alike, read by the engine when its script runs (THERMO); ?chic=0.003, where the wind's base is held (0.015 by default). See the engine's
+// MFLUX and DESIGN.md section 33. Only
 // finite numbers are passed on; the engine bounds them)
 const mfluxSw = (k, ok) => { const v = q.get(k); return v != null && ok(v) ? v : ''; };
 const SWITCH = { duty: q.get('duty'), ctmax: Number(q.get('ctmax')) || 0, eddy: q.get('eddy') === '0', fps: Number(q.get('fps')) || 0, split: q.get('split') === '0', kick: Number(q.get('kick')) || 0, kadapt: q.get('kadapt') === '1',

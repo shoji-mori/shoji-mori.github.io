@@ -7,7 +7,8 @@
 //   rotation   Keplerian, Ω ∝ R^-3/2
 //   coupling   the gas is weakly ionized, so the field slips through it (non-ideal MHD, see NONIDEAL): Ohmic
 //              diffusion leaves a dead zone about the midplane, and ambipolar diffusion keeps the surface above it
-//              laminar; only the thermally ionized innermost disk (inside 0.3 au) is turbulent (the
+//              laminar; only the thermally ionized innermost disk (inside R_TI, 0.69 au since round 13c's accretion rate of
+//              1e-7 M_sun/yr, 0.3 au before) is turbulent (the
 //              magnetorotational instability), in sheared structure and eddies in three dimensions through the
 //              whole column (see CELLS3); beyond about 10 au, where the whole column couples, weakly (OUTER_TURB)
 //   heating    starlight grazes the flared surface and is absorbed where the optical depth toward
@@ -118,8 +119,15 @@
   // at 0.25 au); kappa_R = 5 cm^2/g (0.1 micron grains, Mori et al. 2019, 2021); alpha = 1e-2 where turbulent (the viscous
   // comparison of Mori et al. 2021); tau_heat = 2 (their Sigma_heat of 0.2-0.6 g cm^-2). With these the midplane is 158 K
   // at 1 au, the snow line (160 K) at 0.98 au, and 1000 K at 0.27 au (round 7, with H0 = 0.03: 147 K and 0.86 au). KI, KDS5, KM, KV: the laws' factors at 1 au (cgs).
+  // (Round 13c, the owner, after 1.9-dev.8 found the wind darker than expected: Mdot = 1e-7 M_sun/yr, for the heating as for
+  // the wind's mass budget (see MFLUX), the temperature's change accepted. R_TI moves out to 0.69 au and the snow line to
+  // 1.15 au; the midplane is 174 K at 1 au, 1490 K at 0.3 au, and the accretion's share of T^4 at 1 au 37 % (8 % before; DESIGN.md,
+  // section 33.10). The page's ?mdot= (data-mdot on the disk, read here when
+  // the script runs, as THERMO sets the shaders' constants) sets it for both; ?mdot=1.5e-8 gives the values above.)
   const THERMO = (() => {
-    const L = 2.7, T_STAR = 4300, MDOT = 1.5e-8, KAPPA_R = 5, ALPHA = 1e-2, TAU_HEAT = 2, T_TI = 1000, T_SUB = 1500, T_FLOOR = 10;
+    // (the page's data-mdot; none where there is no page, as in the Node checks)
+    const MDOT_PAGE = (() => { try { const b = document.querySelector('[data-disk3d]'), v = b && b.dataset.mdot ? Number(b.dataset.mdot) : NaN; return Number.isFinite(v) && v > 0 ? Math.min(1e-5, Math.max(1e-10, v)) : 0; } catch (e) { return 0; } })();
+    const L = 2.7, T_STAR = 4300, MDOT = MDOT_PAGE || 1e-7, KAPPA_R = 5, ALPHA = 1e-2, TAU_HEAT = 2, T_TI = 1000, T_SUB = 1500, T_FLOOR = 10;
     const sig = 5.6704e-5, au = 1.496e13, Lsun = 3.828e33, Msun = 1.989e33, yr = 3.156e7, Gc = 6.674e-8, k = 1.3807e-16, mH = 1.6726e-24, mu = 2.34;
     const Md = MDOT * Msun / yr, Om1 = Math.sqrt(Gc * Msun / (au * au * au));
     const KI = L * Lsun / (16 * Math.PI * sig * au * au);                                     // T_i^4 = KI beta / R^2
@@ -150,7 +158,8 @@
   //     couple: no currents flow, the field is vertical, and no turbulence can grow there. That is the dead zone,
   //     |z| < z_k(R) = sigma sqrt(2 ln(eta0 / eta_c)). eta0 / eta_c = (R_DZ / R)^Q falls outward (a lower midplane
   //     density, more of the ionizing radiation reaching it), with the disk's edge cutting it further, so the dead
-  //     zone thins outward and ends at 7.5 au: z_k = 3.1 H at 0.35 au, 2.5 H at 1 au, 1.7 H at 3 au, 0.8 H at 6 au.
+  //     zone thins outward and ends at 7.5 au: z_k = 3.1 H at 0.35 au, 2.5 H at 1 au, 1.7 H at 3 au, 0.8 H at 6 au. (Round 13c:
+  //     with THERMO's 1e-7 the zone begins beyond R_TI = 0.69 au, 2.6 H at 0.8 au; the rest as it was.)
   //     (Beyond it the column is thin enough, below about 100 g cm^-2 for the minimum-mass nebula, for cosmic rays to
   //     reach the midplane, so the whole column couples. Ambipolar diffusion keeps the instability weak there: Disk Lab
   //     v2 lets it stir the outer disk a little, rising from 7.5 au to its full, small strength at 14 au (OUTER_TURB,
@@ -158,7 +167,8 @@
   //     Stone 2011, Simon et al. 2013, and the outer disks observed in CO show turbulence of a few per cent of the sound
   //     speed at most, Flaherty et al. 2015, 2017); out to 7.5 au the disk is laminar, as before.)
   //     For a surface density of 1700 g cm^-2 at 1 au (the minimum-mass solar nebula), 2.5 H leaves about 10 g cm^-2
-  //     above it, the depth to which the star's X-rays ionize the gas (Igea & Glassgold 1999). Inside R_TI = 0.3 au the disk is
+  //     above it, the depth to which the star's X-rays ionize the gas (Igea & Glassgold 1999). Inside R_TI = 0.3 au (0.69 au
+  //     with round 13c's 1e-7 M_sun/yr, see THERMO) the disk is
   //     hot enough (above about 1000 K) for alkali metals to be thermally ionized, so the whole column couples. (Round 7:
   //     R_TI is where the turbulent disk's own accretion heating reaches 1000 K, see THERMO, and the colours show it; until
   //     round 6 they showed the starlight's heating only, 280 K there.)
@@ -489,9 +499,10 @@
   //     that below), and along the line it keeps the solution's flux, rho = rho_b (F xi J)(chi_c) / (F xi J)(chi), J = xi -
   //     chi dxi/dchi (ETA = kappa / (xi J F), the self-similar profile, without the tables' first row, which stands for the
   //     divergence at rest); held at rho_b below chi_c;
-  //   chi_c = CHI_C, 0.003 (0.03 until now): the base at tau* = 1 is below the sonic point, the gas starts ten times slower,
-  //     so that the base's density stays near the disk's at tau* = 1 while the wind carries only W (above it, rho is the flux
-  //     over the speed, whatever chi_c);
+  //   chi_c = CHI_C, 0.015 (0.03 until round 13c, 0.003 in 1.9-dev.7 and dev.8): the base at tau* = 1 is below the sonic
+  //     point, the gas starting slower, so that the base's density stays near the disk's at tau* = 1 while the wind carries only
+  //     W (above it, rho is the flux over the speed, whatever chi_c). With the accretion rate 1e-7, 0.003 put the base at 4.6
+  //     times the disk's density at tau* = 1 near 1 au, a step up; 0.015 keeps it at or below the disk's everywhere;
   //   lambda rising outward, from LAM_LO at R_TI to LAM_HI at the disk's edge R_OUT, in ln R and held beyond (the owner's:
   //     round 8 had it falling, see LAM): the lines take the tables' solution for their foot's lambda, within the tables' 1.8
   //     to 4 (lamOf), the budget the lambda itself at the base's radius (lamBud). (The owner, after 1.9-dev.7: 1.2 at R_TI to 5
@@ -505,7 +516,7 @@
   //     about half of what reaches R_TI. There the lines and the budget agree (lambda 1.8 to 4, within the tables), except
   //     close to R_TI. The inner lines then open wider than their neighbours outside and cross them above about 10 au (R falls
   //     back by up to 12 % at 20 au, feet near 0.2 au), a fold of the kind the dead zone's onset has made since round 8 (8 %
-  //     there, near 0.3 au): the wind map's footRadius takes one of the lines where they cross. data-lamin="1.2" gives the
+  //     there, near R_TI): the wind map's footRadius takes one of the lines where they cross. data-lamin="1.2" gives the
   //     single rise of before.
   //   the accretion layers keep their speed K c_s and their place: the column that moves is the budget's, Sigma_s =
   //     Mdot_acc / 2 pi R sum_s w_s K_s c_s on each layer, a thin sheet where the field bends (the gas line's inflow follows it,
@@ -515,9 +526,9 @@
   // layers' whole gas); data-lam="old", or "lo,hi"; data-mdot, M_sun/yr, the budget's only (THERMO's heating keeps
   // THERMO.MDOT); data-chic. MF.tab: the budget's I = ln(Mdot_acc / Mdot_TI) and its slope dI/dln r at N nodes in ln r from
   // X0 to X1, for a cubic Hermite (the wind map's and the script's); MF.tabV the same at NV nodes, for the gas line's sheet
-  // (within 0.6 % of the other from 0.34 to 35 au; the sheet's own effect is 1e-3 of the flow). K: the solar mass in the model's unit,
+  // (within 6 % of the other next to R_TI, less farther out; the sheet's own effect is 1e-3 to 1e-2 of the flow). K: the solar mass in the model's unit,
   // Sigma(1 au) au^2, for Sigma(1 au) = 1700 g cm^-2 (PROBE.SIG1, the probe's scale: the model's own Sigma is dimensionless).
-  const MFLUX = { LAM_IN: 4.0, LAM_LO: 1.2, LAM_HI: 5.0, CHI_C: 0.003, N: 128, NV: 16, X0: Math.log(0.04), X1: Math.log(128), K: 1.989e33 / (1700 * 1.496e13 * 1.496e13) };
+  const MFLUX = { LAM_IN: 4.0, LAM_LO: 1.2, LAM_HI: 5.0, CHI_C: 0.015, N: 128, NV: 16, X0: Math.log(0.04), X1: Math.log(128), K: 1.989e33 / (1700 * 1.496e13 * 1.496e13) };
   const RHO_B_JS = Math.exp(-MODEL.LNTAU1) / (Math.sqrt(2 * Math.PI) * MODEL.H0);   // (as RHO_B in the GLSL: the gas at tau* = 1 at 1 au)
   // the budget's lambda at the radius where the wind leaves: the rising profile unclamped, or round 8's as the lines have it
   const lamBud = (r) => (MF.rise ? lamRise(MF, r) : Math.min(LAM.MAX, Math.max(LAM.MIN, LAM.A + LAM.B / Math.sqrt(r))));
@@ -812,7 +823,7 @@ vec3 turbL(float lnR, float phi, float Om, float fp, float seed, bool fine, floa
   return n * inversesqrt(w2);
 }
 vec3 turb(float lnR, float phi, float Om, float fp, float seed, bool fine, float launchOffset, vec2 cells){ return turbL(lnR, phi, Om, fp, seed, fine, launchOffset, cells, LIFE); }
-// Strength of the turbulent structure: in the thermally ionized innermost disk (inside R_TI = 0.3 au), where the
+// Strength of the turbulent structure: in the thermally ionized innermost disk (inside R_TI, 0.69 au with THERMO's 1e-7), where the
 // magnetorotational instability works, and weakly in the outer disk (outerAmp, see NONIDEAL); laminar in between
 float turbAmp(float R){ float m = mriAmp(R), o = outerAmp(R); return 1.7 * (m + OUTER_TURB * o + DZ_TURB * (1.0 - m) * (1.0 - o)); }   // (round 8: DZ_TURB in the dead zone, see NONIDEAL)
 // The structure above spans the whole column (large, slowly sheared structures). Within it, the gas is stirred into
@@ -838,7 +849,7 @@ float turb3Amp(float R, float zeta){ return A3_IN * mriAmp(R) * (1.0 - smoothste
   //     to the foot), the travel time of a gas parcel up to that point, and the gas density of the wind.
   const MAP_GLSL = `
 const float LNR_MIN = ${G(Math.log(0.05))}, LNR_SPAN = ${G(Math.log(42 / 0.05))};   // disk map: R from 0.05 to 42 au
-const float LN3_MIN = ${G(Math.log(0.05))}, LN3_SPAN = ${G(Math.log(0.6 / 0.05))};       // the eddies' volume: R from 0.05 to 0.6 au
+const float LN3_MIN = ${G(Math.log(0.05))}, LN3_SPAN = ${G(Math.log(Math.max(0.6, 2 * NONIDEAL.R_TI) / 0.05))};       // the eddies' volume: R from 0.05 to 0.6 au (round 13c: or twice R_TI, 1.37 au with Mdot = 1e-7)
 const float LNW_MIN = ${G(Math.log(0.04))}, LNW_SPAN = ${G(Math.log(120.0 / 0.04))};   // wind map: r from 0.04 to 120 au (70 before round 8)
 const float RHO_B = ${G(Math.exp(-MODEL.LNTAU1) / (Math.sqrt(2 * Math.PI) * MODEL.H0))};   // gas density at the irradiation surface at 1 au
 const float CHI_C = 0.03, WIND_BLEED = 0.03;   // wind density: held below CHI_C, fading into the disk below the base (units of r0)
