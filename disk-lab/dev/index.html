@@ -23,7 +23,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-wave.png?v=a5-bold-20261015">
 <link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="disk-lab.css?v=e65544c08c">
+<link rel="stylesheet" href="disk-lab.css?v=bd2d9855d6">
 <!-- (round 10a) the prefix of the keys this build keeps on the device: none for the public page; a development build's own
      (ver2/tools/disk-lab-v2/make-dev.sh), so that nothing of it reaches the public page on the same origin -->
 <meta name="disk-lab-store" content="disk-lab-dev:">
@@ -88,12 +88,12 @@
   })();
 </script>
 <link rel="expect" href="#posterFirst" blocking="render">
-<script type="module" src="app.js?v=bf1ad8fec0"></script>
+<script type="module" src="app.js?v=77221ee095"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
   <header class="bar">
-    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build dev" data-version-tag>開発版 1.9-dev.1</span></p>
+    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build dev" data-version-tag>開発版 1.9-dev.3</span></p>
     <div class="bar-end">
       <button type="button" class="text-button" id="aboutOpen" aria-haspopup="dialog"><span class="en" lang="en"><span class="long">About this model</span><span class="short">About</span></span><span class="ja" lang="ja"><span class="long">このモデルについて</span><span class="short">解説</span></span></button>
       <div class="lang-switch" role="group" aria-label="Language">
@@ -120,13 +120,28 @@
       <button type="button" class="icon-button" id="presentNext" data-aria-en="Next scene" data-aria-ja="次の場面"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
       <button type="button" class="icon-button" id="presentExit" data-aria-en="End presenting" data-aria-ja="発表を終える"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
     </div>
+    <!-- (round 11c) a QR code of the link for the audience's phones ("QR code" in the rail, Q in the presenter), the address under it -->
+    <div class="qr-over" id="qrOver" role="dialog" hidden>
+      <div class="qr-card"><div class="qr-code" id="qrCode"></div><p class="qr-url" id="qrUrl"></p><p class="qr-note" id="qrNote"></p></div>
+      <button type="button" class="icon-button qr-close" id="qrClose" data-aria-en="Close the QR code" data-aria-ja="QR コードを閉じる"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
+    </div>
     <p class="stage-hint" id="stageHint" aria-hidden="true"></p>
     <div class="planet-pop" id="planetPop" hidden></div>
+    <!-- (round 12a) the probe's panel: the model's numbers at the point tapped (app.js, probeRender) -->
+    <div class="probe-panel" id="probePanel" role="status" aria-live="polite" hidden></div>
     <p class="stage-note" id="stageNote" role="status" aria-live="polite"></p>
-    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.9-dev.1 (2026-11-02) · engine ff17405380</p></div>
+    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.9-dev.3 (2026-11-02) · engine 56a94c039c</p></div>
     <!-- (round 10a) the safe start's note, with its offers; the last visit's record to read and copy -->
     <div class="stage-safe" id="stageSafe" role="status" hidden></div>
     <div class="stage-log" id="stageLog" role="dialog" aria-modal="false" hidden></div>
+    <!-- (round 11b) while a video is made: its frames as they come (the picture on the stage is drawn at the video's size meanwhile),
+         the progress, and Cancel -->
+    <div class="export-cover" id="exportCover" hidden>
+      <canvas class="ex-preview" id="exPreview" width="640" height="360" aria-hidden="true"></canvas>
+      <p class="ex-progress" id="exProgress" role="status" aria-live="polite"></p>
+      <p class="ex-front"><span class="en" lang="en">Keep this tab in front: the browser slows a tab in the background.</span><span class="ja" lang="ja">このタブを前に出しておいてください。後ろのタブはブラウザーが遅くします。</span></p>
+      <button type="button" class="action" id="exCancel"><span class="en" lang="en">Cancel</span><span class="ja" lang="ja">やめる</span></button>
+    </div>
   </main>
 
   <div class="tabs" role="tablist" id="tabs" data-aria-en="Explore or follow the highlights" data-aria-ja="自由に見るか、見どころをたどるか">
@@ -160,6 +175,11 @@
         <button type="button" data-cut="2" aria-pressed="false"><span class="en" lang="en">Quarter</span><span class="ja" lang="ja">1/4</span></button>
       </div>
       <div class="rail-context" id="cutContext"></div>
+    </section>
+    <section class="rail-sec" id="probeSection">
+      <h3><span class="en" lang="en">Probe</span><span class="ja" lang="ja">探針</span></h3>
+      <div class="chips"><button type="button" class="toggle" id="probeBtn" aria-pressed="false"><span class="en" lang="en">Tap to probe</span><span class="ja" lang="ja">タップで調べる</span></button></div>
+      <p class="rail-note"><span class="en" lang="en">Tap the disk in the picture: the model’s temperature, density and motion at that point of the midplane, and what the physics is doing there.</span><span class="ja" lang="ja">絵の円盤をタップすると、その場所の赤道面の温度、密度、動きと、そこで働いている物理を示します。</span></p>
     </section>
     <section class="rail-sec" id="timeSection">
       <h3><span class="en" lang="en">Time</span><span class="ja" lang="ja">時間</span></h3>
@@ -200,8 +220,8 @@
         <div class="chips" id="moveGroup"></div>
         <div class="segmented small talk-pace" role="group" id="paceGroup"></div>
         <p class="rail-note"><span class="en" lang="en">Each move starts from the view as it is, at the pace chosen; a drag, or the same button again, stops it.</span><span class="ja" lang="ja">どの動きも今の眺めから、選んだ速さで始まります。ドラッグするか、同じボタンをもう一度押すと止まります。</span></p>
-        <h4 class="talk-sub"><span class="en" lang="en">Scenes</span><span class="ja" lang="ja">場面</span></h4>
-        <div class="chips seq-edit"><button type="button" class="chip" id="seqAdd"><span class="en" lang="en">+ Add this view</span><span class="ja" lang="ja">+ この眺めを加える</span></button></div>
+        <h4 class="talk-sub seq-edit"><span class="en" lang="en">Scenes</span><span class="ja" lang="ja">場面</span></h4>
+        <div class="chips seq-edit"><button type="button" class="chip" id="seqAdd"><span class="en" lang="en">+ Add this view</span><span class="ja" lang="ja">+ この眺めを加える</span></button><button type="button" class="chip quiet" id="seqRestore" hidden><span class="en" lang="en">Restore my earlier scenes</span><span class="ja" lang="ja">前の場面に戻す</span></button></div>
         <ol class="seq-list seq-edit" id="seqList"></ol>
         <p class="rail-note seq-edit" id="seqNone"><span class="en" lang="en">No scenes yet: set up a view (the look, what is shown, the cut, the clock) and add it. Without scenes of your own, Play and Present go through the nine highlights.</span><span class="ja" lang="ja">まだ場面がありません。眺め(見え方、見せるもの、断面、時計)を決めて加えてください。場面がなければ、再生と発表は見どころの 9 か所をたどります。</span></p>
         <div class="chips seq-run"><button type="button" class="chip" id="seqPlay"></button><button type="button" class="chip present-only" id="presentBtn"><span class="en" lang="en">Present</span><span class="ja" lang="ja">発表する</span></button></div>
@@ -213,7 +233,22 @@
         </div>
         <input type="file" id="seqFile" accept=".json,application/json" hidden>
         <input class="link-field" id="seqLinkField" type="text" readonly hidden data-aria-en="Link to these scenes" data-aria-ja="場面の並びのリンク">
-        <p class="rail-note present-only"><span class="en" lang="en">Present shows the picture alone, full screen: → or Page Down for the next scene, ← or Page Up to go back, Space pauses the clock, B blacks out the screen, Esc ends. The scenes are kept on this device; a file or a link takes them to another.</span><span class="ja" lang="ja">「発表する」で絵だけを全画面に出します。→ か Page Down で次の場面、← か Page Up で前の場面、スペースで時計を止め、B で画面を黒く、Esc で終わります。場面はこの端末に残ります。ファイルかリンクで別の端末へ運べます。</span></p>
+        <p class="rail-note present-only"><span class="en" lang="en">Present shows the picture alone, full screen: →, Page Down or Enter for the next scene, ←, Page Up or Backspace to go back, Home and End for the first and the last, Space pauses the clock, B blacks out the screen, Q shows a QR code of the scene for the audience’s phones, Esc ends (F5 does not reload the page meanwhile). The scenes are kept on this device; a file or a link takes them to another.</span><span class="ja" lang="ja">「発表する」で絵だけを全画面に出します。→、Page Down、Enter で次の場面、←、Page Up、Backspace で前の場面、Home と End で最初と最後、スペースで時計を止め、B で画面を黒く、Q で聴衆の携帯のために場面の QR コードを出し、Esc で終わります(発表中は F5 で読み直しません)。場面はこの端末に残ります。ファイルかリンクで別の端末へ運べます。</span></p>
+        <!-- (round 11b) a video of the scenes or of a move, each frame drawn at the quality chosen, not in real time; for laptops and
+             desktops, as the presenter -->
+        <div class="export-only" id="exportBox">
+          <h4 class="talk-sub"><span class="en" lang="en">Video</span><span class="ja" lang="ja">動画</span></h4>
+          <p class="rail-note" id="exNo" hidden></p>
+          <div id="exForm">
+            <label class="ex-what"><span class="en" lang="en">Of</span><span class="ja" lang="ja">中身</span><select id="exWhat"></select></label>
+            <div class="segmented small ex-seg" role="group" id="exSize" data-aria-en="Size of the video" data-aria-ja="動画の大きさ"></div>
+            <div class="segmented small ex-seg" role="group" id="exFps" data-aria-en="Frames a second" data-aria-ja="1 秒のコマ数"></div>
+            <div class="segmented small ex-seg" role="group" id="exHold" data-aria-en="Hold at each scene" data-aria-ja="場面ごとに止まる時間"></div>
+            <p class="rail-note" id="exPlan" aria-live="polite"></p>
+            <div class="chips ex-go"><button type="button" class="chip" id="exGo"><span class="en" lang="en">Make the video</span><span class="ja" lang="ja">動画を作る</span></button></div>
+            <p class="rail-note"><span class="en" lang="en">An MP4 file (H.264) for slides: each frame drawn at the quality chosen above, not in real time, on black, the credit and the mark in its corner. Holds are at each scene; a move runs as it does here, then holds.</span><span class="ja" lang="ja">スライド用の MP4 ファイル(H.264)。1 コマずつ、上で選んだ画質で描きます(実時間ではありません)。背景は黒、隅に出典と印が入ります。止まる時間は場面ごとに。動きはここでと同じに動いてから止まります。</span></p>
+          </div>
+        </div>
       </details>
     </section>
     <section class="rail-sec">
@@ -229,14 +264,17 @@
       <h3><span class="en" lang="en">Save and share</span><span class="ja" lang="ja">保存と共有</span></h3>
       <div class="chips">
         <button type="button" class="chip" id="copyLink"><span class="en" lang="en">Copy a link</span><span class="ja" lang="ja">リンクをコピー</span></button>
+        <button type="button" class="chip" id="showQr"><span class="en" lang="en">QR code</span><span class="ja" lang="ja">QR コード</span></button>
         <button type="button" class="chip" id="saveImage"><span class="en" lang="en">Save an image</span><span class="ja" lang="ja">画像を保存</span></button>
       </div>
       <div class="segmented small" role="group" id="saveSizeGroup"></div>
+      <!-- (round 11c) pictures for slides: the shape (the screen's, 16:9, 4:3, cut from the middle) and a credit in the corner -->
+      <div class="save-frame"><div class="segmented small" role="group" id="saveRatioGroup"></div><button type="button" class="toggle" id="saveCredit" aria-pressed="true"></button></div>
       <p class="rail-note" id="saveSizeNote"></p>
       <input class="link-field" id="linkField" type="text" readonly hidden data-aria-en="Link to this view" data-aria-ja="この眺めのリンク">
       <p class="rail-note cite" id="citeRail"></p>
     </section>
-    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.9-dev.1 (2026-11-02) · engine ff17405380</p>
+    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.9-dev.3 (2026-11-02) · engine 56a94c039c</p>
   </aside>
 
   <section class="dock" id="dock" aria-labelledby="dockTitle">
@@ -262,7 +300,7 @@
   <div class="about-inner">
     <button type="button" class="icon-button about-close" id="aboutClose" data-aria-en="Close" data-aria-ja="閉じる"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
     <h2 id="aboutTitle" tabindex="-1" autofocus><span class="en" lang="en">About this model</span><span class="ja" lang="ja">このモデルについて</span></h2>
-    <p class="about-ver"><span data-version>Disk Lab v1.9-dev.1 (2026-11-02) · engine ff17405380</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
+    <p class="about-ver"><span data-version>Disk Lab v1.9-dev.3 (2026-11-02) · engine 56a94c039c</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
     <p class="tagline"><span class="en" lang="en">An interactive, physics-based visualization of protoplanetary disks, from magnetic fields and disk winds to planet formation and observational signatures.</span><span class="ja" lang="ja">磁場と円盤風から、惑星の形成、観測で見える姿まで。原始惑星系円盤を物理にもとづいて描き、操作しながら見られるようにしたものです。</span></p>
     <p class="lead"><span class="en" lang="en">The model is schematic: the equations and solutions come from the literature; strengths, colours and other settings are chosen so that the structure reads clearly. It is not the output of a simulation.</span><span class="ja" lang="ja">ただし模式的なモデルです。式と解は文献のものを使い、強さや色などの値は構造が読み取りやすいように選んでいます。シミュレーションの結果そのものではありません。</span></p>
     <p><span class="en" lang="en">It is drawn on your GPU: along each line of sight the light emitted and absorbed is added up (volume rendering). Field lines and labels are drawn over it as vector lines. Made by Shoji Mori.</span><span class="ja" lang="ja">ブラウザーの GPU で、視線に沿って光の放射と吸収を足し合わせて描いています(ボリュームレンダリング)。磁力線と注釈はベクトルの線で重ねています。作成:森 昇志。</span></p>
@@ -314,7 +352,7 @@
       <li><span class="en" lang="en">On a touch screen, as on a map: one finger moves, two fingers zoom and turn, two fingers moved up or down tilt; double-tap to zoom in.</span><span class="ja" lang="ja">タッチでは地図と同じです。1 本指で移動、2 本指で拡大と回転、2 本そろえて上下に動かすと傾きが変わります。ダブルタップで拡大。</span></li>
       <li><span class="en" lang="en">With the picture focused (Tab): arrows turn, + and − zoom, Home returns to the first view, space pauses, 1–5 set the angle, P goes to the planet, F field lines, S the cut, A labels.</span><span class="ja" lang="ja">図にフォーカスがあるとき(Tab):矢印で回転、+ と − で拡大・縮小、Home で最初の視点、スペースで一時停止、1〜5 で角度、P で惑星へ、F で磁力線、S で断面、A で注釈。</span></li>
       <li><span class="en" lang="en">Planets: turn them on under Show; click a planet in the picture to move its orbit, or place more with “Place a planet” (up to four).</span><span class="ja" lang="ja">惑星:「見せるもの」でオンにします。絵の中の惑星をクリックすると軌道半径を動かせ、「惑星を置く」で増やせます(4 つまで)。</span></li>
-      <li><span class="en" lang="en">For talks, under “Moves and talks”: moves that start with one click from the view as it is; scenes of your own, kept on this device, saved as a file or shared as a link; and “Present”, the picture alone, full screen, stepped through with a presentation clicker (→ ← Page Down Page Up; Space pauses the clock, B blacks out the screen, Esc ends).</span><span class="ja" lang="ja">発表のために(「動きと発表」):今の眺めから一押しで始まる動き、自分で加える場面(この端末に残り、ファイルに保存したり、リンクで渡したりできます)、そして「発表する」:絵だけを全画面に出し、プレゼン用のリモコンで場面を進めます(→ ← Page Down Page Up。スペースで時計を止め、B で画面を黒く、Esc で終わります)。</span></li>
+      <li><span class="en" lang="en">For talks, under “Moves and talks”: moves that start with one click from the view as it is; scenes of your own, kept on this device, saved as a file or shared as a link; and “Present”, the picture alone, full screen, stepped through with a presentation clicker (→ ← Page Down Page Up; Space pauses the clock, B blacks out the screen, Q shows a QR code of the scene for the audience, Esc ends). On a computer, the scenes or a move can be made into a video for slides (an MP4 file, each frame drawn at the quality chosen).</span><span class="ja" lang="ja">発表のために(「動きと発表」):今の眺めから一押しで始まる動き、自分で加える場面(この端末に残り、ファイルに保存したり、リンクで渡したりできます)、そして「発表する」:絵だけを全画面に出し、プレゼン用のリモコンで場面を進めます(→ ← Page Down Page Up。スペースで時計を止め、B で画面を黒く、Q で聴衆のための QR コードを出し、Esc で終わります)。コンピューターでは、場面や動きをスライド用の動画(MP4 ファイル。1 コマずつ選んだ画質で描きます)にできます。</span></li>
       <li><span class="en" lang="en">Click the star and see what happens. With “Tap to drop pebbles” (under Pebbles), a click on the disk drops pebbles there; keep at it.</span><span class="ja" lang="ja">星をクリックすると、何かが起きます。「小石」の下の「タップで小石を置く」をオンにすると、円盤をクリックした所に小石を置けます(続けてみてください)。</span></li>
     </ul>
 
@@ -339,7 +377,7 @@
       <li>Ansdell, M. et al. 2018, ApJ, 859, 21</li>
       <li>Cieza, L. A. et al. 2016, Nature, 535, 258 <span class="en" lang="en">(the snow line of V883 Ori in outburst)</span><span class="ja" lang="ja">(増光中の V883 Ori のスノーライン)</span></li>
     </ul>
-    <p class="colophon" id="colophon" data-version>Disk Lab v1.9-dev.1 (2026-11-02) · engine ff17405380</p>
+    <p class="colophon" id="colophon" data-version>Disk Lab v1.9-dev.3 (2026-11-02) · engine 56a94c039c</p>
   </div>
 </dialog>
 <script id="posterFirst">

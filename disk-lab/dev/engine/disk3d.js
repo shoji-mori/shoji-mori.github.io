@@ -3548,6 +3548,58 @@ void main(){
   const tempJS = (R, zh, x, lum = 1) => { const t4 = tInt4JS(R, zh, lum); return subCapJS(Math.pow(t4 * Math.pow(t4, 0.25) + THERMO.KDS5 * lum / (R * R) * Math.exp(-Math.exp(Math.min(x, 20))), 0.2)); };
   const tMidJS = (R, lum = 1) => subCapJS(Math.pow(tInt4JS(R, 0, lum), 0.25));
   const snowR = (lum = 1) => { let lo = 0.05, hi = 30; for (let i = 0; i < 40; i++) { const m = Math.sqrt(lo * hi); if (tMidJS(m, lum) > MODEL.TICE) lo = m; else hi = m; } return Math.sqrt(lo * hi); };
+  // (round 12a) The probe (box.diskProbe): what the model has at a point, R (au, from the axis) and z (au, above the
+  // midplane) where ln tau* = x, in its own units and definitions, from the mirrors above (the same expressions as the
+  // shaders), for the gaps' ln gl at R, the star's luminosity lum, the asymmetry's share f (asymF in the GLSL), the sides
+  // that accrete w (uAcc: upper, lower) and the jet's presence jet (uJet):
+  //   T, Tmid (K): the temperature there and at the midplane (tempAt and tMid in the GLSL, see THERMO);
+  //   H (au): the scale height as drawn, H0 R^1.25; Hgas (au): the one the midplane's own temperature would hold up,
+  //     c_s / Omega (the disk is drawn about 1.8 times thicker, see MODEL); cs (km/s): the sound speed at T (mu = 2.34);
+  //   vK (km/s), P (yr): the Keplerian speed and the orbital period about one solar mass (on the model's clock 12 s a year);
+  //   sigmaRel, rhoRel: the gas's surface density relative to the model's at 1 au (Sigma with the gaps) and its density
+  //     relative to the midplane at 1 au, Sigma H0 / H e^(-z^2 / 2 H^2): the smooth disk of the cut's density face
+  //     (sliceQuantities), without the planets' wakes and the turbulence's fluctuations (diskMap.r and eddies: a few per cent,
+  //     about 10 per cent in the inner disk) and without the wind's gas (windMap: it dominates only above the irradiation
+  //     surface); sigma (g cm^-2), rho (g cm^-3), n (cm^-3): the same scaled to SIG1 = 1700 g cm^-2 at 1 au, the minimum-mass
+  //     nebula's value there, with which the model reckons its dead zone (see NONIDEAL; the model's own profile is R^-1);
+  //   zk (au): the dead zone's top (0 where there is none);
+  //   region: the one the regions' face paints there (layersFace, magFace, in their order; the envelope outside the marched
+  //     cylinder), with the rule that decides it; alpha: the turbulence's alpha_t the model uses there (coAlpha, round 10c:
+  //     the inner disk's THERMO.ALPHA, the dead zone's and the outer disk's scaled by the squares of their density
+  //     fluctuations, NONIDEAL.DZ and OUTER; none in the accretion layers, the wind-launching region and the wind);
+  //   vapour: whether water is vapour there (T above TICE) or ice on the grains.
+  const PROBE = { SIG1: 1700, au: 1.496e13, k: 1.3807e-16, mH: 1.6726e-24, mu: 2.34, vK1: Math.sqrt(6.674e-8 * 1.989e33 / 1.496e13) / 1e5 };
+  const coAlphaJS = (R, zh, f = 0) => {
+    const az = Math.abs(zh), m = mriAmpJS(R), zk = zKinkHJS(R), zb = zBase(R) / Hof(R);
+    const zu = (zh - zAccHJS(R)) / ACC.W, zl = (zh + zAccLowJS(R, f)) / ACC.W;
+    const dead = ss(0, 0.5, zk) * (1 - ss(zk - 0.25, zk + 0.25, az)), acc = accAmpJS(R) * Math.exp(-0.5 * Math.min(zu * zu, zl * zl));
+    const disk = 1 - ss(zb - 0.25, zb + 0.25, az), A = THERMO.ALPHA, D = NONIDEAL.DZ, O = NONIDEAL.OUTER;
+    return disk * (m * A + (1 - m) * (dead * A * D * D + (1 - dead) * ss(NONIDEAL.R_OT[0], NONIDEAL.R_OT[1], R) * A * O * O) * (1 - acc));
+  };
+  const regionJS = (R, z, x, f = 0, w = [1, 1], jet = 0) => {
+    const H = Hof(R), zh = Math.abs(z) / H, zb = zBase(R) / H, zk = zKinkHJS(R), low = z < 0, az = Math.abs(z), za = low ? zAccLowJS(R, f) : zAccHJS(R);
+    if (R > RB_JS || az > ZB_JS) return ['envelope', 'R > ' + RB_JS + ' au or |z| > ' + ZB_JS + ' au (outside the wind’s cylinder)'];
+    if (jet > 0 && az > JET.Z0 && R < Math.min(JET.RL + JET.BASE * az, JET.RC + Math.tan(JET.CONE) * az)) return ['jet', 'R < the jet’s radius at |z|'];
+    if (R < MAG.RT) return ['cavity', 'R < r_T = ' + MAG.RT + ' au (inside the magnetosphere)'];
+    if (zh > zb || x < -4) return ['wind', '|z| > z_base = ' + zb.toFixed(2) + ' H, or ln tau* < -4'];
+    if (R < MODEL.R_IN) return ['inner', 'r_T < R < R_IN = ' + MODEL.R_IN + ' au (the dust-free gas disk)'];
+    if (mriAmpJS(R) > 0.5) return ['inner', 'R < ' + (0.95 * NONIDEAL.R_TI).toFixed(2) + ' au (mriAmp > 0.5: T_vis > ' + THERMO.T_TI + ' K)'];
+    if (Math.abs(zh - za) < 1.2 * ACC.W && (low ? w[1] : w[0]) * accAmpJS(R) > 0.5) return ['acc', '|z / H - ' + za.toFixed(2) + '| < ' + (1.2 * ACC.W).toFixed(2)];
+    if (zh < zk) return ['dead', '|z| < z_k = ' + zk.toFixed(2) + ' H (the Ohmic Elsasser number below 1)'];
+    if (low && f > 0.5 && zh < za) return ['hall', '|z| < ' + za.toFixed(2) + ' H on the lower side, with the asymmetry'];
+    if (ss(NONIDEAL.R_OT[0], NONIDEAL.R_OT[1], R) > 0.5) return ['outer', 'R > ' + (0.5 * (NONIDEAL.R_OT[0] + NONIDEAL.R_OT[1])).toFixed(2) + ' au (outerAmp > 0.5)'];
+    return ['base', 'z_acc < |z| < z_base = ' + zb.toFixed(2) + ' H'];
+  };
+  const probeJS = (R, z, x, gl = 0, lum = 1, f = 0, w = [1, 1], jet = 0) => {
+    const P_ = PROBE, H = Hof(R), zh = z / H, T = tempJS(R, zh, x, lum), Tmid = tMidJS(R, lum);
+    // (the gas disk reaches the magnetosphere's edge MAG.RT, inside the dust's R_IN: Sigma plus gasIn of sliceQuantities with
+    // uMag = 1, as the face shows it close up; from afar the face leaves out the gas inside R_IN, the probe does not)
+    const sigmaRel = Math.exp(-Math.log(R) - cutOut(R) + gl) * ss(MAG.RT * 0.95, MAG.RT * 1.08, R), rhoRel = sigmaRel * MODEL.H0 / H * Math.exp(-0.5 * zh * zh);
+    const cs = Math.sqrt(P_.k * T / (P_.mu * P_.mH)) / 1e5, vK = P_.vK1 / Math.sqrt(R);
+    const rho = P_.SIG1 * rhoRel / (Math.sqrt(2 * Math.PI) * MODEL.H0 * P_.au), [region, rule] = regionJS(R, z, x, f, w, jet);
+    return { R, z, zH: zh, T, Tmid, x, H, Hgas: Math.sqrt(P_.k * Tmid / (P_.mu * P_.mH)) / 1e5 / vK * R, zk: zKinkHJS(R) * H, cs, vK, P: Math.pow(R, 1.5),
+      sigmaRel, rhoRel, sigma: P_.SIG1 * sigmaRel, rho, n: rho / (P_.mu * P_.mH), region, rule, alpha: coAlphaJS(R, zh, f), vapour: T > MODEL.TICE };
+  };
   // (Disk Lab v2, round 6) A planet's gap: the profile of Kanagawa et al. (2017, eqs. 10-14), from the fits to
   // two-dimensional simulations of Kanagawa et al. (2015, 2016): with K' = q^2 h^-3 / alpha and K = K' / h^2 (h = H/R at the
   // planet), Sigma / Sigma_0 is Sigma_min / Sigma_0 = 1 / (1 + 0.04 K) within dR1 = (Sigma_min / 4 Sigma_0 + 0.08) K'^1/4 a
@@ -3901,6 +3953,30 @@ void main(){
     p.lift = lift;
   }
   // /PATH-MATH
+
+  // --- (Round 12b) Looking in by tilting the phone (box.diskTilt; DESIGN.md section 30). The page turns the phone's tilt into a
+  // small offset of the view (its setting, off by default: the sensor, the filter, the dead zone and the ease are the page's); the
+  // rule here decides when the offset asked for is drawn, and when it counts as a moving view. ver2/tools/disk-lab-v2/tilt-check.mjs
+  // reads the lines between TILT-RULE and /TILT-RULE and runs them in Node, as path-check.mjs does the paths.
+  // TILT-RULE
+  // MAX: the largest offset, in elevation and in azimuth (rad, 6 degrees). MOVE: the rate (pixels a second) above which the
+  // offset's steps count as a moving view.
+  const TILT = { MAX: 6 * Math.PI / 180, MOVE: 10 };
+  // The offset drawn ({ el, az, t }: rad, and the time of its last step, ms), from the one asked for (want, rad) at t (ms), px the
+  // angle one pixel of the screen spans (rad). A step is taken only when it moves the picture by a pixel's worth or more: a hand
+  // at rest, or the sensor's last flicker, draws nothing, and a still keeps refining (the owner's rule: a still at rest is
+  // finished to the quality chosen). The way back to no offset is always taken: at rest the picture is the state's own, bit for
+  // bit. A step counts as a moving view (moving: the page's lighter picture, as a drag's) when its rate is above TILT.MOVE
+  // pixels a second, that is steps of a pixel less than 0.1 s apart; slower (a gentle lean, the offset easing back), it is drawn
+  // as a still is, at the scale the still has (the owner's rule: the automatic adjustment only while the view moves).
+  function tiltRule(was, want, t, px) {
+    const cl = (x) => (x > TILT.MAX ? TILT.MAX : x < -TILT.MAX ? -TILT.MAX : x || 0);
+    const el = cl(want.el), az = cl(want.az), step = Math.hypot(el - was.el, az - was.az);
+    if (step === 0 || (step < px && (el || az))) return { el: was.el, az: was.az, t: was.t, moved: false, moving: false };
+    const dt = Math.max(1000 / 60, t - was.t) / 1000;
+    return { el, az, t, moved: true, moving: step / px / dt > TILT.MOVE };
+  }
+  // /TILT-RULE
 
   // reuse: the canvas, when the model is built anew on it after its WebGL context was lost and restored
   function init(box, reuse, restoredTime = 0) {
@@ -5269,7 +5345,9 @@ void main(){
     const pathStop = (why = 'stop') => { if (!path) return; const id = path.id; path = null; pathTell(why, { id }); };
     // the view taken from where the path has brought the camera, and the path left (a drag, the wheel, a key, a new view set
     // with some of its keys: those left out are what is seen, as after a drag)
-    const pathGrab = () => { if (!path) return; elUser = clampEl(camEl); azUser = camAz - viewOff(); opt.dist = camD; panV = clampPan(panOf(camT)); pathStop(); };
+    // (the distance within its range: van Wijk's arc and the midplane rule's lift may carry the camera past DMAX, and the next wheel
+    // step would jump back; review of round 11a)
+    const pathGrab = () => { if (!path) return; elUser = clampEl(camEl); azUser = camAz - viewOff(); opt.dist = Math.min(DMAX, Math.max(dmin(), camD)); panV = clampPan(panOf(camT)); pathStop(); };
     // start (or redirect) a flight from where the camera is to the view set now
     function startFly() {
       pathStop();   // (round 11a: a flight takes over a path, from its pose and velocity)
@@ -5308,6 +5386,8 @@ void main(){
     // screen): in proportion to the camera's distance from the point it looks at, up to 0.05 au, so that close to the
     // star (0.04 au) the lines in front of it and the scale bar stay (a fixed 0.05 au dropped them inside 0.1 au)
     let zN = 0.05;
+    // (round 12b) the tilt's offset drawn (box.diskTilt, see TILT-RULE): { el, az } (rad), t (ms, its last step)
+    let tilt = { el: 0, az: 0, t: 0 };
     function camera() {
       const Tl = lookAt(), vl = [elUser, azUser + viewOff(), Math.log(opt.dist)];
       let T = Tl, v = vl;
@@ -5321,7 +5401,12 @@ void main(){
       }
       camT = T; camEl = v[0]; camAz = v[1]; camD = Math.exp(v[2]);
       zN = Math.min(0.05, 0.02 * camD);
-      const el = camEl, az = camAz, d = camD;
+      // (round 12b) The tilt's offset (box.diskTilt) turns the pose drawn, not camEl and camAz: a flight, a path, a drag or a
+      // pinch take over from the view itself, and the offset never reaches the state, the links or the settings kept (a view of
+      // the same state). Without an offset the pose is the one drawn before, bit for bit. Not under reduced motion, nor with
+      // data-tilt="off" (the page's ?tilt=0), nor on the page's own clock (diskManual: an export draws the state's view).
+      const tl = (tilt.el || tilt.az) && !reduce && manualMs === null && box.dataset.tilt !== 'off';
+      const el = tl ? clampEl(camEl + tilt.el) : camEl, az = tl ? camAz + tilt.az : camAz, d = camD;
       const f = [-Math.cos(el) * Math.cos(az), -Math.cos(el) * Math.sin(az), -Math.sin(el)];
       cam = [T[0] - d * f[0], T[1] - d * f[1], T[2] - d * f[2]];
       const r = [f[1], -f[0], 0]; const rl = Math.hypot(r[0], r[1]) || 1; r[0] /= rl; r[1] /= rl;
@@ -5946,17 +6031,25 @@ void main(){
     // diskSnapshot), and snapBands splits each frame's volume into that many bands, each sent to the GPU on its own, so that
     // no single piece of GPU work takes seconds (the system stops it, and the WebGL context is lost)
     let snapK = 1, snapBands = 1;
+    // (round 11b) a video's frames at a size of their own (diskOut): { w, h, px }, null for the box's
+    let outSz = null;
+    const pxOf = () => (outSz ? outSz.px : Math.min(window.devicePixelRatio || 1, 2) * snapK);   // (the canvas's pixels a CSS pixel)
     function resize() {
       // the height follows data-aspect when given (the canvas's default size would otherwise set it)
-      W = box.clientWidth; Hh = box.dataset.aspect ? Math.round(W * Number(box.dataset.aspect)) : (box.clientHeight || Math.round(W * 0.62));
-      box.style.height = Hh + 'px';
+      // (round 11b: with a size for a video's frames, diskOut, the stage is that size's, w / px x h / px CSS pixels, and the box
+      // is left as it is)
+      if (outSz) { W = outSz.w / outSz.px; Hh = outSz.h / outSz.px; }
+      else {
+        W = box.clientWidth; Hh = box.dataset.aspect ? Math.round(W * Number(box.dataset.aspect)) : (box.clientHeight || Math.round(W * 0.62));
+        box.style.height = Hh + 'px';
+      }
       toastFit();
       if (lost) return;   // (without a context: the static picture shows, and the canvas is sized when the context is back)
       // the canvas at the screen's pixels (the cut face is drawn there, faceT), the volume at the render scale (accT,
       // rW x rH, upsampled by SHOW_FS)
-      const dprS = Math.min(window.devicePixelRatio || 1, 2) * snapK, dpr = dprS * opt.scale;
-      canvas.style.width = W + 'px'; canvas.style.height = Hh + 'px';
-      const cw = Math.max(1, Math.round(W * dprS)), ch = Math.max(1, Math.round(Hh * dprS));
+      const dprS = pxOf(), dpr = dprS * opt.scale;
+      if (!outSz) { canvas.style.width = W + 'px'; canvas.style.height = Hh + 'px'; }
+      const cw = outSz ? outSz.w : Math.max(1, Math.round(W * dprS)), ch = outSz ? outSz.h : Math.max(1, Math.round(Hh * dprS));
       if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
       rW = Math.max(1, Math.round(W * dpr)); rH = Math.max(1, Math.round(Hh * dpr));
       overlay.setAttribute('viewBox', '0 0 ' + W + ' ' + Hh);
@@ -5977,7 +6070,7 @@ void main(){
     function rescale() {
       cancelJob();   // (round 9: a frame being drawn in bands at the scale before is left; round 10a: its kicks' queries with it)
       if (lost || !accT || !accFor || accFor[0] !== canvas.width || accFor[1] !== canvas.height) { resize(); return; }
-      const dpr = Math.min(window.devicePixelRatio || 1, 2) * snapK * opt.scale;
+      const dpr = pxOf() * opt.scale;
       rW = Math.max(1, Math.round(W * dpr)); rH = Math.max(1, Math.round(Hh * dpr));
       if (rW > accT.w || rH > accT.h) {
         gl.deleteFramebuffer(accT.fb); gl.deleteTexture(accT.tex);
@@ -7768,15 +7861,17 @@ void main(){
         const rc = 0.4 * hillOf(p) / q[2] * Hh / (2 * basis.th);
         if (Math.hypot(cx - rect.left - q[0], cy - rect.top - q[1]) < Math.max(12, 1.1 * rc)) { box.dispatchEvent(new CustomEvent('diskplanet', { detail: { i, a: p.a, x: q[0], y: q[1] } })); return; }
       }
-      if (so[2] > zN && Math.hypot(cx - rect.left - so[0], cy - rect.top - so[1]) < 14 && box.dataset.pick !== 'planet') { burstNow(); return; }
+      // (round 12a: data-pick="probe", the page's probe, picks as placing a planet does: diskpick, and no outburst)
+      const pickR = box.dataset.pick === 'planet' || box.dataset.pick === 'probe';
+      if (so[2] > zN && Math.hypot(cx - rect.left - so[0], cy - rect.top - so[1]) < 14 && !pickR) { burstNow(); return; }
       const nx = ((cx - rect.left) / rect.width) * 2 - 1, ny = 1 - ((cy - rect.top) / rect.height) * 2;
       const th = Math.tan(opt.fov / 2), asp = W / Hh;
       const rd = [0, 1, 2].map((i) => basis.f[i] + th * (nx * asp * basis.r[i] + ny * basis.u[i]));
       const t = -cam[2] / rd[2]; if (t <= 0) return;
       const x = cam[0] + rd[0] * t, y = cam[1] + rd[1] * t, R = Math.hypot(x, y);
       // (round 7: placing a planet reaches the gas disk's inner edge, PLANETS.RANGE; pebbles are dropped from 0.15 au)
-      if (R < (box.dataset.pick === 'planet' ? 0.9 * PLANETS.RANGE[0] : 0.15) || R > 31 || !kept([x, y, 0]) || faceAlpha([x, y, 0]) > 0.5) return;
-      if (box.dataset.pick === 'planet') { box.dispatchEvent(new CustomEvent('diskpick', { detail: { R, phi: Math.atan2(y, x), x: cx - rect.left, y: cy - rect.top } })); return; }
+      if (R < (pickR ? 0.9 * PLANETS.RANGE[0] : 0.15) || R > 31 || !kept([x, y, 0]) || faceAlpha([x, y, 0]) > 0.5) return;
+      if (pickR) { box.dispatchEvent(new CustomEvent('diskpick', { detail: { R, phi: Math.atan2(y, x), x: cx - rect.left, y: cy - rect.top } })); return; }
       if (box.dataset.pick !== 'pebbles') return;
       addClump(R, Math.atan2(y, x), 0);
       ripple(cx - rect.left, cy - rect.top);
@@ -8183,6 +8278,28 @@ void main(){
     box.diskCenter = () => { box.diskSet({ tx: 0, ty: 0, tz: 0, fly: 1 }); emitState(); };
     // the first view and the star (the Home key, the page's button): the slice closed, the point looked at the star
     box.diskHome = () => { box.diskSet({ p: 0, slice: 0, el: el0 * 180 / Math.PI, az: az0 * 180 / Math.PI, d: dist0, tx: 0, ty: 0, tz: 0, fly: 1 }); emitState(); };
+    // (Round 12b) diskTilt({ el, az }): the view turned by a small offset (degrees, each at most 6), for looking in by tilting the
+    // phone (the page's setting; DESIGN.md section 30). It is drawn in camera() on the pose, never written into the state: a view
+    // of the same state. A step is drawn only when it moves the picture by a pixel's worth (the vertical field of view over the
+    // canvas's height in CSS pixels), and frames are asked for only then: at rest nothing is drawn and a still keeps refining.
+    // Returns { el, az, moving } (degrees, the offset drawn now; moving when the step's rate is above TILT.MOVE pixels a second:
+    // the page then draws its lighter picture, as for a drag; the engine's frames do not count it in viewMoving, so that the rest's
+    // and the phone's duty still apply). Without an argument, the offset drawn; diskTilt(false) or { el: 0, az: 0 } takes it away.
+    // Nothing under reduced motion, nor with data-tilt="off" (the page's ?tilt=0).
+    box.diskTilt = (o) => {
+      const deg = (x) => x * 180 / Math.PI, now = () => ({ el: deg(tilt.el), az: deg(tilt.az), moving: false });
+      if (o === undefined) return now();
+      // (a frame asked for with dirty, not touched(): not urgent, so that the frame rate's cap and the phone's duty still apply)
+      if (reduce || box.dataset.tilt === 'off') { if (tilt.el || tilt.az) { tilt = { el: 0, az: 0, t: 0 }; dirty = true; } return now(); }
+      const want = o === false ? { el: 0, az: 0 } : { el: finiteNumber(o && o.el) * Math.PI / 180, az: finiteNumber(o && o.az) * Math.PI / 180 };
+      if (!isFinite(want.el)) want.el = 0;
+      if (!isFinite(want.az)) want.az = 0;
+      const step = tiltRule(tilt, want, performance.now(), opt.fov / Math.max(1, Hh));
+      if (!step.moved) return now();
+      tilt = { el: step.el, az: step.az, t: step.t };
+      dirty = true;
+      return { ...now(), moving: step.moving };
+    };
     // (Round 11a) diskPath(view, o): a flight along a smooth path (see PATH-MATH), for talks: from where the camera is (a flight or
     // a path under way: its pose, and its speed along the new way) to the view { el, az, d, tx, ty, tz, p, pi } (diskSet's view
     // keys; those left out as they are), which is set at once, as a flight sets it (not a jump: the guard keeps its measures).
@@ -8230,6 +8347,35 @@ void main(){
       pathTell('start', { id, dur: plan.ease.D, L: plan.L });
       return { id, dur: plan.ease.D, L: plan.L, lift: plan.lift ? plan.lift.b : 0 };
     };
+    // (round 11b) A path's time and length without flying it, from one view to another (diskSet's view keys: those left out of `from`
+    // as the state has them, those left out of `to` as `from` has them), for an exporter, which counts a video's frames before it
+    // begins and then flies each path in the time planned (diskPath's dur). The ends are taken at the clock's time now, with the
+    // planets as they are, from rest, in the destination's frame as diskPath takes them; o as diskPath's. Returns { dur, L, lift } as
+    // diskPath does; nothing is set, flown or drawn. (Later, the frames' slow spin has turned a little: the path flown then, its time
+    // given, is a hair longer or shorter in its measure and fits the time.)
+    box.diskPathPlan = (from, to, o = {}) => {
+      const s = box.diskState(), f = checked(from || {}), g = checked(to || {});
+      const keys = (v, b) => Object.fromEntries(['el', 'az', 'd', 'tx', 'ty', 'tz', 'p', 'pi'].map((k) => [k, v[k] != null ? v[k] : b[k]]));
+      const A = keys(f, s), B = keys(g, A);
+      // a view's pose in the world: the frame it is set in (the planet followed, or the slow spin), as diskSet and camera() take it
+      const pose = (v) => {
+        const fol = !!v.p && planets.length > 0, pl = fol ? planets[Math.max(0, Math.min(planets.length - 1, Math.round(v.pi) || 0))] : null;
+        const a = fol ? planetPhiOf(pl, time) : reduce ? 0 : opt.spin * time, Bx = fol ? planetPosOf(pl, time) : [0, 0, 0], c = Math.cos(a), sn = Math.sin(a);
+        const azU = v.az * Math.PI / 180 - (fol || reduce ? 0 : opt.spin * time), pan = clampPan([v.tx, v.ty, v.tz]);
+        const dmn = fol ? 0.25 * pl.a / PLANET.A : MAG.DMIN;
+        return { a, B: Bx, el: clampEl(v.el * Math.PI / 180), azW: azU + a, azU, lnd: Math.log(Math.min(DMAX, Math.max(dmn, v.d))), pan,
+          T: [Bx[0] + c * pan[0] - sn * pan[1], Bx[1] + sn * pan[0] + c * pan[1], Bx[2] + pan[2]] };
+      };
+      const pa0 = pose(A), pb0 = pose(B), c = Math.cos(pb0.a), sn = Math.sin(pb0.a);
+      const local = (P) => { const x = P[0] - pb0.B[0], y = P[1] - pb0.B[1]; return [c * x + sn * y, -sn * x + c * y, P[2] - pb0.B[2]]; };
+      const pa = { el: pa0.el, az: pa0.azW - pb0.a, lnd: pa0.lnd, T: local(pa0.T) }, pb = { el: pb0.el, az: pb0.azU, lnd: pb0.lnd, T: pb0.pan };
+      const sp = finiteNumber(o.speed), dur = finiteNumber(o.dur), rho = finiteNumber(o.rho), turns = finiteNumber(o.turns);
+      const po = { fov: opt.fov, rho: rho > 0.2 && rho < 4 ? rho : PATH.RHO, kappa: PATH.KAPPA, V: PATH.V * (sp > 0 ? Math.min(4, Math.max(0.25, sp)) : 1), ramp: PATH.RAMP,
+        dmin: PATH.DMIN, dmax: PATH.DMAX, dur: dur > 0 && dur <= 600 ? dur : 0, turns: isFinite(turns) ? Math.max(-8, Math.min(8, Math.round(turns))) : 0, v0: 0,
+        star: local([0, 0, 0]), midR: PATH.MID_R, midH: PATH.MID_H, midMax: PATH.MID_MAX, hOf: Hof };
+      const plan = pathPlan(pa, pb, po);
+      return reduce || !(plan.ease.D > 0) ? { dur: 0, L: 0, lift: 0 } : { dur: plan.ease.D, L: plan.L, lift: plan.lift ? plan.lift.b : 0 };
+    };
     // (round 11a, for checks) The state's picture as a still's first frame (no jitter, nothing averaged, no fade moving on), drawn
     // as frames are (a script's frame, through the guard, in kicks or bands, each piece waited for) into a 32-bit float target and
     // read back, with the exposure and the line's range given (o.expo, as an earlier call returned it) or as they are: two ways
@@ -8237,6 +8383,8 @@ void main(){
     // whole rays). { busy: true } while a flight, a path or a look's switch is under way
     box.diskFrameRead = async (o = {}) => {
       if (lost || !fbFloat) return null;
+      if (testBy) return { error: 'another test holds the target', by: testBy };   // (testT is one: see diskTestBusy)
+      testBy = 'frameread';
       await gpuDone(); stepping++;
       const e0 = [aeLn, aeGoal, coLn, coGoal], ex = Array.isArray(o.expo) && o.expo.length === 4 && o.expo.every((x) => Number.isFinite(x)) ? o.expo.slice() : e0.slice();
       try {
@@ -8251,6 +8399,7 @@ void main(){
         [aeLn, aeGoal, coLn, coGoal] = e0;
         if (testT) { gl.deleteFramebuffer(testT.fb); gl.deleteTexture(testT.tex); testT = null; }
         stepping--; accN = 0; dirty = true;
+        testBy = '';
       }
     };
     // --- the tour: chapters may be selected by the visitor, or advanced automatically by the legacy diskTour(true).
@@ -8365,6 +8514,23 @@ void main(){
     // (round 7, for checks and the notes) the model's temperature at R (au) and z (au) with the planets' gaps as they are:
     // { T, Tmid, x (ln tau*), snow (the snow line's radius), rTI (the turbulent inner disk's edge) }
     box.diskTemp = (R, z = 0) => { const x = lnTauJS(R, z); return { T: tempJS(R, z / Hof(R), x, lumNow), Tmid: tMidJS(R, lumNow), x, snow: rSn, rTI: NONIDEAL.R_TI }; };
+    // (round 12a) the probe at R (au) and z (au), with the planets' gaps, the star's luminosity, the asymmetry and the jet as
+    // they are now (see probeJS for every number and its unit), and: zS (au), the irradiation surface's height (tau* = 1, NaN
+    // where the column does not reach it); rTI (au), the thermally ionized inner disk's edge; snow, the snow line's radius
+    // (au) and whether R is inside it; planets, each shown planet's orbit (au) and mass (Jupiters), its gap's factor on Sigma
+    // at R, its pressure maximum (au, null when there is none: trapOf) and whether R is within one ring width (2 w) of it
+    box.diskProbe = (R, z = 0) => {
+      R = Math.max(Number(R) || 0, 1e-3); z = Number(z) || 0;
+      const jet = jetAmp * jetAmp * (3 - 2 * jetAmp) * (JET.LOOK[lookNow] || 0);
+      return { ...probeJS(R, z, lnTauJS(R, z), gapLnAll(R), lumNow, asymSm(), accW(), jet), zS: zOfTau(R, 0), rTI: NONIDEAL.R_TI, lum: lumNow,
+        snow: { R: rSn, inside: R < rSn },
+        planets: planets.filter((p) => p.amp > 0.5 && p.d > 0).map((p) => ({ a: p.a, m: p.m, gap: Math.exp(gapLnJS(R, p.d, p.a, p.q)), trap: p.trap.s > 0 ? p.trap.R : null, atTrap: p.trap.s > 0 && Math.abs(R - p.trap.R) < 2 * p.trap.w })) };
+    };
+    // (round 12a, for the probe's check) a point (Rs, z) of the open cut's face on the canvas (CSS px; Rs >= 0 on the right
+    // face, as sp), and the face's colour for a value of its quantity (display values, 0 to 1: T in K, rho relative to the
+    // midplane at 1 au) from the legend's colour maps (CBAR), which are the shader's
+    box.diskFacePoint = (Rs, z) => { if (sliceU < 1) return null; const q = sp(Rs, z); return inView(q) ? [q[0], q[1]] : null; };
+    box.diskFaceColour = (q, v) => (q === 'T' ? CBAR.T.col(Math.min(Math.max(uT(v), 0), 1)) : q === 'rho' ? CBAR.rho.col((Math.log10(v) + 10) / 12.5) : null);
     // (the speed as diskSet takes it: a finite number, positive, 0.1 to 10; the zoom's factor finite and positive, 0.01
     // to 100, the distance then held within its range: anything else is left out)
     box.diskSpeed = (x) => { const st = checked({ speed: x }); if (st.speed != null) speed = st.speed; };
@@ -8498,6 +8664,33 @@ void main(){
       const l = snapLimits(), m = Math.min(l.texture, l.renderbuffer, l.viewport, 8192), d = Math.min(window.devicePixelRatio || 1, 2);
       return { k: Math.max(1, Math.floor(100 * m / (Math.max(W, Hh) * d)) / 100), limits: l, screen: [Math.round(W * d), Math.round(Hh * d)] };
     };
+    // (round 11b) A size of its own for the canvas, for a video's frames: { w, h, px }, w x h pixels (16 to snapMax's limit), px of them
+    // a CSS pixel (0.25 to 8); null gives the box's back; no argument reads it. While set, the picture is framed for that size: the
+    // projection, the lines, the labels and the scale bar laid out on a stage of w / px x h / px CSS pixels (the vertical field of view
+    // held, so a wider frame shows more to the sides), each frame drawn so (an animation frame's or a script's: diskSnapshot reads it at
+    // that size, k = 1) through the guard as any; the canvas's CSS size and the box are left as they are, so that nothing around them
+    // moves (the canvas then shows the frame stretched to the box: the page covers it meanwhile). The snapshot's size k multiplies
+    // the screen's pixels at the stage's aspect, so it cannot give a 16:9 frame on another stage, nor one smaller than the screen.
+    box.diskOut = (o) => {
+      if (o === undefined) return outSz ? { ...outSz } : null;
+      if (o === null) { if (outSz) { outSz = null; resize(); } return null; }
+      const l = snapLimits(), m = Math.min(l.texture, l.renderbuffer, l.viewport, 8192);
+      const w = finiteNumber(o.w), h = finiteNumber(o.h), px = finiteNumber(o.px);
+      if (!(Number.isInteger(w) && Number.isInteger(h) && w >= 16 && h >= 16 && w <= m && h <= m && px >= 0.25 && px <= 8)) return null;
+      outSz = { w, h, px };
+      resize();
+      return { ...outSz };
+    };
+    // (round 11b) On the page's own clock (diskManual: an exporter's frames, with no frame rate to keep and nothing else drawn), a
+    // piece's end looked for at every turn of the event loop (a message to the page itself), not every 8 ms, nor 16 for a band's
+    // query: a fence's and a query's state can change only between tasks, and in Chrome each look reads it from memory shared with
+    // the GPU's process (in WebKit each is a round trip: the video is not offered as checked there). A frame of the visible look at
+    // 1080p and scale 1 is some 45 to 50 pieces a picture, 8 pictures a frame, and each piece waited 4 to 20 ms beyond its work: 2 to
+    // 8 s a frame. The pieces themselves, their sizes and the guard's measures of them are as before; they only follow sooner
+    const turnMc = new MessageChannel(), turnQ = [];
+    turnMc.port1.onmessage = () => { const r = turnQ.shift(); if (r) r(); };
+    const nextTurn = () => new Promise((r) => { turnQ.push(r); turnMc.port2.postMessage(0); });
+    const pieceWait = (ms) => (manualMs !== null ? nextTurn() : new Promise((r) => setTimeout(r, ms)));
     // (round 10a: a wait over HUNG_MS told to the recorder as hung, once, with the band in flight; and its end as late)
     const gpuDone = () => new Promise((res) => {
       const f = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0), t0 = performance.now(), rid = lastRid; gl.flush();
@@ -8505,7 +8698,7 @@ void main(){
       const poll = () => {
         if (lost || gl.clientWaitSync(f, 0, 0) !== gl.TIMEOUT_EXPIRED) { gl.deleteSync(f); if (hung) rec({ k: 'late', id: rid, s: 'script', ms: performance.now() - t0 }); res(); return; }
         if (!hung && performance.now() - t0 > HUNG_MS) { hung = true; rec({ k: 'hung', id: rid, s: 'script', key: kindNow(), sc: opt.scale, ms: performance.now() - t0 }); }
-        setTimeout(poll, 8);
+        pieceWait(8).then(poll);
       };
       poll();
     });
@@ -8697,6 +8890,14 @@ void main(){
       for (let i = 0; i < n; i++) { const u = gl.getActiveUniform(f.prog, i); if (u && T.includes(u.type)) names.push(u.name); }
       return { max: gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS), used: names.length, names };
     };
+    // (2026-11-02, checks hygiene) The test target testT is one: diskSplitTest, diskCoStudy and diskFrameRead each make it and
+    // delete it in their finally. Two of them at once (check.js ran an item again after it timed out on a hidden page, the
+    // first call still running) drew into one target and deleted it under the other, whose readF(testT) then threw on a null.
+    // A call while another test holds the target is told so ({ error: 'another test holds the target', by }) and does nothing;
+    // diskTestBusy() says which test holds it ('frameread', 'splittest', 'costudy'; '' when none), so that a check can wait
+    // for it to end. Set at a call's entry, before its first wait, and given back in its finally
+    let testBy = '';
+    box.diskTestBusy = () => testBy;
     // (round 10a, for checks) The picture of the march in kicks against the same frame drawn whole: one frame of the present
     // view (paused; the exposure held), drawn whole and then in kicks, each as a script's frame (in the guard's bands), into a
     // target of 32-bit floats, and compared value by value: the share bit for bit the same, the largest and mean difference
@@ -8704,6 +8905,8 @@ void main(){
     // frame in kicks; o.rows, its bands at most so many rows, so that a frame of many bands is compared on purpose)
     box.diskSplitTest = async (o = {}) => {
       if (lost || !fbFloat) return null;
+      if (testBy) return { error: 'another test holds the target', by: testBy };   // (see diskTestBusy)
+      testBy = 'splittest';
       await gpuDone(); stepping++;
       const was = splitOn, e0 = [aeLn, aeGoal, coLn, coGoal], k0 = kickK, a0 = kickAdapt;
       const kT = finiteNumber(o.k), rT = finiteNumber(o.rows);
@@ -8757,6 +8960,7 @@ void main(){
         if (kickK !== k0 || kickAdapt !== a0) { kickK = k0; kickAdapt = a0; kickResetAll(); }
         if (testT) { gl.deleteFramebuffer(testT.fb); gl.deleteTexture(testT.tex); testT = null; }
         stepping--; accN = 0; dirty = true;
+        testBy = '';
       }
     };
     // (round 10a, dev.7 study, dev only) The moments' velocity integral measured (ver2/docs, the study's note): diskCoStudy(cfg)
@@ -8773,6 +8977,8 @@ void main(){
     let coStudyKey = '';
     box.diskCoStudy = async (cfg = {}) => {
       if (lost || !fbFloat) return null;
+      if (testBy) return { error: 'another test holds the target', by: testBy };   // (see diskTestBusy)
+      testBy = 'costudy';
       await gpuDone(); stepping++;
       const e0 = [aeLn, aeGoal, coLn, coGoal], full0 = full, var0 = [...variants], split0 = splitOn, chan = opt.coMode === 'chan';
       let rayT = null;
@@ -8823,6 +9029,7 @@ void main(){
         if (testT) { gl.deleteFramebuffer(testT.fb); gl.deleteTexture(testT.tex); testT = null; }
         if (rayT) { gl.deleteFramebuffer(rayT.fb); gl.deleteTexture(rayT.tex); }
         stepping--; accN = 0; dirty = true;
+        testBy = '';
       }
     };
     // (the study's end: the guard's measures and the kicks' dropped, measured with the study's march)
@@ -8891,6 +9098,10 @@ void main(){
     box.diskSnapLog = () => snapLog;
     box.diskSnapshot = async (o = {}) => {
       if (lost) return null;   // (no picture without a context)
+      // (round 11a, after the review: a path under way taken over first, where it is: the snapshot plans its bands once, from what is
+      // drawn at its start, and a path, a scene's dearer look on arrival or a move's next leg must not change the picture under it. Not
+      // on the page's own clock (diskManual): an exporter snapshots each frame mid-path on purpose, the path held still meanwhile)
+      if (manualMs === null) pathGrab();
       // (round 9: every snapshot one frame at a time, each band in a task of its own and waited for, so that no piece of GPU
       // work is long and the browser can show its own frames between them; the animation frames draw nothing meanwhile)
       const sc0 = opt.scale, k = o.size > 1 ? Math.min(o.size, box.diskSnapMax().k) : 1;
@@ -8918,13 +9129,20 @@ void main(){
       // in the same task as the read back below, since after a wait the browser may have shown and cleared the drawing
       // buffer, and a read back that waits for a whole heavy frame holds the GPU's process for its whole time)
       const n = o.frames || ACC_SNAP;
-      snapLog = { k, scale: opt.scale, size: [canvas.width, canvas.height], bands: [], ms: [], band: [] };
+      // (round 11b: and as it goes, the pieces so far, the picture and the last piece (its time, the frame's kicks, the band's rows and
+      // kicks): whether a long snapshot is slow or stuck)
+      snapLog = { k, scale: opt.scale, size: [canvas.width, canvas.height], bands: [], ms: [], band: [], pieces: 0, sub: 0, last: null };
       // (round 9: each band's rows from the dearest rows so far, aiming at half of bandMs or the budget; see rowsAfter. The
       // first band no larger than the bands asked for or the guard's would be)
       const bm = o.bandMs || 250, aim = 0.5 * (gBudget > 0 ? Math.min(gBudget, bm) : bm), st = {};
+      // (round 11b) { stop }: a function asked between pieces (and pictures); true leaves the frame where it is, as a jump does
+      // (cancelJob: the picture before kept), and the snapshot gives null: an exporter's Cancel taken within a piece, not a picture
+      // (a picture of the visible look at 1080p is some 45 pieces)
+      const stopped = () => !!(o.stop && o.stop());
       for (let i = 0; i < n; i++) {
-        await gpuDone(); if (lost) return null;   // (the frames before it done first)
+        await gpuDone(); if (lost || stopped()) return null;   // (the frames before it done first)
         const t0 = performance.now();
+        snapLog.sub = i;
         adaptRows = Math.min(rowsAfter(st, null, 0, aim), Math.ceil(rH / snapBands)); adaptAim = aim;
         try { draw(); } finally { adaptRows = 0; adaptAim = 0; }
         let j = await firstBand('snapshot'); if (lost) return null;
@@ -8932,8 +9150,11 @@ void main(){
         for (;;) {
           await gpuDone(); if (lost) return null;
           const now = performance.now(), ms = now - b0; bMax = Math.max(bMax, ms); sum += ms; piece('snapshot', ms, j);
+          snapLog.pieces++; snapLog.last = { ms: Math.round(ms * 10) / 10, sub: i, kicks: j && j.split ? j.kicks || 0 : 0, band: j && j.bd ? [j.bd.y0, j.bd.y1, j.bd.k] : null };
+          if (stopped()) { cancelJob(); return null; }
           if (bandJob !== j) break;
-          if (j.split) { j.bandMs = (j.bandMs || 0) + ms; j.lastMs = ms; j.st = st; j.aim = aim; while (!lost && bandJob === j && !splitReady(j)) await new Promise((r) => setTimeout(r, 16)); if (lost) return null; if (bandJob !== j) break; }   // (round 10a: see scriptFrame)
+          // (round 11b: the band's query looked for at pieceWait's pace: every turn on the page's own clock, every 16 ms else)
+          if (j.split) { j.bandMs = (j.bandMs || 0) + ms; j.lastMs = ms; j.st = st; j.aim = aim; while (!lost && bandJob === j && !splitReady(j)) await pieceWait(16); if (lost) return null; if (bandJob !== j) break; }   // (round 10a: see scriptFrame)
           else j.rows = rowsAfter(st, j, ms, aim);
           bandStep(); b0 = performance.now();
         }

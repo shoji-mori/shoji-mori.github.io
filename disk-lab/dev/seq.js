@@ -11,7 +11,8 @@
 //     bg, planets }, clock: { paused, speed, t } (t kept for the video export to come; the live presenter sets the pause and
 //     the speed only, see app.js), hold (s, the autoplay's rest), move: { dur, turns, speed } (how to fly into it; none made
 //     by the page yet but the built-in moves) }
-// A sequence: { v: 1, app: 'disk-lab', engine, made, pace, keys }.
+// A sequence: { v: 1, app: 'disk-lab', engine, made, pace, src, keys }; src, where the list on the device came from: 'own' (made
+// here), 'link' or 'file' (round 11a, after the review: a list from elsewhere never takes the place of one's own without a copy).
 
 export const SEQ_V = 1;
 export const SEQ_MAX = 60;                 // scenes at most (a talk's worth; a link of 60 is some 5 kB)
@@ -87,8 +88,14 @@ export function checkSeq(o) {
   if (o.app != null && o.app !== 'disk-lab') return null;
   const keys = o.keys.slice(0, SEQ_MAX).map(checkKey).filter(Boolean);
   const pace = Object.prototype.hasOwnProperty.call(PACES, o.pace) ? o.pace : 'normal';
-  return { v: SEQ_V, app: 'disk-lab', engine: typeof o.engine === 'string' ? o.engine.slice(0, 16) : '', made: typeof o.made === 'string' ? o.made.slice(0, 10) : '', pace, keys };
+  const src = ['own', 'link', 'file'].includes(o.src) ? o.src : 'own';
+  return { v: SEQ_V, app: 'disk-lab', engine: typeof o.engine === 'string' ? o.engine.slice(0, 16) : '', made: typeof o.made === 'string' ? o.made.slice(0, 10) : '', pace, src, keys };
 }
+
+// (round 11a, after the review) The one copy kept when a list from a link or a file takes the place of the list on the device: the
+// list replaced, unless the copy already holds a list of one's own (a second link, then a third, must not push one's own list out);
+// nothing for an empty list. Returns what the copy is to hold: cur, or prev as it was
+export const stashFor = (cur, prev) => (cur && cur.keys && cur.keys.length && !(prev && prev.src === 'own') ? cur : prev || null);
 
 // A sequence in a link's fragment: '#seq=' and a letter for the encoding, then the JSON in base64url: z, deflate-raw; d, deflate
 // (where the browser has CompressionStream but not that format: not verified for every browser, see the design's section 2.2);

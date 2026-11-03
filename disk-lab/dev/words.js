@@ -3,6 +3,8 @@
 
 // The citation, one line in English for both languages (round 8)
 const CITE_LINE = (y, url, v) => `Mori, S. ${y}, Disk Lab: an interactive model of a protoplanetary disk (v${v}), ${url}`;
+// (round 11b) the credit burned into each frame of a video, small, in its lower right: in English for both languages, as the citation
+const CREDIT_LINE = (y, url) => `Disk Lab (Mori ${y}) · ${url.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
 
 export const WORDS = {
   ja: {
@@ -91,6 +93,19 @@ export const WORDS = {
       lower: (w, h, pct) => `保存する画像:${w} × ${h} px。この見え方は重いため、ガスは ${pct} % の細かさで描きます。`,
       coScreen: (w, h) => `この見え方は計算が重いため、画面と同じ ${w} × ${h} px で保存します。`
     },
+    // (round 11c) the saved picture's shape (cut from the middle of the view, never stretched) and the credit in its corner
+    saveFrame: {
+      label: '保存する画像の縦横比', screen: '画面のまま', '16:9': '16:9', '4:3': '4:3', credit: '隅に出典',
+      crop: '眺めの中央から切り出します(引き伸ばしません)。縮尺の目盛りは隅に移します。'
+    },
+    // (round 11c) the QR code for the audience: "QR code" beside "Copy a link", and Q in the presenter (app.js, qrShow)
+    qr: {
+      label: 'リンクの QR コード',
+      view: '携帯のカメラで読み取ると、この眺めが開きます。',
+      scenes: (n) => `携帯のカメラで読み取ると、この ${n} 場面が開きます。`,
+      tooLong: (place) => `リンクが長く、離れた携帯で読める QR コードに収まらないため、「${place}」を開くコードにしました(場面や眺めは入りません)。`,
+      failed: 'QR コードを作れませんでした。'
+    },
     imageFailed: '画像を作れませんでした。',
     still: {
       nogl: 'このブラウザーでは動くモデルを描けないため(WebGL 2 が必要です)、同じモデルの静止画を表示しています。',
@@ -158,17 +173,78 @@ export const WORDS = {
       full: (n) => `場面は ${n} までです。`,
       linkCopied: '場面の並びのリンクをコピーしました。',
       linkFailed: 'このリンクの場面の並びは読めませんでした。',
-      fromLink: (n) => `リンクの ${n} 場面を開きました(「動きと発表」)。`,
-      loaded: (n) => `${n} 場面を開きました。`,
+      fromLink: (n) => `リンクから ${n} つの場面を開きました(「動きと発表」)。`,
+      loaded: (n) => `${n} つの場面を開きました。`,
+      restored: '前の場面に戻しました。',
       loadFailed: 'Disk Lab の場面の並びのファイルではありません。',
       presentHint: '→ で次の場面へ · Esc で終わり',
       last: '最後の場面です。'
+    },
+    // (round 11b) the video (app.js, exportVideo)
+    video: {
+      scenes: (n) => `場面(${n})`, places: '見どころの 9 か所',
+      hold: (s) => `${s} 秒`,
+      about: (s) => (s < 90 ? `約 ${Math.max(1, Math.round(s))} 秒` : s < 5400 ? `約 ${Math.round(s / 60)} 分` : `約 ${Math.floor(s / 3600)} 時間 ${Math.round((s % 3600) / 60)} 分`),
+      plan: (p) => `${p.seconds} 秒、${p.frames} コマ(${p.w} × ${p.h}、毎秒 ${p.fps} コマ)。画質は${p.level}(1 コマに ${p.sub} 枚を平均${p.capped ? `。ガス輝線の見え方があるので ${p.capped} %` : ''})、背景は黒。約 ${p.mb} MB。このコンピューターで${p.time}(見積もり。作りながら測ります)。`,
+      long: (n, max, min) => `1 本の動画には長すぎます:${n} コマ(${max} コマ、毎秒 30 コマで ${min} 分まで)。場面を減らすか、止まる時間を短くしてください。`,
+      big: (gb, max) => `メモリーに収まりません:約 ${gb} GB(${max} GB まで)。小さい大きさか、毎秒 30 コマにしてください。`,
+      codec: (w, h, fps) => `このブラウザーは ${w} × ${h}・毎秒 ${fps} コマの H.264 を作れません。小さい大きさか、毎秒 30 コマを選んでください。`,
+      gpu: (w, h) => `この GPU は ${w} × ${h} の絵を描けません。小さい大きさを選んでください。`,
+      noEncoder: 'このブラウザーでは動画を作れません(WebCodecs の H.264 のエンコーダーがありません)。コンピューターの Chrome か Edge、または Safari 16.4 以降で作れます。',
+      noMotion: '動きを減らす設定(システムの設定)では動画を作れません。動画を形づくる飛行とフェードが、その設定では切られるためです。',
+      preparing: '最初のコマを準備しています…',
+      progress: (i, n, j, m, per, left) => `動画を作っています:${n} コマ中 ${i} コマ目${m > 1 ? `(${m} 枚中 ${j} 枚目)` : ''}${per ? `・1 コマ ${per} 秒・残り${left}` : ''}`,
+      writing: 'ファイルにまとめています…',
+      cancelling: 'やめています…',
+      done: (name, mb) => `動画を保存しました:${name}(${mb} MB)。`,
+      cancelled: '動画づくりをやめました。元の眺めに戻しました。',
+      failed: (why) => `動画を作れませんでした(${why})。元の眺めに戻しました。`,
+      lost: 'GPU の文脈が失われました',
+      slow: '可視光と中間赤外線の見え方は、この画質では 1 コマに数十秒かかることがあります(最高・1080p の見積もりで約 17 秒。まだ測れていません)。中にすると何倍も速くなります。',
+      credit: (y, url) => CREDIT_LINE(y, url)
+    },
+    // (round 12a) the probe: a tap on the picture reads the model at the midplane point under it (app.js, probeAt; the
+    // engine's box.diskProbe). physics: one sentence per region (the regions' face's, see layersFace in the engine)
+    probe: {
+      on: '絵の円盤をタップ(クリック)すると、その場所の赤道面の物理量を示します(もう一度タップで移す、Esc でやめる)。',
+      title: (r) => `探針:R = ${r} au の赤道面`, close: '探針を外す',
+      T: '温度', rho: 'ガスの密度', sigma: '面密度', H: 'スケールハイト', vK: 'ケプラー速度', P: '公転周期', alpha: '乱流の強さ α', region: '領域', water: '水',
+      laminar: 'なし(層流)', none: '—(円盤のガスはない)', days: '日', yr: '年',
+      regions: { inner: '熱で電離した内側の円盤', dead: 'デッドゾーン', acc: '降着層', base: '風の吹き出す層', wind: '円盤風', outer: '弱い乱流の外側円盤', hall: 'ホール効果で巻かれた層', cavity: '磁気圏の空洞', jet: 'ジェット', envelope: 'エンベロープ' },
+      physics: {
+        inner: '1000 K を超えてアルカリ金属が電離し、磁場がガスと結びつきます。磁気回転不安定で強く乱れ(α ≈ 0.01)、降着の熱で円盤が自らを温めています。',
+        dead: '電離が弱く、オーム散逸で磁場がガスと結びつかないため、乱流のない静かな層です(磁気回転不安定が働かない)。降着は上の降着層が担い、小石は赤道面に沈んで内側へ流れていきます。',
+        acc: '磁場が曲がり電流が流れる層です。円盤風に角運動量を奪われたガスが、薄い層流となって星へ流れ込みます(ジュール加熱の場所)。デッドゾーンの外では赤道面にあります。',
+        base: '磁場が開き、ガスがゆっくり持ち上げられて円盤風になる手前の層です(両極性拡散が効き、乱流はありません)。',
+        wind: '星の紫外線で電離したガスが、磁力線に沿って吹き出しています。円盤風は角運動量を運び去り、円盤の降着を駆動します。',
+        outer: '宇宙線が赤道面まで届き磁場は結びつきますが、両極性拡散のため乱流は弱いままです(α ≈ 0.001)。',
+        hall: '磁場が回転と同じ向きのとき、ホール効果で電流の層が片側へ押しやられ、その下で磁場が一方向に巻かれています。',
+        cavity: '星の磁場がガス円盤を切り取った内側です。ガスは磁力線に沿って星へ落ちていきます。',
+        jet: '星のそばから軸に沿って細く速く吹き出すジェットです。',
+        envelope: '円盤を包み、星と円盤へ落ちてくる親の分子雲です。'
+      },
+      snowIn: (r) => `蒸気(スノーライン ${r} au の内側)`, snowOut: (r) => `氷(スノーライン ${r} au の外側)`, snowOutWarm: (r) => `蒸気(スノーライン ${r} au の外側だが、ここは 160 K より暖かい)`,
+      gap: (a, f) => `${a} au の惑星のギャップの中:ガスは周りの ${f} %`, trap: (a) => `${a} au の惑星の外側の圧力の山:小石が集まります`,
+      model: 'モデルの値です(円盤の厚みは見やすさのため温度の示す 1.8 倍、面密度は 1 au で 1700 g/cm² とした場合)。'
     },
     // (round 8, the owner: "the citation in English in Japanese too": the lead stays Japanese, the line is the English one)
     cite: {
       lead: '研究や発表での利用は自由です。出典として、このページを引用してください。',
       line: (y, url, v) => CITE_LINE(y, url, v),
       copy: '引用をコピー', copied: '引用をコピーしました。'
+    },
+    // (round 12b) looking in by tilting the phone: the switch in View and what it says (app.js, tiltSay; both languages are
+    // written at once, as spans that the page's language shows)
+    tilt: {
+      label: '傾けて覗き込む',
+      off: '携帯を傾けると、円盤を手に持ったように眺めが少し(6° まで)回ります。リンクと残す設定は変わりません。',
+      on: 'オン:携帯を傾けると覗き込めます。動き・再生・発表の間とドラッグの間は止まります。',
+      asking: '動きのセンサーを使ってよいか、ブラウザーに確かめています…',
+      denied: 'センサーの使用が許可されなかったので、オフのままです。使うには、ブラウザーの設定で「モーションと画面の向きへのアクセス」を許可してから、もう一度オンにしてください。',
+      failed: 'センサーを使えなかったので、オフのままです。',
+      none: 'この端末からは傾きが届かないので、オフにしました。',
+      touch: 'オン:画面に一度触れると、傾きのセンサーが始まります(ブラウザーが確かめることがあります)。',
+      reduced: '動きを減らす設定の間は使えません。'
     }
   },
   en: {
@@ -254,6 +330,17 @@ export const WORDS = {
       lower: (w, h, pct) => `The image: ${w} × ${h} px. This look is heavy, so the gas is drawn at ${pct} % detail.`,
       coScreen: (w, h) => `This look is heavy to compute, so it is saved as the screen, ${w} × ${h} px.`
     },
+    saveFrame: {
+      label: 'Shape of the saved image', screen: 'As the screen', '16:9': '16:9', '4:3': '4:3', credit: 'Credit in the corner',
+      crop: ' Cut from the middle of the view, not stretched; the scale bar moves into the corner.'
+    },
+    qr: {
+      label: 'QR code of the link',
+      view: 'Scan it with a phone’s camera to open this view.',
+      scenes: (n) => `Scan it with a phone’s camera to open these ${n} scenes.`,
+      tooLong: (place) => `The link is too long for a code that phones can read from afar, so this code opens “${place}” only (not the scenes or the view).`,
+      failed: 'The QR code could not be made.'
+    },
     imageFailed: 'The image could not be made.',
     still: {
       nogl: 'This browser can’t draw the live model (it needs WebGL 2), so these are still pictures of the same model.',
@@ -317,16 +404,72 @@ export const WORDS = {
       full: (n) => `${n} scenes at most.`,
       linkCopied: 'A link to these scenes is copied.',
       linkFailed: 'The scenes in this link could not be read.',
-      fromLink: (n) => `${n} scenes opened from the link (under Moves and talks).`,
-      loaded: (n) => `${n} scenes opened.`,
+      fromLink: (n) => (n === 1 ? 'One scene opened from the link (under Moves and talks).' : `${n} scenes opened from the link (under Moves and talks).`),
+      loaded: (n) => (n === 1 ? 'One scene opened.' : `${n} scenes opened.`),
+      restored: 'Your earlier scenes are back.',
       loadFailed: 'This file is not a list of scenes from Disk Lab.',
       presentHint: '→ for the next scene · Esc to end',
       last: 'This is the last scene.'
+    },
+    video: {
+      scenes: (n) => `The scenes (${n})`, places: 'The nine highlights',
+      hold: (s) => `${s} s`,
+      about: (s) => (s < 90 ? `about ${Math.max(1, Math.round(s))} s` : s < 5400 ? `about ${Math.round(s / 60)} min` : `about ${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`),
+      plan: (p) => `${p.seconds} s, ${p.frames} frames of ${p.w} × ${p.h} at ${p.fps} a second. ${p.level} quality (${p.sub} pictures averaged a frame${p.capped ? `; at ${p.capped}% for the gas line’s look` : ''}), on black. About ${p.mb} MB; ${p.time} on this computer (estimated; measured as it goes).`,
+      long: (n, max, min) => `Too long for one video: ${n} frames, at most ${max} (${min} minutes at 30 a second). Fewer scenes, or shorter holds.`,
+      big: (gb, max) => `Too large to keep in memory: about ${gb} GB, at most ${max} GB. A smaller size, or 30 frames a second.`,
+      codec: (w, h, fps) => `This browser cannot encode ${w} × ${h} at ${fps} frames a second in H.264: choose a smaller size, or 30.`,
+      gpu: (w, h) => `This GPU cannot draw a picture of ${w} × ${h}: choose a smaller size.`,
+      noEncoder: 'This browser cannot make videos (it has no H.264 encoder through WebCodecs). Chrome or Edge, or Safari 16.4 or later, on a computer can.',
+      noMotion: 'Not with reduced motion (the system’s setting): the flights and fades a video is made of are cut there.',
+      preparing: 'Preparing the first frame…',
+      progress: (i, n, j, m, per, left) => `Making the video: frame ${i} of ${n}${m > 1 ? ` (picture ${j} of ${m})` : ''}${per ? ` · ${per} s a frame · ${left} left` : ''}`,
+      writing: 'Writing the file…',
+      cancelling: 'Cancelling…',
+      done: (name, mb) => `The video is saved: ${name} (${mb} MB).`,
+      cancelled: 'The video was cancelled; the view is as it was.',
+      failed: (why) => `The video could not be made (${why}); the view is as it was.`,
+      lost: 'the GPU’s context was lost',
+      slow: 'The visible and mid-infrared looks can take tens of seconds a frame at this quality (some 17 s at Best and 1080p estimated; not yet measured); Medium is several times faster.',
+      credit: (y, url) => CREDIT_LINE(y, url)
+    },
+    probe: {
+      on: 'Tap (or click) the disk in the picture: the model’s numbers at that point of the midplane (tap again to move it, Esc to stop).',
+      title: (r) => `Probe: the midplane at R = ${r} au`, close: 'Remove the probe',
+      T: 'Temperature', rho: 'Gas density', sigma: 'Surface density', H: 'Scale height', vK: 'Keplerian speed', P: 'Orbital period', alpha: 'Turbulence α', region: 'Region', water: 'Water',
+      laminar: 'none (laminar)', none: '— (no disk gas)', days: 'days', yr: 'yr',
+      regions: { inner: 'thermally ionized inner disk', dead: 'dead zone', acc: 'accretion layer', base: 'wind-launching region', wind: 'disk wind', outer: 'weakly turbulent outer disk', hall: 'Hall-wound layer', cavity: 'magnetospheric cavity', jet: 'jet', envelope: 'envelope' },
+      physics: {
+        inner: 'Above 1000 K the alkali metals ionize and the field couples to the gas: the magnetorotational instability stirs it strongly (α ≈ 0.01), and the accretion’s heat warms the disk from within.',
+        dead: 'Too weakly ionized for the field to couple (Ohmic diffusion): no magnetorotational turbulence, the gas is quiet. The accretion goes on in the layer above; pebbles settle to the midplane and drift inward.',
+        acc: 'Where the field bends and a current flows: the gas, losing angular momentum to the wind, flows in toward the star in a thin laminar layer (heated by the current). Beyond the dead zone it lies at the midplane.',
+        base: 'The field opens out and the gas is slowly lifted toward the wind (ambipolar diffusion dominates; no turbulence).',
+        wind: 'Ionized by the star’s ultraviolet light, the gas flows out along the field lines: the disk wind carries angular momentum away and drives the accretion.',
+        outer: 'Cosmic rays reach the midplane, so the field couples, but ambipolar diffusion keeps the turbulence weak (α ≈ 0.001).',
+        hall: 'With the field aligned with the rotation, the Hall effect pushes the current layer to one side; below it the field is wound one way.',
+        cavity: 'Inside the star’s magnetosphere, which truncates the gas disk: the gas falls onto the star along the field lines.',
+        jet: 'The narrow, fast jet launched along the axis close to the star.',
+        envelope: 'The parent cloud, falling onto the star and the disk around them.'
+      },
+      snowIn: (r) => `vapour (inside the snow line at ${r} au)`, snowOut: (r) => `ice (outside the snow line at ${r} au)`, snowOutWarm: (r) => `vapour (outside the snow line at ${r} au, but warmer than 160 K here)`,
+      gap: (a, f) => `in the gap of the planet at ${a} au: the gas at ${f} % of its surroundings`, trap: (a) => `at the pressure maximum outside the planet at ${a} au: pebbles collect here`,
+      model: 'The model’s values (the disk drawn 1.8 times as thick as its temperature holds it, for the picture; the surface density taken as 1700 g/cm² at 1 au).'
     },
     cite: {
       lead: 'Free to use in research and talks; please cite this page as the source.',
       line: (y, url, v) => CITE_LINE(y, url, v),
       copy: 'Copy the citation', copied: 'Citation copied.'
+    },
+    tilt: {
+      label: 'Tilt to look in',
+      off: 'Tilting the phone turns the view a little (up to 6°), as if you held the disk in your hand. Links and the settings kept do not change.',
+      on: 'On: tilt the phone to look in. It rests during moves, Play, the presenter and a drag.',
+      asking: 'Asking the browser for the motion sensor…',
+      denied: 'The motion sensor was not allowed, so this stays off. To use it, allow Motion & Orientation Access in the browser’s settings, then turn this on again.',
+      failed: 'The motion sensor could not be used, so this stays off.',
+      none: 'No tilt comes from this device, so this is off.',
+      touch: 'On: touch the screen once to start the tilt sensor (the browser may ask).',
+      reduced: 'Not available while motion is reduced.'
     }
   }
 };

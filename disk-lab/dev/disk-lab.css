@@ -177,6 +177,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .segmented.small button{padding:4px 10px;font-size:12.5px}
 /* (round 7) the saved picture's size, under the save button */
 #saveSizeGroup{margin-top:8px}
+/* (round 11c) the saved picture's shape and the credit's toggle, on one line where the rail allows */
+.save-frame{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin-top:6px}
+.save-frame .toggle{min-height:26px;padding:2px 9px;font-size:12px}
 .segmented.looks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-radius:12px;width:100%}
 .segmented.looks button{border-radius:9px;padding:6px 4px;font-size:12.5px}
 .rail-context .segmented{flex-wrap:wrap;border-radius:14px}
@@ -225,6 +228,21 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .lab.picking .disk-panel canvas{cursor:crosshair}
 .planet-pop{position:absolute;z-index:7;display:grid;grid-template-columns:auto minmax(0,1fr) 24px;align-items:center;gap:4px 8px;width:250px;padding:6px 6px 6px 12px;border-radius:12px;background:rgba(16,20,30,.92);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:12px;color:var(--text);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .planet-pop input{min-width:0;accent-color:var(--accent)}
+/* (round 12a) the probe's panel, beside the point tapped (along the bottom of a narrow stage), in type large enough to read
+   from across a room; and the ring at the point, which fades */
+.probe-panel{position:absolute;z-index:7;width:min(360px,calc(100% - 16px));max-height:calc(100% - 16px);overflow:auto;padding:10px 12px 10px 14px;border-radius:12px;background:rgba(14,18,27,.93);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.45);font-size:15px;line-height:1.35;color:var(--text);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.probe-panel.docked{left:8px;right:8px;bottom:8px;width:auto;max-height:55%;font-size:14px}
+.probe-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.probe-title{font-weight:600;font-size:16px;font-variant-numeric:tabular-nums}
+.probe-row{display:flex;justify-content:space-between;gap:12px;padding:1px 0}
+.probe-k{color:var(--text-2)}
+.probe-v{font-variant-numeric:tabular-nums;text-align:right}
+.probe-line,.probe-physics{margin:6px 0 0}
+.probe-physics{padding-top:6px;border-top:1px solid var(--line-2)}
+.probe-note{margin:6px 0 0;font-size:11.5px;color:var(--text-2)}
+.probe-mark{position:absolute;z-index:6;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.5);pointer-events:none;animation:probe-fade 2.6s ease-out forwards}
+@keyframes probe-fade{0%{opacity:1;transform:scale(.6)}20%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.4)}}
+@media (prefers-reduced-motion:reduce){.probe-mark{animation:probe-fade 1.2s linear forwards}}
 .pop-name{font-variant-numeric:tabular-nums;white-space:pre}
 /* the site's mark, white and faint, in the lower right of the stage (the saved pictures carry it too) */
 .watermark{position:absolute;right:14px;bottom:12px;z-index:3;width:56px;height:auto;opacity:.13;pointer-events:none;user-select:none}
@@ -257,6 +275,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .icon-chip:disabled{opacity:.3;cursor:default}
 #seqClear:disabled{opacity:.4;cursor:default}
 .chip[data-move][aria-pressed=true]{border-color:var(--accent)}
+/* (round 12b) the tilt switch in View (app.js, tiltInit): on shows as a move does */
+.chip[data-tilt][aria-pressed=true]{border-color:var(--accent)}
+.chip[data-tilt]:disabled{opacity:.45;cursor:default}
 /* the presenter: the picture alone (the watermark and the picture's own keys kept), a black screen, the scene's name for a
    moment, and buttons in the corner while the mouse moves; the cursor hidden when it rests */
 .lab[data-present]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);grid-template-areas:"stage"}
@@ -269,9 +290,35 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .present-hud.on{opacity:1}
 .present-cap{font-size:clamp(18px,2.4vw,32px);font-weight:500;line-height:1.25;color:var(--text);text-shadow:0 1px 10px rgba(0,0,0,.8)}
 .present-n{font-size:13px;font-variant-numeric:tabular-nums;color:var(--text-2);text-shadow:0 1px 6px rgba(0,0,0,.8)}
-.present-ctl{position:absolute;top:12px;right:12px;z-index:10;display:none;gap:4px;padding:3px;border-radius:999px;background:rgba(12,15,23,.7);opacity:0;transition:opacity .3s}
+.present-ctl{position:absolute;top:12px;right:12px;z-index:10;display:none;gap:4px;padding:3px;border-radius:999px;background:rgba(12,15,23,.7);opacity:0;visibility:hidden;transition:opacity .3s,visibility .3s}
 .lab[data-present] .present-ctl{display:flex}
-.lab[data-present][data-pointer] .present-ctl{opacity:1}
+/* (review of round 11a: hidden, not merely transparent, unless the mouse moves or one of them has the focus: not reached by Tab unseen) */
+.lab[data-present][data-pointer] .present-ctl,.lab[data-present] .present-ctl:focus-within{opacity:1;visibility:visible}
+/* (round 11c) a QR code for the audience, over the stage (under the black screen, B): dark on light with its quiet zone, as
+   phones read best; as large as the stage allows (in the presenter, the screen), the address under it in letters for the back
+   of a room */
+.qr-over{position:absolute;inset:0;z-index:8;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.88);container-type:size}
+.qr-over[hidden]{display:none}
+.qr-card{display:grid;justify-items:center;gap:12px;text-align:center}
+/* (no stroke: the icons' rule for every svg above would stroke each module 1.5 modules wide in the text's colour) */
+.qr-code svg{display:block;width:min(58vh,80vw);width:min(62cqh,86cqw);height:auto;border-radius:4px;stroke:none}
+.qr-url{font-size:clamp(16px,5.2cqh,60px);font-weight:600;line-height:1.15;color:#fff;letter-spacing:.01em;overflow-wrap:anywhere}
+.qr-note{max-width:min(64ch,90cqw);font-size:clamp(12px,2.1cqh,22px);line-height:1.45;color:var(--text-2)}
+.qr-close{position:absolute;top:12px;left:12px}
+/* (round 11b) the video: its choices in "Moves and talks"; while it is made, a cover over the stage (the picture there is drawn at the
+   video's size meanwhile, stretched to the box): its frames as they come, letterboxed, the progress and Cancel */
+.talk .export-only{margin-top:4px}
+.ex-what{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2)}
+.ex-what select{flex:1;min-width:0;height:28px;padding:0 6px;border:1px solid var(--line-2);border-radius:7px;background:var(--night-2);color:var(--text);font:12.5px var(--sans)}
+.ex-what select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.talk .ex-seg{margin-top:6px}
+.talk .ex-go{margin-top:8px}
+#exGo:disabled{opacity:.4;cursor:default}
+.export-cover{position:absolute;inset:0;z-index:11;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px var(--gx);background:var(--night)}
+.export-cover[hidden]{display:none}
+.ex-preview{display:block;width:100%;max-width:960px;height:auto;max-height:calc(100% - 130px);aspect-ratio:16/9;object-fit:contain;border-radius:6px;background:#000}
+.ex-progress{font-size:13px;color:var(--text);text-align:center;font-variant-numeric:tabular-nums;min-height:1.6em}
+.ex-front{font-size:12px;color:var(--text-3);text-align:center;max-width:52ch}
 
 /* ---- the two halves as tabs, on a narrow screen only ---- */
 .tabs{display:none}
@@ -369,6 +416,13 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   /* (round 11a: the scenes' editing and the presenter are for laptops and desktops, the owner's choice; a phone keeps the moves
      and Play) */
   .talk .seq-edit,.talk .present-only{display:none!important}
+  /* (round 11b: and the video, as the presenter) */
+  .talk .export-only{display:none!important}
+}
+/* (review of round 11a, the supervisor's decision: the presenter offered where there is a mouse or a trackpad, not by the width alone:
+   an iPad without a keyboard keeps the moves and Play) */
+@media (hover:none),(pointer:coarse){
+  .talk .present-only{display:none!important}
 }
 /* phones: the dialog's button by its short name, so that the mark, the title and the languages fit on one line */
 @media (max-width:400px){
