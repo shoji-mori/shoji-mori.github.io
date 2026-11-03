@@ -11,13 +11,13 @@ import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stash
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=d4f31aad17';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=1dfda0c78b';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.7', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.8', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
@@ -115,14 +115,16 @@ if (typeof WebGL2RenderingContext !== 'undefined') {
 // ACC and uGasOuter, and DESIGN.md section 31)
 // (round 13c, the mass budget P-B', to compare on the development build: ?mflux=0, all the prescriptions of before (the wind's
 // density and lambda of round 8, chi_c 0.03, the gas line's inflow of the layers' whole gas); ?lam=old, round 8's lambda in the
-// budget, or ?lam=1.5,2.5, lambda at R_TI and at the disk's edge; ?mdot=3e-8, the budget's accretion rate at R_TI (M_sun/yr; the
+// budget, or ?lam=1.5,2.5, lambda at R_TI and at the disk's edge; ?lamin=1.2, lambda at the dust's inner edge (4 by default;
+// 1.9-dev.7 is ?lam=1.5,2.5&lamin=1.5); ?mdot=3e-8, the budget's accretion rate at R_TI (M_sun/yr; the
 // temperature keeps its own); ?chic=0.03, where the wind's base is held. See the engine's MFLUX and DESIGN.md section 33. Only
 // finite numbers are passed on; the engine bounds them)
 const mfluxSw = (k, ok) => { const v = q.get(k); return v != null && ok(v) ? v : ''; };
 const SWITCH = { duty: q.get('duty'), ctmax: Number(q.get('ctmax')) || 0, eddy: q.get('eddy') === '0', fps: Number(q.get('fps')) || 0, split: q.get('split') === '0', kick: Number(q.get('kick')) || 0, kadapt: q.get('kadapt') === '1',
   acc: q.get('acc') === '1', gasrho: q.get('gasrho') === 'old' ? 'old' : '',
   mflux: q.get('mflux') === '0' ? '0' : '', lam: mfluxSw('lam', (v) => v === 'old' || /^\s*\d*\.?\d+\s*,\s*\d*\.?\d+\s*$/.test(v)),
-  mdot: mfluxSw('mdot', (v) => Number(v) > 0 && Number.isFinite(Number(v))), chic: mfluxSw('chic', (v) => Number(v) > 0 && Number.isFinite(Number(v))) };
+  mdot: mfluxSw('mdot', (v) => Number(v) > 0 && Number.isFinite(Number(v))), chic: mfluxSw('chic', (v) => Number(v) > 0 && Number.isFinite(Number(v))),
+  lamin: mfluxSw('lamin', (v) => Number(v) > 0 && Number.isFinite(Number(v))) };
 // (round 9) the last visit's record (see record): a visit that ended with drawing stopped, or "Try again", starts safe
 // (round 10a: judged from its phase and its flight record, judgePrev: only what is broken counts, not a page closed or put
 // in the background while it started or changed its look)
@@ -1752,7 +1754,7 @@ async function start() {
   if (q.get('bgmove') === '1') box.dataset.bgmove = 'on';
   if (SWITCH.acc) box.dataset.acc = 'on';   // (round 13a: see SWITCH)
   if (SWITCH.gasrho) box.dataset.gasrho = SWITCH.gasrho;
-  for (const k of ['mflux', 'lam', 'mdot', 'chic']) if (SWITCH[k]) box.dataset[k] = SWITCH[k];   // (round 13c: see SWITCH)
+  for (const k of ['mflux', 'lam', 'lamin', 'mdot', 'chic']) if (SWITCH[k]) box.dataset[k] = SWITCH[k];   // (round 13c: see SWITCH)
   box.setAttribute('data-disk3d', '');
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), DEF_KEYS);   // (the engine's own start: the defaults Reset returns to)

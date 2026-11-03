@@ -417,11 +417,14 @@
   // (Round 13c, the owner's choice: lambda rising outward instead, see MFLUX below. It reverses the reasoning above; with
   // data-mflux="0" or data-lam="old" the profile of round 8 is kept.)
   const LAM = { A: 1.5, B: 0.5, MIN: 1.8, MAX: 4, REF: 2 };
-  // (round 13c) the mass budget's settings (see MFLUX), and lambda rising in ln R from lo at R_TI to hi at R_OUT (held beyond)
+  // (round 13c) the mass budget's settings (see MFLUX), and its lambda in ln R through three anchors: lin at the dust's inner
+  // edge R_IN, lo at R_TI, hi at R_OUT (held inside R_IN and beyond R_OUT)
   let MF = null;
-  const lamRise = (lo, hi, R) => lo + (hi - lo) * Math.min(Math.max(Math.log(R / NONIDEAL.R_TI) / Math.log(MODEL.R_OUT / NONIDEAL.R_TI), 0), 1);
-  // the lines' lambda: with the budget's rising profile (MF.rise) that one, else round 8's; within the tables' range either way
-  const lamOf = (Rf) => Math.min(LAM.MAX, Math.max(LAM.MIN, MF && MF.rise ? lamRise(MF.lo, MF.hi, Rf) : LAM.A + LAM.B / Math.sqrt(Rf)));
+  const lamRise = (M, R) => (R < NONIDEAL.R_TI
+    ? M.lin + (M.lo - M.lin) * Math.min(Math.max(Math.log(R / MODEL.R_IN) / Math.log(NONIDEAL.R_TI / MODEL.R_IN), 0), 1)
+    : M.lo + (M.hi - M.lo) * Math.min(Math.log(R / NONIDEAL.R_TI) / Math.log(MODEL.R_OUT / NONIDEAL.R_TI), 1));
+  // the lines' lambda: with the budget's profile (MF.rise) that one, else round 8's; within the tables' range either way
+  const lamOf = (Rf) => Math.min(LAM.MAX, Math.max(LAM.MIN, MF && MF.rise ? lamRise(MF, Rf) : LAM.A + LAM.B / Math.sqrt(Rf)));
   const BPL = [
     { LAM: 1.8, KAP: 15.0, A0: 1.847397, B0: -11.98951, // table-l1.8-k15.json
       XI: [1, 1.0411, 1.0837, 1.1281, 1.1742, 1.2224, 1.2726, 1.325, 1.3798, 1.4371, 1.4969, 1.5596, 1.6251, 1.6937, 1.7656, 1.8408, 1.9195, 2.002, 2.0884, 2.1788, 2.2735, 2.3725, 2.4762, 2.5845, 2.6979, 2.8163, 2.9399, 3.0689, 3.2035, 3.3438, 3.4898, 3.6417, 3.7995, 3.9633, 4.1331, 4.3089, 4.4907, 4.6782, 4.8715, 5.0702, 5.2741, 5.483, 5.6963, 5.9136, 6.1344, 6.358, 6.5836, 6.8104, 7.0374, 7.2636, 7.4877, 7.7083, 7.9241, 8.1335, 8.3346, 8.5258, 8.7049, 8.8698, 9.0183, 9.1478, 9.2559, 9.3396, 9.396, 9.4219],
@@ -491,8 +494,19 @@
   //     over the speed, whatever chi_c);
   //   lambda rising outward, from LAM_LO at R_TI to LAM_HI at the disk's edge R_OUT, in ln R and held beyond (the owner's:
   //     round 8 had it falling, see LAM): the lines take the tables' solution for their foot's lambda, within the tables' 1.8
-  //     to 4 (lamOf), the budget the lambda itself at the base's radius (lamBud: down to 1.5, where a cold solution would need
-  //     more than 3/2, so the lines inside about 1.2 au are those of 1.8);
+  //     to 4 (lamOf), the budget the lambda itself at the base's radius (lamBud). (The owner, after 1.9-dev.7: 1.2 at R_TI to 5
+  //     at R_OUT, the inner wind strong and the outer weak; magneto-thermal winds, which the gas's pressure helps to launch,
+  //     can have lambda near 1, where no cold solution exists (it needs more than 3/2). So the lines inside about 0.6 au keep
+  //     the shape and speed of the cold solution for 1.8, and beyond about 9 au those of 4; a warm solution would be needed
+  //     for a geometry consistent with the budget's lambda there. It was 1.5 to 2.5 in 1.9-dev.7: data-lam="1.5,2.5"
+  //     data-lamin="1.5".) Inside R_TI lambda rises again toward the dust's inner edge, LAM_IN (4) at R_IN: the owner, "about
+  //     half should reach the star". The thermally ionized inner rim couples the field ideally, and ideal-MHD winds have
+  //     large lever arms (4-6, Jacquemin-Ide et al. 2021, as round 8 read them); with the 1.2 at R_TI the inner wind takes
+  //     about half of what reaches R_TI. There the lines and the budget agree (lambda 1.8 to 4, within the tables), except
+  //     close to R_TI. The inner lines then open wider than their neighbours outside and cross them above about 10 au (R falls
+  //     back by up to 12 % at 20 au, feet near 0.2 au), a fold of the kind the dead zone's onset has made since round 8 (8 %
+  //     there, near 0.3 au): the wind map's footRadius takes one of the lines where they cross. data-lamin="1.2" gives the
+  //     single rise of before.
   //   the accretion layers keep their speed K c_s and their place: the column that moves is the budget's, Sigma_s =
   //     Mdot_acc / 2 pi R sum_s w_s K_s c_s on each layer, a thin sheet where the field bends (the gas line's inflow follows it,
   //     see coGas; the flow arrows, the cut's Regions and the temperature's heating layer are unchanged).
@@ -501,12 +515,12 @@
   // layers' whole gas); data-lam="old", or "lo,hi"; data-mdot, M_sun/yr, the budget's only (THERMO's heating keeps
   // THERMO.MDOT); data-chic. MF.tab: the budget's I = ln(Mdot_acc / Mdot_TI) and its slope dI/dln r at N nodes in ln r from
   // X0 to X1, for a cubic Hermite (the wind map's and the script's); MF.tabV the same at NV nodes, for the gas line's sheet
-  // (within 0.2 % of the other from 0.34 to 35 au; the sheet's own effect is 1e-3 of the flow). K: the solar mass in the model's unit,
+  // (within 0.6 % of the other from 0.34 to 35 au; the sheet's own effect is 1e-3 of the flow). K: the solar mass in the model's unit,
   // Sigma(1 au) au^2, for Sigma(1 au) = 1700 g cm^-2 (PROBE.SIG1, the probe's scale: the model's own Sigma is dimensionless).
-  const MFLUX = { LAM_LO: 1.5, LAM_HI: 2.5, CHI_C: 0.003, N: 128, NV: 16, X0: Math.log(0.04), X1: Math.log(128), K: 1.989e33 / (1700 * 1.496e13 * 1.496e13) };
+  const MFLUX = { LAM_IN: 4.0, LAM_LO: 1.2, LAM_HI: 5.0, CHI_C: 0.003, N: 128, NV: 16, X0: Math.log(0.04), X1: Math.log(128), K: 1.989e33 / (1700 * 1.496e13 * 1.496e13) };
   const RHO_B_JS = Math.exp(-MODEL.LNTAU1) / (Math.sqrt(2 * Math.PI) * MODEL.H0);   // (as RHO_B in the GLSL: the gas at tau* = 1 at 1 au)
   // the budget's lambda at the radius where the wind leaves: the rising profile unclamped, or round 8's as the lines have it
-  const lamBud = (r) => (MF.rise ? lamRise(MF.lo, MF.hi, r) : Math.min(LAM.MAX, Math.max(LAM.MIN, LAM.A + LAM.B / Math.sqrt(r))));
+  const lamBud = (r) => (MF.rise ? lamRise(MF, r) : Math.min(LAM.MAX, Math.max(LAM.MIN, LAM.A + LAM.B / Math.sqrt(r))));
   const mfSlope = (x) => { const r = Math.exp(x); return Math.exp(-cutOut(r)) / (2 * (lamBud(r) - 1)); };   // dI/dln r
   // I at r from n nodes (tab: I and its slope, interleaved), by the cubic Hermite, as mfHermite in the GLSL
   const mfHerm = (tab, n, r) => {
@@ -519,8 +533,8 @@
   function mfluxSet(d = {}) {
     const num = (v, lo, hi, def) => { const x = Number(v); return v != null && v !== '' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : def; };
     const on = d.mflux !== '0', m = /^\s*([0-9.]+)\s*,\s*([0-9.]+)\s*$/.exec(d.lam || '');
-    MF = { on, rise: on && d.lam !== 'old', lo: m ? num(m[1], 1.1, LAM.MAX, MFLUX.LAM_LO) : MFLUX.LAM_LO, hi: m ? num(m[2], 1.1, LAM.MAX, MFLUX.LAM_HI) : MFLUX.LAM_HI,
-      chic: num(d.chic, 1e-4, 0.05, MFLUX.CHI_C), mdot: num(d.mdot, 1e-10, 1e-5, THERMO.MDOT) };
+    MF = { on, rise: on && d.lam !== 'old', lo: m ? num(m[1], 1.05, 10, MFLUX.LAM_LO) : MFLUX.LAM_LO, hi: m ? num(m[2], 1.05, 10, MFLUX.LAM_HI) : MFLUX.LAM_HI,
+      lin: num(d.lamin, 1.05, 10, MFLUX.LAM_IN), chic: num(d.chic, 1e-4, 0.05, MFLUX.CHI_C), mdot: num(d.mdot, 1e-10, 1e-5, THERMO.MDOT) };
     // the nodes: I = 0 at R_TI, by Simpson's rule from node to node (steps of at most 0.004 in ln r)
     const xTI = Math.log(NONIDEAL.R_TI);
     const simpson = (a, b, n) => { const h = (b - a) / n; let t = mfSlope(a) + mfSlope(b); for (let i = 1; i < n; i++) t += (i % 2 ? 4 : 2) * mfSlope(a + i * h); return t * h / 3; };
@@ -557,10 +571,12 @@ uniform vec4 uBPL[NBP];
 const float C0 = ${G(BP.C0)}, SMAX = ${G(BP.SMAX)}, CHIMAX = ${G(BP.CHIMAX)};
 float cutOut(float R){ return pow(R / R_OUT, P_OUT); }      // -ln of the density cutoff
 float zBase(float Rf){ float H = H0 * pow(Rf, 1.25); return H * sqrt(2.0 * max(${G(MODEL.LNTAU1)} - 1.25 * log(Rf) - cutOut(Rf), 1.0)); }
-// (round 13c) the lever arm's profile (MF in the script): uLamP.x 1, rising in ln Rf from uLamP.y at R_TI to uLamP.z at R_OUT;
-// 0, round 8's; the lines' solutions within the tables' range (set in the wind map, the one program that asks for it)
+// (round 13c) the lever arm's profile (MF in the script): uLamP.x 1, in ln R through uLamP.w at R_IN, uLamP.y at R_TI and
+// uLamP.z at R_OUT (lamProf, held outside them); 0, round 8's; the lines' solutions within the tables' range (set in the wind
+// map, the one program that asks for it)
 uniform vec4 uLamP;
-float lamOf(float Rf){ return clamp(uLamP.x > 0.5 ? mix(uLamP.y, uLamP.z, clamp(log(Rf / R_TI) / log(R_OUT / R_TI), 0.0, 1.0)) : ${G(LAM.A)} + ${G(LAM.B)} * inversesqrt(Rf), ${G(LAM.MIN)}, ${G(LAM.MAX)}); }
+float lamProf(float r){ return r < R_TI ? mix(uLamP.w, uLamP.y, clamp(log(r / R_IN) / log(R_TI / R_IN), 0.0, 1.0)) : mix(uLamP.y, uLamP.z, clamp(log(r / R_TI) / log(R_OUT / R_TI), 0.0, 1.0)); }
+float lamOf(float Rf){ return clamp(uLamP.x > 0.5 ? lamProf(Rf) : ${G(LAM.A)} + ${G(LAM.B)} * inversesqrt(Rf), ${G(LAM.MIN)}, ${G(LAM.MAX)}); }
 // the rows of the line with foot Rf: j, and the share of row j + 1
 vec2 lamRow(float Rf){
   float l = lamOf(Rf); int j = 0;
@@ -981,7 +997,7 @@ ${CONST_GLSL}
 ${FIELD_GLSL}
 ${MAP_GLSL}
 ${mfHermite('mfI', 'uMdotT', MFLUX.N)}
-float lamBud(float r){ return uLamP.x > 0.5 ? mix(uLamP.y, uLamP.z, clamp(log(r / R_TI) / log(R_OUT / R_TI), 0.0, 1.0)) : clamp(${G(LAM.A)} + ${G(LAM.B)} * inversesqrt(r), ${G(LAM.MIN)}, ${G(LAM.MAX)}); }
+float lamBud(float r){ return uLamP.x > 0.5 ? lamProf(r) : clamp(${G(LAM.A)} + ${G(LAM.B)} * inversesqrt(r), ${G(LAM.MIN)}, ${G(LAM.MAX)}); }
 void main(){
   // (both hemispheres: theta from -90 to 90 degrees; the lower one's lines bend as the side s says)
   float r = exp(LNW_MIN + gl_FragCoord.x / uMapRes.x * LNW_SPAN), th = (gl_FragCoord.y / uMapRes.y - 0.5) * PI;
@@ -4522,7 +4538,7 @@ void main(){
     gl.uniform1i(gl.getUniformLocation(progWind, 'uBPT'), 2);
     gl.uniform4fv(gl.getUniformLocation(progWind, 'uBPL'), new Float32Array(BPL.flatMap((T) => [T.LAM, T.A0, T.B0, 0])));
     // (round 13c) the mass budget's settings and table (see MFLUX), for this build
-    gl.uniform4f(gl.getUniformLocation(progWind, 'uLamP'), MF.rise ? 1 : 0, MF.lo, MF.hi, 0);
+    gl.uniform4f(gl.getUniformLocation(progWind, 'uLamP'), MF.rise ? 1 : 0, MF.lo, MF.hi, MF.lin);
     gl.uniform4f(gl.getUniformLocation(progWind, 'uMflux'), MF.on ? 1 : 0, MF.chic, MF.mdot, 0);
     gl.uniform4fv(gl.getUniformLocation(progWind, 'uMdotT'), MF.tab);
     gl.uniform2f(gl.getUniformLocation(progWind, 'uMapRes'), windMapT.w, windMapT.h);
