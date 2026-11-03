@@ -17,7 +17,7 @@ const ENGINE_SRC = 'engine/disk3d.js?v=56a94c039c';   // ?v= the first ten chara
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.3', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.4', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and

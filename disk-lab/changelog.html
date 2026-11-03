@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Disk Lab の更新履歴 | Disk Lab</title>
+<link rel="icon" type="image/svg+xml" sizes="any" href="/images/favicon-wave.svg?v=a5-bold-20261015">
+<style>
+:root{--night:#0c0f17;--text:#e9edf3;--text-2:#b3bbc8;--line:rgba(255,255,255,.12);--accent:#e0915a;--sans:Inter,'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Noto Sans JP',system-ui,sans-serif}
+html{background:var(--night)}
+body{margin:0;padding:28px 16px 48px;color:var(--text);font:14px/1.7 var(--sans);-webkit-font-smoothing:antialiased}
+main{max-width:980px;margin:0 auto}
+h1{font-size:22px;font-weight:600;margin:0 0 6px}
+h2{font-size:16px;font-weight:600;margin:32px 0 8px;color:var(--text)}
+p{margin:8px 0;color:var(--text-2)}
+a{color:var(--accent)}
+code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text);background:rgba(255,255,255,.06);padding:1px 4px;border-radius:4px}
+.nav{font-size:13px;color:var(--text-2);margin-bottom:18px}
+table{width:100%;border-collapse:collapse;margin:10px 0 0;font-size:13px}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-top:1px solid var(--line)}
+th{color:var(--text-2);font-weight:500;font-size:12px}
+td:first-child{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--text)}
+td:nth-child(2){white-space:nowrap;color:var(--text-2)}
+@media (max-width:700px){
+  table,thead,tbody,tr,td,th{display:block}
+  thead{display:none}
+  tr{border-top:1px solid var(--line);padding:8px 0}
+  td{border:0;padding:3px 0;white-space:normal!important}
+  td::before{content:attr(data-h) ' ';color:var(--text-2);font-size:12px;margin-right:6px}
+}
+</style>
+</head>
+<body>
+<main>
+<p class="nav"><a href="/disk-lab/">← Disk Lab</a> · <a href="/">Shoji Mori</a> · <span lang="en">The record of Disk Lab's updates (in Japanese); the version shows at the end of the page's "About this model".</span></p>
+<h1>Disk Lab の更新履歴</h1>
+<p>公開版 <a href="https://shoji-mori.github.io/disk-lab/">https://shoji-mori.github.io/disk-lab/</a> の版。版は <code>app.js</code> の <code>VERSION</code> と <code>RELEASED</code> の一か所で決め、右の列の下端と 「このモデルについて」の末尾に小さく出す。新しい機能や物理の変更で二つ目の数を、小さな直しで三つ目の数を上げる。 設計の理由は DESIGN.md、エンジンの変更は engine/CHANGES.md。</p>
+<table><thead><tr><th>版</th><th>日付</th><th>主な変更</th></tr></thead><tbody>
+<tr><td data-h="版">1.9</td><td data-h="日付">未公開(開発版 /disk-lab/dev/)</td><td data-h="主な変更">第 10c 巡:ガス輝線の線幅を温度とモデル自身の乱流から(分子の熱運動に、熱電離の内側円盤・デッドゾーン・外側円盤の弱い乱流を足し、降着層と風は層流。前の幅は乱流を二重に数えて 1.4〜2.3 倍広かった)、線の形を面積で規格化(同じ量なら細い線ほど線中心が濃い:外側の τ = 1 の面が少し上がり、内側は下がる)、積分強度の表示の基準を 900 → 730(同じ明るさに見えるよう)。第 11a 巡:発表のための「動きと発表」:今の眺めから一押しの 6 つの動き(1 周、真横から真上へ、遠くから星まで、円盤に沿って惑星へ、時間の早送り、見え方を順に)と速さ、自分で加える場面(名前、並べ替え、再生、この端末に残す、JSON のファイル、#seq= のリンク)、発表モード(絵だけを全画面に、リモコンの → ← Page Down Page Up で場面を進め、スペースで時計、B で黒い画面、Esc で終わり、透かしは残す)、飛行は滑らかな経路(遠い行き先は引いてから寄る、1 桁のズームに約 2.5 秒、行き先に正確に着き、赤道面は円盤の縁を回る)で見え方は発表者のまま、着いた絵は選んだ質まで仕上げる、エンジンの時計を一本に(動画の書き出しの準備)</td></tr>
+<tr><td data-h="版">1.8</td><td data-h="日付">2026-11-02</td><td data-h="主な変更">第 10a 巡:端末の上の飛行記録(GPU の仕事の前後、1 秒ごとの拍、端末のこと、止まった時の「前回の記録を見る」とコピー。どこへも送らない)、「遅い」と「壊れた」を分ける判定、安全な始まりでも設定を消さず一度で戻せる、止まった見え方だけを避けて名前を言う、見張りの穴の直し(最初の帯、静止画の帯、跳びの後、FULL の測り、ページの始まりの断面)、見張りのある端末で GPU を休ませる割合、連続光(可視光、中間赤外)とガス輝線の軽い段の光線を区切って進める(1 回の描画で 1 本の光線が GPU を占める時間を数 ms に。絵はビット単位で同じ)、止めた絵は選んだ質の縮尺まで一段ずつ仕上げる、固定の質(低・中・高・最高)は固定(見張りは縮尺を下げず、片の長さで守る)、時計を動かしたまま手を離すと一段ずつ細かく、休みのお知らせの帯をなくす、自動の調整は視点が動く間だけ、ガス輝線の M0・M1 は窓の探索を 4 倍細かく(星のそばの抜けを直す)して速度の格子をずらした和を平均(止めた絵で 16 枚、時計が動く間は 8 枚)、動きを減らす設定でもプログラムの暖機を待つ、開発版 /disk-lab/dev/(noindex)</td></tr>
+<tr><td data-h="版">1.7</td><td data-h="日付">2026-10-20</td><td data-h="主な変更">第 9 巡:重い見え方で GPU を止めない見張り(1 回の GPU の仕事の予算、変える前の予測で縮尺を下げる、止まった絵や跳びの後や道具の描画は帯に分ける、エンジン自身の見張り、地図のパスも 1 片として数える)、重い見え方は準備ができるまで「準備しています…」、ガス輝線と可視光の長い光線の上限と表示に合わせた止め方、予算を超える端末は軽い行進(ガス輝線は rec-c2)、ガス輝線の行進を速く(rec)してモーメントをパスに分ける、携帯とタブレットは自動が既定、止まって終わった次は安全な設定で始める、止まったままの時の案内をブラウザーごとに、設定と視点をこの端末に覚えて「最初に戻す」、時計だけが動く間は 30 fps(携帯 20 fps、渦は 2 フレームに 1 回)と携帯は 30 秒で休む、惑星のつまみが指に付いてくる、CO を「ガス輝線」に、ジェットを細く淡い黄色に、9 au の環をなくす、星を少し明るく、分子雲を作り直す</td></tr>
+<tr><td data-h="版">1.6</td><td data-h="日付">2026-10-17</td><td data-h="主な変更">第 8 巡の見栄え:モデルの見え方を星の光で照らす(前方散乱、手前が明るく、光の届かない赤道面と奥は暗く)、デッドゾーンの外縁の圧力の極大と小石の環、円盤とともに回る細かな乱流の模様(かき混ぜの強さに比例)、トーンと空気遠近とにじみ(画質の段に応じて)、最初の眺めを 16° に、ジェットの根元を細く</td></tr>
+<tr><td data-h="版">1.5</td><td data-h="日付">2026-10-17</td><td data-h="主な変更">第 8 巡:モデルの見え方を物質の色に、円盤を 1.5 倍厚く、風の範囲 1.7 倍、ジェット、風のレバーアームを足元の半径で、鉛直の構造の直し(層流は区分名でない、降着層は磁力線が曲がる所で外側では赤道面)、惑星の質量、周惑星円盤の反り返り、小石の円盤 20 au、エンベロープを 40 au から、流れの矢印(ガスの設定)、背景(なし/星/分子雲)、タップで小石を置くモード、2 本指で横に動かない、断面の背景・1/4 カット・惑星の印・スノーラインの破線、引用は英語、時刻の表記をなくす</td></tr>
+<tr><td data-h="版">1.4.1</td><td data-h="日付">2026-10-17</td><td data-h="主な変更">引用に版を入れる(Mori, S. 2026, Disk Lab: an interactive model of a protoplanetary disk (v1.4.1), URL)、ページの説明文(検索と共有の要約)と「このモデルについて」冒頭の一行の紹介</td></tr>
+<tr><td data-h="版">1.4</td><td data-h="日付">2026-10-17</td><td data-h="主な変更">描画が止まったときの「もう一度描く」、起動に失敗した理由の表示、ブラウザーの WebGL が使えない状態の案内、放っておかれたら時計を止めて GPU を休ませる、版の表示</td></tr>
+<tr><td data-h="版">1.3</td><td data-h="日付">2026-10-17</td><td data-h="主な変更">温度を物理から(照射の再放射、降着の加熱、熱電離した内側の粘性加熱、過熱される表層の塵)、消した成分は光も影も持たない、エンベロープの自然発光、惑星を 0.05 au から、惑星と周惑星円盤が光る、保存の解像度、静かに戻る画質、X 点の印と 1/4 カットの角度</td></tr>
+<tr><td data-h="版">1.2</td><td data-h="日付">2026-10-16</td><td data-h="主な変更">断面のラベルと凡例の作り直し、断面の量を温度・密度・領域に、塵をガスに含めて温度の構造を見せる、「可視光」、濃さのつまみを外す、既定の画質を最高に、Kanagawa et al. (2017) のギャップ、周惑星円盤 H/R = 0.1、サイトのヘッダーのリンク</td></tr>
+<tr><td data-h="版">1.1</td><td data-h="日付">2026-10-16</td><td data-h="主な変更">時計の倍率を絵から外す、スノーラインの名前を遅らせる、流れの印を磁力線の設定へ、ヘッダーのホームへの印</td></tr>
+<tr><td data-h="版">1.0</td><td data-h="日付">2026-10-16</td><td data-h="主な変更">/disk-lab/ で公開。サイトのカードからの遷移、動かしている間の解像度の切り替え</td></tr>
+</tbody></table>
+<p>公開の記録は <a href="https://shoji-mori.github.io/disk-lab/changelog.html">https://shoji-mori.github.io/disk-lab/changelog.html</a>(この表から <code>ver2/tools/disk-lab-v2/changelog-html.py</code> が作る。 変えたら作り直す)。</p>
+<h2>開発版(/disk-lab/dev/)の記録</h2>
+<p>公開前に発注者が iPhone とノートパソコンで試すための版。noindex。公開版と同じコードの時だけ、版の数字が同じ。</p>
+<table><thead><tr><th>版</th><th>日付</th><th>入っているもの</th><th>見てほしいところ</th></tr></thead><tbody>
+<tr><td data-h="版">1.9-dev.4</td><td data-h="日付">2026-11-03</td><td data-h="入っているもの">dev.3 と同じコードに、「このモデルについて」から更新の記録への入口を足したもの</td><td data-h="見てほしいところ">記録の読みやすさ</td></tr>
+<tr><td data-h="版">1.9-dev.3</td><td data-h="日付">2026-11-03</td><td data-h="入っているもの">第 10c・11a・11b・11c・12a・12b 巡と検査道具の手当て、11a のレビュー対応 11 件、11b の動画の待ちと「やめる」の直し(ブラウザーとレンダリングの検査は発注者の指示で未実施:Node の検査のみ)</td><td data-h="見てほしいところ">ガス輝線の M0・M1 と細くなったチャンネル図。「動きと発表」の 6 つの動きと速さ、場面の追加・並べ替え・再生・リンク、発表モード(→ ← Page Down Page Up、スペース、B、Q、Esc)。「画像を保存」の 16:9・4:3 と右下の出典。「QR コード」。「探針」の「タップで調べる」。iPhone で「視点」の「傾けて覗き込む」(既定オフ、許可を尋ねる)。「動画」はモデルとミリ波の場面で 720p から(可視光と中間赤外の最高画質は 1 コマ十数秒以上、途中で「やめる」が効くか)</td></tr>
+<tr><td data-h="版">1.9-dev.2</td><td data-h="日付">2026-11-02</td><td data-h="入っているもの">dev.3 から 11b の動画の待ちと「やめる」の直しを除いたもの(未公開。統合検査でキック行進とガス輝線の同一性、探針の照合は合格。飛行中の可視光の片の予算超えと動画の 1 片の長い待ちが残った)</td><td data-h="見てほしいところ">—</td></tr>
+<tr><td data-h="版">1.9-dev.1</td><td data-h="日付">2026-11-02</td><td data-h="入っているもの">第 10c 巡(ガス輝線の線幅)と第 11a 巡(一本の時計、滑らかな経路の飛行、動きと発表、発表モード)</td><td data-h="見てほしいところ">飛行の速さ(1 桁のズームに約 2.5 秒)、最高で惑星のそばへ飛んだ時のかくつき、ガス輝線の見え方</td></tr>
+</tbody></table>
+</main>
+</body>
+</html>
