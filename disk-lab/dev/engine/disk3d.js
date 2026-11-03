@@ -2447,26 +2447,50 @@ float cloud(vec3 q, vec3 rd, float s, float zeta){
 // a planet of under a few thermal masses (q_th <~ 1-3, 10 Earth masses everywhere here) wears a nearly round envelope
 // rather than a disk, as the simulations find (Ayliffe & Bate 2009; Sagynbayeva et al. 2024). uCpd.w: its glow for the
 // planet's mass (see glowOf).)
-uniform vec4 uCpd;
+// (Round 13e, the first step of the CPD's study, ver2/docs/cpd-detail-study.md 7.1-7.3, and DESIGN.md section 35: the disk's
+// size, kind, temperature, thickness and millimetre optical depth come from the script's cpdPhys, for the planet's mass, its
+// orbit and its accretion rate. uCpd[0]: the clouds' H/r (their half-light radii) and the model look's glow (glowOf);
+// uCpd[1]: the disk's outer radius R_out (au; it was rCPD, 0.4 R_H; the clouds' widths stay 0.1, 0.3, 0.55 of it) and the
+// clouds' temperatures (K, at their half-light radii); uCpd[2]: the factor on CPD_TAU in the millimetre look (the disk's own
+// optical depth there), the blend D from envelope (0) to disk (1), CPD_DISP the observed looks' one display factor (the
+// brightness otherwise physical: the laws the disk's own light follows in each look, cpdSrc), and 1 for the disk of round 8
+// to compare (data-cpd="old": 0.4 R_H, its colours and glow). The model's look keeps its material colours and glow; the
+// millimetre look draws the CPD's dust as the pebbles' sheet is drawn, G_MM (T/100)(1 - e^-tau) MM_COL, with its own tau.)
+uniform vec4 uCpd[3];
 const vec3 CPD_TAU = vec3(2.84, 1.93, 1.23), CPD_G = vec3(1.4, 0.9, 0.6);
+// (round 13e) the near infrared (2.2 microns, the K band) for the look "visible light" (scattered light, visible and near
+// infrared): B_nu relative to 1500 K, capped softly as mirPlanck; a disk below some 600 K hardly shows there
+float nirPlanck(float T){ float b = (exp(6540.0 / 1500.0) - 1.0) / (exp(6540.0 / max(T, 150.0)) - 1.0); return b / (1.0 + b / 6.0); }
+// (round 13e) the light of the CPD's material at T in an observed look, by the law the disk's own light follows there (its
+// surface in the mid-infrared, G_MIR mirPlanck mirColor; its pebbles in the millimetre, G_MM (T/100) MM_COL), per unit optical depth
+vec3 cpdSrc(float T){
+  if (uLook == 2) return G_MIR * mirPlanck(T) * mirColor(T);
+  if (uLook == 3) return G_MM * (T / 100.0) * MM_COL;
+  return G_OPT * nirPlanck(T) * tcolor(T);
+}
 vec4 planetLight(vec3 ro, vec3 rd, float aspect){
   vec3 q = ro - uPlV.xyz;
-  float R_CPD = rCPD(uPlVa);
-  float t1 = CPD_TAU.x * cloud(q, rd, 0.1 * R_CPD, uCpd.x * 0.1 * R_CPD), t2 = CPD_TAU.y * cloud(q, rd, 0.3 * R_CPD, uCpd.y * 0.3 * R_CPD), t3 = CPD_TAU.z * cloud(q, rd, 0.55 * R_CPD, uCpd.z * 0.55 * R_CPD);
+  float R_CPD = uCpd[1].x;
+  bool mat = uLook == 0, old = uCpd[2].w > 0.5;
+  // (round 13e: in the millimetre look the disk's own optical depth, the clouds' columns in proportion)
+  float k = uLook == 3 && !old ? uCpd[2].x : 1.0;
+  float t1 = k * CPD_TAU.x * cloud(q, rd, 0.1 * R_CPD, uCpd[0].x * 0.1 * R_CPD), t2 = k * CPD_TAU.y * cloud(q, rd, 0.3 * R_CPD, uCpd[0].y * 0.3 * R_CPD), t3 = k * CPD_TAU.z * cloud(q, rd, 0.55 * R_CPD, uCpd[0].z * 0.55 * R_CPD);
   float tt = t1 + t2 + t3;
-  // (round 8: in the model's look the planet's material colour, lighter toward the middle; in the observed looks the
-  // colours of the temperatures of a disk heated by accretion)
-  bool mat = uLook == 0;
-  vec3 c1 = mat ? mix(MAT_PLANET, vec3(1.0), 0.35) : tcolor(1200.0), c2 = mat ? MAT_PLANET : tcolor(530.0), c3 = mat ? 0.8 * MAT_PLANET : tcolor(330.0);
-  vec3 em = (t1 * CPD_G.x * c1 + t2 * CPD_G.y * c2 + t3 * CPD_G.z * c3) * transferWeight(tt);
+  // (round 8: in the model's look the planet's material colour, lighter toward the middle; round 13e: in the observed looks
+  // the light of the clouds' temperatures by each look's law (the colours of 1200, 530 and 330 K with the glow before))
+  vec3 em;
+  if (mat) em = (t1 * CPD_G.x * mix(MAT_PLANET, vec3(1.0), 0.35) + t2 * CPD_G.y * MAT_PLANET + t3 * CPD_G.z * 0.8 * MAT_PLANET) * uCpd[0].w;
+  else if (old) em = (t1 * CPD_G.x * tcolor(1200.0) + t2 * CPD_G.y * tcolor(530.0) + t3 * CPD_G.z * tcolor(330.0)) * uCpd[0].w;
+  else em = (t1 * cpdSrc(uCpd[1].y) + t2 * cpdSrc(uCpd[1].z) + t3 * cpdSrc(uCpd[1].w)) * (uLook == 3 ? 1.0 : uCpd[2].z);
+  em *= transferWeight(tt);
   // the planet, a point (its radius, 1.5 Jupiter radii, is below a pixel unless the camera is within about 0.3 au)
   vec3 pv = vec3(dot(-q, uBasis[0]), dot(-q, uBasis[1]), dot(-q, uBasis[2]));
   if (pv.z > 0.0) {
     vec2 ppx = (vec2(pv.x / (pv.z * uTanHalf * aspect), pv.y / (pv.z * uTanHalf)) * 0.5 + 0.5) * uRes;
     float d = length(gFc - ppx) / uPx, rp = 0.0007 / (pv.z * 2.0 * uTanHalf / uRes.y) / uPx;   // CSS px
-    em += (mat ? mix(MAT_PLANET, vec3(1.0), 0.5) : tcolor(1300.0)) * (4.0 * exp(-max(d - rp, 0.0) * max(d - rp, 0.0) / 0.8) + 0.1 * exp(-d / 2.5)) * exp(-0.25 * tt);
+    em += (mat ? mix(MAT_PLANET, vec3(1.0), 0.5) : tcolor(1300.0)) * (4.0 * exp(-max(d - rp, 0.0) * max(d - rp, 0.0) / 0.8) + 0.1 * exp(-d / 2.5)) * exp(-0.25 * tt) * uCpd[0].w;
   }
-  return vec4(em * uCpd.w, tt) * uPlV.w;
+  return vec4(em, tt) * uPlV.w;
 }
 
 // Quantities on the cut face at the point Rs (signed, along uSliceR) and z of the plane, with phi its azimuth:
@@ -5408,13 +5432,99 @@ void main(){
     const PLANET_GLOW = { model: 1, optical: 0.15, mir: 0.5, mm: 0.25, co: 0 };
     const glowOf = (p) => Math.min(1.8, Math.max(0.25, Math.sqrt(p.m)));   // (round 8: brighter for a heavier planet, see MASS)
     // (round 8) the planet's own disk: H/r of its three clouds (see uCpd in the shader) and its glow
-    const CPD_X = [0.1, 0.3, 0.55].map((w) => 1.5 * w * 0.4);   // the clouds' half-light radii in Hill radii
-    const cpdOf = (p) => {
-      if (!p) return [0.1, 0.1, 0.1, 1];
-      const hp = MODEL.H0 * Math.pow(p.a, 0.25), qth = p.q / (hp * hp * hp);
-      return [...CPD_X.map((x) => Math.min(0.8, Math.max(0.1, 0.83 * Math.pow(qth, -1 / 3) * Math.sqrt(x) / Math.sqrt(1 + x * x * x / 3)))), glowOf(p)];
+    // (Round 13e, the owner's first step of the CPD's study: ver2/docs/cpd-detail-study.md 7.1-7.3 with the decisions D-1 to D-7
+    // of its section 9; DESIGN.md, section 35.) The planet's own disk from its physics, cpdPhys(a, m, mdot, drawn), pure (the
+    // engine's mirrors only, so that ver2/tools/disk-lab-v2/cpd-check.mjs runs it in Node):
+    //   its kind and size from the planet's mass in thermal masses, q_th = q / h^3, h = H/R of the parent disk at the orbit: the
+    //     gas's own, c_s / v_K at the midplane's temperature (tMidJS: 0.026 at 1 au, 0.033 at 3 au), the owner's choice (D-1),
+    //     or with data-cpdh="drawn" the drawn H0 a^1/4 (1.8 times thicker at 3 au, q_th 5.6 times smaller), to compare. A disk
+    //     where q_th is large, an envelope where it is small, blended over q_th = 1 to 8, D = smoothstep (D-3): the simulations
+    //     find a continuum (Sagynbayeva et al. 2025), and rotational support from about 10 q_th in the adiabatic limit (Fung,
+    //     Zhu & Chiang 2019); the cooling criterion of Krapp et al. (2024) is left out (D-3). The disk reaches R_H min(0.4, 0.1
+    //     r_B / R_H), the tidal truncation (Martin & Lubow 2011) or the isothermal disk's bound 0.1 r_B (Fung et al.), with r_B /
+    //     R_H = 3^1/3 q_th^2/3; the envelope R_H min(1/3, 0.2 r_B / R_H) (the isentropic envelope to R_H / 3, Krapp et al.; the
+    //     adiabatic 0.2 r_B, Fung et al.), round (H/r 0.8, the clouds' cap of round 8);
+    //   its temperature, T^4 = T_acc^4 + T_irr^4 + T_0^4: the steady disk's accretion heating, sigma T_acc^4 = 3 G M_p Mdot_p
+    //     (1 - (R_p / r)^1/2) / 8 pi r^3 (Zhu 2015; Adams & Batygin 2025, eq. 88); the planet's light, sigma T_irr^4 = PHI L_p /
+    //     4 pi r^2, L_p = G M_p Mdot_p / R_p the accretion luminosity (D-2), PHI the grazing angle (an estimate), R_p from the
+    //     planet's mass by the mean relation of Chen & Kipping (2017, Table 1; for mature planets: a young accreting one is
+    //     larger, 1.5-2 R_J, and its L_p smaller); T_0, the parent disk's midplane at the orbit (tMidJS); held below T_MAX;
+    //   Mdot_p, the planet's accretion rate (M_J/yr): a tenth of the disk's at the orbit (mdotAccJS, round 13c's mass budget;
+    //     the gap's filtering lets a fraction through, D-2: 3e-5 M_J/yr for a Jupiter at 3 au), or the page's for all the
+    //     planets (cpdMdot, the planets' panel, MDOT; PDS 70 b and c accrete about 1e-8, Thanathibodee et al. 2019);
+    //   its thickness from that temperature, H/r = c_s(T) / v_K about the planet (the radiative CPDs are thick and hardly
+    //     flare: Ayliffe & Bate 2009; Szulagyi et al. 2016), or round 8's isothermal disk at the parent's temperature where it is
+    //     thicker (the form of Tanigawa et al. 2012 and Fung et al. 2019, with the h above: with the drawn h the flaring of
+    //     before), within HR, toward the envelope's 0.8 by D;
+    //   its millimetre optical depth (D-5): steady accretion, Sigma = Mdot_p Omega / 3 pi alpha c_s^2 with alpha = ALPHA (3.1e-3,
+    //     the laminar wind-driven CPD of Shibaike & Mori 2023), dust D2G (a tenth of the parent disk's 0.01), KAPPA_MM, 3.5 cm^2
+    //     per gram of dust at 0.87 mm (Isella et al. 2019): the clouds' columns (TAU, CPD_TAU in the GLSL) scaled so that their
+    //     sum is the disk's at the middle cloud's half-light radius (mmK). The model's pebbles are drawn far thinner than their
+    //     Sigma would make them (K_MM, SD0: a translucent picture); the CPD as its physics has it, thick at the default rate, as
+    //     PDS 70 c's is (spectral index 2.0: Dominguez-Jamett et al. 2025; Shibaike et al. 2026), thin at a low one.
+    // The observed looks' light: each look's own law (cpdSrc in the GLSL) times one display factor DISP, set so that a Jupiter
+    // at 3 au shows about as bright in the mid-infrared as round 8's disk (cpd-check.mjs: the face-on integral of its light).
+    const CPD = { TAU: [2.84, 1.93, 1.23], X: [0.1, 0.3, 0.55], HALF: 1.5, D: [1, 8], R_DISK: 0.4, K_DISK: 0.1, R_ENV: 1 / 3, K_ENV: 0.2, HR: [0.1, 0.8],
+      MDOT_K: 0.1, MDOT: [1e-10, 1e-4], PHI: 0.05, T_MAX: 3000, R_IN: 1.5, ALPHA: 3.1e-3, D2G: 0.1 * 0.01, KAPPA_MM: 3.5, DISP: 0.7,
+      C: { G: 6.674e-8, MSUN: 1.989e33, YR: 3.156e7, AU: 1.496e13, SIG: 5.6704e-5, K: 1.3807e-16, MH: 1.6726e-24, MU: 2.34, RJ: 7.1492e9, LSUN: 3.828e33, ME: 317.83, RJE: 11.209 } };
+    // a planet's radius (R_J) from its mass (M_J): Chen & Kipping (2017), Table 1, R ∝ M^0.279 up to 2.04 Earth masses (1.008
+    // Earth radii at one), M^0.589 up to 0.414 M_J, M^-0.044 beyond, continuous
+    const CK = { S: [0.279, 0.589, -0.044], T: [2.04, 0.414 * 317.83], R1: 1.008 };
+    const radiusOf = (m) => {
+      const me = m * CPD.C.ME, r2 = CK.R1 * Math.pow(CK.T[0], CK.S[0]), r3 = r2 * Math.pow(CK.T[1] / CK.T[0], CK.S[1]);
+      return (me < CK.T[0] ? CK.R1 * Math.pow(me, CK.S[0]) : me < CK.T[1] ? r2 * Math.pow(me / CK.T[0], CK.S[1]) : r3 * Math.pow(me / CK.T[1], CK.S[2])) / CPD.C.RJE;
     };
-    box.diskCpd = (i = 0) => cpdOf(planets[i]);   // (for checks: a planet's disk's H/r, three clouds, and glow)
+    const cpdPhys = (a, m, mdotSet = 0, drawn = false) => {
+      const C = CPD.C, q = m * MASS.MJ, Mp = q * C.MSUN, rH = a * Math.cbrt(q / 3), T0 = tMidJS(a, 1);
+      const hGas = Math.sqrt(C.K * T0 / (C.MU * C.MH) * a * C.AU / (C.G * C.MSUN)), h = drawn ? MODEL.H0 * Math.pow(a, 0.25) : hGas;
+      const qth = q / (h * h * h), D = ss(CPD.D[0], CPD.D[1], qth), rB = Math.cbrt(3) * Math.pow(qth, 2 / 3);   // (r_B in R_H)
+      const rDisk = Math.min(CPD.R_DISK, CPD.K_DISK * rB), rEnv = Math.min(CPD.R_ENV, CPD.K_ENV * rB), rOut = rH * (rEnv + (rDisk - rEnv) * D);
+      const mdot = mdotSet > 0 ? Math.min(CPD.MDOT[1], Math.max(CPD.MDOT[0], mdotSet)) : CPD.MDOT_K * mdotAccJS(a) / MASS.MJ;   // M_J/yr
+      const Md = mdot * MASS.MJ * C.MSUN / C.YR, Rp = radiusOf(m) * C.RJ, L = C.G * Mp * Md / Rp;   // g/s, cm, erg/s
+      // at r (au) from the planet: T (K), H/r, Sigma (g cm^-2) and the millimetre's vertical optical depth; no closer than R_IN
+      // planetary radii (a steady disk is hottest at 1.36 times its inner edge: inside, the planet; at 0.05-0.1 au a disk of 0.4
+      // R_H is only a few planetary radii across)
+      const at = (r) => {
+        const rc = Math.max(r * C.AU, CPD.R_IN * Rp), acc = 3 * C.G * Mp * Md * Math.max(0, 1 - Math.sqrt(Rp / rc)) / (8 * Math.PI * C.SIG * rc * rc * rc);
+        const T = Math.min(CPD.T_MAX, Math.pow(acc + CPD.PHI * L / (4 * Math.PI * C.SIG * rc * rc) + T0 * T0 * T0 * T0, 0.25));
+        const cs2 = C.K * T / (C.MU * C.MH), vK = Math.sqrt(C.G * Mp / rc), x = rc / C.AU / rH;
+        const hr = Math.min(CPD.HR[1], Math.max(CPD.HR[0], Math.sqrt(cs2) / vK, 0.83 * Math.pow(qth, -1 / 3) * Math.sqrt(x) / Math.sqrt(1 + x * x * x / 3)));
+        const sigma = Md * vK / rc / (3 * Math.PI * CPD.ALPHA * cs2);
+        return { T, Hr: CPD.HR[1] + (hr - CPD.HR[1]) * D, sigma, tauMm: CPD.KAPPA_MM * CPD.D2G * sigma };
+      };
+      const xs = CPD.X.map((w) => CPD.HALF * w * rOut), c = xs.map(at);
+      const s2 = CPD.X.reduce((s, w, i) => s + CPD.TAU[i] * Math.exp(-0.5 * Math.pow(xs[1] / (w * rOut), 2)), 0);
+      return { a, m, q, h, hGas, drawn, qth, D, rH, rB: rB * rH, rDisk: rDisk * rH, rEnv: rEnv * rH, rOut, mdot, auto: !(mdotSet > 0), Rp, L: L / C.LSUN, T0, xs,
+        T: c.map((v) => v.T), Hr: c.map((v) => v.Hr), sigma: c.map((v) => v.sigma), tauMm: c.map((v) => v.tauMm), mmK: c[1].tauMm / s2, at };
+    };
+    // the page's accretion rate for all the planets' disks (M_J/yr; 0: each a tenth of the disk's at its orbit), see diskSet;
+    // the development switches, read when the engine is built: data-cpdh="drawn", the thermal mass with the drawn h (D-1's
+    // comparison); data-cpd="old", round 8's disk (0.4 R_H, its clouds' H/r, colours and glow)
+    let cpdMdot = 0;
+    const CPD_DRAWN = box.dataset.cpdh === 'drawn', CPD_OLD = box.dataset.cpd === 'old';
+    const cpdMemo = new Map();
+    const cpdState = (p) => {
+      const key = p.a + ':' + p.m + ':' + cpdMdot + ':' + MF.mdot + ':' + THERMO.MDOT;
+      let c = cpdMemo.get(key);
+      if (!c) { if (cpdMemo.size > 64) cpdMemo.clear(); c = cpdPhys(p.a, p.m, cpdMdot, CPD_DRAWN); cpdMemo.set(key, c); }
+      return c;
+    };
+    // the disk's outer radius as drawn (au)
+    const cpdROut = (p) => (CPD_OLD ? 0.4 * hillOf(p) : cpdState(p).rOut);
+    // (round 8's: the larger of 0.1 and the isothermal disk at the drawn h, within 0.8, at the half-light radii in Hill radii)
+    const CPD_X = [0.1, 0.3, 0.55].map((w) => 1.5 * w * 0.4);
+    const cpdOld = (p) => { const hp = MODEL.H0 * Math.pow(p.a, 0.25), qth = p.q / (hp * hp * hp); return CPD_X.map((x) => Math.min(0.8, Math.max(0.1, 0.83 * Math.pow(qth, -1 / 3) * Math.sqrt(x) / Math.sqrt(1 + x * x * x / 3)))); };
+    // uCpd[3] (see the GLSL): the clouds' H/r and the glow; R_out and the clouds' temperatures; the millimetre's factor, D, DISP
+    // and 1 for round 8's disk
+    const cpdU = new Float32Array(12);
+    const cpdOf = (p) => {
+      if (!p) cpdU.set([0.1, 0.1, 0.1, 1, 0.4 * PLANET.RH, 1200, 530, 330, 1, 1, CPD.DISP, 1]);
+      else if (CPD_OLD) cpdU.set([...cpdOld(p), glowOf(p), 0.4 * hillOf(p), 1200, 530, 330, 1, 1, CPD.DISP, 1]);
+      else { const c = cpdState(p); cpdU.set([...c.Hr, glowOf(p), c.rOut, ...c.T, c.mmK, c.D, CPD.DISP, 0]); }
+      return cpdU;
+    };
+    box.diskCpd = (i = 0) => Array.from(cpdOf(planets[i]));   // (for checks: uCpd as sent)
+    box.diskCpdState = (i = 0) => (planets[i] ? cpdState(planets[i]) : null);   // (round 13e, for checks: the disk's physics)
     const plGlowD = new Float32Array(4 * PLANETS.MAX);
     function planetGlowSet(pV, pVis) {
       plGlowD.fill(0);
@@ -6907,7 +7017,7 @@ void main(){
       const bgK = bgMoves() ? 0 : bgLeft(), bgA = bgMoves() ? 0 : viewOff() + bgK;
       // a still picture (see ACC_MAX): the same state as the last frame, drawn by the same program
       const sig = [time, ...cam, ...basis.f, rW, rH, canvas.width, opt.steps, opt.fov, opt.seed, starL, LOOKS[lookNow], rSn, opt.mode, BG.MODES[opt.bg], bgK, ...compAmp, ...opt.gain,
-        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), colGen, coLn, expo];   // (round 13a: colGen, the materials' colours, see box.diskColours)
+        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), colGen, cpdMdot, coLn, expo];   // (round 13a: colGen, the materials' colours, see box.diskColours; round 13e: cpdMdot, the planets' disks)
       // (a new view: the exposure is measured afresh, with its moves counted anew; a new exposure or CO range: measured again)
       const ne = sig.length - 2, viewNew = sig.length !== lastSig.length || sig.some((v, i) => i < ne && v !== lastSig[i]);
       // (Disk Lab v2) While only the clock moves, the picture is not started over but averaged with the last few frames
@@ -7273,9 +7383,11 @@ void main(){
       if (best) { label.setAttribute('x', best[0] + 8); label.setAttribute('y', best[1] + 14); }
       // the planet, named when it shows (close up)
       const pq = project(pPos), pa = ss(0.3, 0.6, pVis) * (kept(pPos) ? 1 : 0);
-      plabel.textContent = pa > 0 && pq[2] > zN ? (ja() ? '惑星と周惑星円盤' : 'planet and its disk') : '';
+      // (round 13e: a planet of few thermal masses wears an envelope, see cpdPhys)
+      const pEnv = !!pV && !CPD_OLD && cpdState(pV).D < 0.5;
+      plabel.textContent = pa > 0 && pq[2] > zN ? (ja() ? (pEnv ? '惑星とまわりの包み' : '惑星と周惑星円盤') : (pEnv ? 'planet and its envelope' : 'planet and its disk')) : '';
       if (plabel.textContent) {
-        const rc = 0.4 * (pV ? hillOf(pV) : PLANET.RH) / pq[2] * Hh / (2 * basis.th);   // radius of the planet's disk on the screen (px)
+        const rc = (pV ? cpdROut(pV) : 0.4 * PLANET.RH) / pq[2] * Hh / (2 * basis.th);   // radius of the planet's disk on the screen (px; round 13e: as drawn)
         plabel.setAttribute('x', (pq[0] + 0.75 * rc + 10).toFixed(1)); plabel.setAttribute('y', (pq[1] - 0.35 * rc - 12).toFixed(1)); plabel.setAttribute('opacity', (pa * annAmp).toFixed(2));
       }
       const QN = { T: ['温度', 'temperature'], rho: ['ガスの密度', 'gas density'], layers: ['磁場とガスの結びつきによる領域', 'the regions of how the field couples to the gas'] }[opt.sliceQ] || ['温度', 'temperature'];
@@ -8118,8 +8230,9 @@ void main(){
         if (p.amp < 0.5) continue;
         const P = planetPosOf(p, time), q = project(P);
         if (q[2] <= zN || !kept(P) || behindStar(P)) continue;
-        const rc = 0.4 * hillOf(p) / q[2] * Hh / (2 * basis.th);
-        if (Math.hypot(cx - rect.left - q[0], cy - rect.top - q[1]) < Math.max(12, 1.1 * rc)) { box.dispatchEvent(new CustomEvent('diskplanet', { detail: { i, a: p.a, x: q[0], y: q[1] } })); return; }
+        // (round 13e: the disk as drawn, cpdROut; with the probe, the point only, so that a tap on the disk reaches the probe)
+        const rc = cpdROut(p) / q[2] * Hh / (2 * basis.th);
+        if (Math.hypot(cx - rect.left - q[0], cy - rect.top - q[1]) < (box.dataset.pick === 'probe' ? 12 : Math.max(12, 1.1 * rc))) { box.dispatchEvent(new CustomEvent('diskplanet', { detail: { i, a: p.a, x: q[0], y: q[1] } })); return; }
       }
       // (round 12a: data-pick="probe", the page's probe, picks as placing a planet does: diskpick, and no outburst)
       const pickR = box.dataset.pick === 'planet' || box.dataset.pick === 'probe';
@@ -8403,7 +8516,8 @@ void main(){
     const deg = (r) => Math.round(r * 18000 / Math.PI) / 100;
     // az is measured from the planet's azimuth while following it (p = 1)
     box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 1000) / 1000, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? (opt.cut === 'quarter' ? 2 : 1) : 0, sq: opt.sliceQ, p: follow ? 1 : 0, pi: followI, gain: opt.gain.slice(), planets: planets.map((pl) => [pl.a, pl.on ? 1 : 0, pl.m]), ann: opt.ann ? 1 : 0, look: opt.look, ms: opt.ms ? 1 : 0, asym: opt.asym ? 1 : 0, marks: opt.marks ? 1 : 0, waves: opt.waves ? 1 : 0, bg: opt.bg, fx: opt.fx, coMode: opt.coMode, coV: opt.coV, coRange: Math.exp(coLn), coRangeFixed: coHold ? 1 : 0,
-      tx: Math.round(panV[0] * 1e4) / 1e4, ty: Math.round(panV[1] * 1e4) / 1e4, tz: Math.round(panV[2] * 1e4) / 1e4 });
+      tx: Math.round(panV[0] * 1e4) / 1e4, ty: Math.round(panV[1] * 1e4) / 1e4, tz: Math.round(panV[2] * 1e4) / 1e4,
+      cpdMdot });   // (round 13e: the planets' disks' accretion rate, M_J/yr, 0 for a tenth of the disk's; see cpdPhys)
     box.diskLegend = () => legendSpec();
     // (round 8) the materials' colours of the model's look (see MAT), for the page's key: key, colour (sRGB), names; with
     // { key: '#rrggbb' } or { key: ['#rrggbb', k] } a colour (and its brightness factor) is changed for this page (for trying
@@ -8504,6 +8618,9 @@ void main(){
       if (st.asym != null) opt.asym = !!Number(st.asym);
       if (st.marks != null) opt.marks = !!Number(st.marks);
       if (st.waves != null) opt.waves = !!Number(st.waves);
+      // (round 13e) the planets' disks' accretion rate, M_J/yr within CPD.MDOT, or 0 (or anything not positive): each a tenth of the
+      // disk's at its orbit (see cpdPhys); what is not a finite number is left as it is
+      if (st.cpdMdot != null && isFinite(finiteNumber(st.cpdMdot))) { const v = finiteNumber(st.cpdMdot); cpdMdot = v > 0 ? Math.min(CPD.MDOT[1], Math.max(CPD.MDOT[0], v)) : 0; }
       if (st.bg != null && own(BG.MODES, st.bg)) opt.bg = st.bg;   // (round 8: the background, see BG)
       if (st.fx != null && isFinite(Number(st.fx))) opt.fx = Math.max(0, Math.min(2, Math.round(Number(st.fx))));   // (round 8: see opt.fx)
       if (st.coMode != null && own(CO_MODES, st.coMode)) opt.coMode = st.coMode;
@@ -8809,12 +8926,31 @@ void main(){
     // where the column does not reach it); rTI (au), the thermally ionized inner disk's edge; snow, the snow line's radius
     // (au) and whether R is inside it; planets, each shown planet's orbit (au) and mass (Jupiters), its gap's factor on Sigma
     // at R, its pressure maximum (au, null when there is none: trapOf) and whether R is within one ring width (2 w) of it
-    box.diskProbe = (R, z = 0) => {
+    // (round 13e) with phi, the point's azimuth (radians, as diskpick gives it), also cpd: the planet's own disk when the point
+    // lies within its outer radius as drawn (cpdROut) of a shown planet where it is now, else null: the planet's orbit (au) and
+    // mass (M_J), the point's distance from it r (au, and rH in its Hill radii), the disk's outer radius rOut (au, rOutH), the
+    // planet's thermal mass qth and the blend D (kind: 'disk' from D 0.5, else 'envelope'), its accretion rate mdot (M_J/yr;
+    // auto, a tenth of the disk's) and at r: T (K), Hr (H/r), sigma (g cm^-2) and the millimetre's vertical optical depth tauMm
+    // (cpdPhys; DESIGN.md, section 35)
+    const cpdProbe = (R, z, phi) => {
+      if (!isFinite(phi)) return null;
+      const X = [R * Math.cos(phi), R * Math.sin(phi), z];
+      for (const p of planets) {
+        if (p.amp <= 0.5) continue;
+        const P = planetPosOf(p, time), r = Math.hypot(X[0] - P[0], X[1] - P[1], X[2] - P[2]);
+        if (r >= cpdROut(p)) continue;
+        const c = cpdState(p), v = c.at(Math.max(r, 1.01 * c.Rp / CPD.C.AU));
+        return { a: p.a, m: p.m, r, rH: r / c.rH, rOut: cpdROut(p), rOutH: cpdROut(p) / c.rH, qth: c.qth, D: c.D, kind: c.D >= 0.5 ? 'disk' : 'envelope', mdot: c.mdot, auto: c.auto, T: v.T, Hr: v.Hr, sigma: v.sigma, tauMm: v.tauMm };
+      }
+      return null;
+    };
+    box.diskProbe = (R, z = 0, phi) => {
       R = Math.max(Number(R) || 0, 1e-3); z = Number(z) || 0;
       const jet = jetAmp * jetAmp * (3 - 2 * jetAmp) * (JET.LOOK[lookNow] || 0);
       return { ...probeJS(R, z, lnTauJS(R, z), gapLnAll(R), lumNow, asymSm(), accW(), jet), zS: zOfTau(R, 0), rTI: NONIDEAL.R_TI, lum: lumNow,
         snow: { R: rSn, inside: R < rSn },
-        planets: planets.filter((p) => p.amp > 0.5 && p.d > 0).map((p) => ({ a: p.a, m: p.m, gap: Math.exp(gapLnJS(R, p.d, p.a, p.q)), trap: p.trap.s > 0 ? p.trap.R : null, atTrap: p.trap.s > 0 && Math.abs(R - p.trap.R) < 2 * p.trap.w })) };
+        planets: planets.filter((p) => p.amp > 0.5 && p.d > 0).map((p) => ({ a: p.a, m: p.m, gap: Math.exp(gapLnJS(R, p.d, p.a, p.q)), trap: p.trap.s > 0 ? p.trap.R : null, atTrap: p.trap.s > 0 && Math.abs(R - p.trap.R) < 2 * p.trap.w })),
+        cpd: cpdProbe(R, z, Number(phi)) };
     };
     // (round 12a, for the probe's check) a point (Rs, z) of the open cut's face on the canvas (CSS px; Rs >= 0 on the right
     // face, as sp), and the face's colour for a value of its quantity (display values, 0 to 1: T in K, rho relative to the

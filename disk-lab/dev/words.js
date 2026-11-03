@@ -155,6 +155,9 @@ export const WORDS = {
       // (round 13a) the model look's colours beside the components (app.js, COMPS' cols)
       colOf: (k) => 'モデルの見え方での' + ({ disk: 'ガス', rock: '小石(岩)', ice: '小石(氷)', wind: '円盤風', jet: 'ジェット', env: 'エンベロープ' }[k] || k) + 'の色',
       colDefault: '既定の色', colReset: (name) => `${name}の色を既定に戻す`,
+      // (round 13e) the planets' accretion rate, which sets their own disks (app.js, the planets' panel)
+      cpdMdot: '惑星への降着率', cpdMdotOf: 'すべての惑星への降着率(対数)', cpdAuto: (v) => `自動(円盤の降着率の 1/10:${v})`, cpdAutoBtn: '自動に戻す',
+      cpdNote: '惑星のまわりの円盤(周惑星円盤)の温度・厚さ・ミリ波での明るさは、この降着率と惑星の質量から決まります。軽い惑星や外側の惑星(熱質量が小さい)では、円盤でなく丸い包みになります。',
       planetsNote: '軌道半径 0.05〜20 au(内側の端は、星の磁場が円盤を切り取る所)、質量は地球の 10 倍から木星の 3 倍(重いほどギャップが深く広く、小石の環は孤立質量を超えるとできます)。隣どうしは相互ヒル半径の 4 倍以上離します(近すぎる軌道は不安定です)。絵の中の惑星をクリックしても動かせます。'
     },
     quality: {
@@ -228,6 +231,8 @@ export const WORDS = {
       },
       snowIn: (r) => `蒸気(スノーライン ${r} au の内側)`, snowOut: (r) => `氷(スノーライン ${r} au の外側)`, snowOutWarm: (r) => `蒸気(スノーライン ${r} au の外側だが、ここは 160 K より暖かい)`,
       gap: (a, f) => `${a} au の惑星のギャップの中:ガスは周りの ${f} %`, trap: (a) => `${a} au の惑星の外側の圧力の山:小石が集まります`,
+      // (round 13e) inside a planet's own disk (or envelope)
+      cpd: (o) => `${o.a} au の惑星(${o.m})の${o.kind === 'disk' ? '周惑星円盤' : 'まわりの包み'}の中:惑星から ${o.r}(${o.rH} R_H、外縁は ${o.rOut} R_H)、${o.T} K、H/r ${o.Hr}、降着率 ${o.mdot}`,
       model: 'モデルの値です(円盤の厚みは見やすさのため温度の示す 1.8 倍、面密度は 1 au で 1700 g/cm² とした場合)。'
     },
     // (round 8, the owner: "the citation in English in Japanese too": the lead stays Japanese, the line is the English one)
@@ -390,6 +395,9 @@ export const WORDS = {
       // (round 13a) the model look's colours beside the components (app.js, COMPS' cols)
       colOf: (k) => 'Colour of ' + ({ disk: 'the gas', rock: 'the pebbles (rock)', ice: 'the pebbles (ice)', wind: 'the wind', jet: 'the jet', env: 'the envelope' }[k] || k) + ' in the model look',
       colDefault: 'Default colour', colReset: (name) => `${name}: back to the default colour`,
+      // (round 13e) the planets' accretion rate, which sets their own disks (app.js, the planets' panel)
+      cpdMdot: 'Accretion onto the planets', cpdMdotOf: 'The planets’ accretion rate (all of them, log scale)', cpdAuto: (v) => `Auto (a tenth of the disk’s accretion rate: ${v})`, cpdAutoBtn: 'Back to auto',
+      cpdNote: 'The temperature, thickness and millimetre brightness of each planet’s own disk (its circumplanetary disk) follow from this rate and the planet’s mass; a light or distant planet (of few thermal masses) wears a round envelope rather than a disk.',
       planetsNote: 'Orbits of 0.05 to 20 au (the inner end is where the star\u2019s magnetic field cuts off the disk); masses of 10 Earths to 3 Jupiters (heavier planets open deeper, wider gaps, and those above the pebble isolation mass ring their gaps with pebbles). Neighbours are kept at least four mutual Hill radii apart (closer orbits are unstable). A planet in the picture can be clicked to move it too.'
     },
     quality: {
@@ -459,6 +467,8 @@ export const WORDS = {
       },
       snowIn: (r) => `vapour (inside the snow line at ${r} au)`, snowOut: (r) => `ice (outside the snow line at ${r} au)`, snowOutWarm: (r) => `vapour (outside the snow line at ${r} au, but warmer than 160 K here)`,
       gap: (a, f) => `in the gap of the planet at ${a} au: the gas at ${f} % of its surroundings`, trap: (a) => `at the pressure maximum outside the planet at ${a} au: pebbles collect here`,
+      // (round 13e) inside a planet's own disk (or envelope)
+      cpd: (o) => `inside the ${o.kind === 'disk' ? 'circumplanetary disk' : 'envelope'} of the planet at ${o.a} au (${o.m}): ${o.r} from the planet (${o.rH} R_H; its edge at ${o.rOut} R_H), ${o.T} K, H/r ${o.Hr}, accreting ${o.mdot}`,
       model: 'The model’s values (the disk drawn 1.8 times as thick as its temperature holds it, for the picture; the surface density taken as 1700 g/cm² at 1 au).'
     },
     cite: {

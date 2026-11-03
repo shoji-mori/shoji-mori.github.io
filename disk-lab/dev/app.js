@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=814f93ec9f';
-import { WORDS } from './words.js?v=969ed56957';
+import { WORDS } from './words.js?v=27bd0238d4';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=05481e7755';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=63cebb9363';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=34fc894cb3';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.12', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.13', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
@@ -524,6 +524,7 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.planetOn != null) { const pl = S().planets; const i = Number(b.dataset.planetOn); if (pl[i]) { pl[i][1] = pl[i][1] ? 0 : 1; if (pl[i][1] && !roomFor(pl, pl[i][0], i, pl[i][2])) pl[i][1] = 0; box.diskSet({ planets: pl }); } }
   else if (b.dataset.planetRemove != null) { const pl = S().planets; pl.splice(Number(b.dataset.planetRemove), 1); box.diskSet({ planets: pl }); }
   else if (b.id === 'addPlanet') setPick(box.dataset.pick === 'planet' ? false : 'planet');
+  else if (b.dataset.cpdAuto != null) box.diskSet({ cpdMdot: 0 });   // (round 13e: the planets' accretion rate back to auto)
   else if (b.dataset.colReset) resetCols(b.dataset.colReset);   // (round 13a: a component's colours back to the default)
   sync();
 });
@@ -534,12 +535,14 @@ rail.addEventListener('input', (e) => {
   if (t.dataset.col) setCol(t.dataset.col, t.value);   // (round 13a: a colour, the picture following while it is chosen)
   else if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value), true);
   else if (t.dataset.planetM != null) massPlanet(Number(t.dataset.planetM), mOf(t.value), true);
+  else if (t.dataset.cpdMdot != null) { moving(); box.diskSet({ cpdMdot: mdOf(t.value) }); cpdRowSync(S()); }   // (round 13e)
 });
 rail.addEventListener('change', (e) => {
   const t = e.target; if (!live()) return;
   if (t.dataset.col) setCol(t.dataset.col, t.value);
   else if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value));
   else if (t.dataset.planetM != null) massPlanet(Number(t.dataset.planetM), mOf(t.value));
+  else if (t.dataset.cpdMdot != null) { box.diskSet({ cpdMdot: mdOf(t.value) }); sync(); }   // (round 13e)
 });
 
 // ---------- the components (Show): each a toggle; turned on, its settings open below it ----------
@@ -565,6 +568,10 @@ const compEls = COMPS.map((c) => {
   const box_ = c.opts || c.planets ? el('div', { class: 'comp-opts', hidden: true }) : null;
   if (c.planets) box_.append(el('div', { class: 'planet-list' }), el('button', { type: 'button', class: 'chip quiet', id: 'addPlanet', 'aria-pressed': 'false' }));
   for (const o of c.opts || []) box_.append(el('button', { type: 'button', class: 'toggle small', 'data-opt': o, 'aria-pressed': 'false' }));
+  // (round 13e) the planets' accretion rate, which sets their own disks (see cpdRowSync)
+  if (c.planets) box_.append(el('div', { class: 'cpd-mdot' }, el('span', { class: 'cpd-mdot-k', 'data-cpd-k': '' }), el('span', { class: 'cpd-mdot-v', 'data-cpd-v': '' }),
+    el('input', { type: 'range', min: '0', max: '1000', step: '1', 'data-cpd-mdot': '' }), el('button', { type: 'button', class: 'chip quiet', 'data-cpd-auto': '', hidden: true })),
+  el('p', { class: 'rail-note cpd-note', 'data-cpd-note': '' }));
   if (c.planets) box_.append(el('p', { class: 'rail-note planets-note' }));
   // (round 13a) beside the toggle, its colours (shown in the model look once the engine has started) and the chip back to the
   // default (shown while one of them is changed)
@@ -587,6 +594,14 @@ function renderComps() {
     opts.querySelectorAll('[data-opt]').forEach((b) => { b.textContent = w[b.dataset.opt]; });
     const add = opts.querySelector('#addPlanet'); if (add) add.textContent = '+ ' + w.addPlanet;
     const nt = opts.querySelector('.planets-note'); if (nt) nt.textContent = w.planetsNote;
+    // (round 13e) the planets' accretion rate's words (its value: cpdRowSync)
+    const ck = opts.querySelector('[data-cpd-k]');
+    if (ck) {
+      ck.textContent = w.cpdMdot;
+      opts.querySelector('[data-cpd-mdot]').setAttribute('aria-label', w.cpdMdotOf);
+      opts.querySelector('[data-cpd-auto]').textContent = w.cpdAutoBtn;
+      opts.querySelector('[data-cpd-note]').textContent = w.cpdNote;
+    }
   }
   planetsKey = '';
 }
@@ -648,7 +663,29 @@ function planetRows(s) {
   });
   planetsKey = L() + JSON.stringify(s.planets);
 }
+// (round 13e) The planets' accretion rate (the owner's D-2, cpd-detail-study.md section 9): by default each planet's is a tenth of
+// the disk's accretion rate at its orbit (the engine's cpdPhys), "auto"; the slider sets one rate for all the planets, on a log
+// scale from 1e-10 to 1e-4 M_J/yr (PDS 70 b and c accrete about 1e-8; the default near 3e-5 at 3 au), and the chip goes back to
+// auto. The value: the rate set, or auto with the first shown planet's own. It sets their disks' temperature, thickness and
+// millimetre light (DESIGN.md section 35). Kept with the settings (DEF_KEYS) and in a link (pmd=).
+const PL_MD = [1e-10, 1e-4];
+const mdOf = (v) => +(PL_MD[0] * Math.pow(PL_MD[1] / PL_MD[0], Number(v) / 1000)).toPrecision(2);
+const sliderOfMd = (m) => String(Math.round(1000 * Math.log(Math.min(PL_MD[1], Math.max(PL_MD[0], m)) / PL_MD[0]) / Math.log(PL_MD[1] / PL_MD[0])));
+// a rate as "3.0 × 10⁻⁵ M_J/yr" (the J a subscript)
+const mdEl = (m) => el('span', {}, sci(m) + ' M', el('sub', {}, 'J'), '/' + T().probe.yr);
+function cpdRowSync(s) {
+  const comps = $('comps'), val = comps.querySelector('[data-cpd-v]');
+  if (!val || typeof box.diskCpdState !== 'function') return;
+  const set = s.cpdMdot > 0, i = s.planets.findIndex((p) => p[1]), c = i >= 0 ? box.diskCpdState(i) : null;
+  const v = set ? s.cpdMdot : c ? c.mdot : 0;
+  val.replaceChildren(set ? mdEl(v) : T().show.cpdAuto(v > 0 ? sci(v) : '—'));
+  const input = comps.querySelector('[data-cpd-mdot]');
+  if (input && v > 0 && document.activeElement !== input) input.value = sliderOfMd(v);
+  const chip = comps.querySelector('[data-cpd-auto]');
+  if (chip) chip.hidden = !set;
+}
 function syncComps(s) {
+  cpdRowSync(s);
   const opt = { field: s.field, ann: s.ann };
   for (const { c, opts, cols: cs } of compEls) {
     const on = c.bit ? !!(s.mode & c.bit) : !!opt[c.opt];
@@ -782,7 +819,7 @@ const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵
 const sci = (v) => { const e = Math.floor(Math.log10(v)), m = v / Math.pow(10, e); return (m.toFixed(1) === '10.0' ? '1.0 × 10' + String(e + 1).replace(/./g, (c) => SUP[c]) : m.toFixed(1) + ' × 10' + String(e).replace(/./g, (c) => SUP[c])); };
 const sig3 = (v) => (v >= 100 ? String(Math.round(v)) : v >= 10 ? v.toFixed(1) : v.toPrecision(2));
 function probeAt(d) {
-  probeLast = { R: d.R, x: d.x, y: d.y };
+  probeLast = { R: d.R, phi: d.phi, x: d.x, y: d.y };   // (round 13e: and the azimuth, for a planet's own disk)
   probeRender();
   // the ring at the point
   const m = el('div', { class: 'probe-mark', 'aria-hidden': 'true' });
@@ -794,7 +831,7 @@ function probeAt(d) {
 function probeRender() {
   const panel = $('probePanel');
   if (!probeLast || !live() || typeof box.diskProbe !== 'function') { panel.hidden = true; return; }
-  const w = T().probe, p = box.diskProbe(probeLast.R, 0), r = fmtA(probeLast.R);
+  const w = T().probe, p = box.diskProbe(probeLast.R, 0, probeLast.phi), r = fmtA(probeLast.R);
   const row = (k, v, title) => el('div', { class: 'probe-row', ...(title ? { title } : {}) }, el('span', { class: 'probe-k' }, k), el('span', { class: 'probe-v' }, v));
   // (inside the magnetosphere, the cavity, there is no disk gas: only the orbit's numbers; a density of 0 is said so too)
   const gas = p.region !== 'cavity', num = (v, f) => (gas && v > 0 ? f(v) : w.none);
@@ -813,6 +850,12 @@ function probeRender() {
     const pc = 100 * pl.gap;
     if (pl.gap < 0.5) rows.push(el('p', { class: 'probe-line' }, w.gap(fmtA(pl.a), pc < 1 ? pc.toPrecision(2) : String(Math.round(pc)))));
     if (pl.atTrap) rows.push(el('p', { class: 'probe-line' }, w.trap(fmtA(pl.a))));
+  }
+  // (round 13e) inside a planet's own disk or envelope (diskProbe with the point's azimuth): its numbers at the point
+  if (p.cpd) {
+    const c = p.cpd, [n, , sub] = fmtM(c.m);
+    rows.push(el('p', { class: 'probe-line' }, w.cpd({ a: fmtA(c.a), m: n + ' M' + (sub === 'J' ? '_J' : sub), r: sig3(c.r) + ' au', rH: c.rH.toFixed(2), rOut: c.rOutH.toFixed(2),
+      T: sig3(c.T), Hr: c.Hr.toFixed(2), mdot: sci(c.mdot) + ' M_J/' + w.yr, kind: c.kind })));
   }
   panel.replaceChildren(
     el('div', { class: 'probe-head' }, el('span', { class: 'probe-title' }, w.title(r)), el('button', { type: 'button', class: 'icon-x', 'aria-label': w.close, title: w.close, onclick: () => setPick(false) }, '×')),
@@ -1323,6 +1366,7 @@ function linkFor(s) {
   if (cl) u.searchParams.set('col', cl);   // (round 13a: the model look's colours, when not all the defaults; see COL-LINK)
   // (round 8: with each planet's mass in M_J; a link without it is read as Jupiter's)
   if (s.planets.length) u.searchParams.set('pl', s.planets.map(([a, on, m]) => a + ':' + on + ':' + m).join(','));
+  if (s.cpdMdot > 0) u.searchParams.set('pmd', String(s.cpdMdot));   // (round 13e: the planets' accretion rate, M_J/yr, when not auto)
   u.searchParams.set('t', String(Math.round(s.time * 1000) / 1000));
   u.searchParams.set('lang', L());
   return u.href;
@@ -1545,6 +1589,7 @@ function stateFromLink() {
   if (q.has('cov')) st.coV = q.get('cov');
   if (q.has('t')) st.time = q.get('t');
   if (q.has('pl')) st.planets = q.get('pl').split(',').filter(Boolean).map((t) => t.split(':').map(Number));
+  if (q.has('pmd')) st.cpdMdot = q.get('pmd');   // (round 13e; the engine bounds it, and reads anything not positive as auto)
   return Object.keys(st).length ? st : null;
 }
 
@@ -1753,6 +1798,10 @@ async function start() {
   // (round 13b, for a comparison only: ?bgmove=1, the sky behind fixed in the disk's frame as before, swept by the slow spin and
   // by a planet followed; see the engine's bgTurn)
   if (q.get('bgmove') === '1') box.dataset.bgmove = 'on';
+  // (round 13e, to compare the planets' own disks: ?cpdh=drawn, the thermal mass with the drawn h (the owner's D-1 takes the gas's
+  // own, about 1.8 times thinner); ?cpd=old, round 8's disk (0.4 R_H, its colours and glow); see the engine's cpdPhys)
+  if (q.get('cpdh') === 'drawn') box.dataset.cpdh = 'drawn';
+  if (q.get('cpd') === 'old') box.dataset.cpd = 'old';
   if (SWITCH.acc) box.dataset.acc = 'on';   // (round 13a: see SWITCH)
   if (q.get('lit') === 'fx') box.dataset.lit = 'fx';   // (2026-11-03: the starlight's shading tied to the finish's level, as before; see the engine's uLit)
   if (SWITCH.gasrho) box.dataset.gasrho = SWITCH.gasrho;
@@ -2020,7 +2069,7 @@ box.addEventListener('disklost', (e) => {
 // link" writes it), which wins. Not kept: the clock's time and pause, the tap modes, the saved picture's size. After a
 // visit that ended with drawing stopped they are thrown away (see record). "Reset" (the top of the rail) forgets them and
 // puts everything back as at the first visit: the engine's own start (DEF0), the first place, the device's quality.
-const DEF_KEYS = ['mode', 'field', 'marks', 'asym', 'waves', 'ann', 'bg', 'look', 'coMode', 'coV', 'slice', 'sq', 'speed', 'planets', 'ms'];
+const DEF_KEYS = ['mode', 'field', 'marks', 'asym', 'waves', 'ann', 'bg', 'look', 'coMode', 'coV', 'slice', 'sq', 'speed', 'planets', 'ms', 'cpdMdot'];   // (round 13e: cpdMdot, the planets' accretion rate)
 const VIEW_KEYS = ['el', 'az', 'd', 'tx', 'ty', 'tz', 'p', 'pi'];
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] != null).map((k) => [k, Array.isArray(o[k]) ? o[k].map((v) => (Array.isArray(v) ? v.slice() : v)) : o[k]]));
 let DEF0 = null, defaults = null, keeping = false, keepTimer = 0;

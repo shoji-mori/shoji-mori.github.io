@@ -233,6 +233,12 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .planet-row input{min-width:0;accent-color:var(--accent)}
 .planet-mass,.pop-mass{font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right;padding-right:4px}
 .planet-mass sub,.pop-mass sub{font-size:.75em}
+/* (round 13e) the planets' accretion rate: its name and value on one line, the slider and the chip back to auto on the next */
+.cpd-mdot{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 6px;width:100%;margin-top:4px}
+.cpd-mdot-k{font-size:12px;color:var(--text)}
+.cpd-mdot-v{font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;text-align:right}
+.cpd-mdot-v sub{font-size:.75em}
+.cpd-mdot input{grid-column:1/2;min-width:0;width:100%;accent-color:var(--accent)}
 .icon-x{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;color:var(--text-3);font-size:15px;line-height:1}
 .icon-x:hover{background:var(--wash);color:var(--text)}
 #addPlanet[aria-pressed=true]{border-color:var(--accent);color:var(--text)}
