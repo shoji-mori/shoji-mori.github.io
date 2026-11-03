@@ -19,7 +19,7 @@ export const SEQ_MAX = 60;                 // scenes at most (a talk's worth; a 
 export const PACES = { slow: 0.6, normal: 1, fast: 1.7 };   // the presenter's pace: times the engine's cruise speed
 
 const LOOKS = ['model', 'optical', 'mir', 'mm', 'co'], CO_MODES = ['chan', 'm1', 'm0'], SQS = ['T', 'rho', 'layers'], BGS = ['off', 'stars', 'cloud'];
-const SET_BITS = ['field', 'ann', 'marks', 'waves', 'asym', 'ms'];
+const SET_BITS = ['field', 'marks', 'waves', 'asym', 'ms'];   // (round 15a: ann apart, a mask)
 const num = (v) => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const round = (v, k) => Math.round(v * k) / k;
@@ -65,6 +65,8 @@ export function checkKey(k) {
   const s = k.set && typeof k.set === 'object' ? k.set : {}, set = {};
   const mode = num(s.mode); if (Number.isFinite(mode)) set.mode = Math.round(mode) & 127;
   for (const b of SET_BITS) { const x = bit(s[b]); if (x !== undefined) set[b] = x; }
+  // (round 15a) the annotations: 1 all, 0 none, else the mask of the kinds shown (the engine's ANN, below 128)
+  const an = typeof s.ann === 'boolean' ? Number(s.ann) : num(s.ann); if (Number.isInteger(an) && an >= 0 && an < 128) set.ann = an;
   const sl = inRange(s.slice, 0, 2, 1); if (sl !== undefined) set.slice = sl;
   if (SQS.includes(s.sq)) set.sq = s.sq;
   if (BGS.includes(s.bg)) set.bg = s.bg;

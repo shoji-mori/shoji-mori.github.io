@@ -3,21 +3,21 @@
 // what is shown, cut, variants, time, view) and the highlights (places.js), and keeps its controls in step with the
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
-import { PLACES, placeById, placeState, fitDistance } from './places.js?v=814f93ec9f';
-import { WORDS } from './words.js?v=87371f1b21';
+import { PLACES, placeById, placeState, fitDistance } from './places.js?v=c6bd7aed40';
+import { WORDS } from './words.js?v=8c75f3e87f';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
-import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=05481e7755';
+import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=fc12ca1f8c';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=c975c4b47b';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=c013c5245e';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.15', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.16', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -194,6 +194,9 @@ function setPoster(id) {
   poster.src = src;
 }
 
+// (round 15a) the annotations' mask as the state gives it (1: all of them; see setAnn), and the bit of the material key below
+const ANN_ALL = 126, ANN_KEY = 64;
+const annBits = (a) => (Number(a) === 1 ? ANN_ALL : (Number(a) || 0) & ANN_ALL);
 // ---------- the material key (round 8): the model look's colours, one per material (the engine's MAT, box.diskPalette) ----------
 // (the owner: "colour the model look by material, not by temperature"; the temperature's bar that stood here went with it)
 // Only the materials shown, and those that show at this distance: the envelope from 40 au, the star's magnetosphere and
@@ -201,7 +204,7 @@ function setPoster(id) {
 // unless ?acc=1 draws it; in the colours chosen, see the model look's colours)
 let matShown = '';
 function renderMatKey(s) {
-  const on = s.look === 'model' && !s.slice && !!s.ann && typeof box.diskPalette === 'function';
+  const on = s.look === 'model' && !s.slice && !!(annBits(s.ann) & ANN_KEY) && typeof box.diskPalette === 'function';   // (round 15a: its own annotation)
   matKey.classList.toggle('on', on);
   if (!on) return;
   const P = Object.fromEntries(box.diskPalette().map((m) => [m.key, m])), rows = [];
@@ -236,7 +239,9 @@ function placeStateNow(pl, asp = aspect()) {
   // (the planet's place shows the first planet at 3 au, as its text says; others are kept)
   // (round 8: a Jupiter, as the place's text says)
   if (pl.id === 'planet') { const ps = S().planets.filter((p, j) => j > 0 && roomFor([[3, 1, 1]], p[0], -1, p[2])); st.planets = [[3, 1, 1], ...ps].slice(0, 4); st.pi = 0; }
-  else if ((pl.needs & 16) && !S().planets.some((p) => p[1])) st.planets = [[3, 1, 1]];
+  // (round 15a: likewise where none shown lies within the place's half-width, fitW: the start's planet at 10 au is outside the
+  // millimetre place's 6 au, whose text speaks of the gap; a Jupiter at 3 au comes first, the shown ones kept where there is room)
+  else if ((pl.needs & 16) && !S().planets.some((p) => p[1] && (!pl.fitW || p[0] < pl.fitW))) st.planets = [[3, 1, 1], ...S().planets.filter((p) => p[1] && roomFor([[3, 1, 1]], p[0], -1, p[2]))].slice(0, 4);
   return st;
 }
 function goPlace(i, { fly = true } = {}) {
@@ -486,8 +491,9 @@ function sync() {
   if (s.paused) setClockRate(0);   // (paused, no frames come to clear the clock's rate)
   // the rail
   rail.querySelectorAll('[data-bit]').forEach((b) => pressed(b, s.mode & Number(b.dataset.bit)));
-  const opt = { field: s.field, marks: s.marks, ann: s.ann, asym: s.asym, waves: s.waves, drop: box.dataset.pick === 'pebbles' };
+  const opt = { field: s.field, marks: s.marks, asym: s.asym, waves: s.waves, drop: box.dataset.pick === 'pebbles' };
   rail.querySelectorAll('[data-opt]').forEach((b) => pressed(b, opt[b.dataset.opt]));
+  rail.querySelectorAll('[data-ann]').forEach((c) => { c.checked = !!(annBits(s.ann) & Number(c.dataset.ann)); });   // (round 15a)
   rail.querySelectorAll('[data-cut]').forEach((b) => pressed(b, Number(b.dataset.cut) === s.slice));
   rail.querySelectorAll('[data-bg]').forEach((b) => pressed(b, b.dataset.bg === (s.bg || 'stars')));
   rail.querySelectorAll('[data-speed]').forEach((b) => pressed(b, Math.abs(Number(b.dataset.speed) - s.speed) < 1e-6));
@@ -511,7 +517,6 @@ rail.addEventListener('click', (e) => {
   if (b.dataset.bit) { const bit = Number(b.dataset.bit), m = s.mode & bit ? s.mode & ~bit : s.mode | bit; box.diskSet({ mode: m, ...((m & 16) && !s.planets.some((p) => p[1]) ? { planets: [...s.planets.filter((p) => roomFor([[3, 1, 1]], p[0], -1, p[2]) || !p[1]), [3, 1, 1]].slice(-4) } : {}) }); }
   else if (b.dataset.opt === 'field') box.diskField(!s.field);
   else if (b.dataset.opt === 'marks') box.diskSet({ marks: s.marks ? 0 : 1 });
-  else if (b.dataset.opt === 'ann') box.diskAnnotations(!s.ann);
   else if (b.dataset.opt === 'asym') box.diskSet({ asym: s.asym ? 0 : 1 });
   else if (b.dataset.opt === 'waves') box.diskSet({ waves: s.waves ? 0 : 1 });
   else if (b.dataset.opt === 'drop') setPick(box.dataset.pick === 'pebbles' ? false : 'pebbles');
@@ -558,7 +563,13 @@ rail.addEventListener('change', (e) => {
   else if (t.dataset.cpdMdot != null) { box.diskSet({ cpdMdot: mdOf(t.value) }); sync(); }   // (round 13e)
   else if (t.dataset.mp) setParam(t.dataset.mp, mpOf(t.dataset.mp, t.value));
   else if (t.dataset.windGain) { windGain = wbOf(t.value); applyWind(); keepSoon(); }
+  else if (t.dataset.ann) setAnn(Number(t.dataset.ann), t.checked);   // (round 15a)
 });
+// (round 15a, the owner: the annotations each their own choice) the rail's View: a checkbox for each kind (data-ann, the engine's ANN
+// bits: the snow line's name 2, the planet's label 4, the scale bar 8, the cut's lines and colour bar 16, the gas line's colour bar
+// 32, the model look's key of the colours 64, drawn by the page), the state's ann the mask of those ticked; 1 when all are, as links
+// have always written it, 0 when none (annBits, ANN_ALL: before the material key). The A key hides them all and brings back those shown
+function setAnn(bit, on) { const m = annBits(S().ann), n = on ? m | bit : m & ~bit; box.diskSet({ ann: n === ANN_ALL ? 1 : n }); sync(); }
 
 // ---------- the components (Show): each a toggle; turned on, its settings open below it ----------
 // (round 6: the gas and its dust are one component, the engine's bits 1 and 2 together: the owner, "treat the gas as a
@@ -585,8 +596,8 @@ function wbRow() {
 const COMPS = [
   { key: 'gas', bit: 3, opts: ['marks'], cols: ['disk'] }, { key: 'pebbles', bit: 4, opts: ['drop'], cols: ['rock', 'ice'] },
   { key: 'wind', bit: 8, opts: ['asym'], cols: ['wind'] }, { key: 'jet', bit: 64, cols: ['jet'] }, { key: 'field', opt: 'field' },
-  { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32, cols: ['env'] }, { key: 'labels', opt: 'ann' }
-];
+  { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32, cols: ['env'] }
+];   // (round 15a: the labels, a component until now, are the View's annotations, a choice for each kind)
 const compEls = COMPS.map((c) => {
   const btn = el('button', { type: 'button', class: 'toggle', 'aria-pressed': 'false', ...(c.bit ? { 'data-bit': String(c.bit) } : { 'data-opt': c.opt }) });
   const box_ = c.opts || c.planets ? el('div', { class: 'comp-opts', hidden: true }) : null;
@@ -711,7 +722,7 @@ function cpdRowSync(s) {
 }
 function syncComps(s) {
   cpdRowSync(s);
-  const opt = { field: s.field, ann: s.ann };
+  const opt = { field: s.field };
   for (const { c, opts, cols: cs } of compEls) {
     const on = c.bit ? !!(s.mode & c.bit) : !!opt[c.opt];
     if (opts) opts.hidden = !on;
@@ -896,6 +907,13 @@ const mpOf = (k, pos) => {
   if (Number(pos) === mpPos(k, parDef[k])) return parDef[k];
   return Number((sp.log ? sp.min * Math.pow(sp.max / sp.min, u) : sp.min + (sp.max - sp.min) * u).toPrecision(3));
 };
+// (round 15a, the owner: a slider's bar changed its length while it was dragged, as the value beside it changed its width) a value's
+// cell as wide as the widest text of its slider, in ch: a character 1, the narrow ones 0.6 (the spaces, the point, the slash, the
+// superscripts), a CJK one 1.8, and 1 more; for the language now. The bar beside it then keeps its length (DESIGN.md section 36)
+const chW = (t) => [...t].reduce((s, c) => s + (/[\u3000-\u9fff]/.test(c) ? 1.8 : /[\s.,/⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/.test(c) ? 0.6 : 1), 1);
+const valW = (texts) => Math.ceil(2 * Math.max(...texts.map(chW))) / 2 + 'ch';
+const mpWMemo = {};
+const mpValW = (k) => { const id = L() + k + ':' + parSpec[k].min + ':' + parSpec[k].max; return mpWMemo[id] || (mpWMemo[id] = valW([...Array(101).keys()].map((i) => mpText(k, mpOf(k, 10 * i))).concat(mpText(k, parDef[k])))); };
 // a value as the rail writes it, with its unit
 const MP_SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
 const mpSci = (v) => { const e = Math.floor(Math.log10(v) + 1e-9), m = v / Math.pow(10, e); return (Math.abs(m - 1) < 5e-3 ? '' : m.toFixed(1) + ' × ') + '10' + String(e).replace(/./g, (c) => MP_SUP[c]); };
@@ -904,7 +922,9 @@ function mpText(k, v) {
   return t + ({ mdot: L() === 'ja' ? ' M☉/年' : ' M☉/yr', lum: ' L☉', tstar: ' K', tTI: ' K' }[k] || '');
 }
 // the rail's rows by group (the engine's keys)
-const MP_GROUPS = [['star', ['lum', 'tstar']], ['heat', ['mdot', 'alphaIn', 'tTI']], ['wind', ['lamIn', 'lamTI', 'lamOut', 'chic']], ['planets', ['alphaGap']]];
+// (round 15a, the owner: no row for T* nor for lambda at the dust's inner edge, so that lambda has two sliders, at R_TI and at
+// 30 au; a link's ts= or li= is still given to the engine, which keeps or drops it as its PAR_SPEC has it)
+const MP_GROUPS = [['star', ['lum']], ['heat', ['mdot', 'alphaIn', 'tTI']], ['wind', ['lamTI', 'lamOut', 'chic']], ['planets', ['alphaGap']]];
 // the numbers under a group, from the engine's derived
 function mpDerivedText(g) {
   const d = parDerived, w = T().model, au = (v) => (v >= 10 ? String(Math.round(v)) : v >= 1 ? v.toFixed(2) : v.toPrecision(2));
@@ -944,7 +964,7 @@ function renderParams() {
     r.name.textContent = w.names[k];
     if (document.activeElement !== r.input && r.input.value !== pos) r.input.value = pos;
     r.input.setAttribute('aria-valuetext', t);
-    r.val.textContent = t;
+    r.val.textContent = t; r.val.style.minWidth = mpValW(k);
     r.chip.hidden = !(k in params);
     r.chip.textContent = w.def; r.chip.setAttribute('aria-label', w.reset(w.names[k]));
   }
@@ -967,11 +987,11 @@ function applyWind(drag = false) {
 }
 function renderWind() {
   if (!wbEls.row) return;
-  const w = T().show, t = '× ' + (windGain >= 1 ? windGain.toFixed(1) : windGain.toFixed(2));
+  const wbText = (k) => '× ' + (k >= 1 ? k.toFixed(1) : k.toFixed(2)), w = T().show, t = wbText(windGain);
   if (document.activeElement !== wbEls.input && wbEls.input.value !== wbPos(windGain)) wbEls.input.value = wbPos(windGain);
   wbEls.name.textContent = w.windGain;
   wbEls.input.setAttribute('aria-label', w.windGainOf); wbEls.input.setAttribute('aria-valuetext', t);
-  wbEls.val.textContent = t;
+  wbEls.val.textContent = t; wbEls.val.style.minWidth = valW([...Array(101).keys()].map((i) => wbText(wbOf(10 * i))));   // (round 15a)
   wbEls.chip.hidden = windGain === 1; wbEls.chip.textContent = w.gainDefault; wbEls.chip.setAttribute('aria-label', w.windGainReset);
 }
 
@@ -1008,12 +1028,14 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (box.
 // moves it; Esc, the button again or another pick mode removes it. In the picture only a ring at the point, which fades
 // (the page's: the engine draws nothing for the probe, and the point would not stay under a view that moves). On a narrow
 // stage the panel sits along its bottom edge. Its type is large enough to read from across a room (the presenter).
-let probeLast = null;   // the last probe's { R, x, y }: said again in the other language
+let probeLast = null;   // the last probe's { R, x, y } (round 15a: or a planet's, or a ray's that missed): said again in the other language
 const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
 const sci = (v) => { const e = Math.floor(Math.log10(v)), m = v / Math.pow(10, e); return (m.toFixed(1) === '10.0' ? '1.0 × 10' + String(e + 1).replace(/./g, (c) => SUP[c]) : m.toFixed(1) + ' × 10' + String(e).replace(/./g, (c) => SUP[c])); };
 const sig3 = (v) => (v >= 100 ? String(Math.round(v)) : v >= 10 ? v.toFixed(1) : v.toPrecision(2));
 function probeAt(d) {
-  probeLast = { R: d.R, phi: d.phi, x: d.x, y: d.y };   // (round 13e: and the azimuth, for a planet's own disk)
+  // (round 13e: and the azimuth, for a planet's own disk; round 15a: planet, a tap on a planet's point, its index; miss and z, a ray
+  // that missed the disk, at its point closest to the star)
+  probeLast = { R: d.R, z: d.z || 0, phi: d.phi, miss: !!d.miss, planet: d.planet, x: d.x, y: d.y };
   probeRender();
   // the ring at the point
   const m = el('div', { class: 'probe-mark', 'aria-hidden': 'true' });
@@ -1022,44 +1044,80 @@ function probeAt(d) {
   stage.append(m);
   setTimeout(() => m.remove(), reduce ? 1200 : 2600);
 }
+// (round 15a) a share in per cent: two figures below 1 %, one decimal between 99 and 100 %
+const pct = (v) => { const x = 100 * v; return x < 1 ? x.toPrecision(2) : x > 99 && x < 100 ? x.toFixed(1) : String(Math.round(x)); };
 function probeRender() {
   const panel = $('probePanel');
   if (!probeLast || !live() || typeof box.diskProbe !== 'function') { panel.hidden = true; return; }
-  const w = T().probe, p = box.diskProbe(probeLast.R, 0, probeLast.phi), r = fmtA(probeLast.R);
+  const w = T().probe, q = probeLast, s = S();
   // (round 14a: the numbers the region's sentence and the note quote, from the model's parameters: the thermal ionization's
   // temperature, the alphas (the outer disk's in its ratio to the inner's), the disk drawn thicker than its temperature holds up)
   const mp = typeof box.diskParams === 'function' ? box.diskParams() : null, a0 = mp ? mp.now.alphaIn : 0.01;
   const nums = { tTI: String(Math.round(mp ? mp.now.tTI : 1000)), aIn: String(Number(a0.toPrecision(1))), aOut: String(Number((mp && mp.derived.alphaOut != null ? mp.derived.alphaOut : 0.09 * a0).toPrecision(1))), hf: (mp ? mp.derived.hFactor : 1.71).toFixed(1) };
   const said = (v) => (typeof v === 'function' ? v(nums) : v);
   const row = (k, v, title) => el('div', { class: 'probe-row', ...(title ? { title } : {}) }, el('span', { class: 'probe-k' }, k), el('span', { class: 'probe-v' }, v));
-  // (inside the magnetosphere, the cavity, there is no disk gas: only the orbit's numbers; a density of 0 is said so too)
-  const gas = p.region !== 'cavity', num = (v, f) => (gas && v > 0 ? f(v) : w.none);
-  const rows = [
-    row(w.T, num(p.T, (v) => sig3(v) + ' K')),
-    row(w.rho, num(p.rho, (v) => sci(v) + ' g/cm³')),
-    row(w.sigma, num(p.sigma, (v) => sig3(v) + ' g/cm²')),
-    row(w.H, num(p.H, (v) => sig3(v) + ' au (H/R ' + (v / p.R).toFixed(3) + ')')),
-    row(w.vK, p.vK.toFixed(1) + ' km/s'),
-    row(w.P, p.P < 0.1 ? (p.P * 365.25).toFixed(1) + ' ' + w.days : sig3(p.P) + ' ' + w.yr),
-    row(w.alpha, !gas ? w.none : p.alpha < 1e-6 ? w.laminar : sci(p.alpha)),
-    row(w.region, w.regions[p.region] || p.region, p.rule),
-    row(w.water, (p.vapour ? (p.snow.inside ? w.snowIn : w.snowOutWarm) : w.snowOut)(fmtA(p.snow.R)))
-  ];
-  for (const pl of p.planets) {
-    const pc = 100 * pl.gap;
-    if (pl.gap < 0.5) rows.push(el('p', { class: 'probe-line' }, w.gap(fmtA(pl.a), pc < 1 ? pc.toPrecision(2) : String(Math.round(pc)))));
-    if (pl.atTrap) rows.push(el('p', { class: 'probe-line' }, w.trap(fmtA(pl.a))));
-  }
-  // (round 13e) inside a planet's own disk or envelope (diskProbe with the point's azimuth): its numbers at the point
-  if (p.cpd) {
-    const c = p.cpd, [n, , sub] = fmtM(c.m);
-    rows.push(el('p', { class: 'probe-line' }, w.cpd({ a: fmtA(c.a), m: n + ' M' + (sub === 'J' ? '_J' : sub), r: sig3(c.r) + ' au', rH: c.rH.toFixed(2), rOut: c.rOutH.toFixed(2),
-      T: sig3(c.T), Hr: c.Hr.toFixed(2), mdot: sci(c.mdot) + ' M_J/' + w.yr, kind: c.kind })));
+  const line = (t) => el('p', { class: 'probe-line' }, t);
+  let head, rows, phys = '';
+  if (q.planet != null) {
+    // (round 15a) a tap on a planet's point: the planet, its gap as the engine has it (Kanagawa et al.: diskProbe's planets) and its
+    // own disk (cpdPhys: diskCpdState)
+    const pl = s.planets[q.planet];
+    if (!pl) { probeClose(); return; }
+    const [a, , m] = pl, g = (box.diskProbe(a, 0).planets || []).find((o) => o.a === a), c = typeof box.diskCpdState === 'function' ? box.diskCpdState(q.planet) : null, [n, , sub] = fmtM(m);
+    head = w.planetTitle(fmtA(a));
+    rows = [row(w.mass, n + ' M' + (sub === 'J' ? '_J' : sub)), row(w.P, sig3(Math.pow(a, 1.5)) + ' ' + w.yr)];
+    if (c) rows.push(row(w.hill, sig3(c.rH) + ' au'), row(w.qth, sig3(c.qth)));
+    rows.push(line(g ? w.gapOf({ depth: pct(g.depth), w: sig3(g.width), K: sig3(g.K), alpha: sci(g.alpha) }) + (g.trap ? ' ' + w.bump(fmtA(g.trap)) : '') : w.noGap));
+    if (c) rows.push(line(w.cpdOf({ kind: c.D >= 0.5 ? 'disk' : 'envelope', rOut: sig3(c.rOut), rOutH: (c.rOut / c.rH).toFixed(2), T: sig3(c.at(0.5 * c.rOut).T), mdot: sci(c.mdot) + ' M_J/' + w.yr, auto: c.auto })));
+  } else {
+    const p = box.diskProbe(q.R, q.z, q.phi), r = fmtA(q.R), rr = Math.hypot(q.R, q.z), vK1 = p.vK * Math.sqrt(p.R);
+    head = q.miss ? w.aboveTitle({ below: q.z < 0, r: sig3(rr), R: fmtA(q.R), z: sig3(Math.abs(q.z)) }) : w.title(r);
+    const reg = row(w.region, w.regions[p.region] || p.region, p.rule);
+    // (inside the magnetosphere, the cavity, there is no disk gas: only the orbit's numbers; a density of 0 is said so too)
+    const gas = p.region !== 'cavity', num = (v, f) => (gas && v > 0 ? f(v) : w.none);
+    const diskRows = () => [
+      row(w.T, num(p.T, (v) => sig3(v) + ' K')),
+      row(w.rho, num(p.rho, (v) => sci(v) + ' g/cm³')),
+      row(w.sigma, num(p.sigma, (v) => sig3(v) + ' g/cm²')),
+      row(w.H, num(p.H, (v) => sig3(v) + ' au (H/R ' + (v / p.R).toFixed(3) + ')')),
+      row(w.vK, p.vK.toFixed(1) + ' km/s'),
+      row(w.P, p.P < 0.1 ? (p.P * 365.25).toFixed(1) + ' ' + w.days : sig3(p.P) + ' ' + w.yr),
+      row(w.alpha, !gas ? w.none : p.alpha < 1e-6 ? w.laminar : sci(p.alpha)),
+      reg,
+      row(w.water, (p.vapour ? (p.snow.inside ? w.snowIn : w.snowOutWarm) : w.snowOut)(fmtA(p.snow.R)))
+    ];
+    // (round 15a) inside the magnetosphere: r_T, the curtains' lines, the free fall from r_T, sqrt(2 G M (1/r - 1/r_T)) with G M from
+    // the Keplerian speed, here and at the star's surface, and the corotation radius (Kepler's third law for the star's period)
+    const M = p.mag, ff = (x) => vK1 * Math.sqrt(Math.max(0, 2 * (1 / x - 1 / M.rT)));
+    const magRows = () => [reg, row(w.rT, sig3(M.rT) + ' au'), row(w.curtains, w.curtainsV(sig3(M.rT), sig3(M.rT * (1 + M.dl)))),
+      row(w.vff, w.vffV(String(Math.round(ff(Math.max(rr, M.rS)))), String(Math.round(ff(M.rS))))), row(w.rCo, w.rCoV(sig3(Math.pow(M.pDays / 365.25, 2 / 3)), String(M.pDays)))];
+    // (round 15a) the wind from the engine's mirror of its map (windProbe); the jet's speed; the envelope's fall on a parabolic
+    // orbit, |v| = (2 G M / r)^1/2. Neither the jet nor the envelope has a density in physical units in the model: said so
+    const Wd = p.wind, lamB = Wd && Math.abs(Wd.lamBud - Wd.lam) > 0.005 ? Wd.lamBud.toFixed(2) : '';
+    const windRows = () => [reg, row(w.windRho, sci(Wd.rho) + ' g/cm³'), row(w.windV, sig3(Wd.vp) + ' km/s'), row(w.windRot, sig3(Wd.vphi) + ' km/s'),
+      row(w.windFoot, w.windFootV(fmtA(Wd.foot), Wd.lam.toFixed(2), lamB)), row(w.windTerm, sig3(Wd.vInf) + ' km/s')];
+    const envRows = () => [reg, row(w.envV, sig3(vK1 * Math.sqrt(2 / rr)) + ' km/s'), row(w.rho, w.noScale),
+      ...(Math.atan2(q.R, Math.abs(q.z)) < p.env.thCav ? [line(w.inCavity)] : []), ...(rr > p.env.R ? [line(w.beyondEnv)] : [])];
+    rows = p.region === 'cavity' && M ? magRows() : p.region === 'wind' && Wd ? windRows() : p.region === 'jet' ? [reg, row(w.jetV, String(Math.round(p.jetV)) + ' km/s'), row(w.rho, w.noScale)]
+      : p.region === 'envelope' && p.env ? envRows() : diskRows();
+    if ((p.region === 'wind' && !(s.mode & 8)) || (p.region === 'envelope' && !(s.mode & 32))) rows.push(line(w.hidden));
+    if (!q.miss) for (const pl of p.planets) {
+      const pc = 100 * pl.gap;
+      if (pl.gap < 0.5) rows.push(line(w.gap({ a: fmtA(pl.a), f: pc < 1 ? pc.toPrecision(2) : String(Math.round(pc)), depth: pct(pl.depth), w: sig3(pl.width), bump: pl.trap ? fmtA(pl.trap) : '' })));
+      if (pl.atTrap) rows.push(line(w.trap(fmtA(pl.a))));
+    }
+    // (round 13e) inside a planet's own disk or envelope (diskProbe with the point's azimuth): its numbers at the point
+    if (p.cpd) {
+      const c = p.cpd, [n, , sub] = fmtM(c.m);
+      rows.push(line(w.cpd({ a: fmtA(c.a), m: n + ' M' + (sub === 'J' ? '_J' : sub), r: sig3(c.r) + ' au', rH: c.rH.toFixed(2), rOut: c.rOutH.toFixed(2),
+        T: sig3(c.T), Hr: c.Hr.toFixed(2), mdot: sci(c.mdot) + ' M_J/' + w.yr, kind: c.kind })));
+    }
+    phys = said(w.physics[p.region]) || '';
   }
   panel.replaceChildren(
-    el('div', { class: 'probe-head' }, el('span', { class: 'probe-title' }, w.title(r)), el('button', { type: 'button', class: 'icon-x', 'aria-label': w.close, title: w.close, onclick: () => setPick(false) }, '×')),
+    el('div', { class: 'probe-head' }, el('span', { class: 'probe-title' }, head), el('button', { type: 'button', class: 'icon-x', 'aria-label': w.close, title: w.close, onclick: () => setPick(false) }, '×')),
     ...rows,
-    el('p', { class: 'probe-physics' }, said(w.physics[p.region]) || ''),
+    el('p', { class: 'probe-physics' }, phys),
     el('p', { class: 'probe-note' }, said(w.model)));
   panel.hidden = false;
   // beside the point, inside the stage; along the bottom edge of a narrow stage
@@ -1079,6 +1137,8 @@ document.querySelectorAll('.lang-switch [data-lang]').forEach((b) => b.addEventL
 const pop = $('planetPop');
 let popI = -1;
 box.addEventListener('diskplanet', (e) => {
+  // (round 15a) with the probe on, a tap on a planet's point probes the planet: its mass, orbit, gap and own disk (see probeRender)
+  if (box.dataset.pick === 'probe') { probeAt({ planet: e.detail.i, x: e.detail.x, y: e.detail.y }); return; }
   popI = e.detail.i;
   const w = T().show, [a, , m] = S().planets[popI];
   const input = el('input', { type: 'range', min: '0', max: '1000', step: '1', value: sliderOfA(a), 'aria-label': w.orbit(popI + 1),
@@ -2021,8 +2081,12 @@ async function start() {
   if (SWITCH.gasrho) box.dataset.gasrho = SWITCH.gasrho;
   for (const k of ['mflux', 'lam', 'lamin', 'mdot', 'chic']) if (SWITCH[k]) box.dataset[k] = SWITCH[k];   // (round 13c: see SWITCH)
   box.setAttribute('data-disk3d', '');
+  // (round 15b) the engine's dev switches, read from the address: a thick pebble layer, the envelope/wind exclusion, the gas line from the
+  // envelope, the jet's occlusion, the gas's glow, the CPD's flare, the wind's extent, the starlight's scale (README)
+  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale']) if (q.has(k)) box.dataset[k] = q.get(k);
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
-  if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), DEF_KEYS);   // (the engine's own start: the defaults Reset returns to)
+  // (the engine's own start: the defaults Reset returns to; round 15a: with the clock's state, stopped by data-paused)
+  if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), [...DEF_KEYS, 'paused']);
   // (round 13a) the model look's colours, before the first picture: a link's col= (a link without it: the defaults), else those
   // kept on this device. Also after a safe start: they cost nothing to draw, and are not lost when the settings are next kept
   if (typeof box.diskColours === 'function') {
@@ -2329,7 +2393,7 @@ function resetAll() {
   qChosen = false;
   const d = { ...defaults };
   guardSwitch(keyOf({ ...S(), look: d.look, slice: d.slice }));
-  box.diskSet({ ...pick(d, DEF_KEYS), paused: 0 });
+  box.diskSet({ ...pick(d, DEF_KEYS), paused: d.paused ? 1 : 0 });
   box.diskSpeed(d.speed || 1);
   cols = {}; applyCols();   // (round 13a: the model look's colours, the defaults)
   params = {}; applyParams(); windGain = 1; applyWind();   // (round 14a: the model's parameters and the wind's brightness, the defaults)
@@ -2482,7 +2546,9 @@ function tiltInit() {
     disabled: reduce, onclick: () => { if (tiltOn) tiltSet(false); else tiltAsk(); } },
   el('span', { class: 'en', lang: 'en' }, WORDS.en.tilt.label), el('span', { class: 'ja', lang: 'ja' }, WORDS.ja.tilt.label));
   tiltNoteEl = el('p', { class: 'rail-note', id: 'tiltNote' });
-  sec.append(el('div', { class: 'chips' }, tiltBtn), tiltNoteEl);
+  // (round 15a: with the view's chips, before the annotations' group)
+  const annG = sec.querySelector('.ann-group'), tiltEls = [el('div', { class: 'chips' }, tiltBtn), tiltNoteEl];
+  if (annG && annG.parentNode === sec) annG.before(...tiltEls); else sec.append(...tiltEls);
   if (reduce) { tiltSay('reduced'); return; }
   let kept = false;
   try { kept = localStorage.getItem(TILT_KEY) === '1'; } catch { /* not kept */ }

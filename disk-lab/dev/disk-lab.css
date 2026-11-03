@@ -233,6 +233,11 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .comp-cols .chip{min-height:24px;padding:1px 8px;font-size:11.5px}
 .comp-opts{grid-column:1/-1;display:grid;gap:6px;justify-items:start;width:100%;margin:0 0 4px;padding:6px 0 7px 12px;border-left:1px solid var(--line-2)}
 .toggle.small{min-height:26px;padding:2px 9px;font-size:12px}
+/* (round 15a) the annotations under View: a checkbox for each kind */
+.ann-group{display:grid;margin-top:8px}
+.ann-group .talk-sub{margin:4px 0 2px}
+.ann-row{display:flex;align-items:center;gap:8px;min-height:26px;font-size:12.5px;color:var(--text-2);cursor:pointer}
+.ann-row input{width:15px;height:15px;margin:0;flex:none;accent-color:var(--accent)}
 .planet-list{display:grid;gap:4px;width:100%}
 /* (round 8) two lines: the toggle, the orbit's slider and the remove button; the mass and its slider */
 .planet-row{display:grid;grid-template-columns:6.6em minmax(0,1fr) 24px;align-items:center;gap:2px 6px;width:100%}
@@ -240,30 +245,38 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .planet-row input{min-width:0;accent-color:var(--accent)}
 .planet-mass,.pop-mass{font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right;padding-right:4px}
 .planet-mass sub,.pop-mass sub{font-size:.75em}
-/* (round 13e) the planets' accretion rate: its name and value on one line, the slider and the chip back to auto on the next */
+/* (round 13e) the planets' accretion rate: its name and value on one line, the slider and the chip back to auto on the next
+   (round 15a, the owner: the slider changed its length while dragged, as the value's text did. Now the name and the chip, its place
+   kept while it is hidden; the slider across the row; the value under it) */
 .cpd-mdot{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 6px;width:100%;margin-top:4px}
-.cpd-mdot-k{font-size:12px;color:var(--text)}
-.cpd-mdot-v{font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;text-align:right}
+.cpd-mdot-k{grid-row:1;grid-column:1;font-size:12px;color:var(--text)}
+.cpd-mdot .chip{grid-row:1;grid-column:2;justify-self:end}
+.cpd-mdot-v{grid-row:3;grid-column:1/-1;font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;text-align:right}
 .cpd-mdot-v sub{font-size:.75em}
-.cpd-mdot input{grid-column:1/2;min-width:0;width:100%;accent-color:var(--accent)}
+.cpd-mdot input{grid-row:2;grid-column:1/-1;min-width:0;width:100%;accent-color:var(--accent)}
 /* (round 14a) the model's parameters (the rail's Model) and the wind's brightness under the wind: the name over a slider, its value
-   with its unit and, while it is changed, the chip back to the default */
+   with its unit and, while it is changed, the chip back to the default
+   (round 15a, the owner: the bar changed its length while dragged. The chip now beside the name, its place kept while it is hidden,
+   and the value's cell as wide as its slider's widest text (app.js, valW): the bar keeps its length and its place) */
 .mp-group{margin:2px 0 6px}
 .mp-group .talk-sub{margin:10px 0 4px}
-.mp-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:1px 8px;width:100%;margin:4px 0}
+.mp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:1px 8px;width:100%;margin:4px 0}
 .mp-row[hidden]{display:none}
-.mp-name{grid-column:1/-1;font-size:12px;color:var(--text-2)}
-.mp-row input[type=range]{min-width:0;width:100%;accent-color:var(--accent)}
-.mp-val{font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
-.mp-row .chip{min-height:24px;padding:1px 8px;font-size:11.5px}
+.mp-name{grid-row:1;grid-column:1;font-size:12px;color:var(--text-2)}
+.mp-row input[type=range]{grid-row:2;grid-column:1;min-width:0;width:100%;accent-color:var(--accent)}
+.mp-val{grid-row:2;grid-column:2;font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.mp-row .chip{grid-row:1;grid-column:2;justify-self:end;min-height:24px;padding:1px 8px;font-size:11.5px}
+.mp-row .chip[hidden],.cpd-mdot .chip[hidden]{display:inline-flex!important;visibility:hidden}
 .mp-derived{margin:4px 0 2px;font-size:11.5px}
 .gain-row{margin:2px 0 0}
 .icon-x{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;color:var(--text-3);font-size:15px;line-height:1}
 .icon-x:hover{background:var(--wash);color:var(--text)}
 #addPlanet[aria-pressed=true]{border-color:var(--accent);color:var(--text)}
 .lab.picking .disk-panel canvas{cursor:crosshair}
-.planet-pop{position:absolute;z-index:7;display:grid;grid-template-columns:auto minmax(0,1fr) 24px;align-items:center;gap:4px 8px;width:250px;padding:6px 6px 6px 12px;border-radius:12px;background:rgba(16,20,30,.92);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:12px;color:var(--text);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.planet-pop{position:absolute;z-index:7;display:grid;grid-template-columns:5em minmax(0,1fr) 24px;align-items:center;gap:4px 8px;width:250px;padding:6px 6px 6px 12px;border-radius:12px;background:rgba(16,20,30,.92);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:12px;color:var(--text);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .planet-pop input{min-width:0;accent-color:var(--accent)}
+/* (round 15a: the name in a column of its own width, 5em above, so that the sliders keep their length while dragged) */
+.pop-name{font-variant-numeric:tabular-nums;white-space:pre}
 /* (round 12a) the probe's panel, beside the point tapped (along the bottom of a narrow stage), in type large enough to read
    from across a room; and the ring at the point, which fades */
 .probe-panel{position:absolute;z-index:7;width:min(360px,calc(100% - 16px));max-height:calc(100% - 16px);overflow:auto;padding:10px 12px 10px 14px;border-radius:12px;background:rgba(14,18,27,.93);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.45);font-size:15px;line-height:1.35;color:var(--text);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
@@ -472,6 +485,7 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   .comp-cols input[type=color]{width:40px;height:34px}
   .comp-cols .chip{min-height:40px}
   .mp-row .chip{min-height:40px}
+  .ann-row{min-height:36px}
   .tool{height:40px}
   .route button{padding:9px 12px}
   .segmented button{padding-top:9px;padding-bottom:9px}

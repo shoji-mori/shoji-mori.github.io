@@ -228,7 +228,7 @@ export const WORDS = {
     // (round 12a) the probe: a tap on the picture reads the model at the midplane point under it (app.js, probeAt; the
     // engine's box.diskProbe). physics: one sentence per region (the regions' face's, see layersFace in the engine)
     probe: {
-      on: '絵の円盤をタップ(クリック)すると、その場所の赤道面の物理量を示します(もう一度タップで移す、Esc でやめる)。',
+      on: '絵の円盤をタップ(クリック)すると、その場所の赤道面の物理量を示します。惑星ならその惑星を、円盤の上なら視線が星に最も近づく所を調べます(もう一度タップで移す、Esc でやめる)。',
       title: (r) => `探針:R = ${r} au の赤道面`, close: '探針を外す',
       T: '温度', rho: 'ガスの密度', sigma: '面密度', H: 'スケールハイト', vK: 'ケプラー速度', P: '公転周期', alpha: '乱流の強さ α', region: '領域', water: '水',
       laminar: 'なし(層流)', none: '—(円盤のガスはない)', days: '日', yr: '年',
@@ -246,7 +246,20 @@ export const WORDS = {
         envelope: '円盤を包み、星と円盤へ落ちてくる親の分子雲です。'
       },
       snowIn: (r) => `蒸気(スノーライン ${r} au の内側)`, snowOut: (r) => `氷(スノーライン ${r} au の外側)`, snowOutWarm: (r) => `蒸気(スノーライン ${r} au の外側だが、ここは 160 K より暖かい)`,
-      gap: (a, f) => `${a} au の惑星のギャップの中:ガスは周りの ${f} %`, trap: (a) => `${a} au の惑星の外側の圧力の山:小石が集まります`,
+      gap: (o) => `${o.a} au の惑星のギャップの中:ガスは周りの ${o.f} %(ギャップは軌道で深さ ${o.depth} %、半分の深さでの幅 ${o.w} au:Kanagawa et al. 2016)${o.bump ? `。圧力の山(小石が集まる所)は ${o.bump} au` : ''}`, trap: (a) => `${a} au の惑星の外側の圧力の山:小石が集まります`,
+      // (round 15a) a planet's point; the magnetosphere; above the disk (the wind, the jet, the envelope)
+      planetTitle: (a) => `探針:${a} au の惑星`, mass: '質量', hill: 'ヒル半径', qth: '熱的質量(q / h³)',
+      gapOf: (o) => `ギャップ(Kanagawa et al. 2016、α = ${o.alpha}、K = ${o.K}):軌道で深さ ${o.depth} %、半分の深さでの幅 ${o.w} au。`,
+      bump: (r) => `圧力の山(小石が集まる所):${r} au。`, noGap: '軽すぎて、モデルの描くギャップは開きません。',
+      cpdOf: (o) => `自前の${o.kind === 'disk' ? '周惑星円盤' : 'まわりの包み'}:半径 ${o.rOut} au(${o.rOutH} R_H)まで、半分の所で約 ${o.T} K、降着率 ${o.mdot}(${o.auto ? '自動:円盤の降着率の 1/10' : '設定した値'})。`,
+      aboveTitle: (o) => `探針:円盤の${o.below ? '下' : '上'}、視線が星に最も近づく所 r = ${o.r} au(R = ${o.R} au、|z| = ${o.z} au)`,
+      rT: '切断半径 r_T', curtains: '降着のカーテン', vff: 'r_T からの自由落下', rCo: '共回転半径',
+      curtainsV: (a, b) => `${a}〜${b} au で円盤を離れる磁力線に沿って、星の極から約 25° の所へ`,
+      vffV: (here, star) => `ここで ${here} km/s、星の表面で ${star} km/s`, rCoV: (r, d) => `${r} au(星の自転周期 ${d} 日)`,
+      windRho: 'ガスの密度(円盤風)', windV: '磁力線に沿った速さ', windRot: '回転の速さ', windFoot: '吹き出した所', windTerm: '終端速度',
+      windFootV: (r, lam, bud) => `R = ${r} au、レバーアーム λ ${lam}${bud ? `(質量の勘定では ${bud})` : ''}`,
+      jetV: '速さ', envV: '落ちる速さ', noScale: '示しません(モデルに物理的な目盛りがありません)',
+      hidden: '今は表示していません(「見せるもの」でオンに)。', inCavity: '軸に沿った流出の空洞の中で、エンベロープのガスは払われています。', beyondEnv: 'モデルが描くエンベロープ(560 au)の外です。',
       // (round 13e) inside a planet's own disk (or envelope)
       cpd: (o) => `${o.a} au の惑星(${o.m})の${o.kind === 'disk' ? '周惑星円盤' : 'まわりの包み'}の中:惑星から ${o.r}(${o.rH} R_H、外縁は ${o.rOut} R_H)、${o.T} K、H/r ${o.Hr}、降着率 ${o.mdot}`,
       model: (n) => `モデルの値です(円盤の厚みは見やすさのため温度の示す ${n.hf} 倍、面密度は 1 au で 1700 g/cm² とした場合)。`   // (round 14a: n from the model's parameters)
@@ -479,7 +492,7 @@ export const WORDS = {
       credit: (y, url) => CREDIT_LINE(y, url)
     },
     probe: {
-      on: 'Tap (or click) the disk in the picture: the model’s numbers at that point of the midplane (tap again to move it, Esc to stop).',
+      on: 'Tap (or click) the disk in the picture: the model’s numbers at that point of the midplane; a planet, the planet; above the disk, what lies where the line of sight passes nearest the star (tap again to move it, Esc to stop).',
       title: (r) => `Probe: the midplane at R = ${r} au`, close: 'Remove the probe',
       T: 'Temperature', rho: 'Gas density', sigma: 'Surface density', H: 'Scale height', vK: 'Keplerian speed', P: 'Orbital period', alpha: 'Turbulence α', region: 'Region', water: 'Water',
       laminar: 'none (laminar)', none: '— (no disk gas)', days: 'days', yr: 'yr',
@@ -497,7 +510,20 @@ export const WORDS = {
         envelope: 'The parent cloud, falling onto the star and the disk around them.'
       },
       snowIn: (r) => `vapour (inside the snow line at ${r} au)`, snowOut: (r) => `ice (outside the snow line at ${r} au)`, snowOutWarm: (r) => `vapour (outside the snow line at ${r} au, but warmer than 160 K here)`,
-      gap: (a, f) => `in the gap of the planet at ${a} au: the gas at ${f} % of its surroundings`, trap: (a) => `at the pressure maximum outside the planet at ${a} au: pebbles collect here`,
+      gap: (o) => `in the gap of the planet at ${o.a} au: the gas at ${o.f} % of its surroundings (the gap ${o.depth} % deep at the orbit, ${o.w} au wide at half depth: Kanagawa et al. 2016)${o.bump ? `; the pressure maximum, where pebbles collect, at ${o.bump} au` : ''}`, trap: (a) => `at the pressure maximum outside the planet at ${a} au: pebbles collect here`,
+      // (round 15a) a planet's point; the magnetosphere; above the disk (the wind, the jet, the envelope)
+      planetTitle: (a) => `Probe: the planet at ${a} au`, mass: 'Mass', hill: 'Hill radius', qth: 'Thermal mass (q / h³)',
+      gapOf: (o) => `Its gap (Kanagawa et al. 2016, α = ${o.alpha}, K = ${o.K}): ${o.depth} % deep at the orbit, ${o.w} au wide at half depth.`,
+      bump: (r) => `The pressure maximum, where pebbles collect: ${r} au.`, noGap: 'Too light for the gap the model draws.',
+      cpdOf: (o) => `Its own ${o.kind === 'disk' ? 'circumplanetary disk' : 'envelope'}: out to ${o.rOut} au (${o.rOutH} R_H), about ${o.T} K halfway out, accreting ${o.mdot} (${o.auto ? 'auto: a tenth of the disk’s rate' : 'as set'}).`,
+      aboveTitle: (o) => `Probe: ${o.below ? 'below' : 'above'} the disk, where the line of sight passes nearest the star, r = ${o.r} au (R = ${o.R} au, |z| = ${o.z} au)`,
+      rT: 'Truncation radius r_T', curtains: 'Accretion curtains', vff: 'Free fall from r_T', rCo: 'Corotation radius',
+      curtainsV: (a, b) => `along the field lines leaving the disk at ${a} to ${b} au, onto the star about 25° from its poles`,
+      vffV: (here, star) => `${here} km/s here, ${star} km/s at the star’s surface`, rCoV: (r, d) => `${r} au (the star turns in ${d} days)`,
+      windRho: 'Gas density (the wind)', windV: 'Speed along the field line', windRot: 'Rotation', windFoot: 'Launched from', windTerm: 'Terminal speed',
+      windFootV: (r, lam, bud) => `R = ${r} au, lever arm λ ${lam}${bud ? ` (the mass budget’s ${bud})` : ''}`,
+      jetV: 'Speed', envV: 'Speed of the fall', noScale: 'not given (the model has no physical scale for it)',
+      hidden: 'Not shown now (turn it on under Show).', inCavity: 'In the outflow’s cavity along the axis, cleared of the envelope’s gas.', beyondEnv: 'Beyond the envelope the model draws (560 au).',
       // (round 13e) inside a planet's own disk (or envelope)
       cpd: (o) => `inside the ${o.kind === 'disk' ? 'circumplanetary disk' : 'envelope'} of the planet at ${o.a} au (${o.m}): ${o.r} from the planet (${o.rH} R_H; its edge at ${o.rOut} R_H), ${o.T} K, H/r ${o.Hr}, accreting ${o.mdot}`,
       model: (n) => `The model’s values (the disk drawn ${n.hf} times as thick as its temperature holds it, for the picture; the surface density taken as 1700 g/cm² at 1 au).`   // (round 14a: n from the model's parameters)
