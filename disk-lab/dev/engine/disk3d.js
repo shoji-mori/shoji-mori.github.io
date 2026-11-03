@@ -7021,7 +7021,10 @@ void main(){
       gl.uniform4fv(U.uComp, compAmp.map((v, i) => v * v * (3 - 2 * v) * opt.gain[i]));
       gl.uniform1f(U.uMS, msAmp * msAmp * (3 - 2 * msAmp));
       // (round 8) the star's light in the model's look and the finish, by the quality of the moment (see FX)
-      gl.uniform1f(U.uLit, modelAmp * Math.min(fxAmp, 1)); gl.uniform1f(U.uFx, Math.min(fxAmp, 1) * modelAmp);
+      // (2026-11-03, the owner on Safari: "Reset all makes the gas vanish". The starlight's shading was tied to the finish's level (fx),
+      // which Auto on a guarded device sets to 0: the model look then showed the gas's own glow alone, dim since round 13a's white gas.
+      // Now the shading is drawn at every level; data-lit="fx" (?lit=fx) keeps the old coupling for comparison)
+      gl.uniform1f(U.uLit, modelAmp * (box.dataset.lit === 'fx' ? Math.min(fxAmp, 1) : 1)); gl.uniform1f(U.uFx, Math.min(fxAmp, 1) * modelAmp);
       gl.uniform1f(U.uFocus, Math.max(camD, 1e-3));
       gl.uniform1f(U.uWindLow, 1 - (1 - WIND_LOW_JS) * asymAmp * asymAmp * (3 - 2 * asymAmp));
       gl.uniform2fv(U.uAcc, accW());

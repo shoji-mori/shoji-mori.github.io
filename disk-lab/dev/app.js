@@ -11,13 +11,13 @@ import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stash
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=69bda106a1';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=63cebb9363';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.11', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.12', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
@@ -1754,6 +1754,7 @@ async function start() {
   // by a planet followed; see the engine's bgTurn)
   if (q.get('bgmove') === '1') box.dataset.bgmove = 'on';
   if (SWITCH.acc) box.dataset.acc = 'on';   // (round 13a: see SWITCH)
+  if (q.get('lit') === 'fx') box.dataset.lit = 'fx';   // (2026-11-03: the starlight's shading tied to the finish's level, as before; see the engine's uLit)
   if (SWITCH.gasrho) box.dataset.gasrho = SWITCH.gasrho;
   for (const k of ['mflux', 'lam', 'lamin', 'mdot', 'chic']) if (SWITCH[k]) box.dataset[k] = SWITCH[k];   // (round 13c: see SWITCH)
   box.setAttribute('data-disk3d', '');
