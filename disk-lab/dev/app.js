@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=814f93ec9f';
-import { WORDS } from './words.js?v=e2d6188138';
+import { WORDS } from './words.js?v=ef9bfd4551';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=05481e7755';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=56a94c039c';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=36c024bef7';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.5', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.6', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
@@ -110,7 +110,11 @@ if (typeof WebGL2RenderingContext !== 'undefined') {
 // diskDuty; a guarded device 0.5 by default); ?ctmax=N, the continuum's iterations at most; ?eddy=0, no eddies' volume;
 // ?fps=N, the frame rate while only the clock moves; ?split=0, the continuum's rays drawn whole, not in kicks (see the
 // engine's SPLIT); ?kick=N, the work of a kick
-const SWITCH = { duty: q.get('duty'), ctmax: Number(q.get('ctmax')) || 0, eddy: q.get('eddy') === '0', fps: Number(q.get('fps')) || 0, split: q.get('split') === '0', kick: Number(q.get('kick')) || 0, kadapt: q.get('kadapt') === '1' };
+// (round 13a, switches to compare the model look with that of before, on the development build: ?acc=1, the accretion layer
+// drawn (data-acc="on"); ?gasrho=old, the gas's glow raised beyond 6 au as until round 13 (data-gasrho="old"); see the engine's
+// ACC and uGasOuter, and DESIGN.md section 31)
+const SWITCH = { duty: q.get('duty'), ctmax: Number(q.get('ctmax')) || 0, eddy: q.get('eddy') === '0', fps: Number(q.get('fps')) || 0, split: q.get('split') === '0', kick: Number(q.get('kick')) || 0, kadapt: q.get('kadapt') === '1',
+  acc: q.get('acc') === '1', gasrho: q.get('gasrho') === 'old' ? 'old' : '' };
 // (round 9) the last visit's record (see record): a visit that ended with drawing stopped, or "Try again", starts safe
 // (round 10a: judged from its phase and its flight record, judgePrev: only what is broken counts, not a page closed or put
 // in the background while it started or changed its look)
@@ -178,14 +182,15 @@ function setPoster(id) {
 // ---------- the material key (round 8): the model look's colours, one per material (the engine's MAT, box.diskPalette) ----------
 // (the owner: "colour the model look by material, not by temperature"; the temperature's bar that stood here went with it)
 // Only the materials shown, and those that show at this distance: the envelope from 40 au, the star's magnetosphere and
-// curtains within 2 au of the star; the pebbles' rock and ice on one row.
+// curtains within 2 au of the star; the pebbles' rock and ice on one row. (Round 13a: not the accretion layer, no longer drawn,
+// unless ?acc=1 draws it; in the colours chosen, see the model look's colours)
 let matShown = '';
 function renderMatKey(s) {
   const on = s.look === 'model' && !s.slice && !!s.ann && typeof box.diskPalette === 'function';
   matKey.classList.toggle('on', on);
   if (!on) return;
   const P = Object.fromEntries(box.diskPalette().map((m) => [m.key, m])), rows = [];
-  if (s.mode & 3) rows.push(['disk'], ['acc']);
+  if (s.mode & 3) { rows.push(['disk']); if (SWITCH.acc) rows.push(['acc']); }
   if (s.mode & 4) rows.push(['rock', 'ice']);
   if (s.mode & 8) rows.push(['wind']);
   if (s.mode & 64) rows.push(['jet']);
@@ -193,7 +198,7 @@ function renderMatKey(s) {
   if ((s.mode & 16) && s.planets.some((p) => p[1])) rows.push(['planet']);
   if (s.d < 2 && !s.p) rows.push(['mag'], ['curt']);
   if (s.marks && (s.mode & 1)) rows.push(['arrows']);   // (round 8: the flow arrows, with what their length means)
-  const key = L() + JSON.stringify(rows);
+  const key = L() + JSON.stringify(rows.map((ks) => ks.map((k) => k + (P[k] ? P[k].hex : ''))));   // (round 13a: and their colours)
   if (key === matShown) return;
   matShown = key;
   matList.replaceChildren(...rows.map((ks) => ks[0] === 'arrows' ? el('li', {}, el('i', { class: 'arr' }, '\u2192'), el('span', {}, T().arrowsKey))
@@ -508,18 +513,21 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.planetOn != null) { const pl = S().planets; const i = Number(b.dataset.planetOn); if (pl[i]) { pl[i][1] = pl[i][1] ? 0 : 1; if (pl[i][1] && !roomFor(pl, pl[i][0], i, pl[i][2])) pl[i][1] = 0; box.diskSet({ planets: pl }); } }
   else if (b.dataset.planetRemove != null) { const pl = S().planets; pl.splice(Number(b.dataset.planetRemove), 1); box.diskSet({ planets: pl }); }
   else if (b.id === 'addPlanet') setPick(box.dataset.pick === 'planet' ? false : 'planet');
+  else if (b.dataset.colReset) resetCols(b.dataset.colReset);   // (round 13a: a component's colours back to the default)
   sync();
 });
 // (round 9) a planet's slider: while it is dragged, the engine makes the gap's starlight anew at most every 120 ms and the
 // picture is drawn at the moving scale (as for a move of the view, see moving); on release ('change') in full
 rail.addEventListener('input', (e) => {
   const t = e.target; if (!live()) return;
-  if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value), true);
+  if (t.dataset.col) setCol(t.dataset.col, t.value);   // (round 13a: a colour, the picture following while it is chosen)
+  else if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value), true);
   else if (t.dataset.planetM != null) massPlanet(Number(t.dataset.planetM), mOf(t.value), true);
 });
 rail.addEventListener('change', (e) => {
   const t = e.target; if (!live()) return;
-  if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value));
+  if (t.dataset.col) setCol(t.dataset.col, t.value);
+  else if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value));
   else if (t.dataset.planetM != null) massPlanet(Number(t.dataset.planetM), mOf(t.value));
 });
 
@@ -534,10 +542,12 @@ rail.addEventListener('change', (e) => {
 // the list of planets. The envelope, the jet and the labels have no settings of their own. (The flow markers were the field
 // lines' option from round 5, 2026-10-16; round 8, the owner: "the flow markers: an option of the gas; small arrows". They
 // show the gas's motion, drawn while the gas is shown.)
+// (round 13a) cols: the materials whose colour in the model look is chosen beside the toggle (the engine's MAT keys; see the
+// model look's colours): the gas, the pebbles' rock and ice, the wind, the jet, the envelope
 const COMPS = [
-  { key: 'gas', bit: 3, opts: ['marks'] }, { key: 'pebbles', bit: 4, opts: ['drop'] },
-  { key: 'wind', bit: 8, opts: ['asym'] }, { key: 'jet', bit: 64 }, { key: 'field', opt: 'field' },
-  { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32 }, { key: 'labels', opt: 'ann' }
+  { key: 'gas', bit: 3, opts: ['marks'], cols: ['disk'] }, { key: 'pebbles', bit: 4, opts: ['drop'], cols: ['rock', 'ice'] },
+  { key: 'wind', bit: 8, opts: ['asym'], cols: ['wind'] }, { key: 'jet', bit: 64, cols: ['jet'] }, { key: 'field', opt: 'field' },
+  { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32, cols: ['env'] }, { key: 'labels', opt: 'ann' }
 ];
 const compEls = COMPS.map((c) => {
   const btn = el('button', { type: 'button', class: 'toggle', 'aria-pressed': 'false', ...(c.bit ? { 'data-bit': String(c.bit) } : { 'data-opt': c.opt }) });
@@ -545,14 +555,23 @@ const compEls = COMPS.map((c) => {
   if (c.planets) box_.append(el('div', { class: 'planet-list' }), el('button', { type: 'button', class: 'chip quiet', id: 'addPlanet', 'aria-pressed': 'false' }));
   for (const o of c.opts || []) box_.append(el('button', { type: 'button', class: 'toggle small', 'data-opt': o, 'aria-pressed': 'false' }));
   if (c.planets) box_.append(el('p', { class: 'rail-note planets-note' }));
-  const row = el('div', { class: 'comp', 'data-comp': c.key }, btn, box_);
+  // (round 13a) beside the toggle, its colours (shown in the model look once the engine has started) and the chip back to the
+  // default (shown while one of them is changed)
+  const cols_ = c.cols ? el('span', { class: 'comp-cols', hidden: true }, ...c.cols.map((k) => el('input', { type: 'color', 'data-col': k })),
+    el('button', { type: 'button', class: 'chip quiet', 'data-col-reset': c.key, hidden: true })) : null;
+  const row = el('div', { class: 'comp', 'data-comp': c.key }, btn, cols_, box_);
   $('comps').append(row);
-  return { c, row, btn, opts: box_ };
+  return { c, row, btn, opts: box_, cols: cols_ };
 });
 function renderComps() {
   const w = T().show;
-  for (const { c, btn, opts } of compEls) {
+  for (const { c, btn, opts, cols: cs } of compEls) {
     btn.textContent = w[c.key];
+    if (cs) {   // (round 13a)
+      cs.querySelectorAll('[data-col]').forEach((i) => { const t = w.colOf(i.dataset.col); i.setAttribute('aria-label', t); i.setAttribute('title', t); });
+      const r = cs.querySelector('[data-col-reset]');
+      if (r) { r.textContent = w.colDefault; r.setAttribute('aria-label', w.colReset(w[c.key])); }
+    }
     if (!opts) continue;
     opts.querySelectorAll('[data-opt]').forEach((b) => { b.textContent = w[b.dataset.opt]; });
     const add = opts.querySelector('#addPlanet'); if (add) add.textContent = '+ ' + w.addPlanet;
@@ -620,9 +639,10 @@ function planetRows(s) {
 }
 function syncComps(s) {
   const opt = { field: s.field, ann: s.ann };
-  for (const { c, opts } of compEls) {
+  for (const { c, opts, cols: cs } of compEls) {
     const on = c.bit ? !!(s.mode & c.bit) : !!opt[c.opt];
     if (opts) opts.hidden = !on;
+    if (cs) cs.hidden = s.look !== 'model' || !colDef;   // (round 13a: the colours are the model look's)
   }
   // (round 8: the pebbles' tap mode ends with the pebbles, as its button goes with their settings)
   if (box.dataset.pick === 'pebbles' && !(s.mode & 4)) { delete box.dataset.pick; lab.classList.remove('picking'); note('', 0); }
@@ -641,6 +661,77 @@ function syncComps(s) {
     el('span', { class: 'planet-mass' }, massEl(m)),
     el('input', { type: 'range', min: '0', max: '1000', step: '1', value: sliderOfM(m || 1), 'data-planet-m': String(i), 'aria-label': w.massOf(i + 1) }))));
 }
+
+// ---------- the model look's colours (round 13a) ----------
+// The owner: "make each colour changeable". The colour of each material the model look draws (the gas, the pebbles' rock and
+// ice, the wind, the jet, the envelope: COMPS' cols) is chosen beside its component in Show, with a colour input and, while
+// one is changed, a chip back to the default. They go to the engine in one call, box.diskColours (each material not chosen
+// takes its default, the engine's MAT), are kept with the settings on this device (settingsNow, under KEY), written into a
+// link as one parameter, col= (COL-LINK), and put back by Reset all. Shown in the model look only: the observed looks show a
+// light of their own, in colours that are not the materials'. Not in the scenes (a scene is a view, not a palette).
+// COL-LINK
+// The colours a link carries, in this order: the gas (the engine's 'disk'), the pebbles' rock and ice, the wind, the jet, the
+// envelope ('env'). col= holds their six hex digits in that order, separated by dots, a field left empty for a material at
+// its default and the empty ones at the end left out: col=ff8800 is the gas alone, col=.....c080ff the envelope alone, and no
+// col= at all is every default. Read back, a field that is not six hex digits is the default, and fields past the sixth are
+// passed over.
+const COL_ORDER = ['disk', 'rock', 'ice', 'wind', 'jet', 'env'];
+// a colour as '#rrggbb' in small letters, from '#rrggbb' or 'rrggbb' in either case; null if it is not one
+function colHex(v) { return typeof v === 'string' && /^#?[0-9a-f]{6}$/i.test(v) ? '#' + v.replace('#', '').toLowerCase() : null; }
+// the colours chosen ({ key: colour }), only the keys of COL_ORDER, only real colours, none at its default (def, by key)
+function colClean(cols, def) {
+  const out = {};
+  for (const k of COL_ORDER) { const h = colHex(cols && cols[k]); if (h && h !== def[k]) out[k] = h; }
+  return out;
+}
+// the colours chosen as a link's value ('' when every one is at its default)
+function colToLink(cols, def) {
+  const c = colClean(cols, def), f = COL_ORDER.map((k) => (c[k] ? c[k].slice(1) : ''));
+  while (f.length && !f[f.length - 1]) f.pop();
+  return f.join('.');
+}
+// a link's value back as the colours chosen (only those not at the default)
+function colFromLink(s, def) {
+  const f = typeof s === 'string' ? s.split('.') : [], cols = {};
+  COL_ORDER.forEach((k, i) => { if (/^[0-9a-f]{6}$/i.test(f[i] || '')) cols[k] = '#' + f[i].toLowerCase(); });
+  return colClean(cols, def);
+}
+// /COL-LINK
+// the colours chosen (only those not at the default) and the engine's defaults (null until the engine has started)
+let cols = {}, colDef = null;
+// into the engine, in one call, and into the inputs and chips
+function applyCols() {
+  if (typeof box.diskColours === 'function') colDef = box.diskColours(cols).def;
+  renderCols();
+}
+// the inputs as the colours are, and each component's chip back to the default while one of its colours is changed
+function renderCols() {
+  if (!colDef) return;
+  for (const { c, cols: cs } of compEls) {
+    if (!cs) continue;
+    cs.querySelectorAll('[data-col]').forEach((i) => { const v = cols[i.dataset.col] || colDef[i.dataset.col]; if (v && i.value !== v) i.value = v; });
+    const r = cs.querySelector('[data-col-reset]');
+    if (r) r.hidden = !c.cols.some((k) => cols[k]);
+  }
+}
+// a colour chosen in an input (and while it is being chosen: the picture follows)
+function setCol(k, v) {
+  const h = colHex(v);
+  if (!h || !colDef || !COL_ORDER.includes(k)) return;
+  if (h === colDef[k]) delete cols[k]; else cols[k] = h;
+  applyCols();
+  renderMatKey(S());
+  keepSoon();
+}
+// a component's colours back to their defaults (the rail's click handler then syncs, and keeps the settings)
+function resetCols(key) {
+  const c = COMPS.find((x) => x.key === key);
+  if (!c || !c.cols) return;
+  for (const k of c.cols) delete cols[k];
+  applyCols();
+}
+// the colours kept with the settings on this device (none: the defaults)
+const keptCols = () => (saved && typeof saved.col === 'string' && colDef ? colFromLink(saved.col, colDef) : {});
 
 // what a click on the disk does (the engine's data-pick): 'planet', place a planet (the engine sends diskpick); 'pebbles'
 // (round 8, the owner: "no pebbles on a tap by default; a mode of the pebbles"), drop a clump of pebbles there, three near one
@@ -1217,6 +1308,8 @@ function linkFor(s) {
   if (s.look === 'co') { u.searchParams.set('com', s.coMode); u.searchParams.set('cov', String(s.coV)); }
   if (!s.ms) u.searchParams.set('ms', '0');
   if (s.bg && s.bg !== 'stars') u.searchParams.set('bg', s.bg);   // (round 8: the background, when not the stars)
+  const cl = colDef ? colToLink(cols, colDef) : '';
+  if (cl) u.searchParams.set('col', cl);   // (round 13a: the model look's colours, when not all the defaults; see COL-LINK)
   // (round 8: with each planet's mass in M_J; a link without it is read as Jupiter's)
   if (s.planets.length) u.searchParams.set('pl', s.planets.map(([a, on, m]) => a + ':' + on + ':' + m).join(','));
   u.searchParams.set('t', String(Math.round(s.time * 1000) / 1000));
@@ -1646,9 +1739,21 @@ async function start() {
   if (SWITCH.eddy) box.dataset.eddy = 'off';   // (round 10a: see SWITCH)
   if (SWITCH.split) box.dataset.split = '0';
   if (SWITCH.kick > 0) box.dataset.kick = String(Math.round(SWITCH.kick));
+  // (round 13b, for a comparison only: ?bgmove=1, the sky behind fixed in the disk's frame as before, swept by the slow spin and
+  // by a planet followed; see the engine's bgTurn)
+  if (q.get('bgmove') === '1') box.dataset.bgmove = 'on';
+  if (SWITCH.acc) box.dataset.acc = 'on';   // (round 13a: see SWITCH)
+  if (SWITCH.gasrho) box.dataset.gasrho = SWITCH.gasrho;
   box.setAttribute('data-disk3d', '');
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), DEF_KEYS);   // (the engine's own start: the defaults Reset returns to)
+  // (round 13a) the model look's colours, before the first picture: a link's col= (a link without it: the defaults), else those
+  // kept on this device. Also after a safe start: they cost nothing to draw, and are not lost when the settings are next kept
+  if (typeof box.diskColours === 'function') {
+    colDef = box.diskColours().def;
+    cols = q.has('col') || stateFromLink() || q.has('place') ? colFromLink(q.get('col') || '', colDef) : keptCols();
+    applyCols();
+  }
   if (typeof box.diskGuard === 'function') { const g0 = box.diskGuard(); Object.assign(FACTOR, g0.factors); CUT_F = g0.cut; }
   diag.timings.engine = Math.round(performance.now() - t0);
   // (the probe found WebGL2 with float targets, but the engine's own context came out lost or without them: the browser's
@@ -1904,7 +2009,8 @@ const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] != null).ma
 let DEF0 = null, defaults = null, keeping = false, keepTimer = 0;
 function settingsNow() {
   const s = S();
-  return talkHeld({ v: 1, place: PLACES[placeI].id, ...pick(s, DEF_KEYS), ...pick(s, VIEW_KEYS), quality: qChosen ? quality : null });   // (round 11a: see talkHeld)
+  // (round 13a: col, the model look's colours as a link writes them, '' for the defaults; see COL-LINK)
+  return talkHeld({ v: 1, place: PLACES[placeI].id, ...pick(s, DEF_KEYS), ...pick(s, VIEW_KEYS), quality: qChosen ? quality : null, col: colDef ? colToLink(cols, colDef) : '' });   // (round 11a: see talkHeld)
 }
 function keepNow() {
   clearTimeout(keepTimer); keepTimer = 0;
@@ -1932,6 +2038,7 @@ function resetAll() {
   guardSwitch(keyOf({ ...S(), look: d.look, slice: d.slice }));
   box.diskSet({ ...pick(d, DEF_KEYS), paused: 0 });
   box.diskSpeed(d.speed || 1);
+  cols = {}; applyCols();   // (round 13a: the model look's colours, the defaults)
   applyQuality(d.quality);
   goPlace(0);
   keepNow();
@@ -2337,6 +2444,7 @@ function restoreKept() {
     box.diskSet({ ...st, fly: reduce ? 0 : 1 });
     if (st.place) { const i = PLACES.findIndex((p) => p.id === st.place); if (i >= 0) { placeI = i; target = { ...S(), time: S().time }; renderPlace(); } }
   }
+  if (colDef) { cols = keptCols(); applyCols(); }   // (round 13a: the colours kept, as at a start without a link)
   if (keptQuality) { qChosen = true; applyQuality(keptQuality); }
   else { qChosen = false; applyQuality(guarded ? 'auto' : 'full'); }   // (none chosen: the device's own)
   keeping = true; keepNow();
@@ -3248,6 +3356,9 @@ window.diskLab = {
   stamped: async () => { const c = await shot({}); if (c) await watermark(c); return c; },
   setLook, setLang, setTab: (t) => setTab(t), link: () => (live() ? linkFor(S()) : null), snapshot: (opts) => shot(opts),
   resetAll: () => resetAll(),   // (round 9: "Reset all", for checks)
+  // (round 13a: the model look's colours chosen, { key: '#rrggbb' } (only those not at the default); with an object, set as the
+  // inputs would set them, every key left out at its default; for checks and scripts)
+  colours: (o) => { if (o !== undefined && colDef) { cols = colClean(o || {}, colDef); applyCols(); if (live()) renderMatKey(S()); keepSoon(); } return { ...cols }; },
   // (round 10a: the keys this build keeps on the device, the flight record now and the last visit's, its judgement, the
   // version line; for checks, here or through a WebDriver session)
   keys: { settings: SET, session: REC, log: LOG, logBad: LOG_BAD, logOwner: LOG_OWNER, quality: KEY('disk-lab-quality'), lang: KEY('site-language') },

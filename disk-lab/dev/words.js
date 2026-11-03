@@ -152,6 +152,9 @@ export const WORDS = {
       addPlanet: '惑星を置く', picking: '円盤をクリックした半径に惑星を置きます(Esc でやめる)。',
       drop: 'タップで小石を置く', dropping: '円盤をタップ(クリック)すると、そこに小石の塊を置きます。同じ半径に 3 つ続けて置くと、惑星が育ちます(Esc でやめる)。', placed: (a) => `${a} au に惑星を置きました。`,
       noRoom: 'そこには置けません(0.05〜20 au、隣の惑星から相互ヒル半径の 4 倍以上)。', full: '惑星は 4 つまでです。',
+      // (round 13a) the model look's colours beside the components (app.js, COMPS' cols)
+      colOf: (k) => 'モデルの見え方での' + ({ disk: 'ガス', rock: '小石(岩)', ice: '小石(氷)', wind: '円盤風', jet: 'ジェット', env: 'エンベロープ' }[k] || k) + 'の色',
+      colDefault: '既定の色', colReset: (name) => `${name}の色を既定に戻す`,
       planetsNote: '軌道半径 0.05〜20 au(内側の端は、星の磁場が円盤を切り取る所)、質量は地球の 10 倍から木星の 3 倍(重いほどギャップが深く広く、小石の環は孤立質量を超えるとできます)。隣どうしは相互ヒル半径の 4 倍以上離します(近すぎる軌道は不安定です)。絵の中の惑星をクリックしても動かせます。'
     },
     quality: {
@@ -384,6 +387,9 @@ export const WORDS = {
       addPlanet: 'Place a planet', picking: 'Click the disk where the planet should orbit (Esc to stop).',
       drop: 'Tap to drop pebbles', dropping: 'Tap (or click) the disk to drop a clump of pebbles there; three in a row near one radius grow a planet (Esc to stop).', placed: (a) => `A planet placed at ${a} au.`,
       noRoom: 'No room there (0.05 to 20 au, and at least four mutual Hill radii from a neighbour).', full: 'Four planets at most.',
+      // (round 13a) the model look's colours beside the components (app.js, COMPS' cols)
+      colOf: (k) => 'Colour of ' + ({ disk: 'the gas', rock: 'the pebbles (rock)', ice: 'the pebbles (ice)', wind: 'the wind', jet: 'the jet', env: 'the envelope' }[k] || k) + ' in the model look',
+      colDefault: 'Default colour', colReset: (name) => `${name}: back to the default colour`,
       planetsNote: 'Orbits of 0.05 to 20 au (the inner end is where the star\u2019s magnetic field cuts off the disk); masses of 10 Earths to 3 Jupiters (heavier planets open deeper, wider gaps, and those above the pebble isolation mass ring their gaps with pebbles). Neighbours are kept at least four mutual Hill radii apart (closer orbits are unstable). A planet in the picture can be clicked to move it too.'
     },
     quality: {

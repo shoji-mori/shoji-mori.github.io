@@ -216,6 +216,14 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .comps{display:grid;gap:5px}
 .comp{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:10px;row-gap:5px}
 .comp>.toggle{justify-self:start}
+/* (round 13a) beside the toggle: the colours of its materials in the model look, small swatches, and the chip back to the default */
+.comp-cols{display:inline-flex;align-items:center;gap:5px;justify-self:start;min-width:0}
+.comp-cols input[type=color]{width:26px;height:22px;padding:0;border:1px solid var(--line-2);border-radius:6px;background:none;cursor:pointer;flex:none}
+.comp-cols input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+.comp-cols input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
+.comp-cols input[type=color]::-moz-color-swatch{border:none;border-radius:4px}
+.comp-cols input[type=color]:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.comp-cols .chip{min-height:24px;padding:1px 8px;font-size:11.5px}
 .comp-opts{grid-column:1/-1;display:grid;gap:6px;justify-items:start;width:100%;margin:0 0 4px;padding:6px 0 7px 12px;border-left:1px solid var(--line-2)}
 .toggle.small{min-height:26px;padding:2px 9px;font-size:12px}
 .planet-list{display:grid;gap:4px;width:100%}
@@ -436,6 +444,8 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 @media (pointer:coarse){
   .icon-button{width:40px;height:40px}
   .tool,.action,.chip,.toggle{min-height:40px}
+  .comp-cols input[type=color]{width:40px;height:34px}
+  .comp-cols .chip{min-height:40px}
   .tool{height:40px}
   .route button{padding:9px 12px}
   .segmented button{padding-top:9px;padding-bottom:9px}

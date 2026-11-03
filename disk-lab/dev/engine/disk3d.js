@@ -210,6 +210,10 @@
   // is zAcc, the middle of the field's bend (OFF = BEND / 2 above the dead zone's top), down to the midplane where the dead
   // zone ends; there is a layer wherever the disk is not turbulent; with the asymmetry the lower side's layer and its bend rise
   // toward its wind base. OFF was 0.15 H, and the layer ended with the dead zone (accAmp, by 6 au).
+  // (Round 13a, the owner: "don't show the accretion layer") It is no longer drawn in the model's look: not its streaks, nor
+  // its amber glow, nor the column SIG it added to the gas there (a choice for the picture, see above). It stays in the
+  // physics: the cut's Regions face, the probe, the gas line's inflow and coAlpha, the temperature's heating layer and the
+  // flow arrows keep it where it is. data-acc="on" (the page's ?acc=1, a development switch) draws it as before, to compare.
   const ACC = { K_SYM: 2, K_ASYM: 4, W: 0.3, OFF: 0.3, SIG: 0.02, R_END: 0.4, C_SYM: 0.6, C_ASYM: 1.6 };
   // The star's magnetosphere (round 7), drawn close up only (it fades in as the camera comes within SHOW au of the star,
   // and costs nothing from farther). A T Tauri star of one solar mass and radius RS = 2 R_sun = 0.0093 au with a dipole
@@ -360,9 +364,12 @@
   // brown), and warm accents for what lies in the disk or comes from it (the amber accretion layer, brown rock and pale
   // blue ice, gold planets, the coral jet); the star's own violet magnetosphere and magenta curtains. The star keeps its
   // warm white (STARCOL).
+  // (Round 13a, the owner: "make each colour changeable") These are the defaults: the page lets the viewer choose the colours
+  // of the gas ('disk'), the pebbles' rock and ice, the wind, the jet and the envelope (box.diskColours), and keeps them with
+  // its settings and in its links. MAT_DEF holds the defaults to go back to. The accretion layer is no longer drawn (see ACC).
   const MAT = [
     ['disk', '#2a55ff', 0.6, '円盤(ガスと塵)', 'disk (gas and dust)'],
-    ['acc', '#ffa52e', 1.0, '降着層', 'accretion layer'],
+    ['acc', '#ffa52e', 1.0, '降着層', 'accretion layer'],   // (round 13a: drawn only with data-acc="on", see ACC)
     ['rock', '#a0623c', 1.0, '小石(岩)', 'pebbles (rock)'],
     ['ice', '#9fd4ff', 0.8, '小石(氷)', 'pebbles (ice)'],
     ['wind', '#4fe0ff', 1.0, '円盤風', 'disk wind'],
@@ -373,6 +380,7 @@
     ['planet', '#ffd040', 1.0, '惑星と周惑星円盤', 'planets and their disks']
   ];
   const linHex = (h) => [1, 3, 5].map((i) => Math.pow(parseInt(h.slice(i, i + 2), 16) / 255, 2.2));
+  const MAT_DEF = Object.fromEntries(MAT.map(([key, hex]) => [key, hex]));   // (round 13a: the defaults, see box.diskColours)
   const BP = {
     C0: 0.25, SMAX: 5.484797, CHIMAX: 60.0, A0: 2.0570, B0: -3.9977,   // table grid; dR/dz and B_phi/B_z at the surface
     XI: [1, 1.0459, 1.094, 1.1445, 1.1974, 1.253, 1.3114, 1.3727, 1.4372, 1.5049, 1.5762, 1.6512, 1.73, 1.813, 1.9003, 1.9921, 2.0887, 2.1904, 2.2973, 2.4097, 2.5279, 2.6521, 2.7827, 2.9198, 3.0638, 3.215, 3.3736, 3.5398, 3.714, 3.8963, 4.0871, 4.2865, 4.4948, 4.712, 4.9383, 5.1739, 5.4186, 5.6726, 5.9356, 6.2076, 6.4881, 6.7769, 7.0733, 7.3768, 7.6864, 8.0012, 8.3199, 8.6411, 8.963, 9.2838, 9.601, 9.9122, 10.214, 10.505, 10.779, 11.034, 11.265, 11.469, 11.64, 11.775, 11.869, 11.919, 11.919, 11.868],
@@ -1520,10 +1528,19 @@ const float G_SKIN = 0.04, G_GAS = 0.2, G_DUST = 1.4;
 // is lowered by LIT_DARK, so the midplane and the far side, in the disk's own shadow, are darker. Not a surface glowing
 // of itself (round 3): the light is the star's, on the matter it reaches; the glow of the rest stays.
 const float G_LIT_HG = 0.55, G_LIT = 0.3, LIT_DARK = 0.6;
+// (Round 13a, the owner: "show the gas in proportion to its density") The gas body's glow is G_GAS K_G rho, in proportion to
+// its density as its extinction K_G rho is, and nothing else beside the starlight's LIT_DARK above. Until round 13 it was
+// also raised beyond OUTER_R by R / OUTER_R (5 times at 30 au), so that the thin outer disk read about as brightly as at 6 au
+// (Sigma falls as 1 / R, and the glow of a thin column with it). uGasOuter: 1 draws that law of before (data-gasrho="old",
+// the page's ?gasrho=old, a development switch, to compare), 0 by default. Where the gas is thick along a ray its light
+// still tends to G_GAS times the colour over EXT (emission over extinction), whatever the density: an absorbing gas drawn
+// with both in proportion to its density shows its column only where it is thin.
+uniform float uGasOuter;
 // the accretion layer's glow per unit of its density (relative to the gas body's G_GAS) and its colour (see ACC): a thin
 // sheet (its column absorbs little) that glows, a picture of the flow
 const float G_ACC = 7.0;
 const vec3 ACC_COL = vec3(1.0, 0.50, 0.14);
+uniform float uAccDraw;   // (round 13a) the accretion layer drawn in the model's look: 0 by default, 1 with data-acc="on" (see ACC)
 // Multiple scattering, approximated as in two-stream diffusion (on by default, a toggle): of the starlight absorbed in
 // the skin, a part MS_A comes out again as diffuse light (grains of albedo about one half), half of it going down into
 // the disk, where it fades with the vertical optical depth from the surface, tau_v ≈ beta tau* (beta the grazing angle),
@@ -1903,19 +1920,22 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     // gas as a mixture with its dust")
     float dustOn = (uMode & 2) != 0 ? uComp.y : 0.0, gasOn = (uMode & 1) != 0 ? uComp.x : 0.0;
     ex = K_G * rho * EXT * dustOn;
-    // (beyond OUTER_R the glow is raised as the column thins, by R / OUTER_R, a picture of where the gas is; the temperature
-    // is wanted only for this glow, so only where the gas shows and in the model's look: the observed looks set em to 0)
+    // (beyond OUTER_R the glow was raised as the column thins, by R / OUTER_R, a picture of where the gas is: until round 13,
+    // and with uGasOuter since; the temperature is wanted only for this glow, so only where the gas shows and in the model's
+    // look: the observed looks set em to 0)
     bool glowT = gasOn + dustOn > 0.0;
 #ifdef FULL
     glowT = glowT && uLook == 0;
 #endif
     // (round 8: in the colour of its material, MAT_DISK, no longer of its temperature; see MAT in the script)
-    if (glowT) em = G_GAS * K_G * rho * MAT_DISK * 0.5 * (gasOn + dustOn) * max(R / OUTER_R, 1.0) * (1.0 - uLit * LIT_DARK * (1.0 - exp(-exp(min(xs, 30.0)))));
+    // (round 13a: in proportion to the density, see uGasOuter)
+    if (glowT) em = G_GAS * K_G * rho * MAT_DISK * 0.5 * (gasOn + dustOn) * (uGasOuter > 0.5 ? max(R / OUTER_R, 1.0) : 1.0) * (1.0 - uLit * LIT_DARK * (1.0 - exp(-exp(min(xs, 30.0)))));
     // the surface accretion layer(s) (see ACC): a column ACC_SIG of the local surface density, in its streaks, across a
     // Gaussian in height ACC_W H wide. The layer is thinner than a step, so its column over the step is integrated
     // across that profile (the height changes by rd.z ds over the step) and spread over the step as a mean density.
-    // Drawn in the model's look only, with the gas (uMode & 1).
-    float aa = accAmp(R) * float(uMode & 1) * uComp.x;
+    // Drawn in the model's look only, with the gas (uMode & 1). (Round 13a: and only with uAccDraw, the page's ?acc=1; by
+    // default aa is 0, and neither its light nor its column is evaluated)
+    float aa = accAmp(R) * float(uMode & 1) * uComp.x * uAccDraw;
 #ifdef FULL
     if (uLook != 0) aa = 0.0;
 #endif
@@ -2235,6 +2255,7 @@ const float LIGHT_MAX = 1e4, CONT_EPS = 3e-5;   // (round 9: the continuum's end
 uniform int uProbe;       // (round 9) 1: the volume pass writes the march's iterations instead of light (diskRayProbe); 2: the gas line's values
 uniform int uBg;          // (round 8) the background: 0 none, 1 the stars, 2 the sky of a star-forming region (see BG)
 uniform sampler2D uSky;   // its map (see SKY_FS), with uBg = 2
+uniform vec2 uBgTurn;     // (round 13b) the sky's turn about the disk's axis, (cos, sin): the view's own turn with the clock (see bgTurn)
 // stars fixed on the sky, at a density per CSS pixel so small panels are not crowded: in cells of cell CSS px, a star in
 // the share dens of them, its brightness from bmin to bmin + bmax (most faint), the brightest with a soft glow; ext dims
 // and reddens it (the cloud's transmission), except for a few in front of the cloud. (Round 9: a star is at least 0.6
@@ -3344,6 +3365,10 @@ void main(){
     // the others)
     vec3 sky = mix(vec3(0.0020, 0.0026, 0.0050), vec3(0.0040, 0.0056, 0.0130), smoothstep(-1.0, 1.0, uv0.y));
     vec3 dSky = normalize(uBasis[2] + uTanHalf * (uv0.x * aspect * uBasis[0] + uv0.y * uBasis[1])), bg = vec3(0.0);
+    // (round 13b, the owner: "the background need not move; over years the stars behind hardly move") turned back about
+    // the axis by the view's own turn with the clock (uBgTurn), the sky holds still in the picture while the clock turns
+    // the view, and turns as the view is turned (with no turn, (1, 0), the direction is the same to the bit)
+    dSky.xy = vec2(uBgTurn.x * dSky.x + uBgTurn.y * dSky.y, uBgTurn.x * dSky.y - uBgTurn.y * dSky.x);
     if (uBg == 1 || (uBg == 2 && uLook > 1)) bg = stars(dSky, pixA);
     else if (uBg == 2) {
       vec4 sk = texture(uSky, vec2(atan(dSky.y, dSky.x) / (2.0 * PI) + 0.5, asin(clamp(dSky.z, -1.0, 1.0)) / PI + 0.5));
@@ -4010,6 +4035,9 @@ void main(){
       + '<g class="disk-field"></g><g class="disk-slice"></g><path class="disk-snowline" fill="none"/><text class="disk-label"></text><text class="disk-label disk-plabel"></text><g class="disk-scale"><line class="disk-halo"/><line/><text/></g><g class="disk-scale"><line class="disk-halo"/><line/><text/></g>';
     box.appendChild(overlay);
     const ring = overlay.querySelector('.disk-snowline'), label = overlay.querySelector('.disk-label'), fieldG = overlay.querySelector('.disk-field');
+    // (round 13a, the owner: "in the annotations, don't show the snow line's ring") The dashed ring is not drawn; its name is,
+    // where it was (placed by the ring's points, from 110 to 160 px across, as before). The cut's snow line stays on its faces.
+    const SNOW_RING = false;
     const plabel = overlay.querySelector('.disk-plabel');
     // (the small rings that marked the planets from round 3 are gone in round 7: the planets glow instead, see uPlG)
     const [sgroup, sgroup2] = overlay.querySelectorAll('.disk-scale');   // the bar, and the one it replaces as it fades out
@@ -4095,7 +4123,7 @@ void main(){
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
     const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
-      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW'];
+      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter'];
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS, 'show'), progBloom = link(BLOOM_FS, 'bloom');
     // (round 8) the bloom's targets, a quarter of accT's size (made with it): A on unit 18 (for SHOW_FS), B on unit 19
@@ -4982,6 +5010,10 @@ void main(){
       bg: own(BG.MODES, box.dataset.bg) ? box.dataset.bg : 'stars',
       // (round 8) the finish's level for the page's quality, 0 to 2 (see the note before JET): data-fx, 2 unless given
       fx: Math.max(0, Math.min(2, Math.round(Number(box.dataset.fx ?? 2)) || 0)),
+      // (round 13a, development switches to compare the model's look with that of before, read when the engine is built: the
+      // accretion layer drawn, data-acc="on" (see ACC); the gas's glow raised beyond OUTER_R, data-gasrho="old" (see uGasOuter))
+      accDraw: box.dataset.acc === 'on',
+      gasOuter: box.dataset.gasrho === 'old',
       // (Disk Lab v2) a display factor for each of the first four components (gas, small grains, pebbles, wind): how much
       // of it is drawn, its glow and its absorption alike, 0.25 to 3 (1: the model's amount); a choice of the viewer
       gain: [1, 1, 1, 1]
@@ -4991,6 +5023,7 @@ void main(){
     const vapor = Array.from({ length: 4 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0 }));
     let W = 0, Hh = 0, rW = 1, rH = 1, faceT = null, faceA = null, cam, basis, time = restoredTime, last = 0, running = false, dragging = false, touching = false, moved = false, px = 0, py = 0, azUser = opt.az, elUser = opt.el;
     let paused = false, speed = 1, dirty = true, benching = false, fieldMs = 0;
+    let colGen = 0;   // (round 13a) one more each time the materials' colours change (box.diskColours): a still picture starts over
     const Omega = (R) => 0.5236 * Math.pow(R, -1.5);
     // --- the planets: each fades in and out over about 1.5 s when it is turned on or off (its amp); its gap's depth is
     // amp times the depth for the camera's distance to its orbit (DEPTH), and its wake's strength amp times the strength
@@ -5121,11 +5154,27 @@ void main(){
     // (round 8: neighbours MASS.K_HILL mutual Hill radii apart, for a new planet of mass m; see MASS)
     const plRoom = (R, skip = -1, m = 1) => R >= PLANETS.RANGE[0] && R <= PLANETS.RANGE[1]
       && planets.every((p, i) => i === skip || !plWant(p) || Math.max(R, p.a) / Math.min(R, p.a) >= minRatio(m, p.m));
-    const seedPlanet = (R) => {
+    // (Round 13b, the owner: "when dropped pebbles make a planet, clear every pebble on its orbit") The dropped clumps a new
+    // planet p takes in: those that made it (made: its seeds, each with the clump it dropped, if that clump still holds that
+    // drop: c.n), wherever they have drifted to, and every clump whose radius now (drifted inward since its drop, 0.05 au a
+    // second of the clock, as the shader draws it) lies within the planet's gap, |R - a| < dR2 = 0.33 K'^1/4 a (gapK: the
+    // walls' feet, where the gas is back to the smooth disk's, Kanagawa et al. 2017; the reach uGapR gives each gap, without
+    // its margin: 1.43 au to each side for Jupiter at 3 au), at every azimuth; they fade out over CLEAR_S seconds. Round 9's
+    // band, 4 Hill radii about the drifted radius (0.82 au at 3 au), left on the clumps dropped further out and the seeds
+    // that had drifted further in during their 20 s (1 au at most). The model's own pebbles (the pile-up beyond the snow
+    // line, the ring at each gap's pressure maximum, at the outer foot a + dR2, the band's edge) are the sheet's, not clumps:
+    // untouched. For a planet grown from pebbles (seedPlanet) and one placed by a click (clickAt).
+    const clearOrbit = (p, made = []) => {
+      for (const s of made) if (s.c && s.c.n === s.n) s.c.gone = true;
+      const w = gapK(p.a, p.q).dR2;
+      for (const c of clumps) if (c.amp > 0 && Math.abs(c.R - 0.05 * (time - c.t0) - p.a) < w) c.gone = true;
+    };
+    // (round 13b: c, the clump this drop made, kept with its seed; see clearOrbit)
+    const seedPlanet = (R, c) => {
       if (!plRoom(R)) return;
-      seeds = seeds.filter((s) => time - s.t < 20 && Math.abs(s.R - R) < 0.1 * R).concat([{ t: time, R }]);
+      seeds = seeds.filter((s) => time - s.t < 20 && Math.abs(s.R - R) < 0.1 * R).concat([{ t: time, R, c, n: c ? c.n : 0 }]);
       if (seeds.length < 3) return;
-      const Rc = Math.round(seeds.reduce((m, s) => m + s.R, 0) / seeds.length * 100) / 100;
+      const Rc = Math.round(seeds.reduce((m, s) => m + s.R, 0) / seeds.length * 100) / 100, made = seeds;
       seeds = [];
       // (a place: one that is off, else a new one)
       let i = planets.findIndex((p) => !p.on || !(opt.mode & 16));
@@ -5133,11 +5182,11 @@ void main(){
       if (i < 0) { if (planets.length >= PLANETS.MAX) return; planets.push(planetObj(Rc, true, planets.length)); i = planets.length - 1; }
       // (round 8: it grows to Jupiter's mass, as the text says)
       Object.assign(planets[i], { a: Rc, on: true, m: 1, q: qOfM(1), amp: 0, fade: 8, dSet: -1 });
-      // (round 9, the owner: "once a planet is made, clear the pebbles around it") the clumps within its feeding zone, CLEAR
-      // Hill radii of its orbit (the zone from which a planet gathers solids reaches about 2 sqrt(3), 3.5 Hill radii, to each
-      // side), wherever they have drifted to, fade out over CLEAR_S seconds as the planet takes them in
-      const rH = hillOf(planets[i]);
-      for (const c of clumps) if (c.amp > 0 && Math.abs(c.R - 0.05 * (time - c.t0) - Rc) < CLEAR * rH) c.gone = true;
+      // (round 9, the owner: "once a planet is made, clear the pebbles around it": then the clumps within its feeding zone,
+      // CLEAR = 4 Hill radii of its orbit (the zone from which a planet gathers solids reaches about 2 sqrt(3), 3.5 Hill radii,
+      // to each side), where they had drifted to; round 13b, the owner: "clear every pebble on its orbit": the clumps that made
+      // it, and every one within its gap, see clearOrbit) fade out over CLEAR_S seconds as the planet takes them in
+      clearOrbit(planets[i], made);
       opt.mode |= 16;
       box.dispatchEvent(new CustomEvent('diskmode', { detail: { mode: opt.mode } }));
       emitState();
@@ -5303,6 +5352,33 @@ void main(){
     let path = null, pathN = 0;
     const pathTell = (state, extra) => { const detail = { state, ...extra }; queueMicrotask(() => box.dispatchEvent(new CustomEvent('diskpath', { detail }))); };
     const viewOff = () => (follow ? planetPhi(time) : reduce ? 0 : opt.spin * time);
+    // (Round 13b, the owner: "the background need not move: over years the stars behind hardly move") The sky behind (the
+    // stars, the molecular cloud) is turned back about the disk's axis by bgTurn (uBgTurn), the view's own turn with the
+    // clock (viewOff: the slow spin, or the orbit of the planet followed), so that it holds still in the picture while the
+    // clock turns the view and turns only as the view is turned (a drag, the keys, a flight, a path, the tilt), as a sky
+    // does; nothing else in it moves with time (its map is drawn once, its stars are hashed on the direction, uSeed is
+    // fixed). Before, it was fixed in the disk's frame and swept across the picture with the slow spin (0.004 rad a second
+    // of the clock: 7 to 14 degrees a minute in the whole view as fitted, where the clock runs at 0.5 to 1) and with the
+    // planet followed (11 degrees a minute at the planet's place). Where the frame of the view changes under a flight or a
+    // path (following a planet or no longer, another one, a new time), the sky starts from where it was drawn (bgDrawn) and
+    // the difference is eased out over the flight's or the path's time (bgEase), so that it never jumps; a view set at once
+    // takes it at once. ?bgmove=1 (data-bgmove="on") keeps the sky fixed in the disk's frame, as before, for comparison.
+    let bgEase = null, bgDrawn = null;
+    const bgMoves = () => box.dataset.bgmove === 'on';
+    // what the ease has left of its difference (rad); 0 once it has run its time, and then let go
+    const bgLeft = () => {
+      if (!bgEase) return 0;
+      const u = (nowMs() - bgEase.t0) / (1000 * bgEase.dur);
+      if (u >= 1) { bgEase = null; return 0; }
+      return bgEase.d * (1 - u * u * (3 - 2 * u));
+    };
+    const bgTurn = () => (bgMoves() ? 0 : viewOff() + bgLeft());
+    // a flight or a path from t0 (ms, nowMs) for dur seconds: the sky eased from where it was drawn to the turn of the view
+    // it flies to (a difference under a microradian is none)
+    const bgEaseFrom = (t0, dur) => {
+      const d = bgDrawn === null || bgMoves() ? 0 : wrapPi(bgDrawn - viewOff());
+      bgEase = Math.abs(d) > 1e-6 && dur > 0 ? { d, t0, dur } : null;
+    };
     let panV = [0, 0, 0];
     const PAN_MAX = 400;
     // the point looked at now (without a flight): the star or the planet, and the pan turned with the view
@@ -5358,12 +5434,14 @@ void main(){
       const m = Math.abs(to[0] - p0[0]) + Math.abs(to[1] - p0[1]) * Math.cos(p0[0]) + Math.abs(to[2] - p0[2]) + dT / Math.max(1, Math.min(camD, opt.dist));
       const dur = Math.min(FLY_MAX, FLY_MIN + 0.45 * m);
       flyV = { t0: now, dur, p0, v0: camV.slice() };
+      bgEaseFrom(now, dur);   // (round 13b: the sky from where it was drawn, see bgTurn)
       if (dT > 1e-6 || flyT) flyT = { t0: now, dur, p0: camT.slice(), v0: camTV.slice() };
       dirty = true;
     }
     // a drag or a pinch takes over: the view is left where the flight has brought it
     const takeOver = () => {
       if (!flyT && !flyV && !path) return;
+      if (bgEase) bgEaseFrom(nowMs(), FLY_MIN);   // (round 13b: what the sky's ease has left, eased out in a moment; see bgTurn)
       const before = [elUser, wrapPi(azUser + viewOff()), Math.log(opt.dist), ...lookAt()];
       pathGrab();   // (round 11a: and a path)
       if (flyT) { panV = clampPan(panOf(camT)); flyT = null; camTV = [0, 0, 0]; }
@@ -5764,7 +5842,7 @@ void main(){
         mir: ['暖かい表層の熱放射を示します。', 'The warm surface emits thermal radiation.'],
         mm: ['赤道面に沈んだ小石の熱放射を示します。', 'Settled pebbles at the midplane emit thermal radiation.'] }[lookNow];
       return { title: j ? 'Colour and brightness' : '色と明るさ', description: desc ? desc[j] : '', units: '', min: null, max: null, rangeMode: 'none',
-        items: lookNow === 'model' ? MAT.map(([, hex, , ja_, en]) => ({ label: j ? en : ja_, color: hex })) : [] };
+        items: lookNow === 'model' ? MAT.filter(([key]) => key !== 'acc' || opt.accDraw).map(([, hex, , ja_, en]) => ({ label: j ? en : ja_, color: hex })) : [] };   // (round 13a: the accretion layer only where drawn)
     };
     let legendKey = '';
     const legendEvent = () => {
@@ -6657,9 +6735,12 @@ void main(){
       const tF = performance.now(), F = warming || lookNow !== 'model' || (featF && fullReady()) ? fullProgram() : null, U = F ? F.U : U0;   // (round 8: not for the envelope)
       if (F) slowSync('fullProgram', tF);   // (round 10a, dev.6: linked here where the browser cannot link in the background)
       fNow = !!F;   // (round 10a: see knownNow)
+      // (round 13b) the sky's turn for this frame (see bgTurn): what an ease has left of it goes into the signature below, so
+      // that a still is not averaged over a turning sky (the view's own turn with the clock goes with the time, sig[0])
+      const bgK = bgMoves() ? 0 : bgLeft(), bgA = bgMoves() ? 0 : viewOff() + bgK;
       // a still picture (see ACC_MAX): the same state as the last frame, drawn by the same program
-      const sig = [time, ...cam, ...basis.f, rW, rH, canvas.width, opt.steps, opt.fov, opt.seed, starL, LOOKS[lookNow], rSn, opt.mode, BG.MODES[opt.bg], ...compAmp, ...opt.gain,
-        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), coLn, expo];
+      const sig = [time, ...cam, ...basis.f, rW, rH, canvas.width, opt.steps, opt.fov, opt.seed, starL, LOOKS[lookNow], rSn, opt.mode, BG.MODES[opt.bg], bgK, ...compAmp, ...opt.gain,
+        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), colGen, coLn, expo];   // (round 13a: colGen, the materials' colours, see box.diskColours)
       // (a new view: the exposure is measured afresh, with its moves counted anew; a new exposure or CO range: measured again)
       const ne = sig.length - 2, viewNew = sig.length !== lastSig.length || sig.some((v, i) => i < ne && v !== lastSig[i]);
       // (Disk Lab v2) While only the clock moves, the picture is not started over but averaged with the last few frames
@@ -6721,6 +6802,7 @@ void main(){
       gl.viewport(0, 0, rW, rH);
       gl.useProgram(F ? F.prog : prog);
       gl.uniform1i(U.uBg, BG.MODES[opt.bg]);
+      gl.uniform2f(U.uBgTurn, Math.cos(bgA), Math.sin(bgA)); if (!warming) bgDrawn = bgA;   // (round 13b: see bgTurn)
       gl.uniform1i(U.uRayB, coStudy && coStudy.rayB != null ? coStudy.rayB : rayBound ? 1 : 0);   // (round 9: see CO_IT, CT_IT)
       gl.uniform1i(U.uCtMax, ctMax);   // (round 10a: see box.diskCtMax)
       gl.uniform1i(U.uProbe, probing);
@@ -6777,6 +6859,7 @@ void main(){
       gl.uniform1f(U.uWindLow, 1 - (1 - WIND_LOW_JS) * asymAmp * asymAmp * (3 - 2 * asymAmp));
       gl.uniform2fv(U.uAcc, accW());
       gl.uniform2fv(U.uAccV, accK());
+      gl.uniform1f(U.uAccDraw, opt.accDraw ? 1 : 0); gl.uniform1f(U.uGasOuter, opt.gasOuter ? 1 : 0);   // (round 13a: see ACC, uGasOuter)
       gl.uniform1i(U.uCoMode, CO_MODES[opt.coMode]);
       gl.uniform1f(U.uCoV, opt.coV);
       gl.uniform1f(U.uCoRange, coRange());
@@ -6986,6 +7069,7 @@ void main(){
       // a point lies off the picture by more than the picture's size, or a step on the screen spans more than half of
       // it (the ring is sampled too coarsely there to be drawn straight); its points come back to the first, so it is
       // not closed with Z, which would join the ends of a cut path across the picture.)
+      // (round 13a: the ring itself is no longer drawn, SNOW_RING; its points still place and fade its name)
       let d = '', pen = false, qPrev = null;
       const inRing = Math.hypot(...cam) < 1.25 * rSn;   // actual proximity: a high, face-on camera is outside the ring
       const ringA = annAmp * (1 - ss(0.82, 1, sliceU)), ringOn = ringA > 0.002 && !inRing, pts = [];
@@ -7011,7 +7095,7 @@ void main(){
         const sc = n - 0.002 * q[1];   // (fewest lines, then the lowest)
         if (sc < bestS) { bestS = sc; best = q; }
       }
-      ring.setAttribute('d', shown ? d : '');
+      ring.setAttribute('d', shown && SNOW_RING ? d : '');
       label.textContent = best && labF > 0 ? lt : '';
       const aop = annAmp.toFixed(3);
       ring.setAttribute('opacity', (ringA * ringF).toFixed(3)); label.setAttribute('opacity', (ringA * labF).toFixed(3));
@@ -7386,7 +7470,8 @@ void main(){
     }
     // a flight, a fade or the sweep under way
     const plShown = () => planets.filter((p) => p.amp > 0.5).map((p) => +p.a.toFixed(p.a < 10 ? 1 : 0));
-    const busy = () => !!(flyV || flyT || path) || planets.some((p) => p.amp !== plWant(p)) || envAmp !== ((opt.mode & 32) ? 1 : 0) || sliceU !== (opt.slice ? 1 : 0) || (sliceU > 0 && cutA !== CUT_A[opt.cut])
+    // (round 13b: and the sky's ease, see bgTurn)
+    const busy = () => !!(flyV || flyT || path) || bgLeft() !== 0 || planets.some((p) => p.amp !== plWant(p)) || envAmp !== ((opt.mode & 32) ? 1 : 0) || sliceU !== (opt.slice ? 1 : 0) || (sliceU > 0 && cutA !== CUT_A[opt.cut])
       || annAmp !== (opt.ann ? 1 : 0) || lookNow !== opt.look || waitShown || lookDip() < 1 || fieldAmp !== (showField && lookNow === 'model' ? 1 : 0) || !fadesDone()
       || (!aeHeld() && aeGoal !== aeLn) || coGoal !== coLn           // (the automatic exposure and the CO line's range on their way,
       || (aeOn() && !aeHeld() && !aeFresh) || (coOn() && !coHold && coSavedKey !== coKey && !coFresh) || !!coPending;  // or finding their levels)
@@ -7799,11 +7884,15 @@ void main(){
       running = false;
       if (frameRequest !== null) { cancelAnimationFrame(frameRequest); frameRequest = null; }
     };
+    // (round 13b: the clump returned, numbered by its drop, n, so that a seed knows whether its clump still holds it: see
+    // clearOrbit)
+    let clumpN = 0;
     const addClump = (R, phi, age) => {
       const c = clumps.reduce((a, b) => (a.amp <= 0 ? a : b.amp <= 0 ? b : a.t0 < b.t0 ? a : b));
-      c.R = R; c.phi = phi; c.t0 = time - (age || 0); c.amp = 1; c.crossed = R - 0.05 * (age || 0) < rSn; c.gone = false;
+      c.R = R; c.phi = phi; c.t0 = time - (age || 0); c.amp = 1; c.crossed = R - 0.05 * (age || 0) < rSn; c.gone = false; c.n = ++clumpN;
+      return c;
     };
-    const CLEAR = 4, CLEAR_S = 2.5;   // (round 9: see seedPlanet)
+    const CLEAR_S = 2.5;   // (round 9: see seedPlanet; round 13b: its band of 4 Hill radii, CLEAR, gave way to the gap's, see clearOrbit)
 
     // --- input: drag to rotate, wheel, pinch or keys to zoom, click to drop pebbles; touch as a map (see below) ---
     // closest approach: 2 au, or 0.25 au with the slice, where the structure of the inner disk (a few
@@ -7827,7 +7916,7 @@ void main(){
       if (!R) return;
       seeds = [];
       const ph = PLANETS.PHI0(planets.length) + Omega(R) * time;
-      for (let i = 0; i < 3; i++) { addClump(R + 0.08 * R * (i - 1), ph + 0.6 * (i - 1), 0); seedPlanet(R); }
+      for (let i = 0; i < 3; i++) seedPlanet(R, addClump(R + 0.08 * R * (i - 1), ph + 0.6 * (i - 1), 0));
       touched();
     };
     // a ring that spreads and fades where a clump was dropped (none with reduced motion)
@@ -7871,11 +7960,19 @@ void main(){
       const x = cam[0] + rd[0] * t, y = cam[1] + rd[1] * t, R = Math.hypot(x, y);
       // (round 7: placing a planet reaches the gas disk's inner edge, PLANETS.RANGE; pebbles are dropped from 0.15 au)
       if (R < (pickR ? 0.9 * PLANETS.RANGE[0] : 0.15) || R > 31 || !kept([x, y, 0]) || faceAlpha([x, y, 0]) > 0.5) return;
-      if (pickR) { box.dispatchEvent(new CustomEvent('diskpick', { detail: { R, phi: Math.atan2(y, x), x: cx - rect.left, y: cy - rect.top } })); return; }
+      if (pickR) {
+        // (round 13b) a planet the page places in answer (data-pick="planet": its diskpick handler sets the planets with
+        // diskSet within this dispatch, which runs its listeners before it returns) takes in the dropped clumps on its orbit,
+        // as one grown from them does (clearOrbit): the one now shown whose place was off, new, or at another radius
+        const was = planets.map((p) => p.on && p.a);
+        box.dispatchEvent(new CustomEvent('diskpick', { detail: { R, phi: Math.atan2(y, x), x: cx - rect.left, y: cy - rect.top } }));
+        planets.forEach((p, i) => { if (plWant(p) && p.a !== was[i]) clearOrbit(p); });
+        return;
+      }
       if (box.dataset.pick !== 'pebbles') return;
-      addClump(R, Math.atan2(y, x), 0);
+      const c = addClump(R, Math.atan2(y, x), 0);
       ripple(cx - rect.left, cy - rect.top);
-      seedPlanet(R);
+      seedPlanet(R, c);
       touched();
     }
     // The mouse and the pen: a drag turns (with Shift, or the middle or the right button, it moves the point looked at);
@@ -8128,7 +8225,7 @@ void main(){
     box.diskAddClump = (R, phi, age = 0) => {
       const r = finiteNumber(R), ph = finiteNumber(phi), a = finiteNumber(age);
       if (!isFinite(r) || r < 0.15 || r > 31 || !isFinite(ph) || !isFinite(a) || a < 0 || a > 120) return;
-      addClump(r, wrapPi(ph % (2 * Math.PI)), a); if (!a) seedPlanet(r); drawOut();
+      const c = addClump(r, wrapPi(ph % (2 * Math.PI)), a); if (!a) seedPlanet(r, c); drawOut();
     };
     // controls for the preview page: view (degrees, au), components, time, state for links, snapshots
     // (to 0.01 degree and 0.001 au, so that a link restores the picture to within a pixel)
@@ -8143,9 +8240,30 @@ void main(){
     box.diskPalette = (set) => {
       if (set && typeof set === 'object') for (const m of MAT) {
         const v = set[m[0]], hex = Array.isArray(v) ? v[0] : v, k = Array.isArray(v) ? Number(v[1]) : m[2];
-        if (typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex) && k > 0 && k < 10) { m[1] = hex; m[2] = k; matLin.set(linHex(hex).map((c) => c * k), 3 * MAT.indexOf(m)); dirty = true; }
+        if (typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex) && k > 0 && k < 10) { m[1] = hex; m[2] = k; matLin.set(linHex(hex).map((c) => c * k), 3 * MAT.indexOf(m)); dirty = true; colGen++; }
       }
       return MAT.map(([key, hex, k, ja_, en]) => ({ key, hex, k, ja: ja_, en }));
+    };
+    // (round 13a, the owner: "make each colour changeable") The materials' colours as the viewer chose them, in one call:
+    // { key: '#rrggbb' } for MAT's keys (the page offers the gas 'disk', the pebbles' 'rock' and 'ice', the 'wind', the 'jet'
+    // and the envelope 'env'); a key left out, or not such a colour, takes its default (MAT_DEF), so that each call says all
+    // of them and the same call twice is the same picture. The brightness factors stay (they scale the glow each material has,
+    // MAT's third column). Into the uniform uMat at the next frame, and a still picture starts over (colGen). Nothing is kept
+    // here: the page keeps them with its settings and in its links; MAT holds them (shared, as box.diskPalette's), so that an
+    // engine built again after a lost context draws them still. Returns { now, def }: the colours now and the defaults, by
+    // key; without an argument it changes nothing.
+    box.diskColours = (set) => {
+      if (set !== undefined) {
+        const o = set && typeof set === 'object' ? set : {};
+        let changed = false;
+        MAT.forEach((m, i) => {
+          const v = o[m[0]], hex = typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : MAT_DEF[m[0]];
+          if (hex === m[1]) return;
+          m[1] = hex; matLin.set(linHex(hex).map((c) => c * m[2]), 3 * i); changed = true;
+        });
+        if (changed) { colGen++; touched(); }
+      }
+      return { now: Object.fromEntries(MAT.map(([key, hex]) => [key, hex])), def: { ...MAT_DEF } };
     };
     // A state from outside (a link, the page, a script) is checked first: the numbers must be finite (a link copied with
     // text after it, or edited by hand, must not poison the picture: a NaN in the camera or the clock would blank it),
@@ -8232,7 +8350,7 @@ void main(){
       // player of a sequence sets the cut with its scene, the cut's sweep a picture's change, not the view's)
       if (viewSet || st.slice != null) {
         if (!viewSet && path && follow === follow0) { /* (the path goes on) */ }
-        else if (Number(st.fly)) startFly(); else { flyV = flyT = null; pathStop(); }
+        else if (Number(st.fly)) startFly(); else { flyV = flyT = null; pathStop(); bgEase = null; }   // (round 13b: the sky at once too)
       }
       const coAfter = [elUser, wrapPi(azUser + viewOff()), opt.dist, follow, ...panV, opt.look, opt.coMode, opt.coV];
       // (round 9) a jump: see probeNext
@@ -8313,7 +8431,7 @@ void main(){
     // without a view, the path under way: { id, t, dur, s, L, lift } or null; false: the path left where the camera is (a page's
     // stop button), 'stop' told
     box.diskPath = (view, o = {}) => {
-      if (view === false) { if (path) { pathGrab(); touched(); emitState(); } return null; }
+      if (view === false) { if (path) { pathGrab(); if (bgEase) bgEaseFrom(nowMs(), FLY_MIN); touched(); emitState(); } return null; }   // (round 13b: the sky as in takeOver)
       if (view == null) { if (!path) return null; const t = (nowMs() - path.t0) / 1000; return { id: path.id, t, dur: path.plan.ease.D, s: pathEaseAt(path.plan.ease, t).s, L: path.plan.L, lift: path.plan.lift ? path.plan.lift.b : 0 }; }
       const st = checked(view), keys = {};
       for (const k of ['el', 'az', 'd', 'tx', 'ty', 'tz', 'p', 'pi']) if (st[k] != null) keys[k] = st[k];
@@ -8340,9 +8458,10 @@ void main(){
         const nt = Math.hypot(...mt), along = nt > 0 ? mt.reduce((acc, x, i) => acc + x * mv[i], 0) / nt : 0;
         if (along > 0) { po.v0 = along * plan.L / nt; plan.ease = pathEase(plan.L, po); }
       }
-      if (!(plan.ease.D > 0)) { pathTell('arrive', { id, dur: 0, L: 0 }); return { id, dur: 0, L: 0, lift: 0 }; }
+      if (!(plan.ease.D > 0)) { bgEase = null; pathTell('arrive', { id, dur: 0, L: 0 }); return { id, dur: 0, L: 0, lift: 0 }; }
       leaveStill();
       path = { id, plan, t0: nowMs() };
+      bgEaseFrom(path.t0, plan.ease.D);   // (round 13b: the sky eased over the path's time, not the flight's it replaced; see bgTurn)
       touched();
       pathTell('start', { id, dur: plan.ease.D, L: plan.L });
       return { id, dur: plan.ease.D, L: plan.L, lift: plan.lift ? plan.lift.b : 0 };
