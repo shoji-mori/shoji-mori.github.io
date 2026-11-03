@@ -378,14 +378,16 @@
   // (Round 13a, the owner: "make each colour changeable") These are the defaults: the page lets the viewer choose the colours
   // of the gas ('disk'), the pebbles' rock and ice, the wind, the jet and the envelope (box.diskColours), and keeps them with
   // its settings and in its links. MAT_DEF holds the defaults to go back to. The accretion layer is no longer drawn (see ACC).
+  // (2026-11-03, the owner's choice from the page's colour inputs: a white gas, dark rock, grey ice, a pale blue wind, a cream jet,
+  // a lilac envelope; the blue gas, brown rock, ice blue, cyan wind, pale yellow jet and violet envelope of rounds 8 to 13a before)
   const MAT = [
-    ['disk', '#2a55ff', 0.6, '円盤(ガスと塵)', 'disk (gas and dust)'],
+    ['disk', '#ffffff', 0.6, '円盤(ガスと塵)', 'disk (gas and dust)'],
     ['acc', '#ffa52e', 1.0, '降着層', 'accretion layer'],   // (round 13a: drawn only with data-acc="on", see ACC)
-    ['rock', '#a0623c', 1.0, '小石(岩)', 'pebbles (rock)'],
-    ['ice', '#9fd4ff', 0.8, '小石(氷)', 'pebbles (ice)'],
-    ['wind', '#4fe0ff', 1.0, '円盤風', 'disk wind'],
-    ['jet', '#f4e87a', 1.0, 'ジェット', 'jet'],   // (round 9: pale yellow, the coral before; see JET)
-    ['env', '#b47fe0', 1.0, 'エンベロープ', 'envelope'],
+    ['rock', '#232323', 1.0, '小石(岩)', 'pebbles (rock)'],
+    ['ice', '#7a7a7a', 0.8, '小石(氷)', 'pebbles (ice)'],
+    ['wind', '#a8c6fe', 1.0, '円盤風', 'disk wind'],
+    ['jet', '#ffe4a8', 1.0, 'ジェット', 'jet'],   // (round 9: pale yellow, the coral before; see JET)
+    ['env', '#ad89d6', 1.0, 'エンベロープ', 'envelope'],
     ['mag', '#9070ff', 1.0, '磁気圏', 'magnetosphere'],
     ['curt', '#ff4fc8', 1.0, '降着の柱', 'accretion curtains'],
     ['planet', '#ffd040', 1.0, '惑星と周惑星円盤', 'planets and their disks']
