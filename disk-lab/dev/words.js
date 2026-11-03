@@ -229,7 +229,7 @@ export const WORDS = {
     },
     // (round 8, the owner: "the citation in English in Japanese too": the lead stays Japanese, the line is the English one)
     cite: {
-      lead: '研究や発表での利用は自由です。出典として、このページを引用してください。',
+      lead: '研究、発表、授業、資料に自由に使ってください。出典の明記は要りません。引用するなら、この一行をどうぞ。',
       line: (y, url, v) => CITE_LINE(y, url, v),
       copy: '引用をコピー', copied: '引用をコピーしました。'
     },
@@ -456,7 +456,7 @@ export const WORDS = {
       model: 'The model’s values (the disk drawn 1.8 times as thick as its temperature holds it, for the picture; the surface density taken as 1700 g/cm² at 1 au).'
     },
     cite: {
-      lead: 'Free to use in research and talks; please cite this page as the source.',
+      lead: 'Free to use in research, talks, teaching and materials; no credit required. If you cite it, this line will do.',
       line: (y, url, v) => CITE_LINE(y, url, v),
       copy: 'Copy the citation', copied: 'Citation copied.'
     },

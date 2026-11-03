@@ -4,7 +4,7 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=814f93ec9f';
-import { WORDS } from './words.js?v=f61c5b8796';
+import { WORDS } from './words.js?v=e2d6188138';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=05481e7755';
@@ -17,14 +17,14 @@ const ENGINE_SRC = 'engine/disk3d.js?v=56a94c039c';   // ?v= the first ten chara
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.4', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.5', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 10a) The keys this build keeps on the device (localStorage, sessionStorage): the public page's as before; a
 // development build puts a prefix of its own in index.html's meta disk-lab-store (make-dev.sh), so that its records and
 // settings never reach the public page on the same origin, nor the public page's its own
 const STORE = (document.querySelector('meta[name="disk-lab-store"]') || {}).content || '';
 const KEY = (k) => STORE + k;
-// The citation (the page asks to be cited in research and talks): its address in one place, to change when the page
+// The citation (the page is free to use, no credit required; the line is offered to whoever wants to cite it: the owner, 2026-11-03): its address in one place, to change when the page
 // moves from its hidden address to its public one.
 const CITE_URL = 'https://shoji-mori.github.io/disk-lab/', CITE_YEAR = 2026;
 // The quality the viewer may fix (render scale; Auto: the governor, and the sharpening of still pictures)
@@ -1309,11 +1309,11 @@ const saveSizeButtons = SAVE_SIZES.map((k) => {
 // (round 11c, the roadmap's "pictures for slides") The saved picture's shape: the screen's, or 16:9 or 4:3 cut from the middle of
 // the view (capture.js, framed: never stretched; the scale bar moved into the crop's corner; the size chosen above is the cut
 // picture's, 4K 3840 px wide). The background stays black (the supervisor's choice, disk-lab-handoff.md 6). And a one-line credit
-// burnt into the lower right corner, beside the mark, on unless turned off (the citation stays below, to copy). Both kept for the
-// visit, as the size is.
+// burnt into the lower right corner, beside the mark, off unless turned on (the owner, 2026-11-03: free to use, no credit required;
+// the citation stays below, to copy). Both kept for the visit, as the size is.
 const SAVE_RATIOS = { screen: 0, '16:9': 16 / 9, '4:3': 4 / 3 };
-let saveRatio = 'screen', saveCredit = true;
-try { const r = sessionStorage.getItem(KEY('disk-lab-save-ratio')); if (r in SAVE_RATIOS) saveRatio = r; if (sessionStorage.getItem(KEY('disk-lab-save-credit')) === '0') saveCredit = false; } catch { /* the defaults */ }
+let saveRatio = 'screen', saveCredit = false;
+try { const r = sessionStorage.getItem(KEY('disk-lab-save-ratio')); if (r in SAVE_RATIOS) saveRatio = r; if (sessionStorage.getItem(KEY('disk-lab-save-credit')) === '1') saveCredit = true; } catch { /* the defaults */ }
 const saveRatioNow = () => SAVE_RATIOS[saveRatio] || 0;
 const saveRatioButtons = Object.keys(SAVE_RATIOS).map((k) => {
   const b = el('button', { type: 'button', 'data-save-ratio': k, 'aria-pressed': String(k === saveRatio) });
@@ -2941,11 +2941,12 @@ async function exConfig(size, fps) {
   exSupport[key] = got;
   return got;
 }
-// the credit, small, beside the mark in the lower right of each frame (the scale bar is in the lower left), and the mark as on the
-// stage and in saved pictures
+// the mark as on the stage and in saved pictures, in the lower right of each frame, and the credit beside it only where "Credit in the
+// corner" is on under Save an image (the owner, 2026-11-03: free to use, no credit required; the scale bar is in the lower left)
 function exStamp(c) {
   const g = c.getContext('2d'), H = c.height, W = c.width;
   const mk = markImg && markImg.complete && markImg.naturalWidth ? markOn(c) : { w: Math.round(W * 0.06), h: Math.round(W * 0.06 * 677 / 1874), m: Math.round(W * 0.012) };
+  if (!saveCredit) return;
   const fs = Math.max(10, Math.round(H * 0.017));
   g.save();
   g.globalAlpha = 0.62; g.fillStyle = '#fff'; g.textAlign = 'right'; g.textBaseline = 'middle';
