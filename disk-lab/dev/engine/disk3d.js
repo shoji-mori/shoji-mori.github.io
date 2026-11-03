@@ -224,7 +224,8 @@
   // its amber glow, nor the column SIG it added to the gas there (a choice for the picture, see above). It stays in the
   // physics: the cut's Regions face, the probe, the gas line's inflow and coAlpha, the temperature's heating layer and the
   // flow arrows keep it where it is. data-acc="on" (the page's ?acc=1, a development switch) draws it as before, to compare.
-  const ACC = { K_SYM: 2, K_ASYM: 4, W: 0.3, OFF: 0.3, SIG: 0.02, R_END: 0.4, C_SYM: 0.6, C_ASYM: 1.6 };
+  // (round 13c, after Mdot 1e-7 moved R_TI out: the accretion flow's marks end where the thermally ionized disk begins, 1.2 R_TI, not at a fixed 0.4 au)
+  const ACC = { K_SYM: 2, K_ASYM: 4, W: 0.3, OFF: 0.3, SIG: 0.02, R_END: Math.max(0.4, 1.2 * NONIDEAL.R_TI), C_SYM: 0.6, C_ASYM: 1.6 };
   // The star's magnetosphere (round 7), drawn close up only (it fades in as the camera comes within SHOW au of the star,
   // and costs nothing from farther). A T Tauri star of one solar mass and radius RS = 2 R_sun = 0.0093 au with a dipole
   // field of about 1 kG at its surface truncates the gas disk where the field's pressure balances the inflow's ram
