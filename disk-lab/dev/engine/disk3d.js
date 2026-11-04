@@ -1659,9 +1659,6 @@ uniform int uSteps;
 uniform vec4 uFast;
 const float FAST_T = 3e-3;   // (the most of the light behind it a block's volume may take and still be empty)
 #endif
-#ifdef FAST_CB
-uniform vec3 uFastC;    // (round 16a, see FAST) x: 1, half the pixels marched, in a checkerboard; y: its parity; z: its block (render px)
-#endif
 uniform float uSeed;
 uniform float uPx;      // render pixels per CSS pixel
 uniform vec3 uJit;      // a still picture's frame: offset of the ray within the pixel (render pixels), of the march's jitter
@@ -3422,19 +3419,6 @@ void main(){
     fragColor = 0.25 * (faceAt(fc + vec2(0.125, 0.375)) + faceAt(fc + vec2(0.375, -0.125)) + faceAt(fc + vec2(-0.125, -0.375)) + faceAt(fc + vec2(-0.375, 0.125)));
     return;
   }
-#endif
-#ifdef FAST_CB
-  // (round 16a, see uFastC) the pixels of the other parity left as they are in the volume's target (the frame before's), in
-  // the volume drawn whole or in bands, and in kicks (their state is neither read nor written there) and their band's picture
-  {
-    float yv = gl_FragCoord.y;
-#ifdef FULL
-    if (uSplit == 1) yv += uRowOff;   // (a kick's row is its band's state's; the volume's is uRowOff more, see SPLIT)
-#endif
-    if (uFastC.x > 0.0 && mod(floor(gl_FragCoord.x / uFastC.z) + floor(yv / uFastC.z) + uFastC.y, 2.0) > 0.5) discard;
-  }
-#endif
-#ifdef FULL
   // (round 10a, see SPLIT: the band's picture, drawn into the volume's target from the state its rays left; and a kick's
   // pixel, in the band's rows of the state, at its row of the volume)
   if (uSplit == 2) { fragColor = texelFetch(uState, ivec3(ivec2(gl_FragCoord.xy - vec2(0.0, uRowOff)), 0), 0); return; }
@@ -4651,14 +4635,13 @@ void main(){
     // running), for the owner to try; all off by default (DESIGN.md section 39). data-fast (the page's ?fast=): 1, fewer steps
     // (FAST.K of the step cap uSteps in the model and millimetre looks, of the continuum's substeps, of the gas line's first steps'
     // count); 2, and the rays of an empty block left out (a coarse pass at 1 / FAST.B of the size, the march itself within FAST.N
-    // of its iterations, marks the blocks whose volume gathers nothing above the exposure's floor; FAST_SKIP); 3, and half the
-    // pixels marched, in a checkerboard of FAST.CB-pixel blocks alternating frame to frame, the others kept from the frame
-    // before (FAST_CB). data-fastk: FAST.K (0.6; 0.2 to 1); data-fastb: the checkerboard's block (8; 2, 4, 8, 16 or 32). The
-    // still pictures are not touched: a frame of the same state as the last, and the first one after a moving picture's, are
-    // drawn in full, and that first one starts the still over (see drawOnce)
+    // of its iterations, marks the blocks whose volume gathers nothing above the exposure's floor; FAST_SKIP), not in a frame
+    // drawn in kicks. data-fastk: FAST.K (0.6; 0.2 to 1). The still pictures are not touched: every frame of the motion takes the
+    // shortcuts and the first one after it is drawn in full and starts the still over (see drawOnce). (Round 16b, the owner: the
+    // checkerboard of ?fast=3 dropped; 3 is taken as 2)
     const FAST = (() => {
-      const lv = Math.round(Number(box.dataset.fast)), k = Number(box.dataset.fastk), b = Math.round(Number(box.dataset.fastb));
-      return { lvl: lv >= 1 && lv <= 3 ? lv : 0, K: k >= 0.2 && k <= 1 ? k : 0.6, CB: [2, 4, 8, 16, 32].includes(b) ? b : 8, B: 8, N: 128, AGE: 30 };
+      const lv = Math.round(Number(box.dataset.fast)), k = Number(box.dataset.fastk);
+      return { lvl: lv >= 1 ? Math.min(2, lv) : 0, K: k >= 0.2 && k <= 1 ? k : 0.6, B: 8, N: 128, AGE: 10 };
     })();
     const hdrDefs = [mpConst && 'MP_CONST', wextOld && 'WEXT_OLD'].filter(Boolean);
     const mpHdr = (src) => hdrDefs.reduce((s, d) => (s.includes('#define ' + d + '\n') ? s : s.replace('#version 300 es\n', '#version 300 es\n#define ' + d + '\n')), src);
@@ -4774,7 +4757,7 @@ void main(){
     const uniforms = (p, names) => Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)]));
     // (round 10a: with data-math="safe", the main programs with SAFE_MATH, see the end of FS)
     const FSM = mpHdr(box.dataset.math === 'safe' ? FS.replace('#version 300 es\n', '#version 300 es\n#define SAFE_MATH\n') : FS)   // (round 14a: and MP_CONST, see mpHdr)
-      .replace('#version 300 es\n', '#version 300 es\n' + (FAST.lvl >= 2 ? '#define FAST_SKIP\n' : '') + (FAST.lvl >= 3 ? '#define FAST_CB\n' : ''));   // (round 16a: see FAST)
+      .replace('#version 300 es\n', '#version 300 es\n' + (FAST.lvl >= 2 ? '#define FAST_SKIP\n' : ''));   // (round 16a: see FAST)
     const prog = link(FSM, 'FS'), progDisk = link(DISKMAP_FS, 'disk'), progWind = link(WINDMAP_FS, 'wind'), progEnv = link(ENVMAP_FS, 'env');
     // the eddies' volume texture (TURB3_FS, then SHADE3_FS), NB3 layers per draw: 8 where the driver allows, else 4
     const NB3 = gl.getParameter(gl.MAX_DRAW_BUFFERS) >= 8 && gl.getParameter(gl.MAX_COLOR_ATTACHMENTS) >= 8 ? 8 : 4;
@@ -4783,7 +4766,7 @@ void main(){
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
     const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
-      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV', 'uMP', 'uWindK', 'uGGas', 'uJetOcc', 'uLstar', 'uExcl', 'uCoEnv', 'uPebH', 'uFast', 'uFastC'];
+      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV', 'uMP', 'uWindK', 'uGGas', 'uJetOcc', 'uLstar', 'uExcl', 'uCoEnv', 'uPebH', 'uFast'];
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS, 'show'), progBloom = link(BLOOM_FS, 'bloom');
     // (round 8) the bloom's targets, a quarter of accT's size (made with it): A on unit 18 (for SHOW_FS), B on unit 19
@@ -6958,7 +6941,6 @@ void main(){
       accFor = [cw, ch];
       if (faceT && (faceT.w !== cw || faceT.h !== ch)) { for (const t of [faceT, faceA]) { gl.deleteFramebuffer(t.fb); gl.deleteTexture(t.tex); } faceT = faceA = null; for (const u of [gl.TEXTURE11, gl.TEXTURE12]) { gl.activeTexture(u); gl.bindTexture(gl.TEXTURE_2D, noFace); } }
       accN = 0;   // (the new target is empty: a still starts over, else its next frame would be averaged with nothing)
-      cbPrev = null;   // (round 16a: nor a picture for the checkerboard, see fastPasses)
       gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, accT.tex);
       if (!snapping) drawOut();   // (round 9: a snapshot draws its own frames, at the scale it plans, in its bands)
     }
@@ -6978,7 +6960,6 @@ void main(){
         gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, accT.tex);
       }
       accN = 0; dirty = true;
-      cbPrev = null;   // (round 16a: the picture held is of another size, see fastPasses)
     }
     // Still pictures are refined: while nothing that the volume depends on changes (paused, and no flight, fade or sweep
     // under way), each frame is drawn with a new offset of the ray within the pixel and of the march's jitter (low-
@@ -7429,9 +7410,11 @@ void main(){
     let accT = null, accN = 0, lastSig = [], jitN = 0;
     // (round 16a, see FAST) fastNow: this frame takes the shortcuts (settled in drawOnce); fastLast: the last frame begun did;
     // stepsU, marchU: the step cap and uMarch sent for this frame (the coarse pass sends its own, then these again); maskT, its
-    // key and age: the empty blocks' mask (fastPasses); cbPar, the checkerboard's parity; cbPrev: the volume's target and size
-    // whose every pixel a frame has drawn since the last change of either (the checkerboard keeps the other half from it)
-    let fastNow = false, fastLast = false, stepsU = 0, marchU = [0, 0, 0, 0], maskT = null, maskKey = '', maskAge = 0, cbPar = 0, cbPrev = null;
+    // key, its view (maskAt: the camera and its forward direction) and age: the empty blocks' mask (fastPasses)
+    let fastNow = false, fastLast = false, stepsU = 0, marchU = [0, 0, 0, 0], maskT = null, maskKey = '', maskAt = null, maskAge = 0;
+    // (a frame of a moving picture: the view moved by a drag, held or not, a touch, a flight or a path, or the clock running; not a
+    // measurement's, a script's or a snapshot's frame)
+    const fastWant = () => FAST.lvl > 0 && !reduce && !fullFrame && !snapping && !stepping && !benching && !probing && !warming && !coStudy && (viewMoving() || (!paused && manualMs === null && speed !== 0));
     let fadeT = 0, fstats = null;   // fstats: a running measurement, see diskFrameStats
     // (round 10a) a frame drawn outside the animation frames (a new size, a new language, a script's time or clump, a touch
     // with reduced motion): its piece fenced as the animation frames' are, so that its time is measured and the next piece
@@ -7471,17 +7454,18 @@ void main(){
       slowSync('getBufferSubData ae', ts);   // (round 10a: see slowSync)
       aeReady = true;
     }
-    // (round 16a) A moving picture's frame, its shortcuts beyond fewer steps (FAST), set up before its volume is drawn, with the
-    // program and uniforms of the frame (U); returns the bits taken: 2, the empty blocks' mask; 4, the checkerboard. Neither in
-    // the gas line's look (its march is its own), nor with the mask while the cut, a cut face or a planet close up shows
-    // (`off`: their parts are not in the coarse pass's ray, nor added where an empty block's ray starts)
+    // (round 16a) A moving picture's frame, its shortcut beyond fewer steps (FAST), set up before its volume is drawn, with the
+    // program and uniforms of the frame (U); returns 2 where it takes the empty blocks' mask. Not in the gas line's look (its march
+    // is its own), nor while the cut, a cut face or a planet close up shows, nor in a frame drawn in kicks (`off`: their parts are
+    // not in the coarse pass's ray nor added where an empty block's ray starts; round 16b: in kicks, a mask's pass ahead of every
+    // frame and its kicks' own measures made the visible look's moving frames uneven, see DESIGN.md section 39)
     // The mask: a coarse pass of the same program at 1 / FAST.B of the volume's size (a ray through each block's middle), its
     // ray the march itself within FAST.N of its iterations, its whole steps in the continuum and no step cap (a ray cut short
-    // there is not empty), into maskT (the volume's format: the pipeline of the volume drawn whole); made again when the view, the
-    // look, the components, the program or the exposure (to 10 %) change, else every FAST.AGE frames (the clock alone moves the
-    // volume's light a little: the margin of a block covers it; the planets' points of light are the volume pass's own). Then
-    // unit 12 (the cut face's, unused here) holds it for the volume pass. The checkerboard: where the volume's target holds a
-    // whole picture of this size (cbPrev), half the pixels, the parity turned every frame
+    // there is not empty), into maskT (the volume's format: the pipeline of the volume drawn whole). Round 16b: made again only
+    // when the picture has moved by half a block since it was made (the camera's turn and travel, in render pixels at its focal
+    // length; the margin of a block covers less), when the look, the components, the program, the size or the exposure (10 %)
+    // change, or every FAST.AGE frames (the clock alone moves the volume's light a little; the planets' points of light are the
+    // volume pass's own); it was made on every frame of a drag. Then unit 12 (the cut face's, unused here) holds it
     function fastPasses(F, U, sig, expo, off) {
       let bits = 0;
       if (FAST.lvl >= 2 && lookNow !== 'co' && !off) {
@@ -7491,9 +7475,13 @@ void main(){
           if (maskT) { gl.deleteFramebuffer(maskT.fb); gl.deleteTexture(maskT.tex); }
           maskT = target(w, h, gl.RGBA16F, gl.CLAMP_TO_EDGE, gl.NEAREST); glErr('fast mask'); maskKey = '';
         }
-        const key = cw + 'x' + ch + ':' + (F ? 1 : 0) + ':' + Math.round(10 * Math.log(Math.max(expo, 1e-30))) + ':' + sig.slice(1, sig.length - 2).join();
-        if (key !== maskKey || ++maskAge >= FAST.AGE) {
-          maskKey = key; maskAge = 0;
+        // (the state but the clock and the camera, sig[0..6]: the camera by the picture's motion)
+        const key = cw + 'x' + ch + ':' + (F ? 1 : 0) + ':' + Math.round(10 * Math.log(Math.max(expo, 1e-30))) + ':' + sig.slice(7, sig.length - 2).join();
+        const fpx = 0.5 * rH / Math.tan(opt.fov / 2), f = basis.f;
+        const moved = !maskAt ? Infinity : fpx * (Math.acos(Math.min(1, f[0] * maskAt.f[0] + f[1] * maskAt.f[1] + f[2] * maskAt.f[2]))
+          + Math.hypot(cam[0] - maskAt.cam[0], cam[1] - maskAt.cam[1], cam[2] - maskAt.cam[2]) / Math.max(camD, 1e-6));
+        if (key !== maskKey || moved > 0.5 * FAST.B || ++maskAge >= FAST.AGE) {
+          maskKey = key; maskAge = 0; maskAt = { f: f.slice(), cam: cam.slice() };
           gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, noFace); gl.activeTexture(gl.TEXTURE2);   // (not the target drawn into)
           gl.bindFramebuffer(gl.FRAMEBUFFER, maskT.fb); gl.viewport(0, 0, cw, ch);
           gl.uniform2f(U.uRes, cw, ch); gl.uniform4f(U.uFast, 1, FAST.N, cw, ch); gl.uniform1i(U.uSteps, 32768); gl.uniform1i(U.uCtMax, 32768);
@@ -7506,7 +7494,6 @@ void main(){
         gl.uniform4f(U.uFast, 2, 0, cw, ch);
         bits |= 2;
       }
-      if (FAST.lvl >= 3 && lookNow !== 'co' && cbPrev && cbPrev.t === accT && cbPrev.w === rW && cbPrev.h === rH) { cbPar ^= 1; gl.uniform3f(U.uFastC, 1, cbPar, FAST.CB); bits |= 4; }
       return bits;
     }
     function drawOnce() {
@@ -7544,9 +7531,13 @@ void main(){
         else lookT0 = nowMs() - 300;
       }
       // (round 16a) a frame of a moving picture: the view moved by a drag, a touch, a flight or a path, or the clock running (not a
-      // measurement's, a script's or a snapshot's frame); the shortcuts (FAST) are taken below only where its state is not the last
-      // frame's. The guard predicts it from its own kind's measures where there are some (gC1F)
-      fastNow = FAST.lvl > 0 && !reduce && !fullFrame && !snapping && !stepping && !benching && !probing && !warming && !coStudy && (viewMoving() || (!paused && manualMs === null && speed !== 0));
+      // measurement's, a script's or a snapshot's frame) takes the shortcuts (FAST); the guard predicts it from its own kind's
+      // measures where there are some (gC1F). Round 16b: every frame of the motion, the state changed since the last frame or not.
+      // (16a drew a frame of the same state as the last in full: a drag held a moment, or an animation frame with no new input,
+      // alternated full frames with the moving ones, each full one in bands after its kind's measure was dropped, DESIGN.md section
+      // 39.) A change between the two starts the picture over (neither is averaged into the other); at the motion's end, fastEnd
+      fastNow = fastWant();
+      if (!warming && fastNow !== fastLast) { accN = 0; if (!fastNow) fastEnd(kindNow()); }
       guardFrame();   // (round 9: the engine's own guard, see GFAC)
       const wantF = showField && lookNow === 'model' ? 1 : 0;
       fieldAmp = reduce ? wantF : wantF > fieldAmp ? Math.min(wantF, fieldAmp + dtR / 0.4) : Math.max(wantF, fieldAmp - dtR / 0.4);
@@ -7633,11 +7624,6 @@ void main(){
         ema = shift < 0.25 ? 6 : shift < 0.6 ? 3 : shift < 1.2 ? 1 : 0;
       }
       if (viewNew || sig[ne] !== lastSig[ne] || sig[ne + 1] !== lastSig[ne + 1]) { accN = ema && accN ? Math.min(accN, ema) : 0; aeFresh = false; coFresh = false; }
-      // (round 16a) A frame of the same state as the last is a still's: drawn in full (FAST). The first one after frames that took
-      // the shortcuts starts the still over, so that none of them is averaged into it, and its kind's measure of a full frame,
-      // taken in another view before the moving picture, is dropped: it is drawn in bands sized as they go, as after a jump
-      if (fastNow && !viewNew) fastNow = false;
-      if (!fastNow && fastLast) { accN = 0; delete gKnown[kindNow()]; }
       const key = [Math.round(10 * Math.log(Math.hypot(...cam))), Math.round(20 * camEl), Math.round(20 * camAz), ...panV.map((v) => Math.round(10 * v / camD)), lookNow, opt.mode, opt.slice ? opt.cut + opt.sliceQ : '', follow, msAmp, W, Hh, opt.coMode, opt.coV].join();
       if (key !== aeKey) { aeKey = key; aeTries = 0; aeLo = -Infinity; aeHi = Infinity; aeGen++; }
       // (the CO line's range: searched again for a new view, look or display; held when only the components change)
@@ -7788,7 +7774,7 @@ void main(){
         gl.bindFramebuffer(gl.FRAMEBUFFER, accT.fb); gl.viewport(0, 0, rW, rH);
       } else if (faceOn && FAST.lvl >= 2 && faceA) { gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, faceA.tex); gl.activeTexture(gl.TEXTURE2); }   // (round 16a: unit 12 may hold the empty blocks' mask, see fastPasses)
       gl.uniform1i(U.uFaceRdy, faceOn ? 1 : 0); gl.uniform2f(U.uFaceRes, canvas.width, canvas.height);
-      if (FAST.lvl >= 2) { gl.uniform4f(U.uFast, 0, 0, 1, 1); gl.uniform3f(U.uFastC, 0, 0, FAST.CB); }   // (round 16a: neither, until fastPasses)
+      if (FAST.lvl >= 2) gl.uniform4f(U.uFast, 0, 0, 1, 1);   // (round 16a: no mask, until fastPasses)
       // (the first frame replaces what the target holds, so that nothing from before carries over, not even a NaN:
       // blended with weight 0 it would stay, since NaN times 0 is NaN)
       // (round 9) The volume, in one draw or in bands (see bandsFor): a frame in bands is a job (bandJob) whose first band is
@@ -7832,8 +7818,9 @@ void main(){
         lastWarmGt = gtNote(gtEnd(preQ), { what: 'warm', key: kindNow(), first: 1 });
         return;
       }
-      // (round 16a) a moving picture's frame: its other shortcuts (FAST), the empty blocks' mask made with the work before the volume
-      const fastBits = fastNow ? 1 | fastPasses(F, U, sig, expo, faceOn || pVis > 0 || sliceU > 0 || !!opt.slice) : 0;
+      // (round 16a) a moving picture's frame: its other shortcut (FAST), the empty blocks' mask made with the work before the volume
+      // (round 16b: not in a frame drawn in kicks, see fastPasses)
+      const fastBits = fastNow ? 1 | fastPasses(F, U, sig, expo, faceOn || pVis > 0 || sliceU > 0 || !!opt.slice || splitWants(F)) : 0;
       // (round 9) The frame's work before its volume (the maps for this moment: the wind's, the eddies', the wind's streamers,
       // the disk's; the sky's; the cut face at the screen's resolution; the tables uploaded): sent on its own and measured as
       // a piece of its own, which the guard counts with the frame's. It ran in the volume's first piece, unseen: a settling
@@ -7850,12 +7837,10 @@ void main(){
       job.split = splitWants(F); job.rW = rW; job.rH = rH; job.still = paused;
       // (round 10a: a kind measured at another size of the volume: from its first use again, see kickT)
       // (round 10a, dev.6: and the gas line's stages, measured apart: see coStage)
-      if (job.split) { const k0 = frameKeyOf(F), m0 = kickT[k0]; if (m0 && (m0.w !== rW || m0.h !== rH)) for (const k of [k0, k0 + ':w', k0 + ':g', k0 + ':fast']) kickReset(k, true); job.K = kOf(k0); }
+      if (job.split) { const k0 = frameKeyOf(F), m0 = kickT[k0]; if (m0 && (m0.w !== rW || m0.h !== rH)) for (const k of [k0, k0 + ':w', k0 + ':g']) kickReset(k, true); job.K = kOf(k0); }
       job.kk = job.key;
-      // (round 16a: the shortcuts this frame takes, see FAST; in kicks, with the mask or the checkerboard, its kicks cost less than a
-      // full frame's and are measured apart)
+      // (round 16a: the shortcuts this frame takes, see FAST)
       job.fast = fastBits; fastLast = fastNow;
-      if (job.split && (fastBits & 6)) job.kk = job.key + ':fast';
       // (round 9: the moments in passes, see coGrid: each group pass, then the composite, every one a piece of its own in its
       // bands; the bands asked for the frame shared among the group passes)
       const nPass = F ? coPassesNow() : 0;
@@ -7879,7 +7864,7 @@ void main(){
       // (round 9: the first animation frames after a jump, see probeNext: the same, each band's rows from the one before)
       // (round 10a: and any frame of a kind not measured lately (gKnown, 30 s): a prediction carried by the factors is not
       // trusted with a whole frame)
-      else if ((probeNext > 0 || (gBudget > 0 && !knownNow(kindF()))) && !fullFrame && !snapping && !stepping && !reduce) {
+      else if ((probeNext > 0 || (gBudget > 0 && !(fastNow ? knownF(kindF()) : knownNow(kindF())))) && !fullFrame && !snapping && !stepping && !reduce) {
         if (probeNext > 0) probeNext--;
         job.ad = true; job.st = {}; job.y = 0; job.rows = firstRows(aimFirst); job.n = (job.stages ? job.stages.length : 1) * Math.ceil(rH / job.rows);
       }
@@ -7902,7 +7887,6 @@ void main(){
       bandJob = lastJob = job;
       job.finish = () => {
       accN = acc + 1;
-      if (!(probing === 2 && probeT) && !testT) cbPrev = { t: accT, w: rW, h: rH };   // (round 16a: see fastPasses)
       if (job.stages) coCur = job.coOut;   // (round 10a, dev.7: the average so far, for the next frame's first pass)
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       // (round 8) the finish (see BLOOM): the glow of the bright parts and the tone curve, by the quality of the moment; in
@@ -8095,9 +8079,24 @@ void main(){
       return Math.max(pred, own);
     }
     // (round 16a) a frame of a moving picture (FAST) predicted from its own kind's fresh measure ('model:fast'), else as a full frame of
-    // its kind (more: the safe side). Only after a frame that took the shortcuts: the guard is asked before this frame's state is known,
-    // and a frame that turns out a still's then starts in bands sized as they go (see drawOnce)
-    const gC1F = (k) => (fastNow && fastLast && ownC1(k + ':fast') > 0 ? ownC1(k + ':fast') : gC1(k));
+    // its kind: the plain frame's own prediction (more: a frame with fewer steps costs at most the full one)
+    const gC1F = (k) => (fastNow && ownC1(k + ':fast') > 0 ? ownC1(k + ':fast') : gC1(k));
+    // (round 16b) The end of a moving picture's frames (FAST): the kind's measure of a full frame, from before the motion, kept for the
+    // still (16a dropped it, and the still began in bands), raised to the moving frames' own measure over FAST.K at least (a ray
+    // marched with FAST.K of the step cap takes FAST.K of its steps at least, so a full frame costs at most 1 / FAST.K of the moving
+    // one: the view's cost as it is now) and taken over by the next full frame's own; dropped, the still then drawn in bands sized as
+    // they go as after a jump, only where the camera is far from where it was measured (a third of its distance, or 25 degrees)
+    function fastEnd(k) {
+      const kn = gKnown[k];
+      if (!kn) return;
+      if (kn.cam && cam) {
+        const r0 = Math.hypot(kn.cam[0], kn.cam[1], kn.cam[2]), r1 = Math.hypot(cam[0], cam[1], cam[2]);
+        const cosA = (kn.cam[0] * cam[0] + kn.cam[1] * cam[1] + kn.cam[2] * cam[2]) / Math.max(r0 * r1, 1e-12);
+        if (Math.abs(Math.log(r1 / Math.max(r0, 1e-12))) > 0.29 || cosA < 0.906) { delete gKnown[k]; return; }
+      }
+      const cf = ownC1(k + ':fast');
+      if (cf > 0) { kn.c = [Math.max(ownC1(k), cf / FAST.K)]; kn.t = performance.now(); kn.ub = 0; kn.tub = 0; if (cam) kn.cam = cam.slice(); }
+    }
     // (round 10a: isF, a frame of the FULL program; see fNow)
     function gNote(k, ms, scale, n, band, isF = false) {
       if (!(scale > 0) || !(ms > 0)) return;
@@ -8114,6 +8113,7 @@ void main(){
       const c = (n > 1 && band > 2 * gBudget ? band * n : ms) / (scale * scale);
       const kn = gKnown[k] || (gKnown[k] = { c: [], t: 0, ub: 0, tub: 0, s: 0 });
       kn.s = scale;   // (round 10a: the scale it was measured at, see knownNow)
+      if (!/:fast$/.test(k) && cam) kn.cam = cam.slice();   // (round 16b: and the camera, see fastEnd)
       // (round 10a: FULL's first measure of a kind replaces the usual program's, see fNow)
       if (isF && !kn.F) { kn.c = []; kn.ub = 0; kn.tub = 0; kn.F = true; }
       if (n > 1) { kn.ub = c; kn.tub = performance.now(); }
@@ -8341,8 +8341,11 @@ void main(){
     // and took 185 to 235 (dev.3: 101, 109); a measure at another scale now sizes nothing, the frame's bands sized as they go
     // from the least, and its measure at this scale taken)
     const knownNow = (k) => ownC1(k) > 0 && (!fNow || !!(gKnown[k] && gKnown[k].F)) && Math.abs((gKnown[k].s || 0) - opt.scale) < 0.004;
-    // (round 16a: a frame with the shortcuts, FAST, from its own kind where that is known now)
-    const kindF = () => (fastNow && knownNow(kindNow() + ':fast') ? kindNow() + ':fast' : kindNow());
+    // (round 16a: a frame with the shortcuts, FAST, from its own kind where that is known. Round 16b: known for such a frame at any
+    // scale, its own measure or a full frame's (the governor's steps are small and a frame's cost goes nearly as its pixels: a moving
+    // frame is not drawn in bands for want of a measure at its scale); a still's frame as before, at its scale (knownNow))
+    const knownF = (k) => ownC1(k) > 0 && (!fNow || !!(gKnown[k] && gKnown[k].F));
+    const kindF = () => (fastNow && knownF(kindNow() + ':fast') ? kindNow() + ':fast' : kindNow());
     const firstRows = (aim) => {
       const k = kindF(), kn = gKnown[k], trusted = knownNow(k);
       let r = BAND_ROWS;
@@ -8619,6 +8622,8 @@ void main(){
       if (!paused && manualMs === null) { time += dt * speed * clockK(); if (burst) burst.age += dt * speed; update(); dirty = true; }
       const moving = busy();
       if (moving) dirty = true;   // flights, fades and the sweep run in real time (see draw)
+      // (round 16b: a motion over, its still drawn in full at once, also where its frames had filled the average, a drag held long)
+      if (fastLast && !fastWant()) dirty = true;
       // (round 9) a frame being drawn in bands goes on, one band at a time, each waited for (see bandsFor)
       // (round 10a: a frame in kicks, see SPLIT: its next piece once its band in hand is seen done or not; its last piece, the
       // band's picture and the finish, is light, and the next frame may be drawn in the same animation frame)

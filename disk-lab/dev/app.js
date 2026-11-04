@@ -11,13 +11,13 @@ import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stash
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=f508a55e7c';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=6afad67589';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.18', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.19', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -2083,8 +2083,8 @@ async function start() {
   box.setAttribute('data-disk3d', '');
   // (round 15b) the engine's dev switches, read from the address: a thick pebble layer, the envelope/wind exclusion, the gas line from the
   // envelope, the jet's occlusion, the gas's glow, the CPD's flare, the wind's extent, the starlight's scale (README); (round 16a) the
-  // shortcuts while the picture moves, their share of the steps and the checkerboard's block (README, the engine's FAST)
-  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'fastb']) if (q.has(k)) box.dataset[k] = q.get(k);
+  // shortcuts while the picture moves and their share of the steps (README, the engine's FAST; round 16b: the checkerboard dropped)
+  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk']) if (q.has(k)) box.dataset[k] = q.get(k);
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   // (the engine's own start: the defaults Reset returns to; round 15a: with the clock's state, stopped by data-paused)
   if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), [...DEF_KEYS, 'paused']);
