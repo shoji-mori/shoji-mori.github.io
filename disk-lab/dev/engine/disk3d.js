@@ -5810,14 +5810,22 @@ void main(){
       if (!plRoom(R)) return;
       seeds = seeds.filter((s) => time - s.t < 20 && Math.abs(s.R - R) < 0.1 * R).concat([{ t: time, R, c, n: c ? c.n : 0 }]);
       if (seeds.length < 3) return;
-      const Rc = Math.round(seeds.reduce((m, s) => m + s.R, 0) / seeds.length * 100) / 100, made = seeds;
+      // (Round 15c, the owner: "the planet forms where the pebbles gathered") Each seed's clump where it is drawn now: drifted
+      // in 0.05 au a second since its drop and gone round at Omega of its radius (the sheet draws it so, uClump), or the
+      // drop's place if its clump was taken since. The core at their mean radius, in their mean direction (the vector sum),
+      // its phase set so that it is there now (planetPhiOf); the places' rule (plRoom) judged at that radius. It was at
+      // the mean of the drops' radii, in the next default direction (PLANETS.PHI0), away from the pebbles.
+      const now = seeds.map((s) => { const k = s.c && s.c.n === s.n ? s.c : null, dt = k ? time - k.t0 : 0, Rn = k ? k.R - 0.05 * dt : s.R; return { R: Rn, phi: k ? k.phi + Omega(Rn) * dt : null }; });
+      const Rc = Math.round(now.reduce((m, s) => m + s.R, 0) / now.length * 100) / 100, made = seeds;
+      if (!plRoom(Rc)) return;
+      const dirs = now.filter((s) => s.phi != null), phiNow = dirs.length ? Math.atan2(dirs.reduce((m, s) => m + Math.sin(s.phi), 0), dirs.reduce((m, s) => m + Math.cos(s.phi), 0)) : null;
       seeds = [];
       // (a place: one that is off, else a new one)
       let i = planets.findIndex((p) => !p.on || !(opt.mode & 16));
       if (!(opt.mode & 16)) { for (const p of planets) p.on = false; i = planets.length ? 0 : -1; }
       if (i < 0) { if (planets.length >= PLANETS.MAX) return; planets.push(planetObj(Rc, true, planets.length)); i = planets.length - 1; }
       // (round 8: it grows to Jupiter's mass, as the text says)
-      Object.assign(planets[i], { a: Rc, on: true, m: 1, q: qOfM(1), amp: 0, fade: 8, dSet: -1 });
+      Object.assign(planets[i], { a: Rc, on: true, m: 1, q: qOfM(1), amp: 0, fade: 8, dSet: -1, phi0: phiNow == null ? PLANETS.PHI0(i) : Math.atan2(Math.sin(phiNow - Omega(Rc) * time), Math.cos(phiNow - Omega(Rc) * time)) });
       // (round 9, the owner: "once a planet is made, clear the pebbles around it": then the clumps within its feeding zone,
       // CLEAR = 4 Hill radii of its orbit (the zone from which a planet gathers solids reaches about 2 sqrt(3), 3.5 Hill radii,
       // to each side), where they had drifted to; round 13b, the owner: "clear every pebble on its orbit": the clumps that made
