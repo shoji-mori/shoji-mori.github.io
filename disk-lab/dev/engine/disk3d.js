@@ -6966,7 +6966,8 @@ void main(){
     // discrepancy sequences) and averaged with the frames before it, up to ACC_MAX, so that the grain of the march, the
     // banding of its steps and the jagged edges fade out; the maps are not redrawn meanwhile. Any change starts over at
     // once. A snapshot averages ACC_SNAP frames.
-    const ACC_MAX = 16, ACC_SNAP = 12;
+    // (round 16c, for the owner's timing trials: data-acc, the page's ?acc=, 1-16 frames in a still; the default 16)
+    const ACC_MAX = Math.min(16, Math.max(1, Math.round(Number(box.dataset.acc)) || 16)), ACC_SNAP = 12;
     const TIME_MAX = 1e6;   // the model's clock from outside, at most (s: 12 days at x1)
     // The automatic exposure (the model's look, the camera within AE.D of the star). Close to the star the inner disk's lit
     // surface fills the picture and the stretch runs into white (a mean level of 200 or more, a third of the pixels blown

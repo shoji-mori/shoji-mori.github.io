@@ -88,12 +88,12 @@
   })();
 </script>
 <link rel="expect" href="#posterFirst" blocking="render">
-<script type="module" src="app.js?v=23d6654143"></script>
+<script type="module" src="app.js?v=00be740d32"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
   <header class="bar">
-    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build dev" data-version-tag>開発版 1.9-dev.19</span></p>
+    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build dev" data-version-tag>開発版 1.9-dev.20</span></p>
     <div class="bar-end">
       <button type="button" class="text-button" id="aboutOpen" aria-haspopup="dialog"><span class="en" lang="en"><span class="long">About this model</span><span class="short">About</span></span><span class="ja" lang="ja"><span class="long">このモデルについて</span><span class="short">解説</span></span></button>
       <button type="button" class="text-button" id="historyOpen" aria-haspopup="dialog"><span class="en" lang="en"><span class="long">What’s new</span><span class="short">New</span></span><span class="ja" lang="ja"><span class="long">更新履歴</span><span class="short">履歴</span></span></button>
@@ -131,7 +131,7 @@
     <!-- (round 12a) the probe's panel: the model's numbers at the point tapped (app.js, probeRender) -->
     <div class="probe-panel" id="probePanel" role="status" aria-live="polite" hidden></div>
     <p class="stage-note" id="stageNote" role="status" aria-live="polite"></p>
-    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.9-dev.19 (2026-11-02) · engine 6afad67589</p></div>
+    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.9-dev.20 (2026-11-02) · engine 2734c2f766</p></div>
     <!-- (round 10a) the safe start's note, with its offers; the last visit's record to read and copy -->
     <div class="stage-safe" id="stageSafe" role="status" hidden></div>
     <div class="stage-log" id="stageLog" role="dialog" aria-modal="false" hidden></div>
@@ -292,7 +292,7 @@
       <input class="link-field" id="linkField" type="text" readonly hidden data-aria-en="Link to this view" data-aria-ja="この眺めのリンク">
       <p class="rail-note cite" id="citeRail"></p>
     </section>
-    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.9-dev.19 (2026-11-02) · engine 6afad67589</p>
+    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.9-dev.20 (2026-11-02) · engine 2734c2f766</p>
   </aside>
 
   <section class="dock" id="dock" aria-labelledby="dockTitle">
@@ -327,7 +327,7 @@
   <div class="about-inner">
     <button type="button" class="icon-button about-close" id="aboutClose" data-aria-en="Close" data-aria-ja="閉じる"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
     <h2 id="aboutTitle" tabindex="-1" autofocus><span class="en" lang="en">About this model</span><span class="ja" lang="ja">このモデルについて</span></h2>
-    <p class="about-ver"><span data-version>Disk Lab v1.9-dev.19 (2026-11-02) · engine 6afad67589</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
+    <p class="about-ver"><span data-version>Disk Lab v1.9-dev.20 (2026-11-02) · engine 2734c2f766</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
     <p class="about-log"><a href="/disk-lab/changelog.html"><span class="en" lang="en">What changed, version by version</span><span class="ja" lang="ja">更新の記録(版ごとの変更)</span></a></p>
     <p class="tagline"><span class="en" lang="en">An interactive, physics-based visualization of protoplanetary disks, from magnetic fields and disk winds to planet formation and observational signatures.</span><span class="ja" lang="ja">磁場と円盤風から、惑星の形成、観測で見える姿まで。原始惑星系円盤を物理にもとづいて描き、操作しながら見られるようにしたものです。</span></p>
     <p class="lead"><span class="en" lang="en">The model is schematic: the equations and solutions come from the literature; strengths, colours and other settings are chosen so that the structure reads clearly. It is not the output of a simulation.</span><span class="ja" lang="ja">ただし模式的なモデルです。式と解は文献のものを使い、強さや色などの値は構造が読み取りやすいように選んでいます。シミュレーションの結果そのものではありません。</span></p>
@@ -405,7 +405,7 @@
       <li>Ansdell, M. et al. 2018, ApJ, 859, 21</li>
       <li>Cieza, L. A. et al. 2016, Nature, 535, 258 <span class="en" lang="en">(the snow line of V883 Ori in outburst)</span><span class="ja" lang="ja">(増光中の V883 Ori のスノーライン)</span></li>
     </ul>
-    <p class="colophon" id="colophon" data-version>Disk Lab v1.9-dev.19 (2026-11-02) · engine 6afad67589</p>
+    <p class="colophon" id="colophon" data-version>Disk Lab v1.9-dev.20 (2026-11-02) · engine 2734c2f766</p>
   </div>
 </dialog>
 <script id="posterFirst">
