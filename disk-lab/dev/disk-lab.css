@@ -224,7 +224,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .comp{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:10px;row-gap:5px}
 .comp>.toggle{justify-self:start}
 /* (round 13a) beside the toggle: the colours of its materials in the model look, small swatches, and the chip back to the default */
-.comp-cols{display:inline-flex;align-items:center;gap:5px;justify-self:start;min-width:0}
+.comp-cols{display:inline-flex;flex-wrap:wrap;align-items:center;gap:5px;justify-self:start;min-width:0}
+/* (round 18c) in the looks other than the model's the colours are hidden and the see-through's slider stays */
+.comp-cols.no-cols input[type=color],.comp-cols.no-cols [data-col-reset]{display:none}
 .comp-cols input[type=color]{width:26px;height:22px;padding:0;border:1px solid var(--line-2);border-radius:6px;background:none;cursor:pointer;flex:none}
 .comp-cols input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
 .comp-cols input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
@@ -272,7 +274,7 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 /* (round 18b, the owner: the see-through's controls more discreet) a component's see-through under its settings: a small half-filled
    mark and a short slider, no name (its aria-label and title carry it), dimmed at rest; its value and the chip back to the default only
    once it is changed (.changed), after the slider, which keeps its place and its length */
-.op-row{display:flex;align-items:center;gap:6px;min-height:24px;color:var(--text-3)}
+.op-row{display:inline-flex;align-items:center;gap:6px;min-height:24px;margin-left:4px;color:var(--text-3)}   /* (round 18c: in the colours' span) */
 .op-row .op-mark{width:12px;height:12px;stroke-width:1.4}
 .op-row input[type=range]{flex:none;width:6.5em;min-width:0;height:18px;margin:0;accent-color:var(--text-2);opacity:.7}
 .op-row input[type=range]:hover,.op-row input[type=range]:focus-visible,.op-row.changed input[type=range]{opacity:1;accent-color:var(--accent)}

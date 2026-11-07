@@ -17,7 +17,7 @@ const ENGINE_SRC = 'engine/disk3d.js?v=9c1f5b1d9b';   // ?v= the first ten chara
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.24', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.25', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -622,7 +622,7 @@ function opMark() {
 function opRow(i) {
   const e = { input: el('input', { type: 'range', id: 'opac' + i, min: '0', max: String(OP_MAX), step: '1', 'data-opac': String(i) }),
     val: el('span', { class: 'op-val', 'aria-hidden': 'true' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-opac-reset': String(i), hidden: true }) };
-  e.row = el('div', { class: 'op-row' }, opMark(), e.input, e.val, e.chip);
+  e.row = el('span', { class: 'op-row' }, opMark(), e.input, e.val, e.chip);   // (round 18c: a span, inside the colours' span)
   opEls[i] = e;
   return e.row;
 }
@@ -635,7 +635,7 @@ const COMPS = [
 ];   // (round 15a: the labels, a component until now, are the View's annotations, a choice for each kind)
 const compEls = COMPS.map((c) => {
   const btn = el('button', { type: 'button', class: 'toggle', 'aria-pressed': 'false', ...(c.bit ? { 'data-bit': String(c.bit) } : { 'data-opt': c.opt }) });
-  const box_ = c.opts || c.planets || c.op != null ? el('div', { class: 'comp-opts', hidden: true }) : null;
+  const box_ = c.opts || c.planets ? el('div', { class: 'comp-opts', hidden: true }) : null;   // (round 18c: the see-through moved to the colours)
   if (c.planets) box_.append(el('div', { class: 'planet-list' }), el('button', { type: 'button', class: 'chip quiet', id: 'addPlanet', 'aria-pressed': 'false' }));
   for (const o of c.opts || []) box_.append(el('button', { type: 'button', class: 'toggle small', 'data-opt': o, 'aria-pressed': 'false' }));
   // (round 13e) the planets' accretion rate, which sets their own disks (see cpdRowSync)
@@ -643,12 +643,13 @@ const compEls = COMPS.map((c) => {
     el('input', { type: 'range', min: '0', max: '1000', step: '1', 'data-cpd-mdot': '' }), el('button', { type: 'button', class: 'chip quiet', 'data-cpd-auto': '', hidden: true })),
   el('p', { class: 'rail-note cpd-note', 'data-cpd-note': '' }));
   if (c.key === 'wind') box_.append(wbRow());   // (round 14a: its brightness in the model look)
-  if (c.op != null) box_.append(opRow(c.op));   // (round 18a: its see-through)
   if (c.planets) box_.append(el('p', { class: 'rail-note planets-note' }));
   // (round 13a) beside the toggle, its colours (shown in the model look once the engine has started) and the chip back to the
-  // default (shown while one of them is changed)
+  // default (shown while one of them is changed). (Round 18c, the owner: "can't the see-through's bar go in the colour palette?")
+  // Its see-through's mark and slider (opRow) sit in the same span after the colours; in the other looks the span stays, with
+  // the colours hidden (no-cols, syncComps), since the see-through works in every look.
   const cols_ = c.cols ? el('span', { class: 'comp-cols', hidden: true }, ...c.cols.map((k) => el('input', { type: 'color', 'data-col': k })),
-    el('button', { type: 'button', class: 'chip quiet', 'data-col-reset': c.key, hidden: true })) : null;
+    el('button', { type: 'button', class: 'chip quiet', 'data-col-reset': c.key, hidden: true }), ...(c.op != null ? [opRow(c.op)] : [])) : null;
   const row = el('div', { class: 'comp', 'data-comp': c.key }, btn, cols_, box_);
   $('comps').append(row);
   return { c, row, btn, opts: box_, cols: cols_ };
@@ -762,7 +763,7 @@ function syncComps(s) {
   for (const { c, opts, cols: cs } of compEls) {
     const on = c.bit ? !!(s.mode & c.bit) : !!opt[c.opt];
     if (opts) opts.hidden = !on;
-    if (cs) cs.hidden = s.look !== 'model' || !colDef;   // (round 13a: the colours are the model look's)
+    if (cs) { cs.hidden = !colDef; cs.classList.toggle('no-cols', s.look !== 'model'); }   // (round 13a: the colours are the model look's; round 18c: the span stays for the see-through)
   }
   // (round 14a: the wind's brightness, as the colours, the model look's)
   if (wbEls.row) wbEls.row.hidden = s.look !== 'model' || typeof box.diskWindGain !== 'function';
