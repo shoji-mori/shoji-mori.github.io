@@ -10,9 +10,9 @@ export const WORDS = {
   ja: {
     places: {
       whole: { short: '全体', title: '円盤の全体',
-        text: '若い星を回るガスと塵の円盤(半径 30 au)。惑星はこうした円盤で生まれます。星の光は反り返った表層を温め、赤道面は冷たいまま。上に淡く光るのは円盤風です。' },
+        text: '若い星を回るガスと塵の円盤(半径 30 au)。惑星はこうした円盤で生まれます。星の光が反り返った表層を温め、赤道面は冷たいまま。円盤を貫く線は磁力線、上に淡く光るのは円盤風です。最初は 10 au に木星質量の惑星を置き、時計を止めています(「時間」の再生ボタンで動き出します)。' },
       wind: { short: '磁場と風', title: '磁場と円盤風',
-        text: '円盤を貫く磁力線は、回転にねじられながら外へ開きます。ガスはこの線に沿って加速し、風となって上下に吹き出します。磁場が回転と同じ向きなら、片側が強くなります。' },
+        text: '円盤を貫く磁力線は、回転にねじられながら外へ開きます。ガスはこの線に沿って加速し、風となって上下に吹き出します。磁場が回転と同じ向きなら、風は片側で強くなります。' },
       snow: { short: 'スノーライン', title: 'スノーライン',
         // (round 14a: from the model, n.snow; the dashed ring went in round 13a, the name stays)
         text: (n) => `スノーラインは約 ${n.snow} au にあります。その外では、赤道面の小石が氷をまといます。すぐ外に小石が少したまり、内側では氷が昇華して岩の粒になります。` },
@@ -21,9 +21,9 @@ export const WORDS = {
       mm: { short: 'ミリ波', title: 'ミリ波で見る',
         text: 'ミリ波(ALMA の波長)では、赤道面の小石が光ります。惑星のギャップは暗い溝に、そのすぐ外にたまった小石は明るい環になります。' },
       heat: { short: '温度', title: '円盤の中の温度',
-        text: (n) => `手前の半分を切り取り、切り口を温度で塗りました。白い線(τ* = 1)より上では星の光で塵が熱く、その下の内部はぬるいまま。約 ${n.rTI} au より内側だけは降着の熱で赤道面が最も熱くなります。` },   // (round 14a: n.rTI from the model)
+        text: (n) => `手前の半分を切り取り、切り口を温度で塗りました。白い線(τ* = 1)より上では星の光で塵が熱く、その下の内部は温度が低いまま。約 ${n.rTI} au より内側だけは降着の熱で赤道面が最も熱くなります。` },   // (round 14a: n.rTI from the model)
       deadzone: { short: 'デッドゾーン', title: 'デッドゾーン',
-        text: '右手前の 4 分の 1 を切り取り、何が起きている所かで塗り分けました。紺のデッドゾーンでは磁場がガスをつかめず、乱流も起きません。降着はそのすぐ上の薄い層(琥珀色)を流れ、そこで磁力線が折れ曲がります。その上は円盤風の根元です。' },
+        text: '右手前の 4 分の 1 を切り取り、何が起きている所かで塗り分けました。紺のデッドゾーンでは磁場がガスをつかめず、乱流も起きません。降着はそのすぐ上の薄い層(琥珀色)を流れ、そこで磁力線が折れ曲がります。その上は風の根元です。' },
       star: { short: '星のそば', title: '星のすぐそば',
         text: '星から 0.15 au。星の磁場が円盤を 0.05 au で切り取り、ガスは磁力線に沿う弧状のカーテン(桃色)となって星へ落ちます(秒速約 400 km)。' },
       afar: { short: '遠くから', title: '遠くから',
@@ -54,7 +54,7 @@ export const WORDS = {
     },
     // the key of the cut's lines and of what is left clear (round 6: the names are no longer on the face)
     cutKey: {
-      tau1: '星の光が届く深さ(τ* = 1)', tau1Regions: '星の光が届く深さ(τ* = 1):円盤風の基部',
+      tau1: '星の光が届く深さ(τ* = 1)', tau1Regions: '星の光が届く深さ(τ* = 1):ここから上が円盤風',
       ice: 'スノーライン(160 K、氷の境界)',
       pebbles: '小石の層(茶:岩、白:氷)',
       contour: '等密度線(目盛りの値)',
@@ -72,7 +72,7 @@ export const WORDS = {
       waves: '惑星の波を強調',
       noplanet: '惑星を消す'
     },
-    back: 'この視点に戻る',
+    back: 'この眺めに戻る',
     onward: '次へ:', again: 'はじめから:',
     count: (i, n) => `${i} / ${n}`,
     prev: '前の場所', next: '次の場所',
@@ -90,14 +90,14 @@ export const WORDS = {
     // (round 7) the saved picture's size: as the screen, twice, or 3840 px wide (4K); the lines, labels and the mark at that size
     saveSize: {
       label: '保存する画像の大きさ', screen: '画面と同じ', twice: '2 倍', uhd: '4K',
-      note: (w, h) => `保存する画像:${w} × ${h} px(線と文字と印も同じ大きさで)。`,
+      note: (w, h) => `保存する画像:${w} × ${h} px(線と文字と印もその大きさに合わせて)。`,
       lower: (w, h, pct) => `保存する画像:${w} × ${h} px。この見え方は重いため、ガスは ${pct} % の細かさで描きます。`,
       coScreen: (w, h) => `この見え方は計算が重いため、画面と同じ ${w} × ${h} px で保存します。`
     },
     // (round 11c) the saved picture's shape (cut from the middle of the view, never stretched) and the credit in its corner
     saveFrame: {
       label: '保存する画像の縦横比', screen: '画面のまま', '16:9': '16:9', '4:3': '4:3', credit: '隅に出典',
-      crop: '眺めの中央から切り出します(引き伸ばしません)。縮尺の目盛りは隅に移します。'
+      crop: '眺めの中央から切り出します(引き伸ばしません)。縮尺の帯は隅に移します。'
     },
     // (round 11c) the QR code for the audience: "QR code" beside "Copy a link", and Q in the presenter (app.js, qrShow)
     qr: {
@@ -129,9 +129,9 @@ export const WORDS = {
       retry: 'もう一度描く'
     },
     resetDone: '最初の状態に戻しました。',
-    preparingLook: 'この表示を準備しています…',
-    heavyStill: 'この見え方はこの端末で動かすには重いため、時計を止めて静止画で描いています(再生ボタンで動かすこともできます)。',
-    safeStart: '前回は描画が止まったため、安全な設定(モデル、断面なし、画質は自動、全体の眺め)で始めました。',
+    preparingLook: 'この見え方を準備しています…',
+    heavyStill: 'この見え方はこの端末で動かすには重いため、時計を止めて描いています(再生ボタンで動かすこともできます)。',
+    safeStart: '前回は描画が止まったため、安全な設定(モデルの見え方、断面なし、画質は自動、全体の眺め)で始めました。',
     restoredSafe: '描画が中断したため、モデルの見え方に戻しました。',
     // (round 10a) the safe start that leaves out only what was in view when drawing stopped, and offers the settings back;
     // the flight record (kept on this device, nothing sent)
@@ -145,7 +145,7 @@ export const WORDS = {
       copy: 'コピー', copied: 'コピーしました', close: '閉じる', none: '記録はありません。'
     },
     ariaStage: '円盤のモデル',
-    ariaRoute: '行き先',
+    ariaRoute: '見どころ',
     show: {
       gas: 'ガス', pebbles: '小石', wind: '円盤風', jet: 'ジェット', field: '磁力線', planet: '惑星', envelope: 'エンベロープ', labels: '注釈',
       asym: '上下非対称(Mori, Bai & Tomida 2025)', marks: '流れの矢印', waves: '波を強調',
@@ -158,7 +158,7 @@ export const WORDS = {
       colDefault: '既定の色', colReset: (name) => `${name}の色を既定に戻す`,
       // (round 13e) the planets' accretion rate, which sets their own disks (app.js, the planets' panel)
       cpdMdot: '惑星への降着率', cpdMdotOf: 'すべての惑星への降着率(対数)', cpdAuto: (v) => `自動(円盤の降着率の 1/10:${v})`, cpdAutoBtn: '自動に戻す',
-      cpdNote: '惑星のまわりの円盤(周惑星円盤)の温度・厚さ・ミリ波での明るさは、この降着率と惑星の質量から決まります。軽い惑星や外側の惑星(熱質量が小さい)では、円盤でなく丸い包みになります。',
+      cpdNote: '惑星のまわりの円盤(周惑星円盤)の温度・厚さ・ミリ波での明るさは、この降着率と惑星の質量から決まります。軽い惑星や外側の惑星(熱的質量が小さい)では、円盤でなく丸い包みになります。',
       // (round 14a) the wind's brightness in the model look, under the wind's settings (app.js, wbEls)
       windGain: '明るさ', windGainOf: 'モデルの見え方での円盤風の明るさ', windGainReset: '円盤風の明るさを既定に戻す', gainDefault: '既定',
       planetsNote: '軌道半径 0.05〜20 au(内側の端は、星の磁場が円盤を切り取る所)、質量は地球の 10 倍から木星の 3 倍(重いほどギャップが深く広く、小石の環は孤立質量を超えるとできます)。隣どうしは相互ヒル半径の 4 倍以上離します(近すぎる軌道は不安定です)。絵の中の惑星をクリックしても動かせます。'
@@ -173,15 +173,15 @@ export const WORDS = {
       heat: (d) => `熱電離の縁 ${d.rTI} au、スノーライン ${d.snow} au(増光すると ${d.burst} au)、1 au の赤道面 ${d.t1} K。デッドゾーンと外側円盤の α は内側との比のまま動きます。`,
       wind: (d) => `星へ届く降着 ${d.star} M☉/年(Ṁ の ${d.fStar} %)。円盤の縁 30 au から入る流れのうち、${d.share} % を風が運び去ります。`,
       windOff: '前の処方(?mflux=0)の間は、ここの値は風に効きません。',
-      lamOld: '?lam=old の間は、λ の三つの値は効きません(第 8 巡の λ)。',
+      lamOld: '?lam=old の間は、λ の値は効きません(第 8 巡の λ)。',
       planets: '惑星の数、軌道、質量は「見せるもの」の惑星で変えられます。'
     },
     quality: {
       label: '画質', auto: '自動', low: '低', mid: '中', high: '高', full: '最高',
-      autoNote: '自動:端末の速さに合わせて解像度を変え、止まった絵は細かく描き直します。',
+      autoNote: '自動:端末の速さに合わせて解像度を変え、動きが止まると細かく描き直します。',
       fixedNote: (pct) => `固定:画面の解像度の ${pct} % で描きます(自動の調整は止まります)。`,
       capped: (pct) => `この眺めでは重すぎるため、${pct} % に下げています(描画が止まらないように)。`,
-      bestNote: '最高(既定):画面の解像度で描きます。重い眺めでは、動きが止まらないよう静かに一段ずつ下げます。',
+      bestNote: '最高(既定):画面の解像度で描きます。重い眺めでは、動きが滞らないよう、自動で一段ずつ下げます。',
       bestCapped: (pct) => `最高(既定):この眺めは重いため、いまは ${pct} % で描いています。`
     },
     // (round 11a) moves and talks: the built-in moves, the pace, the scenes and the presenter (app.js)
@@ -195,8 +195,8 @@ export const WORDS = {
       full: (n) => `場面は ${n} までです。`,
       linkCopied: '場面の並びのリンクをコピーしました。',
       linkFailed: 'このリンクの場面の並びは読めませんでした。',
-      fromLink: (n) => `リンクから ${n} つの場面を開きました(「動きと発表」)。`,
-      loaded: (n) => `${n} つの場面を開きました。`,
+      fromLink: (n) => `リンクから ${n} 場面を開きました(「動きと発表」)。`,
+      loaded: (n) => `${n} 場面を開きました。`,
       restored: '前の場面に戻しました。',
       loadFailed: 'Disk Lab の場面の並びのファイルではありません。',
       presentHint: '→ で次の場面へ · Esc で終わり',
@@ -221,18 +221,18 @@ export const WORDS = {
       done: (name, mb) => `動画を保存しました:${name}(${mb} MB)。`,
       cancelled: '動画づくりをやめました。元の眺めに戻しました。',
       failed: (why) => `動画を作れませんでした(${why})。元の眺めに戻しました。`,
-      lost: 'GPU の文脈が失われました',
-      slow: '可視光と中間赤外線の見え方は、この画質では 1 コマに数十秒かかることがあります(最高・1080p の見積もりで約 17 秒。まだ測れていません)。中にすると何倍も速くなります。',
+      lost: 'GPU のコンテキストが失われました',
+      slow: '可視光と中間赤外線の見え方は、この画質では 1 コマに数十秒かかることがあります(最高・1080p の見積もりで約 17 秒。まだ測れていません)。画質を「中」にすると何倍も速くなります。',
       credit: (y, url) => CREDIT_LINE(y, url)
     },
     // (round 12a) the probe: a tap on the picture reads the model at the midplane point under it (app.js, probeAt; the
     // engine's box.diskProbe). physics: one sentence per region (the regions' face's, see layersFace in the engine)
     probe: {
-      on: '絵の円盤をタップ(クリック)すると、その場所の赤道面の物理量を示します。惑星ならその惑星を、円盤の上なら視線が星に最も近づく所を調べます(もう一度タップで移す、Esc でやめる)。',
+      on: '絵の円盤をタップ(クリック)すると、その場所の赤道面の物理量を示します。惑星をタップするとその惑星を、円盤の上や下なら視線が星に最も近づく所を調べます(もう一度タップで移す、Esc でやめる)。',
       title: (r) => `探針:R = ${r} au の赤道面`, close: '探針を外す',
       T: '温度', rho: 'ガスの密度', sigma: '面密度', H: 'スケールハイト', vK: 'ケプラー速度', P: '公転周期', alpha: '乱流の強さ α', region: '領域', water: '水',
       laminar: 'なし(層流)', none: '—(円盤のガスはない)', days: '日', yr: '年',
-      regions: { inner: '熱で電離した内側の円盤', dead: 'デッドゾーン', acc: '降着層', base: '風の吹き出す層', wind: '円盤風', outer: '弱い乱流の外側円盤', hall: 'ホール効果で巻かれた層', cavity: '磁気圏の空洞', jet: 'ジェット', envelope: 'エンベロープ' },
+      regions: { inner: '熱で電離した内側の円盤', dead: 'デッドゾーン', acc: '降着層', base: '風の根元', wind: '円盤風', outer: '弱い乱流の外側円盤', hall: 'ホール効果の層', cavity: '磁気圏の空洞', jet: 'ジェット', envelope: 'エンベロープ' },
       physics: {
         inner: (n) => `${n.tTI} K を超えてアルカリ金属が電離し、磁場がガスと結びつきます。磁気回転不安定で強く乱れ(α ≈ ${n.aIn})、降着の熱で円盤が自らを温めています。`,
         dead: '電離が弱く、オーム散逸で磁場がガスと結びつかないため、乱流のない静かな層です(磁気回転不安定が働かない)。降着は上の降着層が担い、小石は赤道面に沈んで内側へ流れていきます。',
@@ -243,15 +243,15 @@ export const WORDS = {
         hall: '磁場が回転と同じ向きのとき、ホール効果で電流の層が片側へ押しやられ、その下で磁場が一方向に巻かれています。',
         cavity: '星の磁場がガス円盤を切り取った内側です。ガスは磁力線に沿って星へ落ちていきます。',
         jet: '星のそばから軸に沿って細く速く吹き出すジェットです。',
-        envelope: '円盤を包み、星と円盤へ落ちてくる親の分子雲です。'
+        envelope: '母体の雲の名残です。円盤を包み、星と円盤へ落ちてきます。'
       },
       snowIn: (r) => `蒸気(スノーライン ${r} au の内側)`, snowOut: (r) => `氷(スノーライン ${r} au の外側)`, snowOutWarm: (r) => `蒸気(スノーライン ${r} au の外側だが、ここは 160 K より暖かい)`,
       gap: (o) => `${o.a} au の惑星のギャップの中:ガスは周りの ${o.f} %(ギャップは軌道で深さ ${o.depth} %、半分の深さでの幅 ${o.w} au:Kanagawa et al. 2016)${o.bump ? `。圧力の山(小石が集まる所)は ${o.bump} au` : ''}`, trap: (a) => `${a} au の惑星の外側の圧力の山:小石が集まります`,
       // (round 15a) a planet's point; the magnetosphere; above the disk (the wind, the jet, the envelope)
       planetTitle: (a) => `探針:${a} au の惑星`, mass: '質量', hill: 'ヒル半径', qth: '熱的質量(q / h³)',
       gapOf: (o) => `ギャップ(Kanagawa et al. 2016、α = ${o.alpha}、K = ${o.K}):軌道で深さ ${o.depth} %、半分の深さでの幅 ${o.w} au。`,
-      bump: (r) => `圧力の山(小石が集まる所):${r} au。`, noGap: '軽すぎて、モデルの描くギャップは開きません。',
-      cpdOf: (o) => `自前の${o.kind === 'disk' ? '周惑星円盤' : 'まわりの包み'}:半径 ${o.rOut} au(${o.rOutH} R_H)まで、半分の所で約 ${o.T} K、降着率 ${o.mdot}(${o.auto ? '自動:円盤の降着率の 1/10' : '設定した値'})。`,
+      bump: (r) => `圧力の山(小石が集まる所):${r} au。`, noGap: '軽すぎて、このモデルではギャップが開きません。',
+      cpdOf: (o) => `${o.kind === 'disk' ? '自前の周惑星円盤' : 'まわりの包み'}:半径 ${o.rOut} au(${o.rOutH} R_H)まで、半分の所で約 ${o.T} K、降着率 ${o.mdot}(${o.auto ? '自動:円盤の降着率の 1/10' : '設定した値'})。`,
       aboveTitle: (o) => `探針:円盤の${o.below ? '下' : '上'}、視線が星に最も近づく所 r = ${o.r} au(R = ${o.R} au、|z| = ${o.z} au)`,
       rT: '切断半径 r_T', curtains: '降着のカーテン', vff: 'r_T からの自由落下', rCo: '共回転半径',
       curtainsV: (a, b) => `${a}〜${b} au で円盤を離れる磁力線に沿って、星の極から約 25° の所へ`,
@@ -262,7 +262,7 @@ export const WORDS = {
       hidden: '今は表示していません(「見せるもの」でオンに)。', inCavity: '軸に沿った流出の空洞の中で、エンベロープのガスは払われています。', beyondEnv: 'モデルが描くエンベロープ(560 au)の外です。',
       // (round 13e) inside a planet's own disk (or envelope)
       cpd: (o) => `${o.a} au の惑星(${o.m})の${o.kind === 'disk' ? '周惑星円盤' : 'まわりの包み'}の中:惑星から ${o.r}(${o.rH} R_H、外縁は ${o.rOut} R_H)、${o.T} K、H/r ${o.Hr}、降着率 ${o.mdot}`,
-      model: (n) => `モデルの値です(円盤の厚みは見やすさのため温度の示す ${n.hf} 倍、面密度は 1 au で 1700 g/cm² とした場合)。`   // (round 14a: n from the model's parameters)
+      model: (n) => `モデルの値です。見やすさのため円盤は温度から決まる厚みの ${n.hf} 倍に描き、面密度は 1 au で 1700 g/cm² としています。`   // (round 14a: n from the model's parameters)
     },
     // (round 8, the owner: "the citation in English in Japanese too": the lead stays Japanese, the line is the English one)
     cite: {
@@ -274,7 +274,7 @@ export const WORDS = {
     // written at once, as spans that the page's language shows)
     tilt: {
       label: '傾けて覗き込む',
-      off: '携帯を傾けると、円盤を手に持ったように眺めが少し(6° まで)回ります。リンクと残す設定は変わりません。',
+      off: '携帯を傾けると、円盤を手に持ったように眺めが少し(6° まで)回ります。リンクや端末に残す設定には入りません。',
       on: 'オン:携帯を傾けると覗き込めます。動き・再生・発表の間とドラッグの間は止まります。',
       asking: '動きのセンサーを使ってよいか、ブラウザーに確かめています…',
       denied: 'センサーの使用が許可されなかったので、オフのままです。使うには、ブラウザーの設定で「モーションと画面の向きへのアクセス」を許可してから、もう一度オンにしてください。',
@@ -287,7 +287,7 @@ export const WORDS = {
   en: {
     places: {
       whole: { short: 'Whole disk', title: 'The whole disk',
-        text: 'A disk of gas and dust around a young star, 30 au in radius: the kind of disk in which planets form. Starlight warms its flared surface; the midplane stays cold. The faint glow above is a wind.' },
+        text: 'A disk of gas and dust around a young star, 30 au in radius: the kind of disk in which planets form. Starlight warms its flared surface; the midplane stays cold. The lines threading it are magnetic field lines, and the faint glow above is a wind. It starts with a Jupiter-mass planet at 10 au and the clock stopped (the play button under Time starts it).' },
       wind: { short: 'Field & wind', title: 'Field and wind',
         text: 'Field lines threading the disk are wound up by its rotation and open outward. Gas speeds up along them and leaves both faces as a wind; with the field aligned with the rotation, one side blows harder.' },
       snow: { short: 'Snow line', title: 'The snow line',
@@ -297,11 +297,11 @@ export const WORDS = {
       mm: { short: 'Millimetre', title: 'In millimetre light',
         text: 'At millimetre wavelengths (ALMA\u2019s) the pebbles at the midplane glow. The planet\u2019s gap shows as a dark lane; the pebbles trapped just outside it form a bright ring.' },
       heat: { short: 'Heat', title: 'Heat inside the disk',
-        text: (n) => `The near half cut away through the star, the face coloured by temperature. Above the white line (\u03c4* = 1) starlight makes the dust hot; the interior below stays cool. Only inside about ${n.rTI} au does accretion make the midplane the hottest.` },   // (round 14a: n.rTI from the model)
+        text: (n) => `The near half is cut away through the star and the cut face coloured by temperature. Above the white line (\u03c4* = 1) starlight makes the dust hot; the interior below stays cool. Only inside about ${n.rTI} au does accretion make the midplane the hottest.` },   // (round 14a: n.rTI from the model)
       deadzone: { short: 'Dead zone', title: 'The dead zone',
-        text: 'A quarter cut away, coloured by what happens there. In the navy dead zone the field cannot grip the gas, and nothing stirs; accretion runs in a thin layer just above it (amber), where the field lines bend, and above that the wind is launched.' },
+        text: 'The near right quarter is cut away and coloured by what happens there. In the navy dead zone the field cannot grip the gas, and nothing stirs; accretion runs in a thin layer just above it (amber), where the field lines bend, and above that the wind is launched.' },
       star: { short: 'The star', title: 'Next to the star',
-        text: 'At 0.15 au, the star\u2019s magnetic field holds the disk off at 0.05 au. Gas falls onto the star along the field lines in arc-shaped curtains (pink), at about 400 km/s.' },
+        text: 'From 0.15 au: the star\u2019s magnetic field holds the disk off at 0.05 au, and gas falls onto the star along the field lines in arc-shaped curtains (pink), at about 400 km/s.' },
       afar: { short: 'Afar', title: 'From afar',
         text: 'From 340 au: the remains of the parent cloud (the envelope) fall onto the disk as they rotate, and starlight lights the walls of a cavity along the axis.' }
     },
@@ -328,7 +328,7 @@ export const WORDS = {
       layers: 'The cut face is divided by what happens there: turbulence, the dead zone, the accretion layer, the wind base, the wind (the key at the top left).'
     },
     cutKey: {
-      tau1: 'Where starlight reaches (\u03c4* = 1)', tau1Regions: 'Where starlight reaches (\u03c4* = 1): the wind\u2019s base',
+      tau1: 'Where starlight reaches (\u03c4* = 1)', tau1Regions: 'Where starlight reaches (\u03c4* = 1): above it, the wind',
       ice: 'Snow line (160 K, where water freezes)',
       pebbles: 'Pebbles (brown: rock, white: ice)',
       contour: 'Density contours (at the scale\u2019s ticks)',
@@ -365,7 +365,7 @@ export const WORDS = {
       label: 'Size of the saved image', screen: 'Screen', twice: '2×', uhd: '4K',
       note: (w, h) => `The image: ${w} × ${h} px (lines, labels and the mark at that size too).`,
       lower: (w, h, pct) => `The image: ${w} × ${h} px. This look is heavy, so the gas is drawn at ${pct} % detail.`,
-      coScreen: (w, h) => `This look is heavy to compute, so it is saved as the screen, ${w} × ${h} px.`
+      coScreen: (w, h) => `This look is heavy to compute, so it is saved at the screen’s size, ${w} × ${h} px.`
     },
     saveFrame: {
       label: 'Shape of the saved image', screen: 'As the screen', '16:9': '16:9', '4:3': '4:3', credit: 'Credit in the corner',
@@ -399,8 +399,8 @@ export const WORDS = {
       retry: 'Try again'
     },
     resetDone: 'Everything is back as it was at first.',
-    preparingLook: 'Preparing this view…',
-    heavyStill: 'This look is too heavy to animate on this device, so the clock is paused and it is drawn as a still (the play button animates it anyway).',
+    preparingLook: 'Preparing this look…',
+    heavyStill: 'This look is too heavy to animate on this device, so the clock is stopped and the picture held still (the play button animates it anyway).',
     safeStart: 'Drawing stopped last time, so this visit starts with safe settings (the model look, no cut, Auto quality, the whole disk).',
     restoredSafe: 'Drawing was interrupted, so the model look is back.',
     safeStartKnown: (what) => `Drawing stopped last time while showing ${what}, so this visit starts without it (Auto quality).`,
@@ -413,7 +413,7 @@ export const WORDS = {
       copy: 'Copy', copied: 'Copied', close: 'Close', none: 'No record.'
     },
     ariaStage: 'Model of a protoplanetary disk',
-    ariaRoute: 'Places',
+    ariaRoute: 'Highlights',
     show: {
       gas: 'Gas', pebbles: 'Pebbles', wind: 'Wind', jet: 'Jet', field: 'Field lines', planet: 'Planets', envelope: 'Envelope', labels: 'Labels',
       asym: 'One-sided (Mori, Bai & Tomida 2025)', marks: 'Flow arrows', waves: 'Exaggerate the waves',
@@ -441,16 +441,16 @@ export const WORDS = {
       heat: (d) => `Thermal ionization edge ${d.rTI} au; snow line ${d.snow} au (${d.burst} au in an outburst); the midplane at 1 au ${d.t1} K. The dead zone\u2019s and the outer disk\u2019s α keep their ratios to the inner disk\u2019s.`,
       wind: (d) => `Reaching the star: ${d.star} M☉/yr (${d.fStar} % of Ṁ). Of the flow coming in at the disk\u2019s edge, 30 au, the wind carries away ${d.share} %.`,
       windOff: 'With the prescriptions of before (?mflux=0) these values do not act on the wind.',
-      lamOld: 'With ?lam=old the three λ values have no effect (round 8\u2019s λ).',
+      lamOld: 'With ?lam=old the λ values have no effect (round 8\u2019s λ).',
       planets: 'The planets\u2019 number, orbits and masses are under Show, Planets.'
     },
     quality: {
       label: 'Quality', auto: 'Auto', low: 'Low', mid: 'Medium', high: 'High', full: 'Best',
-      autoNote: 'Auto: the resolution follows the device’s speed, and a still picture is drawn again more finely.',
-      fixedNote: (pct) => `Fixed: drawn at ${pct}% of the screen’s resolution (the automatic steps stop).`,
-      capped: (pct) => `Too heavy in this view: held at ${pct}% so that drawing does not stall.`,
+      autoNote: 'Auto: the resolution follows the device’s speed, and once the picture stops moving it is drawn again more finely.',
+      fixedNote: (pct) => `Fixed: drawn at ${pct} % of the screen’s resolution (the automatic steps stop).`,
+      capped: (pct) => `Too heavy in this view: held at ${pct} % so that drawing does not stall.`,
       bestNote: 'Best (the default): drawn at the screen\u2019s resolution, stepped down quietly where a view is too heavy to move smoothly.',
-      bestCapped: (pct) => `Best (the default): this view is heavy, so it is drawn at ${pct}% for now.`
+      bestCapped: (pct) => `Best (the default): this view is heavy, so it is drawn at ${pct} % for now.`
     },
     talk: {
       moves: { orbit: 'Orbit once', rise: 'Edge-on to face-on', powers: 'From afar to the star', planet: 'Along the disk to the planet', timelapse: 'Speed up time', looks: 'Each look in turn' },
@@ -462,7 +462,7 @@ export const WORDS = {
       full: (n) => `${n} scenes at most.`,
       linkCopied: 'A link to these scenes is copied.',
       linkFailed: 'The scenes in this link could not be read.',
-      fromLink: (n) => (n === 1 ? 'One scene opened from the link (under Moves and talks).' : `${n} scenes opened from the link (under Moves and talks).`),
+      fromLink: (n) => (n === 1 ? 'One scene opened from the link (under “Moves and talks”).' : `${n} scenes opened from the link (under “Moves and talks”).`),
       loaded: (n) => (n === 1 ? 'One scene opened.' : `${n} scenes opened.`),
       restored: 'Your earlier scenes are back.',
       loadFailed: 'This file is not a list of scenes from Disk Lab.',
@@ -473,7 +473,7 @@ export const WORDS = {
       scenes: (n) => `The scenes (${n})`, places: 'The nine highlights',
       hold: (s) => `${s} s`,
       about: (s) => (s < 90 ? `about ${Math.max(1, Math.round(s))} s` : s < 5400 ? `about ${Math.round(s / 60)} min` : `about ${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`),
-      plan: (p) => `${p.seconds} s, ${p.frames} frames of ${p.w} × ${p.h} at ${p.fps} a second. ${p.level} quality (${p.sub} pictures averaged a frame${p.capped ? `; at ${p.capped}% for the gas line’s look` : ''}), on black. About ${p.mb} MB; ${p.time} on this computer (estimated; measured as it goes).`,
+      plan: (p) => `${p.seconds} s, ${p.frames} frames of ${p.w} × ${p.h} at ${p.fps} a second. ${p.level} quality (${p.sub} pictures averaged a frame${p.capped ? `; at ${p.capped} % for the gas line’s look` : ''}), on black. About ${p.mb} MB; ${p.time} on this computer (estimated; measured as it goes).`,
       long: (n, max, min) => `Too long for one video: ${n} frames, at most ${max} (${min} minutes at 30 a second). Fewer scenes, or shorter holds.`,
       big: (gb, max) => `Too large to keep in memory: about ${gb} GB, at most ${max} GB. A smaller size, or 30 frames a second.`,
       codec: (w, h, fps) => `This browser cannot encode ${w} × ${h} at ${fps} frames a second in H.264: choose a smaller size, or 30.`,
@@ -492,11 +492,11 @@ export const WORDS = {
       credit: (y, url) => CREDIT_LINE(y, url)
     },
     probe: {
-      on: 'Tap (or click) the disk in the picture: the model’s numbers at that point of the midplane; a planet, the planet; above the disk, what lies where the line of sight passes nearest the star (tap again to move it, Esc to stop).',
+      on: 'Tap (or click) the disk in the picture for the model’s numbers at that point of the midplane; tap a planet for the planet, or above or below the disk for what lies where the line of sight passes nearest the star (tap again to move it, Esc to stop).',
       title: (r) => `Probe: the midplane at R = ${r} au`, close: 'Remove the probe',
       T: 'Temperature', rho: 'Gas density', sigma: 'Surface density', H: 'Scale height', vK: 'Keplerian speed', P: 'Orbital period', alpha: 'Turbulence α', region: 'Region', water: 'Water',
       laminar: 'none (laminar)', none: '— (no disk gas)', days: 'days', yr: 'yr',
-      regions: { inner: 'thermally ionized inner disk', dead: 'dead zone', acc: 'accretion layer', base: 'wind-launching region', wind: 'disk wind', outer: 'weakly turbulent outer disk', hall: 'Hall-wound layer', cavity: 'magnetospheric cavity', jet: 'jet', envelope: 'envelope' },
+      regions: { inner: 'thermally ionized inner disk', dead: 'dead zone', acc: 'accretion layer', base: 'wind base', wind: 'disk wind', outer: 'weakly turbulent outer disk', hall: 'Hall layer', cavity: 'magnetospheric cavity', jet: 'jet', envelope: 'envelope' },
       physics: {
         inner: (n) => `Above ${n.tTI} K the alkali metals ionize and the field couples to the gas: the magnetorotational instability stirs it strongly (α ≈ ${n.aIn}), and the accretion’s heat warms the disk from within.`,
         dead: 'Too weakly ionized for the field to couple (Ohmic diffusion): no magnetorotational turbulence, the gas is quiet. The accretion goes on in the layer above; pebbles settle to the midplane and drift inward.',
@@ -507,14 +507,14 @@ export const WORDS = {
         hall: 'With the field aligned with the rotation, the Hall effect pushes the current layer to one side; below it the field is wound one way.',
         cavity: 'Inside the star’s magnetosphere, which truncates the gas disk: the gas falls onto the star along the field lines.',
         jet: 'The narrow, fast jet launched along the axis close to the star.',
-        envelope: 'The parent cloud, falling onto the star and the disk around them.'
+        envelope: 'The remains of the parent cloud, falling onto the star and the disk it surrounds.'
       },
       snowIn: (r) => `vapour (inside the snow line at ${r} au)`, snowOut: (r) => `ice (outside the snow line at ${r} au)`, snowOutWarm: (r) => `vapour (outside the snow line at ${r} au, but warmer than 160 K here)`,
       gap: (o) => `in the gap of the planet at ${o.a} au: the gas at ${o.f} % of its surroundings (the gap ${o.depth} % deep at the orbit, ${o.w} au wide at half depth: Kanagawa et al. 2016)${o.bump ? `; the pressure maximum, where pebbles collect, at ${o.bump} au` : ''}`, trap: (a) => `at the pressure maximum outside the planet at ${a} au: pebbles collect here`,
       // (round 15a) a planet's point; the magnetosphere; above the disk (the wind, the jet, the envelope)
       planetTitle: (a) => `Probe: the planet at ${a} au`, mass: 'Mass', hill: 'Hill radius', qth: 'Thermal mass (q / h³)',
       gapOf: (o) => `Its gap (Kanagawa et al. 2016, α = ${o.alpha}, K = ${o.K}): ${o.depth} % deep at the orbit, ${o.w} au wide at half depth.`,
-      bump: (r) => `The pressure maximum, where pebbles collect: ${r} au.`, noGap: 'Too light for the gap the model draws.',
+      bump: (r) => `The pressure maximum, where pebbles collect: ${r} au.`, noGap: 'Too light to open a gap in the model.',
       cpdOf: (o) => `Its own ${o.kind === 'disk' ? 'circumplanetary disk' : 'envelope'}: out to ${o.rOut} au (${o.rOutH} R_H), about ${o.T} K halfway out, accreting ${o.mdot} (${o.auto ? 'auto: a tenth of the disk’s rate' : 'as set'}).`,
       aboveTitle: (o) => `Probe: ${o.below ? 'below' : 'above'} the disk, where the line of sight passes nearest the star, r = ${o.r} au (R = ${o.R} au, |z| = ${o.z} au)`,
       rT: 'Truncation radius r_T', curtains: 'Accretion curtains', vff: 'Free fall from r_T', rCo: 'Corotation radius',
@@ -526,7 +526,7 @@ export const WORDS = {
       hidden: 'Not shown now (turn it on under Show).', inCavity: 'In the outflow’s cavity along the axis, cleared of the envelope’s gas.', beyondEnv: 'Beyond the envelope the model draws (560 au).',
       // (round 13e) inside a planet's own disk (or envelope)
       cpd: (o) => `inside the ${o.kind === 'disk' ? 'circumplanetary disk' : 'envelope'} of the planet at ${o.a} au (${o.m}): ${o.r} from the planet (${o.rH} R_H; its edge at ${o.rOut} R_H), ${o.T} K, H/r ${o.Hr}, accreting ${o.mdot}`,
-      model: (n) => `The model’s values (the disk drawn ${n.hf} times as thick as its temperature holds it, for the picture; the surface density taken as 1700 g/cm² at 1 au).`   // (round 14a: n from the model's parameters)
+      model: (n) => `The model’s values (the disk drawn ${n.hf} times as thick as its temperature holds it up, for the picture; the surface density taken as 1700 g/cm² at 1 au).`   // (round 14a: n from the model's parameters)
     },
     cite: {
       lead: 'Free to use in research, talks, teaching and materials; no credit required. If you cite it, this line will do.',
@@ -535,10 +535,10 @@ export const WORDS = {
     },
     tilt: {
       label: 'Tilt to look in',
-      off: 'Tilting the phone turns the view a little (up to 6°), as if you held the disk in your hand. Links and the settings kept do not change.',
+      off: 'Tilting the phone turns the view a little (up to 6°), as if you held the disk in your hand. It does not go into links or the settings kept on this device.',
       on: 'On: tilt the phone to look in. It rests during moves, Play, the presenter and a drag.',
       asking: 'Asking the browser for the motion sensor…',
-      denied: 'The motion sensor was not allowed, so this stays off. To use it, allow Motion & Orientation Access in the browser’s settings, then turn this on again.',
+      denied: 'The motion sensor was not allowed, so this stays off. To use it, allow “Motion & Orientation Access” in the browser’s settings, then turn this on again.',
       failed: 'The motion sensor could not be used, so this stays off.',
       none: 'No tilt comes from this device, so this is off.',
       touch: 'On: touch the screen once to start the tilt sensor (the browser may ask).',

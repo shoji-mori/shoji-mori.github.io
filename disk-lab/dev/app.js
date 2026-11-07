@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=c6bd7aed40';
-import { WORDS } from './words.js?v=8c75f3e87f';
+import { WORDS } from './words.js?v=aacaf7df9e';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=fc12ca1f8c';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=2734c2f766';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=57492f6d8d';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.20', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.21', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -114,9 +114,10 @@ if (typeof WebGL2RenderingContext !== 'undefined') {
 // diskDuty; a guarded device 0.5 by default); ?ctmax=N, the continuum's iterations at most; ?eddy=0, no eddies' volume;
 // ?fps=N, the frame rate while only the clock moves; ?split=0, the continuum's rays drawn whole, not in kicks (see the
 // engine's SPLIT); ?kick=N, the work of a kick
-// (round 13a, switches to compare the model look with that of before, on the development build: ?acc=1, the accretion layer
-// drawn (data-acc="on"); ?gasrho=old, the gas's glow raised beyond 6 au as until round 13 (data-gasrho="old"); see the engine's
-// ACC and uGasOuter, and DESIGN.md section 31)
+// (round 13a, switches to compare the model look with that of before, on the development build: ?acclayer=1, the accretion layer
+// drawn (data-acclayer="on"; ?acc=1 until round 17b, when round 16c's ?acc= of the still's frames had taken the name and the
+// engine read neither as meant); ?gasrho=old, the gas's glow raised beyond 6 au as until round 13 (data-gasrho="old"); see the
+// engine's ACC and uGasOuter, and DESIGN.md sections 31 and 41)
 // (round 13c, the mass budget P-B', to compare on the development build: ?mflux=0, all the prescriptions of before (the wind's
 // density and lambda of round 8, chi_c 0.03, the gas line's inflow of the layers' whole gas); ?lam=old, round 8's lambda in the
 // budget, or ?lam=1.5,2.5, lambda at R_TI and at the disk's edge; ?lamin=1.2, lambda at the dust's inner edge (4 by default;
@@ -126,7 +127,7 @@ if (typeof WebGL2RenderingContext !== 'undefined') {
 // finite numbers are passed on; the engine bounds them)
 const mfluxSw = (k, ok) => { const v = q.get(k); return v != null && ok(v) ? v : ''; };
 const SWITCH = { duty: q.get('duty'), ctmax: Number(q.get('ctmax')) || 0, eddy: q.get('eddy') === '0', fps: Number(q.get('fps')) || 0, split: q.get('split') === '0', kick: Number(q.get('kick')) || 0, kadapt: q.get('kadapt') === '1',
-  acc: q.get('acc') === '1', gasrho: q.get('gasrho') === 'old' ? 'old' : '',
+  accLayer: q.get('acclayer') === '1', gasrho: q.get('gasrho') === 'old' ? 'old' : '',
   mflux: q.get('mflux') === '0' ? '0' : '', lam: mfluxSw('lam', (v) => v === 'old' || /^\s*\d*\.?\d+\s*,\s*\d*\.?\d+\s*$/.test(v)),
   mdot: mfluxSw('mdot', (v) => Number(v) > 0 && Number.isFinite(Number(v))), chic: mfluxSw('chic', (v) => Number(v) > 0 && Number.isFinite(Number(v))),
   lamin: mfluxSw('lamin', (v) => Number(v) > 0 && Number.isFinite(Number(v))) };
@@ -201,14 +202,14 @@ const annBits = (a) => (Number(a) === 1 ? ANN_ALL : (Number(a) || 0) & ANN_ALL);
 // (the owner: "colour the model look by material, not by temperature"; the temperature's bar that stood here went with it)
 // Only the materials shown, and those that show at this distance: the envelope from 40 au, the star's magnetosphere and
 // curtains within 2 au of the star; the pebbles' rock and ice on one row. (Round 13a: not the accretion layer, no longer drawn,
-// unless ?acc=1 draws it; in the colours chosen, see the model look's colours)
+// unless ?acclayer=1 draws it; in the colours chosen, see the model look's colours)
 let matShown = '';
 function renderMatKey(s) {
   const on = s.look === 'model' && !s.slice && !!(annBits(s.ann) & ANN_KEY) && typeof box.diskPalette === 'function';   // (round 15a: its own annotation)
   matKey.classList.toggle('on', on);
   if (!on) return;
   const P = Object.fromEntries(box.diskPalette().map((m) => [m.key, m])), rows = [];
-  if (s.mode & 3) { rows.push(['disk']); if (SWITCH.acc) rows.push(['acc']); }
+  if (s.mode & 3) { rows.push(['disk']); if (SWITCH.accLayer) rows.push(['acc']); }
   if (s.mode & 4) rows.push(['rock', 'ice']);
   if (s.mode & 8) rows.push(['wind']);
   if (s.mode & 64) rows.push(['jet']);
@@ -579,7 +580,7 @@ function setAnn(bit, on) { const m = annBits(S().ann), n = on ? m | bit : m & ~b
 // model's own amounts are what is shown, and a link's g= is read past)
 // opts: the engine's options that belong to it (the gas's flow arrows, the pebbles' tap mode, the wind's asymmetry, the
 // planets' waves); planets:
-// the list of planets. The envelope, the jet and the labels have no settings of their own. (The flow markers were the field
+// the list of planets. The envelope and the jet have no settings of their own (round 15a: the labels are the View's annotations). (The flow markers were the field
 // lines' option from round 5, 2026-10-16; round 8, the owner: "the flow markers: an option of the gas; small arrows". They
 // show the gas's motion, drawn while the gas is shown.)
 // (round 13a) cols: the materials whose colour in the model look is chosen beside the toggle (the engine's MAT keys; see the
@@ -833,8 +834,10 @@ const keptCols = () => (saved && typeof saved.col === 'string' && colDef ? colFr
 // The parameters a link carries, each by a name of two letters: mp= holds the name and the value of each one not at its default,
 // joined by '_' (a value with three significant figures at most, written the shortest way: 3e-7, 0.015, 1.2), e.g.
 // mp=md3e-7_ls10; no mp= at all is every default. Read back, a pair whose name is not known, or whose value is not a number, is
-// passed over (that parameter at its default); the engine holds each one within its range.
-const MP_KEYS = { md: 'mdot', ls: 'lum', ts: 'tstar', ai: 'alphaIn', ti: 'tTI', li: 'lamIn', lt: 'lamTI', lo: 'lamOut', cc: 'chic', ga: 'alphaGap' };
+// passed over (that parameter at its default); the engine holds each one within its range. (Round 17b: ts, the star's colour
+// temperature, and li, lambda at the dust's inner edge, are no longer parameters since round 15b: a link's ts or li of before
+// is passed over as a name not known, the picture at the engine's own values)
+const MP_KEYS = { md: 'mdot', ls: 'lum', ai: 'alphaIn', ti: 'tTI', lt: 'lamTI', lo: 'lamOut', cc: 'chic', ga: 'alphaGap' };
 const MP_NAME = Object.fromEntries(Object.entries(MP_KEYS).map(([n, k]) => [k, n]));
 // a value as a link writes it: three significant figures at most
 const mpNum = (v) => String(Number(Number(v).toPrecision(3)));
@@ -853,7 +856,7 @@ const mpToLink = (par, def) => Object.entries(mpClean(par, def)).map(([k, v]) =>
 function mpFromLink(v, def) {
   const out = {};
   for (const pair of typeof v === 'string' ? v.split('_') : []) {
-    const k = MP_KEYS[pair.slice(0, 2)], x = pair.length > 2 ? Number(pair.slice(2)) : NaN;
+    const k = MP_KEYS[pair.slice(0, 2)], x = pair.slice(2).trim() !== '' ? Number(pair.slice(2)) : NaN;   // (round 17b: a blank value is none, not 0)
     if (k && Number.isFinite(x)) out[k] = x;
   }
   return mpClean(out, def);
@@ -864,8 +867,7 @@ function mpAliases() {
   const o = {}, m = /^\s*(\d*\.?\d+)\s*,\s*(\d*\.?\d+)\s*$/.exec(SWITCH.lam || '');
   if (SWITCH.mdot) o.mdot = Number(SWITCH.mdot);
   if (m) { o.lamTI = Number(m[1]); o.lamOut = Number(m[2]); }
-  if (SWITCH.lamin) o.lamIn = Number(SWITCH.lamin);
-  if (SWITCH.chic) o.chic = Number(SWITCH.chic);
+  if (SWITCH.chic) o.chic = Number(SWITCH.chic);   // (?lamin= is the engine's switch since round 15b, data-lamin: not a parameter)
   return o;
 }
 // the parameters chosen (only those not at the default), and the engine's defaults, spec and the numbers that follow (null until
@@ -918,12 +920,12 @@ const mpValW = (k) => { const id = L() + k + ':' + parSpec[k].min + ':' + parSpe
 const MP_SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
 const mpSci = (v) => { const e = Math.floor(Math.log10(v) + 1e-9), m = v / Math.pow(10, e); return (Math.abs(m - 1) < 5e-3 ? '' : m.toFixed(1) + ' × ') + '10' + String(e).replace(/./g, (c) => MP_SUP[c]); };
 function mpText(k, v) {
-  const t = k === 'mdot' || k === 'alphaIn' || k === 'alphaGap' ? mpSci(v) : k === 'tstar' || k === 'tTI' ? String(Math.round(v)) : mpNum(v);
-  return t + ({ mdot: L() === 'ja' ? ' M☉/年' : ' M☉/yr', lum: ' L☉', tstar: ' K', tTI: ' K' }[k] || '');
+  const t = k === 'mdot' || k === 'alphaIn' || k === 'alphaGap' ? mpSci(v) : k === 'tTI' ? String(Math.round(v)) : mpNum(v);
+  return t + ({ mdot: L() === 'ja' ? ' M☉/年' : ' M☉/yr', lum: ' L☉', tTI: ' K' }[k] || '');
 }
 // the rail's rows by group (the engine's keys)
 // (round 15a, the owner: no row for T* nor for lambda at the dust's inner edge, so that lambda has two sliders, at R_TI and at
-// 30 au; a link's ts= or li= is still given to the engine, which keeps or drops it as its PAR_SPEC has it)
+// 30 au; round 15b took both out of the engine's parameters, and round 17b out of the page's link, MP_KEYS)
 const MP_GROUPS = [['star', ['lum']], ['heat', ['mdot', 'alphaIn', 'tTI']], ['wind', ['lamTI', 'lamOut', 'chic']], ['planets', ['alphaGap']]];
 // the numbers under a group, from the engine's derived
 function mpDerivedText(g) {
@@ -978,7 +980,7 @@ const WB_RANGE = [0.3, 10];
 let windGain = 1;
 const wbPos = (k) => String(Math.round(1000 * Math.log(k / WB_RANGE[0]) / Math.log(WB_RANGE[1] / WB_RANGE[0])));
 const wbOf = (pos) => (String(pos) === wbPos(1) ? 1 : Number((WB_RANGE[0] * Math.pow(WB_RANGE[1] / WB_RANGE[0], Number(pos) / 1000)).toPrecision(2)));
-const wbFrom = (v) => { const x = v != null && v !== '' ? Number(v) : NaN; return Number.isFinite(x) ? Math.min(WB_RANGE[1], Math.max(WB_RANGE[0], x)) : 1; };
+const wbFrom = (v) => { const x = v != null && String(v).trim() !== '' ? Number(v) : NaN; return Number.isFinite(x) ? Math.min(WB_RANGE[1], Math.max(WB_RANGE[0], x)) : 1; };   // (round 17b: a blank one is none)
 const keptWind = () => (saved && saved.wb ? wbFrom(saved.wb) : 1);
 function applyWind(drag = false) {
   if (typeof box.diskWindGain === 'function') windGain = box.diskWindGain(windGain);
@@ -1147,7 +1149,7 @@ box.addEventListener('diskplanet', (e) => {
   const inputM = el('input', { type: 'range', min: '0', max: '1000', step: '1', value: sliderOfM(m || 1), 'aria-label': w.massOf(popI + 1),
     oninput: (ev) => massPlanet(popI, mOf(ev.target.value), true), onchange: (ev) => massPlanet(popI, mOf(ev.target.value)) });
   pop.replaceChildren(el('span', { class: 'pop-name' }, w.planetRow(popI + 1, fmtA(a))), input,
-    el('button', { type: 'button', class: 'icon-x', 'aria-label': 'close', onclick: popClose }, '×'),
+    el('button', { type: 'button', class: 'icon-x', 'aria-label': T().log.close, title: T().log.close, onclick: popClose }, '×'),   // (round 17b: in the page's language, as the safe start's ×)
     el('span', { class: 'pop-mass' }, massEl(m)), inputM);
   pop.hidden = false;
   const x = Math.min(stage.clientWidth - 260, Math.max(8, e.detail.x + 18)), y = Math.min(stage.clientHeight - 84, Math.max(8, e.detail.y - 22));
@@ -1466,8 +1468,9 @@ box.addEventListener('diskwarm', (e) => {
   if (e.detail && e.detail.warming) warmNoteT = setTimeout(() => { if (live() && !stageNote.classList.contains('on')) note(T().loading, 0); }, e.detail.now ? 0 : WARM_NOTE_MS);
   else if (stageNote.textContent === T().loading) note('', 0);
 });
-// (for checks: ?gpux=k counts every frame k times longer, as on a GPU k times slower)
-const GPUX = Math.max(1, Number(q.get('gpux')) || 1);
+// (for checks: ?gpux=k counts every frame k times longer, as on a GPU k times slower; round 17b: a finite k only, else 1, as an
+// infinite one made every cost infinite)
+const GPUX = Number.isFinite(Number(q.get('gpux'))) ? Math.max(1, Number(q.get('gpux')) || 1) : 1;
 // A look whose frames run over the budget even at the lowest step, in bands (its slowest ray alone: the line's moments on a
 // slow GPU), is not animated on a guarded device: after three such frames the clock is paused there and the picture drawn
 // as a still, in bands, with a line saying so; leaving that look starts the clock again, and the play button animates it
@@ -1626,8 +1629,9 @@ function linkFor(s) {
   const mp = parDef ? mpToLink(params, parDef) : '';
   if (mp) u.searchParams.set('mp', mp);   // (round 14a: the model's parameters, when not all the defaults; see MP-LINK)
   if (windGain !== 1) u.searchParams.set('wb', mpNum(windGain));   // (round 14a: the wind's brightness)
-  // (round 8: with each planet's mass in M_J; a link without it is read as Jupiter's)
-  if (s.planets.length) u.searchParams.set('pl', s.planets.map(([a, on, m]) => a + ':' + on + ':' + m).join(','));
+  // (round 8: with each planet's mass in M_J; a link without it is read as Jupiter's. Round 17b: pl= empty when every planet was
+  // removed, so that the link gives none back, not the start's planet)
+  u.searchParams.set('pl', s.planets.map(([a, on, m]) => a + ':' + on + ':' + m).join(','));
   if (s.cpdMdot > 0) u.searchParams.set('pmd', String(s.cpdMdot));   // (round 13e: the planets' accretion rate, M_J/yr, when not auto)
   u.searchParams.set('t', String(Math.round(s.time * 1000) / 1000));
   u.searchParams.set('lang', L());
@@ -1850,7 +1854,8 @@ function stateFromLink() {
   if (q.has('com')) st.coMode = q.get('com');
   if (q.has('cov')) st.coV = q.get('cov');
   if (q.has('t')) st.time = q.get('t');
-  if (q.has('pl')) st.planets = q.get('pl').split(',').filter(Boolean).map((t) => t.split(':').map(Number));
+  // (round 17b: an empty field is no number, not 0: pl=::: made a planet at the inner end; the engine passes over a radius not a number)
+  if (q.has('pl')) st.planets = q.get('pl').split(',').filter(Boolean).map((t) => t.split(':').map((x) => (x.trim() === '' ? NaN : Number(x))));
   if (q.has('pmd')) st.cpdMdot = q.get('pmd');   // (round 13e; the engine bounds it, and reads anything not positive as auto)
   return Object.keys(st).length ? st : null;
 }
@@ -2043,7 +2048,7 @@ async function start() {
   guarded = MOBILE || coarse || !diag.probe.timer;
   GUARD_MS = guarded ? 70 : 120;
   // (for checks: ?guard=<ms> guards as a phone would, with that budget)
-  if (Number(q.get('guard')) > 0) { guarded = true; GUARD_MS = Math.max(5, Number(q.get('guard'))); }
+  if (Number(q.get('guard')) > 0 && Number.isFinite(Number(q.get('guard')))) { guarded = true; GUARD_MS = Math.max(5, Number(q.get('guard'))); }   // (round 17b: finite: an infinite budget guards nothing)
   diag.guard = { guarded, budget: GUARD_MS, mobile: MOBILE, timer: !!diag.probe.timer, crashed, previous: prevRec };
   if (crashed) { quality = 'auto'; qChosen = false; }
   else if (!qChosen) quality = guarded ? 'auto' : 'full';
@@ -2076,14 +2081,16 @@ async function start() {
   // own, about 1.8 times thinner); ?cpd=old, round 8's disk (0.4 R_H, its colours and glow); see the engine's cpdPhys)
   if (q.get('cpdh') === 'drawn') box.dataset.cpdh = 'drawn';
   if (q.get('cpd') === 'old') box.dataset.cpd = 'old';
-  if (SWITCH.acc) box.dataset.acc = 'on';   // (round 13a: see SWITCH)
+  if (SWITCH.accLayer) box.dataset.acclayer = 'on';   // (round 13a: see SWITCH)
   if (q.get('lit') === 'fx') box.dataset.lit = 'fx';   // (2026-11-03: the starlight's shading tied to the finish's level, as before; see the engine's uLit)
   if (SWITCH.gasrho) box.dataset.gasrho = SWITCH.gasrho;
   for (const k of ['mflux', 'lam', 'lamin', 'mdot', 'chic']) if (SWITCH[k]) box.dataset[k] = SWITCH[k];   // (round 13c: see SWITCH)
   box.setAttribute('data-disk3d', '');
   // (round 15b) the engine's dev switches, read from the address: a thick pebble layer, the envelope/wind exclusion, the gas line from the
   // envelope, the jet's occlusion, the gas's glow, the CPD's flare, the wind's extent, the starlight's scale (README); (round 16a) the
-  // shortcuts while the picture moves and their share of the steps (README, the engine's FAST; round 16b: the checkerboard dropped)
+  // shortcuts while the picture moves and their share of the steps (README, the engine's FAST; round 16b: the checkerboard dropped);
+  // (round 16c) the march's steps and the still's frames, for the owner's timing trials. Each passed as it is: the engine reads
+  // each within its range, and a value it cannot read as its default
   for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc']) if (q.has(k)) box.dataset[k] = q.get(k);
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   // (the engine's own start: the defaults Reset returns to; round 15a: with the clock's state, stopped by data-paused)
@@ -2828,7 +2835,8 @@ function showLog() {
     try { await navigator.clipboard.writeText(text); copy.textContent = w.copied; }
     catch { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
   } }, w.copy);
-  stageLog.replaceChildren(el('p', { class: 'log-title' }, w.title), el('p', { class: 'log-note' }, w.note), pre,
+  // (round 17b: the panel named by its title, index.html's aria-labelledby)
+  stageLog.replaceChildren(el('p', { class: 'log-title', id: 'logTitle' }, w.title), el('p', { class: 'log-note' }, w.note), pre,
     el('div', { class: 'safe-acts' }, copy, el('button', { type: 'button', class: 'chip quiet', onclick: () => { stageLog.hidden = true; } }, w.close)));
   stageLog.hidden = false;
 }

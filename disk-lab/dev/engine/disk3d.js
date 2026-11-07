@@ -238,7 +238,8 @@
   // (Round 13a, the owner: "don't show the accretion layer") It is no longer drawn in the model's look: not its streaks, nor
   // its amber glow, nor the column SIG it added to the gas there (a choice for the picture, see above). It stays in the
   // physics: the cut's Regions face, the probe, the gas line's inflow and coAlpha, the temperature's heating layer and the
-  // flow arrows keep it where it is. data-acc="on" (the page's ?acc=1, a development switch) draws it as before, to compare.
+  // flow arrows keep it where it is. data-acclayer="on" (the page's ?acclayer=1, a development switch; data-acc="on" and ?acc=1
+  // until round 17b, when round 16c's data-acc of the still's frames, ACC_MAX, had taken the name) draws it as before, to compare.
   // (round 13c, after Mdot 1e-7 moved R_TI out: the accretion flow's marks end where the thermally ionized disk begins, 1.2 R_TI, not at a fixed 0.4 au)
   const ACC = { K_SYM: 2, K_ASYM: 4, W: 0.3, OFF: 0.3, SIG: 0.02, R_END: Math.max(0.4, 1.2 * NONIDEAL.R_TI), C_SYM: 0.6, C_ASYM: 1.6 };
   // (round 13c) the eddies' volume over the thermally ionized disk: R from 0.05 au to 0.6 au or twice R_TI, its span in ln R
@@ -417,14 +418,14 @@
   // a lilac envelope; the blue gas, brown rock, ice blue, cyan wind, pale yellow jet and violet envelope of rounds 8 to 13a before)
   const MAT = [
     ['disk', '#ffffff', 0.6, '円盤(ガスと塵)', 'disk (gas and dust)'],
-    ['acc', '#ffa52e', 1.0, '降着層', 'accretion layer'],   // (round 13a: drawn only with data-acc="on", see ACC)
+    ['acc', '#ffa52e', 1.0, '降着層', 'accretion layer'],   // (round 13a: drawn only with data-acclayer="on", see ACC)
     ['rock', '#232323', 1.0, '小石(岩)', 'pebbles (rock)'],
     ['ice', '#7a7a7a', 0.8, '小石(氷)', 'pebbles (ice)'],
     ['wind', '#a8c6fe', 1.0, '円盤風', 'disk wind'],
     ['jet', '#ffe4a8', 1.0, 'ジェット', 'jet'],   // (round 9: pale yellow, the coral before; see JET)
     ['env', '#ad89d6', 1.0, 'エンベロープ', 'envelope'],
     ['mag', '#9070ff', 1.0, '磁気圏', 'magnetosphere'],
-    ['curt', '#ff4fc8', 1.0, '降着の柱', 'accretion curtains'],
+    ['curt', '#ff4fc8', 1.0, '降着のカーテン', 'accretion curtains'],
     ['planet', '#ffd040', 1.0, '惑星と周惑星円盤', 'planets and their disks']
   ];
   const linHex = (h) => [1, 3, 5].map((i) => Math.pow(parseInt(h.slice(i, i + 2), 16) / 255, 2.2));
@@ -1800,7 +1801,7 @@ uniform float uGasOuter;
 // sheet (its column absorbs little) that glows, a picture of the flow
 const float G_ACC = 7.0;
 const vec3 ACC_COL = vec3(1.0, 0.50, 0.14);
-uniform float uAccDraw;   // (round 13a) the accretion layer drawn in the model's look: 0 by default, 1 with data-acc="on" (see ACC)
+uniform float uAccDraw;   // (round 13a) the accretion layer drawn in the model's look: 0 by default, 1 with data-acclayer="on" (see ACC)
 // Multiple scattering, approximated as in two-stream diffusion (on by default, a toggle): of the starlight absorbed in
 // the skin, a part MS_A comes out again as diffuse light (grains of albedo about one half), half of it going down into
 // the disk, where it fades with the vertical optical depth from the surface, tau_v ≈ beta tau* (beta the grazing angle),
@@ -2204,7 +2205,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     // the surface accretion layer(s) (see ACC): a column ACC_SIG of the local surface density, in its streaks, across a
     // Gaussian in height ACC_W H wide. The layer is thinner than a step, so its column over the step is integrated
     // across that profile (the height changes by rd.z ds over the step) and spread over the step as a mean density.
-    // Drawn in the model's look only, with the gas (uMode & 1). (Round 13a: and only with uAccDraw, the page's ?acc=1; by
+    // Drawn in the model's look only, with the gas (uMode & 1). (Round 13a: and only with uAccDraw, the page's ?acclayer=1; by
     // default aa is 0, and neither its light nor its column is evaluated)
     float aa = accAmp(R) * float(uMode & 1) * uComp.x * uAccDraw;
 #ifdef FULL
@@ -5651,7 +5652,8 @@ void main(){
       dist: Number(box.dataset.distance || 90),
       fov: Number(box.dataset.fov || 32) * Math.PI / 180,
       scale: Number(box.dataset.scale || 0.6),
-      steps: Number(box.dataset.steps || 150),
+      // (round 17b: within diskSteps' range, 1 to 320, as the page's ?steps= passes any text on; 150 for one not a number)
+      steps: Number(box.dataset.steps) > 0 && Number.isFinite(Number(box.dataset.steps)) ? Math.min(320, Math.max(1, Math.round(Number(box.dataset.steps)))) : 150,
       exposure: Number(box.dataset.exposure || 1.0),
       spin: Number(box.dataset.spin || 0.004),
       seed: Number(box.dataset.seed || 2.0),
@@ -5686,8 +5688,9 @@ void main(){
       // (round 8) the finish's level for the page's quality, 0 to 2 (see the note before JET): data-fx, 2 unless given
       fx: Math.max(0, Math.min(2, Math.round(Number(box.dataset.fx ?? 2)) || 0)),
       // (round 13a, development switches to compare the model's look with that of before, read when the engine is built: the
-      // accretion layer drawn, data-acc="on" (see ACC); the gas's glow raised beyond OUTER_R, data-gasrho="old" (see uGasOuter))
-      accDraw: box.dataset.acc === 'on',
+      // accretion layer drawn, data-acclayer="on" (see ACC; data-acc="on" until round 17b); the gas's glow raised beyond OUTER_R,
+      // data-gasrho="old" (see uGasOuter))
+      accDraw: box.dataset.acclayer === 'on',
       gasOuter: box.dataset.gasrho === 'old',
       // (round 15b) the gas body's glow (see uGGas): data-ggas, 0.05 to 2; 0.5 unless given (0.2 until round 15b)
       // (round 15b) the jet hidden behind the disk (see jetOcc): off with data-jetocc="0"; the observed looks' starlight with L*
@@ -5797,8 +5800,8 @@ void main(){
     descEl.style.cssText = keysEl.style.cssText = hidden;
     box.append(descEl, keysEl);
     canvas.setAttribute('aria-describedby', descEl.id + ' ' + keysEl.id);
-    const KEYS_JA = 'ドラッグで回転、Shift+ドラッグ(または中・右ボタン)で見る中心を動かす。タッチでは指 1 本で移動、2 本の指でピンチしてズーム、ひねって回転、そろえて上下に動かして傾き、ダブルタップで拡大、2 本指のタップで縮小。キー:矢印で回転、Shift+矢印で中心を動かす、＋と−でズーム(ホイールのズームはこの図にフォーカスしてから)、Home で元の視点と星の中心、C で中心を星に戻す(視点はそのまま)、スペースで一時停止、1〜5 で視点、P で惑星に寄る、F で磁力線、S で断面、A で注釈、B で星の増光、G で惑星を育てる。「タップで小石を置く」がオンのときは、円盤をクリックするとそこに小石の塊を置きます。';
-    const KEYS_EN = 'Drag to turn, Shift+drag (or the middle or right button) to move the point looked at. On a touch screen one finger moves, two fingers pinch to zoom, twist to turn and move up or down together to tilt; a double tap zooms in, a two-finger tap zooms out. Keys: arrows turn, Shift+arrows move the point looked at, + and - zoom (the wheel zooms once this picture has the focus), Home returns to the first view centred on the star, C brings the point looked at back to the star (the view kept), space pauses, 1 to 5 pick views, P goes to the planet, F toggles the field lines, S the cut, A the annotations, B makes the star flare, G grows the planet. With \u201cTap to drop pebbles\u201d on (under Pebbles), a click on the disk drops a clump of pebbles there.';
+    const KEYS_JA = 'ドラッグで回転、Shift+ドラッグ(または中・右ボタン)で見る中心を動かす。タッチでは 1 本指で移動、2 本指のピンチで拡大・縮小、ひねって回転、そろえて上下に動かして傾き、ダブルタップで拡大、2 本指のタップで縮小。キー:矢印で回転、Shift+矢印で中心を動かす、+ と − で拡大・縮小(ホイールでの拡大・縮小はこの絵にフォーカスしてから)、Home で最初の眺め(中心は星)、C で中心を星に戻す(眺めの向きはそのまま)、スペースで一時停止、1〜5 で角度、P で惑星に寄る、F で磁力線、S で断面、A で注釈、B で星の増光、G で惑星を育てる。「タップで小石を置く」がオンのときは、円盤をクリックするとそこに小石の塊を置きます。';
+    const KEYS_EN = 'Drag to turn, Shift+drag (or the middle or right button) to move the point looked at. On a touch screen one finger moves, two fingers pinch to zoom, twist to turn and move up or down together to tilt; a double tap zooms in, a two-finger tap zooms out. Keys: arrows turn, Shift+arrows move the point looked at, + and − zoom (the wheel zooms once this picture has the focus), Home returns to the first view centred on the star, C brings the point looked at back to the star (the view kept), space pauses, 1 to 5 set the angle, P goes to the planet, F toggles the field lines, S the cut, A the annotations, B makes the star flare, G grows the planet. With \u201cTap to drop pebbles\u201d on (under Pebbles), a click on the disk drops a clump of pebbles there.';
     let toastTimer = 0, toastSwap = 0, toastMsg = null;   // toastMsg: the text showing, in both languages (and short ones)
     // the text for the panel: the short version on a narrow one, when there is one
     const toastText = () => { const n = W > 0 && W < 560, m = toastMsg; return ja() ? (n && m[2] ? m[2] : m[0]) : (n && m[3] ? m[3] : m[1]); };
@@ -6498,7 +6501,7 @@ void main(){
     // per quantity: colour at u in [0, 1] along the bar, ticks (u, text) and a title
     const T0 = 30, T1 = 2000, uT = (T) => Math.log(T / T0) / Math.log(T1 / T0);
     const CBAR = {
-      T: { col: (u) => tcolorJS(T0 * Math.pow(T1 / T0, u)), ticks: [50, 160, 300, 1000].map((T) => [uT(T), String(T)]), title: ['温度 (K)', 'temperature (K)'], units: 'K', min: T0, max: T1,
+      T: { col: (u) => tcolorJS(T0 * Math.pow(T1 / T0, u)), ticks: [50, 160, 300, 1000].map((T) => [uT(T), String(T)]), title: ['温度(K)', 'temperature (K)'], units: 'K', min: T0, max: T1,
         description: ['色は温度を対数の尺度で示します。白い線は星の光が届く深さ(τ* = 1)、水色の破線はスノーライン(160 K)です。', 'Colour shows temperature on a logarithmic scale. The white line is where starlight reaches (tau* = 1); the dashed blue line is the snow line (160 K).'] },
       rho: { col: (u) => cmapJS(u, 'viridis'), ticks: [-9, -6, -3, 0].map((l) => [(l + 10) / 12.5, '10' + sup(l)]), title: ['ガスの密度(1 au の赤道面に対する比)', 'gas density (relative to the midplane at 1 au)'], units: '', min: 1e-10, max: Math.pow(10, 2.5),
         description: ['密度は 1 au の赤道面に対する比で、色は対数の尺度です。細い線は目盛りの値の等密度線です。', 'Density is relative to the midplane at 1 au; the colour scale is logarithmic. The thin lines are contours at the ticks\u2019 values.'] },
@@ -6593,11 +6596,11 @@ void main(){
     const coSpec = () => {
       const rng = coRange(), mode = opt.coMode, top = (mode === 'm0' ? CO_M0_JS : 220) * Math.exp(coLn);
       const div = (u) => { const v = 2 * u - 1, g = [0.60, 0.61, 0.64], b = [0.20, 0.36, 0.92], r = [0.88, 0.16, 0.12]; return g.map((c, i) => c + ((v < 0 ? b : r)[i] - c) * Math.abs(v)); };
-      return mode === 'm1' ? { col: div, ticks: [[0, '−' + rng.toFixed(0)], [0.5, '0'], [1, '+' + rng.toFixed(0)]], title: ['平均の視線速度 (km/s、赤は遠ざかる)', 'mean line-of-sight velocity (km/s, red receding)'], units: 'km/s', min: -rng, max: rng,
+      return mode === 'm1' ? { col: div, ticks: [[0, '−' + rng.toFixed(0)], [0.5, '0'], [1, '+' + rng.toFixed(0)]], title: ['平均の視線速度(km/s、赤は遠ざかる)', 'mean line-of-sight velocity (km/s, red receding)'], units: 'km/s', min: -rng, max: rng,
         description: ['赤は遠ざかるガス、青は近づくガスです。', 'Red gas recedes; blue gas approaches.'] }
-        : mode === 'm0' ? { col: (u) => cmapJS(u, 'inferno'), ticks: coTicks(top, [1 / 9, 4 / 9, 1]), title: ['輝線の積分強度 (K km/s)', 'line integrated intensity (K km/s)'], units: 'K km/s', min: 0, max: top,
+        : mode === 'm0' ? { col: (u) => cmapJS(u, 'inferno'), ticks: coTicks(top, [1 / 9, 4 / 9, 1]), title: ['輝線の積分強度(K km/s)', 'line integrated intensity (K km/s)'], units: 'K km/s', min: 0, max: top,
           description: ['色は速度にわたって積分した強度の平方根を示します。', 'Colour follows the square root of intensity integrated over velocity.'] }
-          : { col: (u) => cmapJS(u, 'inferno'), ticks: coTicks(top, [25 / 220, 100 / 220, 1]), title: ['輝線の輝度温度 (K)', 'line brightness temperature (K)'], units: 'K', min: 0, max: top,
+          : { col: (u) => cmapJS(u, 'inferno'), ticks: coTicks(top, [25 / 220, 100 / 220, 1]), title: ['輝線の輝度温度(K)', 'line brightness temperature (K)'], units: 'K', min: 0, max: top,
             description: ['チャンネル ' + opt.coV.toFixed(2) + ' km/s。色は輝度温度の平方根を示します。', 'Channel ' + opt.coV.toFixed(2) + ' km/s. Colour follows the square root of brightness temperature.'] };
     };
     function drawCoBar() {
@@ -6966,7 +6969,8 @@ void main(){
     // discrepancy sequences) and averaged with the frames before it, up to ACC_MAX, so that the grain of the march, the
     // banding of its steps and the jagged edges fade out; the maps are not redrawn meanwhile. Any change starts over at
     // once. A snapshot averages ACC_SNAP frames.
-    // (round 16c, for the owner's timing trials: data-acc, the page's ?acc=, 1-16 frames in a still; the default 16)
+    // (round 16c, for the owner's timing trials: data-acc, the page's ?acc=, 1-16 frames in a still; the default 16. Round 17b:
+    // the accretion layer's switch of round 13a, data-acc="on", which this took over, is data-acclayer="on")
     const ACC_MAX = Math.min(16, Math.max(1, Math.round(Number(box.dataset.acc)) || 16)), ACC_SNAP = 12;
     const TIME_MAX = 1e6;   // the model's clock from outside, at most (s: 12 days at x1)
     // The automatic exposure (the model's look, the camera within AE.D of the star). Close to the star the inner disk's lit
@@ -7996,8 +8000,8 @@ void main(){
         mir: ['中間赤外線で見た姿で、暖かい表層の熱放射が内側ほど明るく見えます。', ' Seen in the mid-infrared: the warm surface glows, brightest close in.'],
         mm: ['ミリ波で見た姿で、赤道面に沈んだ小石の熱放射が、惑星のギャップのすぐ外の環とともに見えます。', ' Seen at millimetre wavelengths: the pebbles at the midplane glow, with a ring just outside the planet\u2019s gap.'] }[lookNow];
       const desc = ja()
-        ? '原始惑星系円盤(半径30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、ダストが赤道面に沈み、約1 auのスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に木星質量の惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + QN[0] + 'を色で示しています。' : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? 'ガスの輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
-        : 'Volume rendering of a model of a protoplanetary disk (30 au in radius): warm surface layers, a cold midplane with settled dust, and a water snow line near 1 au.' + (plShown().length ? (plShown().length > 1 ? ' Jupiter-mass planets at ' + plShown().join(', ') + ' au open gaps.' : ' A Jupiter-mass planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + QN[1] + ' in colour.' : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in an emission line of the gas: ' + CON[1] + '.' : '');
+        ? '原始惑星系円盤(半径 30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、赤道面に沈んだ塵はスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + QN[0] + 'を色で示しています。' : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? 'ガスの輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
+        : 'Volume rendering of a model of a protoplanetary disk (30 au in radius): warm surface layers, and a cold midplane with settled dust, icy beyond the water snow line.' + (plShown().length ? (plShown().length > 1 ? ' Planets at ' + plShown().join(', ') + ' au open gaps.' : ' A planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + QN[1] + ' in colour.' : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in an emission line of the gas: ' + CON[1] + '.' : '');
       if (desc !== descEl.textContent) descEl.textContent = desc;
       const name = ja() ? '操作できる原始惑星系円盤のモデル' : 'Interactive model of a protoplanetary disk';
       if (canvas.getAttribute('aria-label') !== name) { canvas.setAttribute('aria-label', name); keysEl.textContent = ja() ? KEYS_JA : KEYS_EN; }
@@ -9043,12 +9047,12 @@ void main(){
     box.appendChild(hint);
     let hintT = 0;
     const wheelHint = () => {
-      hint.textContent = ja() ? 'クリックしてからホイールでズーム(⌘/Ctrl+ホイールでも。クリックで小石が置かれます。Tab でも可)' : 'Click the picture, then scroll to zoom (or \u2318/Ctrl + scroll; a click drops pebbles, Tab works too)';
+      hint.textContent = ja() ? 'クリックしてからホイールで拡大・縮小(⌘/Ctrl+ホイールでも。Tab でも可)' : 'Click the picture, then scroll to zoom (or \u2318/Ctrl + scroll; Tab works too)';
       hint.style.opacity = '1'; clearTimeout(hintT); hintT = setTimeout(() => { hint.style.opacity = '0'; }, 1600);
     };
     // (the first touch: how to move, as on a map)
     const touchHint = () => {
-      hint.textContent = ja() ? '指 1 本で移動、2 本でズーム' : 'One finger moves, two zoom';
+      hint.textContent = ja() ? '1 本指で移動、2 本指で拡大と回転' : 'One finger moves, two zoom and turn';
       hint.style.opacity = '1'; clearTimeout(hintT); hintT = setTimeout(() => { hint.style.opacity = '0'; }, 2200);
     };
     canvas.addEventListener('wheel', (e) => {
