@@ -11,13 +11,13 @@ import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stash
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=0e3f1a7004';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=9c1f5b1d9b';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.23', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.24', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -604,15 +604,25 @@ function wbRow() {
   wbEls.row = el('div', { class: 'mp-row gain-row', hidden: true }, wbEls.name, wbEls.input, wbEls.val, wbEls.chip);
   return wbEls.row;
 }
-// (round 18a, the owner: "the objects' transparency too") a component's see-through, a row under its settings as the wind's
-// brightness (see the see-through below): made here, its elements kept in opEls by the component's place in op; OP_MIN, the least
-// factor, and OP_MAX, the slider's end (the share taken away, %)
+// (round 18a, the owner: "the objects' transparency too") a component's see-through, a row under its settings (see the see-through
+// below): made here, its elements kept in opEls by the component's place in op; OP_MIN, the least factor, and OP_MAX, the slider's
+// end (the share taken away, %). (Round 18b, the owner: "could the see-through's controls be more discreet?") No name and no value
+// on the row: a small half-filled mark and a short slider, its name and value for the screen reader (aria-label, aria-valuetext)
+// and as the pointer's hint (title); the value and the chip back to the default only once it is changed, so that the default
+// leaves no trace. Its own class (op-row): the wind's brightness keeps its row (mp-row gain-row) as it was.
 const OP_MIN = 0.05, OP_MAX = Math.round(100 * (1 - OP_MIN));
 const opEls = [];
+function opMark() {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', 'op-mark');
+  const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); ring.setAttribute('cx', '8'); ring.setAttribute('cy', '8'); ring.setAttribute('r', '5.5');
+  const half = document.createElementNS('http://www.w3.org/2000/svg', 'path'); half.setAttribute('d', 'M8 2.5a5.5 5.5 0 0 0 0 11Z'); half.setAttribute('fill', 'currentColor');
+  s.append(ring, half);
+  return s;
+}
 function opRow(i) {
-  const id = 'opac' + i, e = { name: el('label', { class: 'mp-name', for: id }), input: el('input', { type: 'range', id, min: '0', max: String(OP_MAX), step: '1', 'data-opac': String(i) }),
-    val: el('span', { class: 'mp-val' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-opac-reset': String(i), hidden: true }) };
-  e.row = el('div', { class: 'mp-row gain-row' }, e.name, e.input, e.val, e.chip);
+  const e = { input: el('input', { type: 'range', id: 'opac' + i, min: '0', max: String(OP_MAX), step: '1', 'data-opac': String(i) }),
+    val: el('span', { class: 'op-val', 'aria-hidden': 'true' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-opac-reset': String(i), hidden: true }) };
+  e.row = el('div', { class: 'op-row' }, opMark(), e.input, e.val, e.chip);
   opEls[i] = e;
   return e.row;
 }
@@ -1046,8 +1056,9 @@ function renderOpac(s) {
     const e = opEls[c.op]; if (c.op == null || !e) continue;
     const f = op[c.op], t = text(f);
     if (document.activeElement !== e.input && e.input.value !== opPos(f)) e.input.value = opPos(f);
-    e.name.textContent = w.opac;
-    e.input.setAttribute('aria-label', w.opacOf(w[c.key])); e.input.setAttribute('aria-valuetext', t);
+    // (round 18b: no name on the row; the slider's name and value in aria and its title, the value and the chip once changed)
+    e.input.setAttribute('aria-label', w.opacOf(w[c.key])); e.input.setAttribute('aria-valuetext', t); e.input.title = w.opac;
+    e.row.classList.toggle('changed', f !== 1);
     e.val.textContent = t; e.val.style.minWidth = valW([text(1), text(OP_MIN)]);   // (round 15a: the widest text, the bar's length kept)
     e.chip.hidden = f === 1; e.chip.textContent = w.gainDefault; e.chip.setAttribute('aria-label', w.opacReset(w[c.key]));
   }
@@ -2179,7 +2190,7 @@ async function start() {
   // envelope, the jet's occlusion, the gas's glow, the CPD's flare, the wind's extent, the starlight's scale (README); (round 16a) the
   // shortcuts while the picture moves and their share of the steps (README, the engine's FAST; round 16b: the checkerboard dropped);
   // (round 16c) the march's steps and the still's frames, for the owner's timing trials; (round 18a) the gas's surface density, its
-  // cut of before (?sigtail=0) and another R_c for its exponential tail (?rc=, au). Each passed as it is: the engine reads
+  // cut of before (?sigtail=0) and another R_c for its tail (?rc=, au; round 18b: a Gaussian). Each passed as it is: the engine reads
   // each within its range, and a value it cannot read as its default
   for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc', 'sigtail', 'rc']) if (q.has(k)) box.dataset[k] = q.get(k);
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }

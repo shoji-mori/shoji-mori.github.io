@@ -269,6 +269,17 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .mp-row .chip[hidden],.cpd-mdot .chip[hidden]{display:inline-flex!important;visibility:hidden}
 .mp-derived{margin:4px 0 2px;font-size:11.5px}
 .gain-row{margin:2px 0 0}
+/* (round 18b, the owner: the see-through's controls more discreet) a component's see-through under its settings: a small half-filled
+   mark and a short slider, no name (its aria-label and title carry it), dimmed at rest; its value and the chip back to the default only
+   once it is changed (.changed), after the slider, which keeps its place and its length */
+.op-row{display:flex;align-items:center;gap:6px;min-height:24px;color:var(--text-3)}
+.op-row .op-mark{width:12px;height:12px;stroke-width:1.4}
+.op-row input[type=range]{flex:none;width:6.5em;min-width:0;height:18px;margin:0;accent-color:var(--text-2);opacity:.7}
+.op-row input[type=range]:hover,.op-row input[type=range]:focus-visible,.op-row.changed input[type=range]{opacity:1;accent-color:var(--accent)}
+.op-row.changed{color:var(--text-2)}
+.op-val{font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.op-row:not(.changed) .op-val{display:none}
+.op-row .chip{min-height:22px;padding:1px 7px;font-size:11px}
 .icon-x{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;color:var(--text-3);font-size:15px;line-height:1}
 .icon-x:hover{background:var(--wash);color:var(--text)}
 #addPlanet[aria-pressed=true]{border-color:var(--accent);color:var(--text)}
@@ -485,6 +496,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   .comp-cols input[type=color]{width:40px;height:34px}
   .comp-cols .chip{min-height:40px}
   .mp-row .chip{min-height:40px}
+  .op-row{min-height:40px}
+  .op-row input[type=range]{width:7.5em;height:32px}
+  .op-row .chip{min-height:40px}
   .ann-row{min-height:36px}
   .tool{height:40px}
   .route button{padding:9px 12px}

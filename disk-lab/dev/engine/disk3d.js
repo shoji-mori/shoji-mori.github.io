@@ -81,17 +81,22 @@
   // so the disk is drawn about 1.8 times thicker than its own temperature would hold up. The surface density is kept, so
   // the midplane density falls by 1.5 and with it the grazing optical depth toward the star: LNTAU1 8.5 -> 8.5 - ln 1.5.
   // The density at the irradiation surface (RHO_B, where the wind is based) does not change: it is set by tau* = 1.)
-  const MODEL = { R_IN: 0.08, H0: 0.045, R_OUT: 30.0, P_OUT: 6.0, LNTAU1: +(8.5 - Math.log(1.5)).toFixed(4), TICE: 160.0, K_D: 1200.0, SD0: 0.012, TAIL: true, RC: 30.0 };
+  const MODEL = { R_IN: 0.08, H0: 0.045, R_OUT: 30.0, P_OUT: 6.0, LNTAU1: +(8.5 - Math.log(1.5)).toFixed(4), TICE: 160.0, K_D: 1200.0, SD0: 0.012, TAIL: true, RC: 30.0, C_OVER: 0.5 };
   // (Round 18a, the owner: "the gas disk's surface density with an exponential tail") The gas disk no longer ends in the cut
-  // exp(-(R/R_OUT)^P_OUT) but tapers as the self-similar disk of Lynden-Bell & Pringle (1974; Hartmann et al. 1998), Sigma ∝
-  // (R/R_c)^-gamma exp(-(R/R_c)^(2 - gamma)), with the model's own inner law kept, gamma = 1 (Sigma ∝ 1/R), and R_c = RC, 30 au
-  // (the owner's "radius 30 au", R_OUT), normalised so that Sigma at 1 au is unchanged: -ln of the taper, cutOut(R) = (R -
-  // 1 au) / R_c, and its slope d cutOut / d ln R = R / R_c (cutSlope). Whatever is built on Sigma takes it from there (the
-  // volume and tau*, the irradiated surface and with it the temperature, the dead zone's top, the wind's loading and the mass
-  // budget, the probe, the cut, the pressure that traps the pebbles, the jet's occultation). The pebbles keep their own edge
-  // (pebEdge: R_PEB, inside it Sigma ∝ 1/R as before: they drift in). The disk's mass rises by 11 % (DESIGN.md section 42).
-  // TAIL false (data-sigtail="0", the page's ?sigtail=0): the cut of before; RC another R_c (data-rc, the page's ?rc=, 5 to 200
-  // au). Both set by init before anything of the build reads them (in the shaders SIG_CUT and SIG_RC, see CONST_GLSL).
+  // exp(-(R/R_OUT)^P_OUT) but tapers past R_c = RC, 30 au (the owner's "radius 30 au", R_OUT), with the model's own inner law
+  // kept (Sigma ∝ 1/R). Round 18a tapered it as the self-similar disk of Lynden-Bell & Pringle (1974; Hartmann et al. 1998),
+  // Sigma ∝ (R/R_c)^-gamma exp(-(R/R_c)^(2 - gamma)) with gamma = 1, exp(-(R - 1 au)/R_c) normalised at 1 au. (Round 18b, the
+  // owner: "make it Sigma ∝ R^-1 exp(-(R/30 au)^2)") It tapers as a Gaussian: -ln of the taper, cutOut(R) = (R/R_c)^2, and its
+  // slope d cutOut / d ln R = 2 (R/R_c)^2 (cutSlope). A steeper tail than the self-similar one, the owner's choice (with the
+  // inner 1/R kept it is not a solution of the viscous disk, whose gamma = 1 gives exp(-R/R_c)); Sigma at 1 au is lower by
+  // e^-1/900, 0.1 %, and not normalised again. Whatever is built on Sigma takes it from there (the volume and tau*, the
+  // irradiated surface and with it the temperature, the dead zone's top, the wind's loading and the mass budget, the probe,
+  // the cut, the pressure that traps the pebbles, the jet's occultation). The pebbles keep their own edge (pebEdge: R_PEB,
+  // inside it Sigma ∝ 1/R as before: they drift in). The disk's mass: 0.0333 M_sun with the cut, 0.0372 with 18a's
+  // exponential tail, 0.0319 with the Gaussian (DESIGN.md sections 42.1 and 43). TAIL false (data-sigtail="0", the page's
+  // ?sigtail=0): the cut of before; RC another R_c (data-rc, the page's ?rc=, 5 to 200 au). Both set by init before anything of
+  // the build reads them (in the shaders SIG_CUT and SIG_RC, see CONST_GLSL). C_OVER (round 18b): the share of the starlight
+  // passing over the crest of the irradiated surface that the tail beyond it takes (see crestJS and betaOverJS).
   // (Disk Lab v2, round 8, the owner: "the pebbles' disk 1/1.5 of the gas's radius") The pebbles end at R_PEB = R_OUT / 1.5
   // = 20 au, in a cutoff of the same shape as the gas's, exp(-(R/R_PEB)^P_OUT): millimetre dust disks are smaller than
   // their gas disks (Ansdell et al. 2018, Lupus: R_CO / R_mm of 1.5 to 3; the lower optical depth of the dust at its edge
@@ -185,7 +190,8 @@
   //     density, more of the ionizing radiation reaching it), with the disk's edge cutting it further, so the dead
   //     zone thins outward and ends at 7.5 au: z_k = 3.1 H at 0.35 au, 2.5 H at 1 au, 1.7 H at 3 au, 0.8 H at 6 au. (Round 13c:
   //     with THERMO's 1e-7 the zone begins beyond R_TI = 0.69 au, 2.6 H at 0.8 au; the rest as it was. Round 18a: the gas's
-  //     exponential tail thins the column beyond 1 au, 1.67 H at 3 au, 0.72 H at 6 au, and the zone ends at 7.0 au.)
+  //     exponential tail thins the column beyond 1 au, 1.67 H at 3 au, 0.72 H at 6 au, and the zone ends at 7.0 au. Round
+  //     18b, the Gaussian tail: 1.68 H at 3 au, 0.81 H at 6 au, and the zone ends at 7.4 au.)
   //     (Beyond it the column is thin enough, below about 100 g cm^-2 for the minimum-mass nebula, for cosmic rays to
   //     reach the midplane, so the whole column couples. Ambipolar diffusion keeps the instability weak there: Disk Lab
   //     v2 lets it stir the outer disk a little, rising from 7.5 au to its full, small strength at 14 au (OUTER_TURB,
@@ -310,9 +316,9 @@
   // thermal masses, up to 1; Jupiter at 3 au is 4.6 of them), the glow of the planet and its disk (as (m / M_J)^1/2 from 0.25
   // to 1.8, a display choice), and the pebbles' ring, which needs a pressure maximum outside the gap: only planets above the
   // pebble isolation mass make one (Lambrechts et al. 2014; Bitsch et al. 2018, eqs. 10-11 for alpha = 1e-3: M_iso = 25
-  // M_earth (h_p / 0.05)^3 (1 - (d ln P / d ln R + 2.5) / 6), with d ln P / d ln R = -2.75 - R / R_c here (round 18a, the
-  // exponential tail: cutSlope): 44 M_earth at 3 au, 113 at 10 au, 199 at 20 au (with the cut of before, -2.75 - 6 (R / R_OUT)^6:
-  // 43, 107, 195), the ring rising from 0.7 to 1.3 M_iso (just below it the pebbles only
+  // M_earth (h_p / 0.05)^3 (1 - (d ln P / d ln R + 2.5) / 6), with d ln P / d ln R = -2.75 - 2 (R / R_c)^2 here (round 18b, the
+  // Gaussian tail: cutSlope): 43 M_earth at 3 au, 111 at 10 au, 205 at 20 au (round 18a's exponential tail, -2.75 - R / R_c: 44,
+  // 113, 199; the cut of before, -2.75 - 6 (R / R_OUT)^6: 43, 107, 195), the ring rising from 0.7 to 1.3 M_iso (just below it the pebbles only
   // slow, a traffic jam rather than a trap: Rosotti et al. 2016). The upper end, 3 M_J: above it the gap turns eccentric for
   // alpha <= 1e-3 (Kley & Dirksen 2006; Zhang et al. 2018), which the axisymmetric profile cannot show; Kanagawa et al.
   // tested 5e-5 < q < 2e-3 (17 M_earth to 2.1 M_J), so the ends are extrapolated a little. The lower end, 10 Earth masses,
@@ -718,8 +724,8 @@ const float PI = 3.14159265, TAU = 6.2831853;
 const float R_IN = ${G(MODEL.R_IN)}, H0 = ${G(MODEL.H0)}, TICE = ${G(MODEL.TICE)};
 const float R_OUT = ${G(MODEL.R_OUT)}, P_OUT = ${G(MODEL.P_OUT)};   // the disk's radius, and the exponent of its cut of before
 // (round 18a) -ln of the gas's surface density's taper, and its slope d / d ln R (cutOut, cutSlope; MODEL.TAIL in the script):
-// the exponential tail of a self-similar disk, (R - 1 au) / R_c (SIG_RC, R_OUT unless the page's ?rc= gives another), or with
-// SIG_CUT (data-sigtail="0") the cut of before, exp(-(R/R_OUT)^P_OUT)
+// (round 18b) the Gaussian tail, (R / R_c)^2 (SIG_RC, R_OUT unless the page's ?rc= gives another; round 18a's exponential
+// (R - 1 au) / R_c gave way to it), or with SIG_CUT (data-sigtail="0") the cut of before, exp(-(R/R_OUT)^P_OUT)
 #ifdef SIG_CUT
 float cutOut(float R){ return pow(R / R_OUT, P_OUT); }
 float cutSlope(float R){ return P_OUT * cutOut(R); }
@@ -727,10 +733,32 @@ float cutSlope(float R){ return P_OUT * cutOut(R); }
 #ifndef SIG_RC
 #define SIG_RC ${G(MODEL.R_OUT)}
 #endif
-float cutOut(float R){ return (R - 1.0) / SIG_RC; }
-float cutSlope(float R){ return R / SIG_RC; }
+float cutOut(float R){ float u = R / SIG_RC; return u * u; }
+float cutSlope(float R){ return 2.0 * cutOut(R); }
 #endif
 const float LNTAU1 = ${G(MODEL.LNTAU1)};               // ln of the grazing optical depth toward the star at the midplane, 1 au
+// (round 18b) the crest of the irradiated surface (crestJS in the script): CREST = (its radius, ln tau* at its midplane a, its
+// h = H / R, its angle h sqrt(2a)), defined by init (mpHdr) with the tail. Beyond it the starlight's depth at the angle th = az / R
+// is at least the crest's at that angle (xCrest: the crest's shadow, as behind a gap's inner rim, xRim; dxCrest its slope in z),
+// and the gas takes the starlight that passes over the crest (betaOver, see Eabs and betaOverJS). With SIG_CUT neither: the cut
+// of before keeps its picture.
+#ifdef SIG_CUT
+float xCrest(float R, float az){ return -1e30; }
+float dxCrest(float R, float az){ return 0.0; }
+float betaOver(float R, float lnR, float H, float cut){ return 0.0; }
+#else
+#ifndef CREST
+#error CREST, the crest of the irradiated surface, is defined by init with the tail
+#endif
+const vec4 CREST_V = CREST;
+float xCrest(float R, float az){ if (R <= CREST_V.x) return -1e30; float th = az / R; return CREST_V.y - 0.5 * th * th / (CREST_V.z * CREST_V.z); }
+float dxCrest(float R, float az){ return az / (R * R * CREST_V.z * CREST_V.z); }
+float betaOver(float R, float lnR, float H, float cut){
+  if (R <= 0.5 * CREST_V.x) return 0.0;
+  float h = H / R;
+  return ${G(MODEL.C_OVER)} / CREST_V.w * h * h * exp(LNTAU1 - 1.25 * lnR - cut - 0.5 * CREST_V.w * CREST_V.w / (h * h));
+}
+#endif
 // the temperature (round 7, see THERMO in the script): T_i^4 = TH_KI beta / R^2 and T_ds^5 = TH_KDS5 / R^2, both times the
 // star's luminosity uLum (the outburst), T_acc^4 = TH_KM / R^3 (at the midplane), T_vis = TH_KV R^-0.9
 const float TH_KI = ${G(+THERMO.KI.toPrecision(6))}, TH_KDS5 = ${G(+THERMO.KDS5.toPrecision(6))}, TH_KM = ${G(+THERMO.KM.toPrecision(6))}, TH_KV = ${G(+THERMO.KV.toPrecision(6))};
@@ -932,7 +960,8 @@ float turb3Amp(float R, float zeta){ return A3_IN * mriAmp(R) * (1.0 - smoothste
   //     to the foot), the travel time of a gas parcel up to that point, and the gas density of the wind.
   const MAP_GLSL = `
 // disk map: R from 0.05 to 60 au (round 18a: 42 until then, and with SIG_CUT: the gas now reaches past 42 au, and so do the
-// wakes of the outer planets, to 2.5 a, 50 au from 20 au; beyond the map its last column, clamped, is the neutral 1)
+// wakes of the outer planets, to 2.5 a, 50 au from 20 au; beyond the map its last column, clamped, is the neutral 1. Round
+// 18b kept it for the Gaussian tail: Sigma at 50 au is still 1/800 of that at 1 au, where the wakes reach, and ?rc= stretches it)
 #ifdef SIG_CUT
 const float LNR_MIN = ${G(Math.log(0.05))}, LNR_SPAN = ${G(Math.log(42 / 0.05))};
 #else
@@ -1157,7 +1186,7 @@ void main(){
   // held at its value at CHI_C below that height, where the cold solution, starting from rest at the
   // surface, has it diverge; RHO_B puts that value at the density of the disk gas at its irradiation
   // surface (tau* = 1) at 1 au. Below the base the wind fades into the disk over WIND_BLEED. Lines only
-  // carry gas where the disk has it (its inner edge, as Sigma, and its taper, cutOut: round 18a's exponential tail). The wind
+  // carry gas where the disk has it (its inner edge, as Sigma, and its taper, cutOut: round 18b's Gaussian tail). The wind
   // fades out toward the top and the side of the marched cylinder, so its edge does not show: exponentially from
   // 0.55 of the way (the display stretch is logarithmic for bright light, so a fade that only reaches zero at the edge
   // shows the edge as a hard line once the wind is bright, as in an outburst), and to zero over the last 15%.
@@ -1944,12 +1973,14 @@ vec2 eddies(float lnR, float phi, float zh){
 vec4 windMap(float R, float z){
   return texture(uWindMap, vec2((0.5 * log(R * R + z * z) - LNW_MIN) / LNW_SPAN, 0.5 + atan(z, R) / PI));
 }
-// The disk tapers exponentially beyond R_c (round 18a: exp(-cutOut), see CONST_GLSL; until then a cut at R_OUT,
-// exp(-(R/R_OUT)^P_OUT)); its tapering edge lies in the shadow of the flared disk, so the light fades with the surface.
+// The disk tapers beyond R_c (exp(-cutOut), see CONST_GLSL: round 18b's Gaussian, round 18a's exponential; until then a cut at
+// R_OUT, exp(-(R/R_OUT)^P_OUT)); its tapering edge lies in the shadow of the flared disk's crest, and (round 18b) its gas above
+// that shadow takes the starlight passing over the crest, so the light fades with the gas (see CREST).
 float Sigma(float R, float lnR){ return exp(-lnR - cutOut(R) + gapLn(R)) * smoothstep(R_IN * 0.8, R_IN * 1.3, R); }
 // Starlight absorbed per unit area of the surface, L β / 4πR², with β the grazing angle of the
 // irradiation surface z_s = H sqrt(2 a), a = ln τ* at the midplane. Where the density cutoff brings the
-// surface down, β drops to zero: the edge lies in the shadow of the disk's crest. Shown with the true
+// surface down, β drops to zero: the edge lies in the shadow of the disk's crest (round 18b: and takes the starlight over the
+// crest, betaOver, which keeps the tail lit as its gas thins; the cut of before, SIG_CUT, keeps the zero). Shown with the true
 // R^-2 falloff inside 1 au, easing to R^-1.1 outside and to R^-0.2 beyond OUTER_R = 6 au (scattered-light images are
 // often scaled by R² for the same reason; the disk reaches 30 au, so its outer part would otherwise be lost in the dark).
 const float OUTER_R = 6.0, OUTER_E = 0.9;
@@ -1959,7 +1990,8 @@ float litFall(float R){ return pow(1.0 + R, 0.9) / (0.66 * (R * R + 0.01)) * pow
 const float LIT_F1 = 2.7994;   // (litFall(1 au))
 float Eabs(float R, float lnR, float H){
   float cut = cutOut(R), a = max(LNTAU1 - 1.25 * lnR - cut, 1.0);
-  float beta = max(H * sqrt(2.0 * a) / R * (0.25 - (0.625 + 0.5 * cutSlope(R)) / a), 0.0) + 0.004 / R;
+  // (round 18b: or the starlight over the crest where that is more, betaOver; see CREST)
+  float beta = max(max(H * sqrt(2.0 * a) / R * (0.25 - (0.625 + 0.5 * cutSlope(R)) / a), 0.0), betaOver(R, lnR, H, cut)) + 0.004 / R;
   return beta / 0.022 * litFall(R) * smoothstep(R_IN * 0.85, R_IN * 1.5, R);
 }
 
@@ -2013,7 +2045,8 @@ float xRim(float R, float az, float x){
 // x = ln of the optical depth toward the star; the irradiation surface is x = 0
 float lnTauStar(vec3 p){
   float R = max(length(p.xy), 1e-3), lnR = log(R), H = H0 * exp(1.25 * lnR);
-  return clamp(LNTAU1 - 1.25 * lnR - cutOut(R) + gapLn(R) - 0.5 * p.z * p.z / (H * H), -30.0, 30.0);
+  // (round 18b: beyond the crest at least the crest's at this angle, xCrest)
+  return clamp(max(LNTAU1 - 1.25 * lnR - cutOut(R) + gapLn(R) - 0.5 * p.z * p.z / (H * H), xCrest(R, abs(p.z))), -30.0, 30.0);
 }
 
 // Streamers in the wind: how much gas a bundle of field lines lifts (the mass loading) varies with the place and the
@@ -2115,7 +2148,8 @@ float accColumn(float z0, float z1, float za, float ds, float dzh){
 // the disk's sample (the snow line's view took twice the GPU time); from the table, with the superheated term only where
 // tau* < 20 and the sublimation's cap only above 900 K, a few per cent. (Round 18a: 605 radii to 160 au with the disk's
 // exponential tail, which reaches past the marched cylinder's 136 au, in the same steps of ln R; 512 to 40 au with SIG_CUT, the
-// cut of before; see ttNR and ttSpan in the script)
+// cut of before; see ttNR and ttSpan in the script. Round 18b kept it for the Gaussian tail, which thins sooner: the cut's face
+// colours the temperature out to the cylinder's edge, and ?rc= stretches the tail)
 uniform highp sampler2D uThermo;
 #ifdef SIG_CUT
 const float TT_LN0 = ${G(+Math.log(0.02).toFixed(6))}, TT_DLN = ${G(+(Math.log(2000) / 511).toFixed(8))}, TT_NR = 512.0;
@@ -2150,8 +2184,10 @@ float envStep(float r){ return max(1.5, 0.08 * r); }
 // (round 10a) The march in kicks (SPLIT in the script; DESIGN.md, section 23): the work a step of each loop counts against a
 // kick's budget, in steps of the march (KW_: the envelope's steps outside the cylinder, the star's light with the
 // magnetosphere's columns (magLight), a lobe of the jet, the planet's light; from their costs on the M1 Max, rounded up);
-// the ray's stages (PH_); and its marks, carried from kick to kick (F_)
-const float KW_ENV = 0.25, KW_STAR = 8.0, KW_JET = 2.0, KW_PL = 4.0;
+// the ray's stages (PH_); and its marks, carried from kick to kick (F_). (Round 18b: KW_JET 2 -> 5, the occultation's column, 31
+// evaluations of the smooth disk's density a lobe beside its 16 of the jet's light, an estimate: not measured on the GPU; the
+// picture does not depend on it)
+const float KW_ENV = 0.25, KW_STAR = 8.0, KW_JET = 5.0, KW_PL = 4.0;
 const int PH_ENV0 = 1, PH_CUT0 = 2, PH_MARCH = 3, PH_BACK = 4, PH_CUT1 = 5, PH_ENV1 = 6, PH_FINAL = 7, PH_DONE = 8;
 const int F_SHEET = 1, F_STAR = 2, F_PG = 4, F_JU = 8, F_JL = 16, F_PL = 32, F_SKIP = 64, F_FINE = 128, F_CFINE = 256, F_CUT = 1024;
 // One step of the ray march, from the previous sample (with ln τ* = xPrev) to p over a length ds.
@@ -2172,7 +2208,10 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
   float H = H0 * exp(1.25 * lnR);
   float z = p.z, az = abs(z), zh = z / H;
   float gl = gapLn(R), cut = cutOut(R);
-  x = clamp(LNTAU1 - 1.25 * lnR - cut + gl - 0.5 * zh * zh, -30.0, 30.0);
+  // (round 18b: beyond the crest at least the crest's depth at this angle, xCrest; where that holds, the skin's dx/dz is the
+  // crest's, dxCrest, so that the starlight absorbed across its shadow's edge is E, as across the local surface)
+  float xl = LNTAU1 - 1.25 * lnR - cut + gl - 0.5 * zh * zh, xc = xCrest(R, az);
+  x = clamp(max(xl, xc), -30.0, 30.0);
   float xs = gCenteredSegment ? xEnd : x;
   if (R < R_IN * 0.7) { x = xs; wq = vec3(99.0); return; }
 
@@ -2209,11 +2248,13 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       // (round 8: in the model's look the light's fall with the distance is eased to R^-1/2, see G_LIT: the shading shows the
       // surface's tilt toward the star, its shadows and the scattering's direction, not the light's distance)
       float Es = uLook == 0 ? E * LIT_F1 / litFall(R) * inversesqrt(max(R, 0.1)) : E;
-      float mu = dot(p, -rd) / max(length(p), 1e-3), base0 = G_SKIN * Es * az / (H * H) * ds * dm.g * ed.x, base = base0 * P * exp(-ed.y);
+      float mu = dot(p, -rd) / max(length(p), 1e-3), base0 = (xc > xl ? G_SKIN * Es * dxCrest(R, az) : G_SKIN * Es * az / (H * H)) * ds * dm.g * ed.x, base = base0 * P * exp(-ed.y);   // (round 18b: dxCrest)
       float Pd = 0.0;   // multiple scattering: the diffuse light absorbed over the step (see MS_C)
       if (uMS > 0.0) {
         Pd = abs(dx) > 1e-3 ? (exp(-MS_C * exp(xPrev)) - exp(-MS_C * exp(xs))) / dx : MS_C * exp(xm - MS_C * exp(xm));
-        Pd *= uMS * MS_A * base0 * exp(-0.5 * ed.y);
+        // (round 18b: in the crest's shadow the diffuse light is scattered by the gas there, whose own depth is the share
+        // e^(xl - xc) of the starlight's: weighed by it, else it spread over the whole shadow, gas or none)
+        Pd *= uMS * MS_A * base0 * exp(-0.5 * ed.y) * (xc > xl ? exp(xl - xc) : 1.0);
       }
       // (the model's look: the star's light on the disk, see G_LIT; the observed looks below)
       skin = (base * hg(mu, G_LIT_HG) + Pd) * (G_LIT * uLit) * litCol();
@@ -2585,21 +2626,85 @@ float jetEm(vec3 p){
 // the lobe's light is taken down by e^-tau. K_OCC: the visible extinction of the small grains per gram of gas, about 200 cm^2/g
 // (the interstellar A_V / N_H = 5.3e-22 mag cm^2), times SIG1 = 1700 g cm^-2, the model's Sigma at 1 au (Sigma in the model's
 // unit): tau of order 1e5 / R au through the disk, so it hides the lobe out to its edge (tau = 1 near 43 au with the cut; with the
-// exponential tail of round 18a, near 220 au) and
-// through a planet's gap (a Jupiter's at 3 au, Sigma_min / Sigma_0 about 0.02: tau about 2000). Inside R_IN the gas is dust-free and the jet is seen through it, as
+// exponential tail of round 18a, near 220 au; with round 18b's Gaussian, near 86 au) and
+// through a planet's gap (a Jupiter's at 3 au, Sigma_min / Sigma_0 about 0.02: tau about 2000). (Those numbers are for that
+// interstellar K_OCC; round 18b, below, takes the model's own, 920 times less.) Inside R_IN the gas is dust-free and the jet is seen through it, as
 // is right. One factor per lobe, where its light is laid in: the same in kicks and drawn whole, no state carried, nothing more
 // in the march. The disk's own translucency (the model look's K_G rho EXT) and its other light behind it are left as they are.
 // uJetOcc: 1, or 0 (data-jetocc="0", the page's ?jetocc=0) as before
+// (Round 18b, the owner: "the jet's see-through is too discrete in the inclination; can't it simply be a high opacity in the
+// model?") Until then a lobe was hidden only when the camera was on the other side of the midplane, by the whole column at the
+// crossing: crossing the midplane flipped a lobe whole from seen to hidden (from any camera within the 86 au where the disk is
+// opaque). Now tau = K_OCC times the disk's column between the camera and the lobe along the ray, through the model's own smooth
+// disk (Sigma's taper, its gaps and dust-free hole, e^(-z^2 / 2 H^2)): a camera on either side, inside the disk or outside it.
+// The lobe comes out of the disk from its foot as the camera rises, and both lobes' feet are hidden edge-on.
+// K_OCC (round 18b, the coordinator's choice): the model's own opacity for the starlight, the one that sets tau* and with it the
+// lit surface: tau* = e^LNTAU1 R^-1.25 e^-cut e^(-z^2 / 2 H^2) = K_OCC rho R with K_OCC = e^LNTAU1 sqrt(2 pi) H0 = 369.6 in Sigma's
+// unit. The model look draws the disk's gas translucent; the jet is hidden by the opacity that stops the starlight, where the lit
+// surface is, not 920 times sooner by the interstellar dust's visible opacity of round 15b (200 cm^2/g x SIG1 = 3.4e5, the
+// alternative, no switch: from inside the disk's extent below about 20 degrees, the wind place's 10 degrees and 60 au, it hid the
+// jet whole). Through the disk tau is 370 at 1 au, 120 at 3 au, 33 at 10 au, 4.5 at 30 au and 1 at 44 au (straight through):
+// behind the disk's body the far lobe stays hidden, seen through the tail beyond about 44 au it shows.
+// occColumn: the column in Sigma's unit from the camera (t = 0) to t1 along the ray. q = ln rho has one peak on the stretch, which
+// ends before the lobe (|z| / H changes one way on each side of the midplane, and R falls along it): found by golden section, the
+// ends and the midplane's crossing tried too (a narrow peak the search may step over). Its scale there, where q changes by about 1
+// (occDQ: q's first and second derivatives along the ray), sets the first of 8 nodes on each side, spaced geometrically out to the
+// stretch's ends; between nodes q is taken as linear, e^q integrated exactly (the exponential's own rule: exact for a steep fall,
+// within a few per cent across a Gaussian peak, and it follows a broad one-sided fall where a parabola about the peak does not).
+// Against a fine integral of the same density over 1260 rays (cameras at 0.3-340 au, -25 to 70 degrees, the lobes from 0.06 to 200
+// au): the transmission within 0.03, the column within 8 % where 0.05 < tau < 20 (DESIGN.md section 43.4). For each lobe once, at
+// the place its light is laid in: the lobe's 16 samples lie within 3.5 widths of the axis, at least JET_Z0 from the midplane,
+// where the disk has no gas (H < 0.01 au within 0.3 au of the star), and the ray crosses the midplane before the lobe's first, so
+// each sample's column is the lobe's (31 evaluations of the density a lobe, and KW_JET 5)
+float occQ(vec3 ro, vec3 rd, float t){
+  vec3 p = ro + rd * t;
+  float R = max(length(p.xy), 1e-3), lnR = log(R), g = p.z / (H0 * exp(1.25 * lnR));
+  return -2.25 * lnR - cutOut(R) + gapLn(R) + (R < R_IN * 1.3 ? log(max(smoothstep(R_IN * 0.8, R_IN * 1.3, R), 1e-30)) : 0.0) - 0.5 * g * g;
+}
+// q's first and second derivatives along the ray at t (the power law, the taper as the Gaussian's d cutSlope / d ln R = 2 cutSlope,
+// the vertical Gaussian; the gaps and the dust's edge left out): only the first node's distance takes them
+vec2 occDQ(vec3 ro, vec3 rd, float t){
+  vec3 p = ro + rd * t;
+  float R = max(length(p.xy), 1e-3), Rd = dot(p.xy, rd.xy) / R, H = H0 * pow(R, 1.25), g = p.z / H, u = Rd / R;
+  float du = (dot(rd.xy, rd.xy) - 2.0 * Rd * Rd) / (R * R), dg = rd.z / H - 1.25 * g * u, ddg = -1.25 * (rd.z * u / H + dg * u + g * du), cs = cutSlope(R);
+  return vec2(-(2.25 + cs) * u - g * dg, -(2.25 + cs) * du - 2.0 * cs * u * u - dg * dg - g * ddg);
+}
+float occColumn(vec3 ro, vec3 rd, float t1){
+  if (t1 <= 1e-6) return 0.0;   // (a lobe laid in at the camera: no stretch)
+  const float GR = 0.381966;
+  float a = 0.0, b = t1, x1 = GR * t1, x2 = t1 - GR * t1, f1 = occQ(ro, rd, x1), f2 = occQ(ro, rd, x2);
+  for (int i = 0; i < 10; i++) {
+    if (f1 < f2) { a = x1; x1 = x2; f1 = f2; x2 = b - GR * (b - a); f2 = occQ(ro, rd, x2); }
+    else { b = x2; x2 = x1; f2 = f1; x1 = a + GR * (b - a); f1 = occQ(ro, rd, x1); }
+  }
+  float ts = f1 > f2 ? x1 : x2, qs = max(f1, f2), q0 = occQ(ro, rd, 0.0), q1e = occQ(ro, rd, t1);
+  if (q0 > qs) { ts = 0.0; qs = q0; }
+  if (q1e > qs) { ts = t1; qs = q1e; }
+  float tx = abs(rd.z) > 1e-6 ? -ro.z / rd.z : -1.0;
+  if (tx > 0.0 && tx < t1) { float fx = occQ(ro, rd, tx); if (fx > qs) { ts = tx; qs = fx; } }
+  vec2 dq = occDQ(ro, rd, ts);
+  float d0 = clamp(0.5 * inversesqrt(dq.x * dq.x + max(-dq.y, 0.0) + 1e-12), 1e-6 * t1, max(b - a, 1e-6 * t1)), col = 0.0;
+  for (int side = 0; side < 2; side++) {
+    float L = side == 0 ? ts : t1 - ts, sg = side == 0 ? -1.0 : 1.0;
+    if (L <= 0.0) continue;
+    int n = L <= d0 ? 1 : 8;
+    float r = n > 1 ? pow(L / d0, 1.0 / 7.0) : 1.0, d = d0, tp = ts, qp = qs;
+    for (int k = 1; k <= 8; k++) {
+      if (k > n) break;
+      float t = ts + sg * (k == n ? L : d), qn = occQ(ro, rd, t), dt = abs(t - tp), e = qn - qp;
+      col += abs(e) > 1e-4 ? dt * (exp(qn) - exp(qp)) / e : dt * exp(0.5 * (qn + qp));
+      tp = t; qp = qn; d *= r;
+    }
+  }
+  return col * ${G(+(1 / (Math.sqrt(2 * Math.PI) * MODEL.H0)).toPrecision(7))};   // (rho = Sigma / (sqrt(2 pi) H0 R^1.25) e^(-z^2 / 2 H^2))
+}
 uniform float uJetOcc;
-const float K_OCC = 3.4e5;
-float jetOcc(vec3 ro, vec3 rd, float side, float tc){
-  if (uJetOcc <= 0.0 || ro.z * side >= 0.0 || abs(rd.z) < 1e-6) return 1.0;
-  float tx = -ro.z / rd.z;
-  if (tx <= 0.0 || tx >= tc) return 1.0;
-  float R = max(length(ro.xy + rd.xy * tx), 1e-3);
-  float t = exp(-min(K_OCC * Sigma(R, log(R)) / abs(rd.z), 80.0));
+const float K_OCC = ${G(+(Math.exp(MODEL.LNTAU1) * Math.sqrt(2 * Math.PI) * MODEL.H0).toPrecision(6))};   // (e^LNTAU1 sqrt(2 pi) H0; 3.4e5 the interstellar alternative, see above)
+float jetOcc(vec3 ro, vec3 rd, float tc){
+  if (uJetOcc <= 0.0) return 1.0;
+  float t = exp(-min(K_OCC * occColumn(ro, rd, tc), 80.0));
   // (round 18a: with the gas's see-through, uOpac.x, the disk's opacity as one sheet's, 1 - t, times it: its optical depth, of
-  // order 1e5 / R au, would hide the lobe at any factor)
+  // order 1e5 / R au then, would hide the lobe at any factor; with round 18b's K_OCC, 370 / R au, kept so)
   return uOpac.x < 1.0 ? mix(1.0, t, uOpac.x) : t;
 }
 // a lobe (side +1 or -1): its light (relative, x; times jetCol) and where it is laid in (y; 1e9: none). (Two numbers a
@@ -2618,7 +2723,7 @@ vec2 jetLobe(vec3 ro, vec3 rd, float side, float jitter, bool light){
   // (round 8: faded close to the camera, within half its distance from the point looked at: looking down the axis the camera
   // sits in the jet's wide part, which then veiled the whole view)
   if (light) for (int i = 0; i < 16; i++) { float ti = c - L + (float(i) + jitter) * ds; e += jetEm(ro + rd * ti) * smoothstep(0.15, 0.5, ti / uFocus); }
-  return vec2(G_JET * uJet * e * ds * (light ? jetOcc(ro, rd, side, c) : 1.0), c);   // (round 15b: hidden behind the disk, jetOcc)
+  return vec2(G_JET * uJet * e * ds * (light ? jetOcc(ro, rd, c) : 1.0), c);   // (round 15b: hidden behind the disk, jetOcc; round 18b: by its column along the ray)
 }
 // (its colour: the visible look the red of its lines)
 vec3 jetCol(){ return uLook == 0 ? MAT_JET : vec3(1.0, 0.22, 0.28); }
@@ -2784,7 +2889,9 @@ vec3 sliceQuantities(float Rs, float z, float phi){
   // (round 15b) with the exclusion, the envelope's gas where it holds the place: Ulrich's density at the infall rate (uExcl.y), not
   // the model look's picture (ENV_RHO); before, the face showed the disk and the wind alone
   if (uExcl.x > 0.5) { float re = length(vec2(R, z)); rho += exp(uExcl.y + texture(uEnvMap, vec2((log(max(re, 0.5)) - LNE_MIN) / LNE_SPAN, abs(atan(z, R)) / (0.5 * PI))).r) * envShare(R, z); }
-  return vec3(uSliceQ == 1 ? tempAt(R, lnR, zh, x) : 0.0, log(max(rho, 1e-30) * ${G(Math.sqrt(2 * Math.PI) * MODEL.H0)}) / LN10, x);
+  // (round 18b: the temperature in the crest's shadow, xCrest; the faces stay where the gas's own depth, x, puts them: in the
+  // shadow beyond the gas the starlight's depth stays high where there is nothing to paint)
+  return vec3(uSliceQ == 1 ? tempAt(R, lnR, zh, max(x, xCrest(R, abs(z)))) : 0.0, log(max(rho, 1e-30) * ${G(Math.sqrt(2 * Math.PI) * MODEL.H0)}) / LN10, x);
 }
 // The stretch (tIn, tOut) of the ray in the part cut away (empty when tIn >= tOut): the intersection of the two
 // half-spaces dot(p, n_i) > uSliceOff, so a single stretch, as the part is convex. (A camera within 1e-5 of its distance
@@ -3009,7 +3116,7 @@ vec4 coGas(vec3 p, vec3 rd){
   coNGas += 1.0;
   float R = max(length(p.xy), 1e-3), lnR = log(R), H = H0 * exp(1.25 * lnR), zh = p.z / H, az = abs(p.z);
   float cut = cutOut(R), gl = gapLn(R), phi = atan(p.y, p.x);
-  float x = clamp(LNTAU1 - 1.25 * lnR - cut + gl - 0.5 * zh * zh, -30.0, 30.0);
+  float x = clamp(max(LNTAU1 - 1.25 * lnR - cut + gl - 0.5 * zh * zh, xCrest(R, az)), -30.0, 30.0);   // (round 18b: the crest's shadow, xCrest)
   vec4 dm = diskMap(lnR, phi);
   // (the gas disk reaches the magnetosphere's edge MAG_RT, inside the dust's)
   float rhoD = exp(-lnR - cut + gl - 0.5 * zh * zh) * smoothstep(MAG_RT * 0.95, MAG_RT * 1.08, R) / (2.5066 * H) * dm.r * eddies(lnR, phi, zh).x;
@@ -4064,9 +4171,40 @@ void main(){
   // The field model again in JS, for the field lines and wind parcels drawn as vector strokes in the SVG
   // overlay (kept in step with FIELD_GLSL above).
   const ss = (a, b, x) => { const t = Math.min(Math.max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t); };
-  // (round 18a: the taper of the gas's surface density and its slope d / d ln R, as cutOut and cutSlope in the GLSL; MODEL.TAIL)
-  const cutOut = (R) => (MODEL.TAIL ? (R - 1) / MODEL.RC : Math.pow(R / MODEL.R_OUT, MODEL.P_OUT));
-  const cutSlope = (R) => (MODEL.TAIL ? R / MODEL.RC : MODEL.P_OUT * cutOut(R));
+  // (round 18a: the taper of the gas's surface density and its slope d / d ln R, as cutOut and cutSlope in the GLSL; MODEL.TAIL.
+  // Round 18b: the Gaussian tail, (R / R_c)^2 and twice that; 18a's (R - 1 au) / R_c and R / R_c gave way to it)
+  const cutOut = (R) => (MODEL.TAIL ? (R / MODEL.RC) * (R / MODEL.RC) : Math.pow(R / MODEL.R_OUT, MODEL.P_OUT));
+  const cutSlope = (R) => (MODEL.TAIL ? 2 * cutOut(R) : MODEL.P_OUT * cutOut(R));
+  // (Round 18b, the owner: "the surface's rendering is off the gas's tail") The crest of the irradiated surface. The local surface
+  // z_s = H sqrt(2a), a = ln tau*_mid (the starlight's depth at the midplane), rises as z_s / R = h sqrt(2a) (h = H / R) while the
+  // disk flares, and turns over where the taper thins the disk: at the radius where a = 2.5 + 2 cutSlope (beta's first term is 0
+  // there; 18.7 au with the Gaussian tail). Beyond it the local estimate put the tail in the crest's shadow (beta 0.004 / R, the
+  // midplane at 16 K at 20 au) and yet drew its gas as lit above z_s, which falls to the midplane at 53 au: the lit surface ended
+  // at 19 au while the gas went on to 60 au. Read along rays from the star, the local tau* gathered e-fold by e-fold of R (DESIGN.md
+  // section 43.2), the starlight's depth at an angle th = |z| / R beyond the crest is at least the crest's at that angle (its
+  // shadow, as behind a gap's inner rim: xRim), and the tail goes on taking the starlight that passes over the crest. crestJS:
+  // the crest's radius R, its a and h, and its angle th = h sqrt(2a), to 6 digits as the shaders have them (CREST, see
+  // CONST_GLSL); null with the cut of before (MODEL.TAIL false), which keeps its picture. Memoised on R_c.
+  let crestMemo = null;
+  const crestJS = () => {
+    if (!MODEL.TAIL) return null;
+    if (crestMemo && crestMemo.rc === MODEL.RC) return crestMemo;
+    const a = (R) => MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R);
+    let lo = 0.1, hi = 50 * MODEL.RC;
+    for (let i = 0; i < 100; i++) { const m = Math.sqrt(lo * hi); if (a(m) - 2.5 - 2 * cutSlope(m) > 0) lo = m; else hi = m; }
+    const R = Math.sqrt(lo * hi), h = MODEL.H0 * Math.pow(R, 0.25), r6 = (v) => +v.toPrecision(6);
+    crestMemo = { rc: MODEL.RC, R: r6(R), a: r6(a(R)), h: r6(h), th: r6(h * Math.sqrt(2 * a(R))) };
+    return crestMemo;
+  };
+  // the crest's shadow (xCrest in the GLSL): ln tau* at least the crest's at the angle az / R beyond the crest, -Infinity inside it
+  const xCrestJS = (R, az) => { const c = crestJS(); if (!c || R <= c.R) return -Infinity; const th = az / R; return c.a - 0.5 * th * th / (c.h * c.h); };
+  // the starlight over the crest that the gas at R takes, per unit area (betaOver in the GLSL): its depth toward the star per
+  // e-fold of R at the crest's angle, tau*(R, th_c) = e^(a(R) - th_c^2 / 2 h^2), over the band of angles h^2 / th_c across which
+  // that depth falls by e, times MODEL.C_OVER. The ray-by-ray integration gives 0.6 of that from 30 to 70 au and 0.7 to 0.9
+  // nearer the crest; C_OVER 0.5, rounded down so that it overtakes the local beta only beyond 15 au (15.1 au; the disk inside
+  // keeps its temperature and its picture to the bit). 0 inside half the crest's radius, where it stays under the local beta for
+  // R_c from 5 to 200 au (at most 0.62 of it), and with the cut
+  const betaOverJS = (R) => { const c = crestJS(); if (!c || R <= 0.5 * c.R) return 0; const h = MODEL.H0 * Math.pow(R, 0.25); return MODEL.C_OVER / c.th * h * h * Math.exp(MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) - 0.5 * c.th * c.th / (h * h)); };
   const zBase =(Rf) => MODEL.H0 * Math.pow(Rf, 1.25) * Math.sqrt(2 * Math.max(MODEL.LNTAU1 - 1.25 * Math.log(Rf) - cutOut(Rf), 1));
   const SigmaJS = (R) => Math.exp(-Math.log(R) - cutOut(R)) * ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, R);
   // (round 8) the pebbles' outer edge relative to the gas's (see MODEL.R_PEB)
@@ -4081,7 +4219,8 @@ void main(){
   // (round 7) the temperature, as tempAt in the GLSL (see THERMO), at R, z/H and ln tau* x, for the star's luminosity lum
   // relative to its own; the midplane's; and the snow line, where the midplane is at TICE (bisection: it falls with R)
   const erfJS = (x) => { const x2 = x * x, a = 0.147; return Math.sign(x) * Math.sqrt(1 - Math.exp(-x2 * (1.2732395 + a * x2) / (1 + a * x2))); };
-  const betaIrrJS = (R) => { const c = cutOut(R), a = Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - c, 1); return Math.max(MODEL.H0 * Math.pow(R, 0.25) * Math.sqrt(2 * a) * (0.25 - (0.625 + 0.5 * cutSlope(R)) / a), 0) + 0.004 / R; };
+  // (round 18b: or the starlight over the crest where that is more, betaOverJS, as Eabs)
+  const betaIrrJS = (R) => { const c = cutOut(R), a = Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - c, 1); return Math.max(Math.max(MODEL.H0 * Math.pow(R, 0.25) * Math.sqrt(2 * a) * (0.25 - (0.625 + 0.5 * cutSlope(R)) / a), 0), betaOverJS(R)) + 0.004 / R; };
   const tInt4JS = (R, zh, lum = 1) => {
     const m = mriAmpJS(R), az = Math.abs(zh), u = 1 - erfJS(az * Math.SQRT1_2), za = zAccHJS(R), ua = Math.max(1 - erfJS(za * Math.SQRT1_2), 1e-6);
     const tm4 = THERMO.KM / (R * R * R) * (az < za ? 1 : (THERMO.TAU_HEAT * u / ua + 0.57735) / (THERMO.TAU_HEAT + 0.57735));
@@ -4633,8 +4772,8 @@ void main(){
   // (round 7) the temperature's table (tInt4 in the GLSL, uThermo on unit 15), from the script's own laws (tInt4JS): T_acc with the
   // floor, and T_i for THERMO's luminosity, in K (half floats, linearly filtered): ttNR() radii uniform in ln R from 0.02 to 40 au by
   // TT_NZ heights from 0 to 8 H. (Round 14a: a function, made again when the parameters change; it was a block of init.)
-  // (Round 18a: ttNR radii to ttSpan times 0.02 au: 605 to 160 au with the disk's exponential tail, MODEL.TAIL, in the steps of
-  // ln R of before (604 = 511 ln 8000 / ln 2000, rounded); 512 to 40 au with the cut of before; as the GLSL's TT_NR and TT_DLN)
+  // (Round 18a: ttNR radii to ttSpan times 0.02 au: 605 to 160 au with the disk's tail, MODEL.TAIL (round 18b's Gaussian), in the
+  // steps of ln R of before (604 = 511 ln 8000 / ln 2000, rounded); 512 to 40 au with the cut of before; as the GLSL's TT_NR and TT_DLN)
   const TT_NZ = 128, ttNR = () => (MODEL.TAIL ? 605 : 512), ttSpan = () => (MODEL.TAIL ? 8000 : 2000);
   function thermoTableData() {
     const NR = ttNR(), NZ = TT_NZ, ln0 = Math.log(0.02), dln = Math.log(ttSpan()) / (NR - 1), d = new Float32Array(NR * NZ * 2);
@@ -4712,8 +4851,11 @@ void main(){
       const lv = Math.round(Number(box.dataset.fast)), k = Number(box.dataset.fastk);
       return { lvl: lv >= 1 ? Math.min(2, lv) : 0, K: k >= 0.2 && k <= 1 ? k : 0.6, B: 8, N: 128, AGE: 10 };
     })();
-    // (round 18a: SIG_CUT, the gas's cut of before; SIG_RC, another R_c for its taper; see MODEL.TAIL)
-    const hdrDefs = [mpConst && 'MP_CONST', wextOld && 'WEXT_OLD', !MODEL.TAIL && 'SIG_CUT', MODEL.TAIL && MODEL.RC !== MODEL.R_OUT && 'SIG_RC ' + G(MODEL.RC)].filter(Boolean);
+    // (round 18a: SIG_CUT, the gas's cut of before; SIG_RC, another R_c for its taper; see MODEL.TAIL. Round 18b: CREST, the crest of
+    // the irradiated surface for this taper, crestJS, with the tail)
+    const crest = crestJS();
+    const hdrDefs = [mpConst && 'MP_CONST', wextOld && 'WEXT_OLD', !MODEL.TAIL && 'SIG_CUT', MODEL.TAIL && MODEL.RC !== MODEL.R_OUT && 'SIG_RC ' + G(MODEL.RC),
+      crest && 'CREST vec4(' + [crest.R, crest.a, crest.h, crest.th].map(G).join(', ') + ')'].filter(Boolean);
     const mpHdr = (src) => hdrDefs.reduce((s, d) => (s.includes('#define ' + d + '\n') ? s : s.replace('#version 300 es\n', '#version 300 es\n#define ' + d + '\n')), src);
     let MPV = mpValues();
     const mpLoc = new Map();
@@ -5272,10 +5414,10 @@ void main(){
       accMarks.push({ R0, phi0: phi0 + 2.4, side: -1, u: (0.618034 * i + 0.5) % 1 });
     }
     // starlight reaching a point at radius R and height h: softened falloff with the distance from the star,
-    // shadowed inside the disk (optical depth toward the star)
+    // shadowed inside the disk (optical depth toward the star; round 18b: and in the crest's shadow, xCrestJS)
     const starlight = (R, h) => {
       const Hs = MODEL.H0 * Math.pow(R, 1.25);
-      const tau = Math.exp(Math.min(Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) - 0.5 * h * h / (Hs * Hs), -30), 30));
+      const tau = Math.exp(Math.min(Math.max(Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) - 0.5 * h * h / (Hs * Hs), xCrestJS(R, Math.abs(h))), -30), 30));
       return (0.2 + 0.8 * Math.exp(-tau)) / (1 + Math.pow((R * R + h * h) / 225, WIND_SOFT / 2));
     };
     // A line keeps its shape in the frame rotating with its foot, so its samples are computed once: radius,
@@ -6399,8 +6541,10 @@ void main(){
     const coG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     overlay.appendChild(coG);
     const LN10 = Math.LN10, CHI_C = 0.03;
-    // ln tau* toward the star with the planets' gaps, behind each inner rim at least that of the rim (as xRim)
-    const lnTauJS = (R, z) => {
+    // ln tau* toward the star with the planets' gaps, behind each inner rim at least that of the rim (as xRim). (Round 18b: and
+    // beyond the crest of the irradiated surface at least the crest's at the same angle, xCrestJS, as the shaders' x. lnTauLocJS
+    // without the crest's shadow: the gas's own depth, which places the faces as the GLSL's q.z does, where there is gas)
+    const lnTauLocJS = (R, z) => {
       let x = MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnAll(R) - 0.5 * z * z / (Hof(R) * Hof(R));
       const th = Math.abs(z) / R;
       for (const rim of rims()) {
@@ -6410,8 +6554,10 @@ void main(){
       }
       return x;
     };
+    const lnTauJS = (R, z) => Math.max(lnTauLocJS(R, z), xCrestJS(R, Math.abs(z)));
     // height where ln tau* = lt (the irradiation surface for lt = 0), and where the disk gas is 10^lr of the
-    // midplane at 1 au; NaN where the column does not reach it. Behind the gap's rim tau* is found by bisection.
+    // midplane at 1 au; NaN where the column does not reach it. Behind the gap's rim tau* is found by bisection. (Round 18b:
+    // beyond the crest the higher of the gas's own and the crest's shadow's, R h_c sqrt(2 (a_c - lt)))
     const zOfTau = (R, lt) => {
       if (rims().some((rim) => R > rim.R && R < rim.end + 0.5)) {
         if (lnTauJS(R, 0) < lt) return NaN;
@@ -6419,8 +6565,10 @@ void main(){
         for (let i = 0; i < 40; i++) { const m = 0.5 * (lo + hi); if (lnTauJS(R, m) > lt) lo = m; else hi = m; }
         return 0.5 * (lo + hi);
       }
-      const a = MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnAll(R) - lt;
-      return a > 0 ? Hof(R) * Math.sqrt(2 * a) : NaN;
+      const a = MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnAll(R) - lt, z = a > 0 ? Hof(R) * Math.sqrt(2 * a) : NaN;
+      const c = crestJS();
+      if (c && R > c.R && c.a > lt) { const zc = R * c.h * Math.sqrt(2 * (c.a - lt)); return isNaN(z) ? zc : Math.max(z, zc); }
+      return z;
     };
     const zOfRho = (R, lr) => { const v = Math.log(SigmaJS(R) * Math.exp(gapLnAll(R)) * MODEL.H0 / Hof(R)) - lr * LN10; return v > 0 ? Hof(R) * Math.sqrt(2 * v) : NaN; };
     const sliceGeom = {};               // lines in (R, z), R >= 0 and z >= 0, built once per quantity and gap depth
@@ -6500,7 +6648,8 @@ void main(){
         }
       }
       sliceGeom.key = key; sliceGeom.g = g;
-      g.tau1 = logspace(MODEL.R_IN, RB_JS - 1, 300).map((R) => [R, zOfTau(R, 0)]).filter((pt) => !isNaN(pt[1]));
+      // (round 18b: on the painted face only, where the gas's own depth reaches e^-4.5: beyond the gas the crest's shadow goes on)
+      g.tau1 = logspace(MODEL.R_IN, RB_JS - 1, 300).map((R) => [R, zOfTau(R, 0)]).filter((pt) => !isNaN(pt[1]) && lnTauLocJS(pt[0], pt[1]) > -4.5);
       // (the snow line on the faces: the 160 K surface of the temperature (round 7: tempAt), from the midplane at the snow
       // line up to where even the superheated grains in full starlight are colder (rIceS), and up along that radius to
       // the top of the painted face)
@@ -6790,7 +6939,7 @@ void main(){
       // (Disk Lab v2, round 6: the density's face is clear in the tube along the axis, where no field line of the model
       // carries gas (those from inside the disk's inner edge, R_IN, are empty), as in the shader)
       if (opt.sliceQ === 'rho') return R < RB_JS - 1 && Math.abs(z) < ZB_JS - 1 && !(Math.abs(z) > zBase(MODEL.R_IN) && R < fieldRP(MODEL.R_IN, Math.abs(z))[0]) ? ss(0.82, 1, sliceU) : 0;
-      const x = lnTauJS(Math.max(R, 1e-3), z), hole = ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, R);
+      const x = lnTauLocJS(Math.max(R, 1e-3), z), hole = ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, R);   // (round 18b: the gas's own, as the face's q.z)
       return (opt.sliceQ === 'layers' ? (Math.abs(z) <= zBase(R) ? 1 : 0) : ss(-6, -4.5, x)) * hole * ss(0.82, 1, sliceU);
     }
     // The cutaway opens and closes as a sweep: sliceU goes from 0 (closed) to 1 (open) in 1.5 s, as the fades do, and

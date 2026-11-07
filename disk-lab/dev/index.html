@@ -23,7 +23,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-wave.png?v=a5-bold-20261015">
 <link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="disk-lab.css?v=677d48d1ef">
+<link rel="stylesheet" href="disk-lab.css?v=e01a79aa12">
 <!-- (round 10a) the prefix of the keys this build keeps on the device: none for the public page; a development build's own
      (ver2/tools/disk-lab-v2/make-dev.sh), so that nothing of it reaches the public page on the same origin -->
 <meta name="disk-lab-store" content="disk-lab-dev:">
@@ -88,12 +88,12 @@
   })();
 </script>
 <link rel="expect" href="#posterFirst" blocking="render">
-<script type="module" src="app.js?v=01b64a0f0c"></script>
+<script type="module" src="app.js?v=99928908f2"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
   <header class="bar">
-    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build dev" data-version-tag>開発版 1.9-dev.23</span></p>
+    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build dev" data-version-tag>開発版 1.9-dev.24</span></p>
     <div class="bar-end">
       <button type="button" class="text-button" id="aboutOpen" aria-haspopup="dialog"><span class="en" lang="en"><span class="long">About this model</span><span class="short">About</span></span><span class="ja" lang="ja"><span class="long">このモデルについて</span><span class="short">解説</span></span></button>
       <button type="button" class="text-button" id="historyOpen" aria-haspopup="dialog"><span class="en" lang="en"><span class="long">What’s new</span><span class="short">New</span></span><span class="ja" lang="ja"><span class="long">更新履歴</span><span class="short">履歴</span></span></button>
@@ -131,7 +131,7 @@
     <!-- (round 12a) the probe's panel: the model's numbers at the point tapped (app.js, probeRender) -->
     <div class="probe-panel" id="probePanel" role="status" aria-live="polite" hidden></div>
     <p class="stage-note" id="stageNote" role="status" aria-live="polite"></p>
-    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.9-dev.23 (2026-11-02) · engine 0e3f1a7004</p></div>
+    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.9-dev.24 (2026-11-02) · engine 9c1f5b1d9b</p></div>
     <!-- (round 10a) the safe start's note, with its offers; the last visit's record to read and copy -->
     <div class="stage-safe" id="stageSafe" role="status" hidden></div>
     <div class="stage-log" id="stageLog" role="dialog" aria-modal="false" aria-labelledby="logTitle" hidden></div>
@@ -306,7 +306,7 @@
       <input class="link-field" id="linkField" type="text" readonly hidden data-aria-en="Link to this view" data-aria-ja="この眺めのリンク">
       <p class="rail-note cite" id="citeRail"></p>
     </section>
-    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.9-dev.23 (2026-11-02) · engine 0e3f1a7004</p>
+    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.9-dev.24 (2026-11-02) · engine 9c1f5b1d9b</p>
   </aside>
 
   <section class="dock" id="dock" aria-labelledby="dockTitle">
@@ -341,7 +341,7 @@
   <div class="about-inner">
     <button type="button" class="icon-button about-close" id="aboutClose" data-aria-en="Close" data-aria-ja="閉じる"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
     <h2 id="aboutTitle" tabindex="-1" autofocus><span class="en" lang="en">About this model</span><span class="ja" lang="ja">このモデルについて</span></h2>
-    <p class="about-ver"><span data-version>Disk Lab v1.9-dev.23 (2026-11-02) · engine 0e3f1a7004</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
+    <p class="about-ver"><span data-version>Disk Lab v1.9-dev.24 (2026-11-02) · engine 9c1f5b1d9b</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
     <p class="about-log"><a href="/disk-lab/changelog.html"><span class="en" lang="en">What’s new, version by version</span><span class="ja" lang="ja">更新履歴(版ごとの変更)</span></a></p>
     <p class="tagline"><span class="en" lang="en">An interactive, physics-based visualization of protoplanetary disks, from magnetic fields and disk winds to planet formation and observational signatures.</span><span class="ja" lang="ja">磁場と円盤風から、惑星の形成、観測で見える姿まで。原始惑星系円盤を物理にもとづいて描き、操作しながら見られるようにしたものです。</span></p>
     <p class="lead"><span class="en" lang="en">The model is schematic: the equations and solutions come from the literature; strengths, colours and other settings are chosen so that the structure reads clearly. It is not the output of a simulation.</span><span class="ja" lang="ja">ただし模式的なモデルです。式と解は文献のものを使い、強さや色などの値は構造が読み取りやすいように選んでいます。シミュレーションの結果そのものではありません。</span></p>
@@ -350,7 +350,7 @@
     <h3><span class="en" lang="en">What is in it</span><span class="ja" lang="ja">入っているもの</span></h3>
     <dl class="facts">
       <dt><span class="en" lang="en">Disk</span><span class="ja" lang="ja">円盤</span></dt>
-      <dd><span class="en" lang="en">Its characteristic radius is 30 au: the surface density falls as 1/R and, beyond about 30 au, exponentially (Σ ∝ R<sup>−1</sup> e<sup>−R/30 au</sup>, the self-similar disk of Lynden-Bell &amp; Pringle 1974), so the gas thins out past it rather than ending there. The thickness, H/R = 0.045 (R/1 au)<sup>1/4</sup>, flares outward. It is drawn about 1.7 times thicker than its own temperature would make it (about 174 K at 1 au, which holds up H/R ≈ 0.026), so that its layers show; the surface density is kept, and everything built on the thickness follows it (the lit surface, the wind’s base, the gaps). The star has the Sun’s mass and 2.7 times its luminosity (a young star); the disk feeds it 10<sup>−7</sup> solar masses a year. These are the defaults: under Model the star’s luminosity, the accretion rate, the turbulence, the lever arm of the wind and more can be changed, and the temperature, the edge of the thermally ionized inner disk and the wind follow (the numbers that follow are given there).</span><span class="ja" lang="ja">特性半径は 30 au。面密度は半径に反比例し、30 au あたりから外では指数関数的に減ります(Σ ∝ R<sup>−1</sup> e<sup>−R/30 au</sup>。Lynden-Bell &amp; Pringle 1974 の相似解)。円盤はそこで切れず、外へ薄れていきます。厚み H/R = 0.045 (R/1 au)<sup>1/4</sup> で外ほど反り返ります。層の構造が見えるよう、自身の温度(1 au で約 174 K)が支える厚み(H/R ≈ 0.026)の 1.7 倍ほどに描いています。面密度は変えず、厚みで決まるもの(照らされた表層、風の根元、ギャップ)はそれに従います。中心星は太陽の質量で、明るさは太陽の 2.7 倍(若い星)。円盤から星へ年に太陽質量の 10<sup>−7</sup> 倍のガスが降着します。ここに書いた数は既定の値です。「モデル」で星の光度、降着率、乱流の強さ、風のレバーアームなどを変えると、温度、熱電離した内側円盤の縁、円盤風がそれに従います(その数も「モデル」に出ます)。</span></dd>
+      <dd><span class="en" lang="en">Its characteristic radius is 30 au: the surface density falls as 1/R and, beyond about 30 au, steeply, as a Gaussian (Σ ∝ R<sup>−1</sup> e<sup>−(R/30 au)²</sup>), so the gas thins out past it rather than ending there. The thickness, H/R = 0.045 (R/1 au)<sup>1/4</sup>, flares outward. It is drawn about 1.7 times thicker than its own temperature would make it (about 174 K at 1 au, which holds up H/R ≈ 0.026), so that its layers show; the surface density is kept, and everything built on the thickness follows it (the lit surface, the wind’s base, the gaps). The star has the Sun’s mass and 2.7 times its luminosity (a young star); the disk feeds it 10<sup>−7</sup> solar masses a year. These are the defaults: under Model the star’s luminosity, the accretion rate, the turbulence, the lever arm of the wind and more can be changed, and the temperature, the edge of the thermally ionized inner disk and the wind follow (the numbers that follow are given there).</span><span class="ja" lang="ja">特性半径は 30 au。面密度は半径に反比例し、30 au あたりから外ではガウス関数の形で急に減ります(Σ ∝ R<sup>−1</sup> e<sup>−(R/30 au)²</sup>)。円盤はそこで切れず、外へ薄れていきます。厚み H/R = 0.045 (R/1 au)<sup>1/4</sup> で外ほど反り返ります。層の構造が見えるよう、自身の温度(1 au で約 174 K)が支える厚み(H/R ≈ 0.026)の 1.7 倍ほどに描いています。面密度は変えず、厚みで決まるもの(照らされた表層、風の根元、ギャップ)はそれに従います。中心星は太陽の質量で、明るさは太陽の 2.7 倍(若い星)。円盤から星へ年に太陽質量の 10<sup>−7</sup> 倍のガスが降着します。ここに書いた数は既定の値です。「モデル」で星の光度、降着率、乱流の強さ、風のレバーアームなどを変えると、温度、熱電離した内側円盤の縁、円盤風がそれに従います(その数も「モデル」に出ます)。</span></dd>
       <dt><span class="en" lang="en">Gas and its temperature</span><span class="ja" lang="ja">ガスと温度</span></dt>
       <dd><span class="en" lang="en">The gas carries small dust grains, well mixed with it (they evaporate inside about 0.08 au); the two are shown together, as the gas. The temperature follows from the starlight and the accretion (Chiang &amp; Goldreich 1997; Mori et al. 2019, 2021, 2025): the grains in the thin layer a few scale heights up that absorbs the grazing starlight (the white line on the cut, τ* = 1) are superheated, about 590 K at 1 au, and the interior below is warmed by the light they give off again, about 155 K at 1 au. In a magnetically accreting disk the accretion releases its heat high up, where most of it escapes; at 10<sup>−7</sup> solar masses a year it still warms the interior to about 174 K at 1 au, so the water snow line lies near 1.1 au. Only inside about 0.7 au, where the disk is turbulent, does it make the midplane the hottest, above 1000 K (up to about 1500 K, where the dust evaporates). The temperature shows on the cut (its Temperature quantity) and in the observed looks: in the visible and mid-infrared looks the lit surface is what you see (its light is integrated analytically).</span><span class="ja" lang="ja">ガスには小さな塵がよく混ざっています(約 0.08 au より内側では蒸発してありません)。この二つを合わせて「ガス」として見せています。温度は星の光と降着から求めています(Chiang &amp; Goldreich 1997、Mori et al. 2019, 2021, 2025)。斜めに当たる星の光を吸う数スケールハイト上の薄い層(断面の白い線、τ* = 1)の塵は過熱されて 1 au で約 590 K、その下の内部は塵が出し直す光で温まり 1 au で約 155 K です。磁場で降着する円盤では降着の熱が上の方で出て大半が逃げますが、年に太陽質量の 10<sup>−7</sup> 倍の降着では内部も 1 au で約 174 K まで温まり、水のスノーラインは約 1.1 au にあります。乱流のある約 0.7 au より内側でだけ、降着の熱で赤道面が最も熱くなり、1000 K を超えます(塵が蒸発する約 1500 K まで)。温度は断面の「温度」と観測の見え方で見られます。可視光と中間赤外の見え方では、この照らされた表層が見えます(光り方は解析的に積分しています)。</span></dd>
       <dt><span class="en" lang="en">Pebbles and the snow line</span><span class="ja" lang="ja">小石とスノーライン</span></dt>
@@ -419,7 +419,7 @@
       <li>Ansdell, M. et al. 2018, ApJ, 859, 21</li>
       <li>Cieza, L. A. et al. 2016, Nature, 535, 258 <span class="en" lang="en">(the snow line of V883 Ori in outburst)</span><span class="ja" lang="ja">(増光中の V883 Ori のスノーライン)</span></li>
     </ul>
-    <p class="colophon" id="colophon" data-version>Disk Lab v1.9-dev.23 (2026-11-02) · engine 0e3f1a7004</p>
+    <p class="colophon" id="colophon" data-version>Disk Lab v1.9-dev.24 (2026-11-02) · engine 9c1f5b1d9b</p>
   </div>
 </dialog>
 <script id="posterFirst">
