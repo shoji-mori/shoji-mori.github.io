@@ -5,6 +5,10 @@
 const CITE_LINE = (y, url, v) => `Mori, S. ${y}, Disk Lab: an interactive model of a protoplanetary disk (v${v}), ${url}`;
 // (round 11b) the credit burned into each frame of a video, small, in its lower right: in English for both languages, as the citation
 const CREDIT_LINE = (y, url) => `Disk Lab (Mori ${y}) · ${url.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
+// (round 13a) the names of the colours the model look lets one choose, by the engine's keys (app.js, COMPS' cols), for the colours'
+// words under show (round 18d: one map for the colour's input and its own chip; and the field lines', drawn over the picture)
+const COLS_JA = { disk: 'ガス', rock: '小石(岩)', ice: '小石(氷)', wind: '円盤風', jet: 'ジェット', env: 'エンベロープ', field: '磁力線' };
+const COLS_EN = { disk: 'Gas', rock: 'Pebbles (rock)', ice: 'Pebbles (ice)', wind: 'Wind', jet: 'Jet', env: 'Envelope', field: 'Field lines' };
 
 export const WORDS = {
   ja: {
@@ -79,7 +83,7 @@ export const WORDS = {
     play: '再生', pause: '一時停止',
     clockRate: (n) => `今は ×1/${n}。`,
     hintMouse: 'ドラッグで回転 · スクロールで拡大',
-    hintTouch: '1 本指で移動 · 2 本指で拡大と回転',
+    hintTouch: '1 本指で回転 · 2 本指で拡大と回転',   // (round 18e: one finger turns, as a drag does)
     loading: '準備しています…',
     reduced: '動きを減らす設定のため、時計を止めています。',
     linkCopied: 'リンクをコピーしました。',
@@ -153,16 +157,22 @@ export const WORDS = {
       addPlanet: '惑星を置く', picking: '円盤をクリックした半径に惑星を置きます(Esc でやめる)。',
       drop: 'タップで小石を置く', dropping: '円盤をタップ(クリック)すると、そこに小石の塊を置きます。同じ半径に 3 つ続けて置くと、惑星が育ちます(Esc でやめる)。', placed: (a) => `${a} au に惑星を置きました。`,
       noRoom: 'そこには置けません(0.05〜20 au、隣の惑星から相互ヒル半径の 4 倍以上)。', full: '惑星は 4 つまでです。',
-      // (round 13a) the model look's colours beside the components (app.js, COMPS' cols)
-      colOf: (k) => 'モデルの見え方での' + ({ disk: 'ガス', rock: '小石(岩)', ice: '小石(氷)', wind: '円盤風', jet: 'ジェット', env: 'エンベロープ' }[k] || k) + 'の色',
-      colDefault: '既定の色', colReset: (name) => `${name}の色を既定に戻す`,
+      // (round 13a) the model look's colours beside the components (app.js, COMPS' cols). (Round 18d) In each component's palette,
+      // which its swatch opens: the swatch's and the palette's name (pal; palOp in the other looks, the see-through alone), a colour's
+      // name on its row (colName), and a chip for each colour (colReset, by the colour's key)
+      pal: (name) => `${name}の色と透過`, palOp: (name) => `${name}の透過`,
+      colOf: (k) => 'モデルの見え方での' + (COLS_JA[k] || k) + 'の色', colName: (k) => ({ rock: '岩', ice: '氷' }[k] || '色'),
+      colDefault: '既定の色', colReset: (k) => `${COLS_JA[k] || k}の色を既定に戻す`,
       // (round 13e) the planets' accretion rate, which sets their own disks (app.js, the planets' panel)
       cpdMdot: '惑星への降着率', cpdMdotOf: 'すべての惑星への降着率(対数)', cpdAuto: (v) => `自動(円盤の降着率の 1/10:${v})`, cpdAutoBtn: '自動に戻す',
       cpdNote: '惑星のまわりの円盤(周惑星円盤)の温度・厚さ・ミリ波での明るさは、この降着率と惑星の質量から決まります。軽い惑星や外側の惑星(熱的質量が小さい)では、円盤でなく丸い包みになります。',
       // (round 14a) the wind's brightness in the model look, under the wind's settings (app.js, wbEls)
       windGain: '明るさ', windGainOf: 'モデルの見え方での円盤風の明るさ', windGainReset: '円盤風の明るさを既定に戻す', gainDefault: '既定',
       // (round 18a) each component's see-through, under its settings (app.js, opEls): the share of its extinction taken away
-      opac: '透過', opacOf: (name) => `${name}の透過(光をさえぎる強さを弱める割合)`, opacReset: (name) => `${name}の透過を既定(0 %)に戻す`, opacVal: (p) => `${p} %`,
+      // (round 18d: in its palette, opac the row's name; the jet's, which has no extinction and only shines, dims its light, and the
+      // field lines' draws their lines fainter: opacOf by the component's key, opacJet the note in the jet's palette)
+      opac: '透過', opacOf: (name, k) => `${name}の透過(${k === 'jet' ? '光を弱める割合' : k === 'field' ? '線を薄く描く割合' : '光をさえぎる強さを弱める割合'})`, opacReset: (name) => `${name}の透過を既定(0 %)に戻す`, opacVal: (p) => `${p} %`,
+      opacJet: 'ジェットは光るだけなので、透過は明るさを下げます。',
       planetsNote: '軌道半径 0.05〜20 au(内側の端は、星の磁場が円盤を切り取る所)、質量は地球の 10 倍から木星の 3 倍(重いほどギャップが深く広く、小石の環は孤立質量を超えるとできます)。隣どうしは相互ヒル半径の 4 倍以上離します(近すぎる軌道は不安定です)。絵の中の惑星をクリックしても動かせます。'
     },
     // (round 14a) the model's parameters, the rail's Model (app.js; the engine's box.diskParams)
@@ -289,7 +299,11 @@ export const WORDS = {
     // (app.js, renderRoll and renderStars)
     view: {
       roll: '回転', rollOf: '視線を軸にした眺めの回転', rollReset: '回転を 0° に戻す', rollVal: (d) => `${d}°`,
-      stars: '星の数', starsOf: '背景の星の数(既定の何倍か)', starsReset: '星の数を既定に戻す', starsVal: (k) => `× ${k}`
+      stars: '星の数', starsOf: '背景の星の数(既定の何倍か)', starsReset: '星の数を既定に戻す', starsVal: (k) => `× ${k}`,
+      // (round 18e) the point looked at, under the roll: its name, its arrows (app.js, renderAim) and its chip back to the star, or
+      // to the planet while one is followed
+      aim: '注視点', aimLeft: '注視点を左へ', aimUp: '注視点を上へ', aimDown: '注視点を下へ', aimRight: '注視点を右へ',
+      aimStar: '星に戻す', aimStarOf: '注視点を星に戻す', aimPlanet: '惑星に戻す', aimPlanetOf: '注視点を惑星に戻す'
     }
   },
   en: {
@@ -361,7 +375,7 @@ export const WORDS = {
     play: 'Play', pause: 'Pause',
     clockRate: (n) => ` Now ×1/${n}.`,
     hintMouse: 'Drag to turn · scroll to zoom',
-    hintTouch: 'One finger moves · two zoom and turn',
+    hintTouch: 'One finger turns · two zoom and turn',
     loading: 'Preparing…',
     reduced: 'Reduced motion is on, so the clock is stopped.',
     linkCopied: 'Link copied.',
@@ -429,16 +443,22 @@ export const WORDS = {
       addPlanet: 'Place a planet', picking: 'Click the disk where the planet should orbit (Esc to stop).',
       drop: 'Tap to drop pebbles', dropping: 'Tap (or click) the disk to drop a clump of pebbles there; three in a row near one radius grow a planet (Esc to stop).', placed: (a) => `A planet placed at ${a} au.`,
       noRoom: 'No room there (0.05 to 20 au, and at least four mutual Hill radii from a neighbour).', full: 'Four planets at most.',
-      // (round 13a) the model look's colours beside the components (app.js, COMPS' cols)
-      colOf: (k) => 'Colour of ' + ({ disk: 'the gas', rock: 'the pebbles (rock)', ice: 'the pebbles (ice)', wind: 'the wind', jet: 'the jet', env: 'the envelope' }[k] || k) + ' in the model look',
-      colDefault: 'Default colour', colReset: (name) => `${name}: back to the default colour`,
+      // (round 13a) the model look's colours beside the components (app.js, COMPS' cols). (Round 18d) In each component's palette,
+      // which its swatch opens: the swatch's and the palette's name (pal; palOp in the other looks, the see-through alone), a colour's
+      // name on its row (colName), and a chip for each colour (colReset, by the colour's key)
+      pal: (name) => `${name}: colour and see-through`, palOp: (name) => `${name}: see-through`,
+      colOf: (k) => 'Colour of the ' + String(COLS_EN[k] || k).toLowerCase() + ' in the model look', colName: (k) => ({ rock: 'Rock', ice: 'Ice' }[k] || 'Colour'),
+      colDefault: 'Default colour', colReset: (k) => `${COLS_EN[k] || k}: back to the default colour`,
       // (round 13e) the planets' accretion rate, which sets their own disks (app.js, the planets' panel)
       cpdMdot: 'Accretion onto the planets', cpdMdotOf: 'The planets’ accretion rate (all of them, log scale)', cpdAuto: (v) => `Auto (a tenth of the disk’s accretion rate: ${v})`, cpdAutoBtn: 'Back to auto',
       cpdNote: 'The temperature, thickness and millimetre brightness of each planet’s own disk (its circumplanetary disk) follow from this rate and the planet’s mass; a light or distant planet (of few thermal masses) wears a round envelope rather than a disk.',
       // (round 14a) the wind's brightness in the model look, under the wind's settings (app.js, wbEls)
       windGain: 'Brightness', windGainOf: 'Brightness of the wind in the model look', windGainReset: 'Wind: back to the default brightness', gainDefault: 'Default',
       // (round 18a) each component's see-through, under its settings (app.js, opEls): the share of its extinction taken away
-      opac: 'See-through', opacOf: (name) => `See-through of the ${name.toLowerCase()} (how much less light it blocks)`, opacReset: (name) => `${name}: back to no see-through`, opacVal: (p) => `${p} %`,
+      // (round 18d: in its palette, opac the row's name; the jet's, which has no extinction and only shines, dims its light, and the
+      // field lines' draws their lines fainter: opacOf by the component's key, opacJet the note in the jet's palette)
+      opac: 'See-through', opacOf: (name, k) => `See-through of the ${name.toLowerCase()} (${k === 'jet' ? 'how much dimmer it shines' : k === 'field' ? 'how much fainter the lines are drawn' : 'how much less light it blocks'})`, opacReset: (name) => `${name}: back to no see-through`, opacVal: (p) => `${p} %`,
+      opacJet: 'The jet only shines, so its see-through lowers its brightness.',
       planetsNote: 'Orbits of 0.05 to 20 au (the inner end is where the star\u2019s magnetic field cuts off the disk); masses of 10 Earths to 3 Jupiters (heavier planets open deeper, wider gaps, and those above the pebble isolation mass ring their gaps with pebbles). Neighbours are kept at least four mutual Hill radii apart (closer orbits are unstable). A planet in the picture can be clicked to move it too.'
     },
     // (round 14a) the model's parameters, the rail's Model (app.js; the engine's box.diskParams)
@@ -558,7 +578,10 @@ export const WORDS = {
     // (app.js, renderRoll and renderStars)
     view: {
       roll: 'Roll', rollOf: 'Roll of the view about the line of sight', rollReset: 'Roll back to 0°', rollVal: (d) => `${d}°`,
-      stars: 'Stars', starsOf: 'Number of the background’s stars (times the default)', starsReset: 'Stars: back to the default number', starsVal: (k) => `× ${k}`
+      stars: 'Stars', starsOf: 'Number of the background’s stars (times the default)', starsReset: 'Stars: back to the default number', starsVal: (k) => `× ${k}`,
+      aim: 'Point looked at', aimLeft: 'Move the point looked at left', aimUp: 'Move the point looked at up', aimDown: 'Move the point looked at down',
+      aimRight: 'Move the point looked at right', aimStar: 'Back to the star', aimStarOf: 'Point looked at back to the star',
+      aimPlanet: 'Back to the planet', aimPlanetOf: 'Point looked at back to the planet'
     }
   }
 };

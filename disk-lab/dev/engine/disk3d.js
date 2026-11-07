@@ -448,6 +448,21 @@
   ];
   const linHex = (h) => [1, 3, 5].map((i) => Math.pow(parseInt(h.slice(i, i + 2), 16) / 255, 2.2));
   const MAT_DEF = Object.fromEntries(MAT.map(([key, hex]) => [key, hex]));   // (round 13a: the defaults, see box.diskColours)
+  // (Round 18d, the owner: "for the field lines a colour palette") The field lines' colour, chosen as the materials' are
+  // (box.diskColours' 'field'), drawn in the overlay alone (the volume does not draw them: MAT and uMat stay as they were). It is
+  // their lines' core; their glow (the halo) and the magnetosphere's lines (the star's loops and the disk's open lines at its inner
+  // edge) take colours made from it in the relation the defaults have to the default core (fieldTint): on the line from white
+  // through the core, 255 - k (255 - c) a channel, the glow further from white (k 1.77, which gives the default glow to the
+  // character; less where a channel would leave the colours, so that the hue stays), the magnetosphere's nearer (k 0.48, within one
+  // unit of its default). At the default, the colours of before as they were written. The lines on the cut's face keep theirs
+  // (chosen to show on the face's colour maps, as the cut's key in the page shows them). Kept here, as MAT, so that an engine
+  // built again after a lost context draws it still.
+  const FIELD = { DEF: '#bed7ff', now: '#bed7ff', TINT: { core: '#bed7ff', halo: '#8cb8ff', mag: 'rgb(225,235,255)' }, K: { core: 1, halo: 1.77, mag: 0.48 } };
+  const fieldTint = (kind) => {
+    if (FIELD.now === FIELD.DEF) return FIELD.TINT[kind];
+    const d = [1, 3, 5].map((i) => 255 - parseInt(FIELD.now.slice(i, i + 2), 16)), k = Math.min(FIELD.K[kind], ...d.map((x) => (x > 0 ? 255 / x : Infinity)));
+    return '#' + d.map((x) => Math.round(255 - k * x).toString(16).padStart(2, '0')).join('');
+  };
   const BP = {
     C0: 0.25, SMAX: 5.484797, CHIMAX: 60.0, A0: 2.0570, B0: -3.9977,   // table grid; dR/dz and B_phi/B_z at the surface
     XI: [1, 1.0459, 1.094, 1.1445, 1.1974, 1.253, 1.3114, 1.3727, 1.4372, 1.5049, 1.5762, 1.6512, 1.73, 1.813, 1.9003, 1.9921, 2.0887, 2.1904, 2.2973, 2.4097, 2.5279, 2.6521, 2.7827, 2.9198, 3.0638, 3.215, 3.3736, 3.5398, 3.714, 3.8963, 4.0871, 4.2865, 4.4948, 4.712, 4.9383, 5.1739, 5.4186, 5.6726, 5.9356, 6.2076, 6.4881, 6.7769, 7.0733, 7.3768, 7.6864, 8.0012, 8.3199, 8.6411, 8.963, 9.2838, 9.601, 9.9122, 10.214, 10.505, 10.779, 11.034, 11.265, 11.469, 11.64, 11.775, 11.869, 11.919, 11.919, 11.868],
@@ -5519,8 +5534,9 @@ void main(){
     const U_MAX = 1 + 0.36 * 1.4, uOf = (a) => (a <= 1 ? a : 1 + 0.36 * (a - 1)), aOf = (u) => (u <= 1 ? u : 1 + (u - 1) / 0.36);
     const level = (b, n = NB) => aOf((b + 0.5) * U_MAX / n);
     const halo = [], core = [];
-    for (let b = 0; b < NB; b++) halo.push(mkPath({ fill: 'none', stroke: '#8cb8ff', 'stroke-width': 30, 'stroke-opacity': Math.min(0.6, 0.18 * level(b)).toFixed(3), 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }));
-    for (let b = 0; b < NB; b++) core.push(mkPath({ fill: 'none', stroke: '#bed7ff', 'stroke-width': 10, 'stroke-opacity': Math.min(1, level(b)).toFixed(3), 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }));
+    // (round 18d: in the field lines' colour, FIELD; #8cb8ff and #bed7ff by default)
+    for (let b = 0; b < NB; b++) halo.push(mkPath({ fill: 'none', stroke: fieldTint('halo'), 'stroke-width': 30, 'stroke-opacity': Math.min(0.6, 0.18 * level(b)).toFixed(3), 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }));
+    for (let b = 0; b < NB; b++) core.push(mkPath({ fill: 'none', stroke: fieldTint('core'), 'stroke-width': 10, 'stroke-opacity': Math.min(1, level(b)).toFixed(3), 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }));
     const elines = mkPath({ fill: 'none', stroke: '#c9d8f5', 'stroke-width': 8, 'stroke-linecap': 'round' });
     // (round 8) the flows' arrows (see ARROW), in a group of their own over the field lines (they are the gas's option, not
     // the lines'), each flow in a light tint of its material's colour: the wind's, the accretion's, the envelope's, the
@@ -5556,12 +5572,20 @@ void main(){
     magG.setAttribute('transform', 'scale(0.1)');
     const magPath = (w, op) => {
       const e = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      for (const [k, v] of [['fill', 'none'], ['stroke', 'rgb(225,235,255)'], ['stroke-width', 10 * w], ['stroke-opacity', op], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round']]) e.setAttribute(k, v);
+      for (const [k, v] of [['fill', 'none'], ['stroke', fieldTint('mag')], ['stroke-width', 10 * w], ['stroke-opacity', op], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round']]) e.setAttribute(k, v);   // (round 18d: the field lines' colour, FIELD; rgb(225,235,255) by default)
       magG.appendChild(e); return e;
     };
     const magClosed = magPath(1, 0.5), magEdge = magPath(1.3, 0.8), magOpen = magPath(1, 0.45), magCurt = magPath(1.2, 0.85), magX = magPath(1.6, 0.95);
     magCurt.setAttribute('stroke', 'rgb(255,120,150)');
     magX.setAttribute('stroke', 'rgb(255,236,170)');
+    // (round 18d) the field lines' colour (FIELD, box.diskColours' 'field') put on their lines again: the cores, the glows, the
+    // magnetosphere's lines (not its curtains, the gas falling along them, nor the X-point)
+    const fieldPaint = () => {
+      const c = fieldTint('core'), h = fieldTint('halo'), m = fieldTint('mag');
+      for (const e of core) e.setAttribute('stroke', c);
+      for (const e of halo) e.setAttribute('stroke', h);
+      for (const e of [magClosed, magEdge, magOpen]) e.setAttribute('stroke', m);
+    };
     const magXL = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     const XPOINT_LABEL = false;   // (Disk Lab v2: the X-point is marked but not named, in the view and on the cut face)
     // (Disk Lab v2, round 7: nor marked: the small cross at the X-point goes too, in the view and on the cut face, as the
@@ -5666,7 +5690,7 @@ void main(){
         dK += poly(25);
       }
       magClosed.setAttribute('d', dC); magEdge.setAttribute('d', dE); magOpen.setAttribute('d', dO); magCurt.setAttribute('d', dK); magX.setAttribute('d', dX);
-      magG.setAttribute('opacity', a.toFixed(3));
+      magG.setAttribute('opacity', (a * opt.opac[5]).toFixed(3));   // (round 18d: with the field lines' see-through, see opt.opac)
     }
     function drawMagX(a, vis) {
       if (a <= 0.01 || !XPOINT_MARK) { magXL.textContent = ''; return ''; }
@@ -5981,8 +6005,11 @@ void main(){
       // of it is drawn, its glow and its absorption alike, 0.25 to 3 (1: the model's amount); a choice of the viewer
       gain: [1, 1, 1, 1],
       // (round 18a) the see-through of the gas, the pebbles, the wind and the envelope: factors on their extinction alone, 0.05
-      // to 1 (OPAC; 1, the picture of before to the bit; see uOpac), the state's op
-      opac: [1, 1, 1, 1],
+      // to 1 (OPAC; 1, the picture of before to the bit; see uOpac), the state's op. (Round 18d, the owner: "a see-through for the
+      // jet; for the field lines a palette and a see-through bar") Six: [4] the jet's, a factor on its light, as it has no
+      // extinction to take away (on uJet, see the jet's uniforms below); [5] the field lines', a factor on the opacity of their
+      // lines in the overlay (fieldG, the magnetosphere's magG, the cut's sliceFG)
+      opac: [1, 1, 1, 1, 1, 1],
       // (round 18a) the number of the background's stars, times the default's (STARS; see uStars), the state's stars
       stars: 1
     };
@@ -6080,8 +6107,9 @@ void main(){
     descEl.style.cssText = keysEl.style.cssText = hidden;
     box.append(descEl, keysEl);
     canvas.setAttribute('aria-describedby', descEl.id + ' ' + keysEl.id);
-    const KEYS_JA = 'ドラッグで回転、Shift+ドラッグ(または中・右ボタン)で見る中心を動かす。タッチでは 1 本指で移動、2 本指のピンチで拡大・縮小、ひねって回転、そろえて上下に動かして傾き、ダブルタップで拡大、2 本指のタップで縮小。キー:矢印で回転、Shift+矢印で中心を動かす、+ と − で拡大・縮小(ホイールでの拡大・縮小はこの絵にフォーカスしてから)、Home で最初の眺め(中心は星)、C で中心を星に戻す(眺めの向きはそのまま)、スペースで一時停止、1〜5 で角度、P で惑星に寄る、F で磁力線、S で断面、A で注釈、B で星の増光、G で惑星を育てる。「タップで小石を置く」がオンのときは、円盤をクリックするとそこに小石の塊を置きます。';
-    const KEYS_EN = 'Drag to turn, Shift+drag (or the middle or right button) to move the point looked at. On a touch screen one finger moves, two fingers pinch to zoom, twist to turn and move up or down together to tilt; a double tap zooms in, a two-finger tap zooms out. Keys: arrows turn, Shift+arrows move the point looked at, + and − zoom (the wheel zooms once this picture has the focus), Home returns to the first view centred on the star, C brings the point looked at back to the star (the view kept), space pauses, 1 to 5 set the angle, P goes to the planet, F toggles the field lines, S the cut, A the annotations, B makes the star flare, G grows the planet. With \u201cTap to drop pebbles\u201d on (under Pebbles), a click on the disk drops a clump of pebbles there.';
+    // (round 18e: a drag only turns, the point looked at moved from the page's View or Shift+arrows)
+    const KEYS_JA = 'ドラッグで回転(どのボタンでも)。タッチでは 1 本指で回転、2 本指のピンチで拡大・縮小、ひねって回転、そろえて上下に動かして傾き、ダブルタップで拡大、2 本指のタップで縮小。注視点(見る中心)は「眺め」の矢印か Shift+矢印で動かし、「星に戻す」か C で星に戻す(眺めの向きはそのまま)。キー:矢印で回転、+ と − で拡大・縮小(ホイールでの拡大・縮小はこの絵にフォーカスしてから)、Home で最初の眺め(注視点は星)、スペースで一時停止、1〜5 で角度、P で惑星に寄る、F で磁力線、S で断面、A で注釈、B で星の増光、G で惑星を育てる。「タップで小石を置く」がオンのときは、円盤をクリックするとそこに小石の塊を置きます。';
+    const KEYS_EN = 'Drag to turn, with any button. On a touch screen one finger turns, two fingers pinch to zoom, twist to turn and move up or down together to tilt; a double tap zooms in, a two-finger tap zooms out. The point looked at moves with the arrows under View or with Shift+arrows, and \u201cBack to the star\u201d or C brings it back to the star (the view kept). Keys: arrows turn, + and − zoom (the wheel zooms once this picture has the focus), Home returns to the first view centred on the star, space pauses, 1 to 5 set the angle, P goes to the planet, F toggles the field lines, S the cut, A the annotations, B makes the star flare, G grows the planet. With \u201cTap to drop pebbles\u201d on (under Pebbles), a click on the disk drops a clump of pebbles there.';
     let toastTimer = 0, toastSwap = 0, toastMsg = null;   // toastMsg: the text showing, in both languages (and short ones)
     // the text for the panel: the short version on a narrow one, when there is one
     const toastText = () => { const n = W > 0 && W < 560, m = toastMsg; return ja() ? (n && m[2] ? m[2] : m[0]) : (n && m[3] ? m[3] : m[1]); };
@@ -6405,7 +6433,8 @@ void main(){
 
     // The camera looks at the star, or (follow) at the planet, turning with its orbit, or at a point moved from it by the
     // pan (panV, au, in the frame that turns with the view: the slow spin, or the planet's orbit, so that what is framed
-    // stays framed; Shift+drag, the middle or right button, two fingers, Shift+arrows; Home and the planet's view bring it
+    // stays framed; the View's arrows (box.diskNudge) and Shift+arrows move it, and the zooms toward a point under the fingers;
+    // until round 18e Shift+drag, the middle or right button and one finger too; Home and the planet's view bring it
     // back, the cut looks at the star and restores it when closed). Every change of view (buttons,
     // keys, the wheel, the tour) flies there: the view (elevation, azimuth the shorter way round, ln distance) and the
     // point looked at each move on a cubic Hermite curve that starts with the camera's present velocity, so that a
@@ -6542,6 +6571,12 @@ void main(){
       for (let i = 0; i < 3; i++) P[i] += (-dx * basis.r[i] + dy * basis.u[i]) * k;
       panV = clampPan(panOf(P));
     };
+    // (Round 18e, the owner: "move the camera from the control panel") A step of the point looked at along the picture as it is
+    // drawn (rolled, see camera): dx to the right and dy up, in tenths of the picture's height, as far as that spans at its
+    // distance (panBy), and a flight there from where the camera is, as a key's step. Shift+arrows take it, and the page's View
+    // its arrows (box.diskNudge); the point goes the arrow's way, so that the picture moves the other. (Until round 18e
+    // Shift+arrows moved the picture the arrow's way, as a drag with Shift did.)
+    const nudge = (dx, dy) => { const a = 0.1 * Hh; panBy(-dx * a, dy * a); startFly(); };
     // The overlay leaves out points nearer the camera than zN (behind it, or so near that they would be thrown far off the
     // screen): in proportion to the camera's distance from the point it looks at, up to 0.05 au, so that close to the
     // star (0.04 au) the lines in front of it and the scale bar stay (a fixed 0.05 au dropped them inside 0.1 au)
@@ -7088,7 +7123,7 @@ void main(){
     };
     function drawSlice() {
       sliceG.setAttribute('opacity', (ss(0.82, 1, sliceU) * annOf(ANN.CUT)).toFixed(3));
-      sliceFG.setAttribute('opacity', ss(0.82, 1, sliceU).toFixed(3));   // (round 15b: the field lines in the plane, not annotations)
+      sliceFG.setAttribute('opacity', (ss(0.82, 1, sliceU) * opt.opac[5]).toFixed(3));   // (round 15b: the field lines in the plane, not annotations; round 18d: with their see-through)
       if (sliceU <= 0) { for (const k in sP) sP[k].setAttribute('d', ''); sLabels.forEach((e) => { e.textContent = ''; }); drawCbar('', 0); return; }
       const ja_ = ja(), g = buildSlice(opt.sliceQ);
       let li = 0;
@@ -7846,7 +7881,9 @@ void main(){
       guardFrame();   // (round 9: the engine's own guard, see GFAC)
       const wantF = showField && lookNow === 'model' ? 1 : 0;
       fieldAmp = reduce ? wantF : wantF > fieldAmp ? Math.min(wantF, fieldAmp + dtR / 0.4) : Math.max(wantF, fieldAmp - dtR / 0.4);
-      fieldG.setAttribute('opacity', fieldAmp.toFixed(3));
+      // (round 18d: and the field lines' see-through, opt.opac[5], a factor on the lines' opacity, the envelope's streamlines drawn
+      // with them as well, as the field's toggle hides them; the fade itself, fieldAmp, and the frames' work are as before)
+      fieldG.setAttribute('opacity', (fieldAmp * opt.opac[5]).toFixed(3));
       COMP_BITS.forEach((b, i) => { compAmp[i] = toward(compAmp[i], opt.mode & b ? 1 : 0, dtR, 0.6); });
       modelAmp = toward(modelAmp, lookNow === 'model' ? 1 : 0, dtR, 0.4);
       msAmp = toward(msAmp, opt.ms ? 1 : 0, dtR, 0.6);
@@ -8010,8 +8047,11 @@ void main(){
       magFrame = { vis: magVis, ax: mAx, e1: e1.map((v) => v / e1n) };
       gl.uniform1i(U.uLook, LOOKS[lookNow]);
       gl.uniform3fv(U.uMat, matLin);   // (round 8: the materials' colours, see MAT)
-      // (round 8) the jet: its fade times the look's strength, the lower lobe's speed with the asymmetry, the clock
-      gl.uniform1f(U.uJet, jetAmp * jetAmp * (3 - 2 * jetAmp) * (JET.LOOK[lookNow] || 0));
+      // (round 8) the jet: its fade times the look's strength, the lower lobe's speed with the asymmetry, the clock. (Round 18d:
+      // and its see-through, opt.opac[4]: the jet only shines, so the factor dims its light, 1 to 0.05. On uJet, whose only other
+      // use in the shaders is to ask whether there is a jet (uJet > 0, which no factor of OPAC changes): no shader changes, and at
+      // 1 the uniform is the one of before to the bit)
+      gl.uniform1f(U.uJet, jetAmp * jetAmp * (3 - 2 * jetAmp) * (JET.LOOK[lookNow] || 0) * opt.opac[4]);
       gl.uniform1f(U.uJetLow, 1 - (1 - 1 / JET.LOW) * asymSm());
       gl.uniform1f(U.uJetT, time % 3600);
       stepsU = fastNow ? Math.round(opt.steps * (camD < 10 ? 2 : 1) * FAST.K) || 1 : Math.round(opt.steps * (camD < 10 ? 2 : 1));   // (round 16a: FAST.K of it on a moving picture's frame)
@@ -9112,7 +9152,7 @@ void main(){
     };
     const CLEAR_S = 2.5;   // (round 9: see seedPlanet; round 13b: its band of 4 Hill radii, CLEAR, gave way to the gap's, see clearOrbit)
 
-    // --- input: drag to rotate, wheel, pinch or keys to zoom, click to drop pebbles; touch as a map (see below) ---
+    // --- input: drag to rotate (round 18e: a drag only turns), wheel, pinch or keys to zoom, click to drop pebbles; touch alike (see below) ---
     // closest approach: 2 au, or 0.25 au with the slice, where the structure of the inner disk (a few
     // hundredths of an au thick at 0.1 au) is to be seen
     const EL_MAX = 89 * Math.PI / 180;
@@ -9202,11 +9242,19 @@ void main(){
       seedPlanet(R, c);
       touched();
     }
-    // The mouse and the pen: a drag turns (with Shift, or the middle or the right button, it moves the point looked at);
-    // a click is clickAt. (Round 18a: the drag is taken on the picture as it is drawn, turned back by the roll, so that what is
-    // under the pointer turns with it; with Alt (Option), a drag across rolls the camera, rightward clockwise: Shift was the pan's)
-    let panning = false, rolling = false, mousePtr = null, mouseTravel = 0;
-    // (the right button pans: no menu over the picture)
+    // the view turned by a move of dx, dy pixels on the screen, as a drag turns it (the mouse's, and one finger's since round
+    // 18e), 0.006 rad a pixel: what is under the pointer turns with it (round 18a: the move taken on the picture as it is drawn,
+    // turned back by the roll)
+    const turnBy = (dx, dy) => {
+      if (camRoll) { const c = Math.cos(camRoll), sn = Math.sin(camRoll); azUser -= (dx * c - dy * sn) * 0.006; elUser = clampEl(elUser + (dx * sn + dy * c) * 0.006); }
+      else { azUser -= dx * 0.006; elUser = clampEl(elUser + dy * 0.006); }
+    };
+    // The mouse and the pen: a drag turns, whichever button and whatever key is held; a click is clickAt. (Round 18e, the owner:
+    // "the drag is hard to follow: let it turn the disk only, and move the camera from the panel". Until then Shift, the middle
+    // or the right button moved the point looked at and Alt (Option) rolled the camera (round 18a): the point looked at is moved
+    // now from the View's arrows (box.diskNudge) or Shift+arrows, the roll from the View's slider.)
+    let mousePtr = null, mouseTravel = 0, mouseQuiet = false;
+    // (the right button turns too: no menu over the picture)
     canvas.addEventListener('contextmenu', (e) => e.preventDefault(), on);
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch' || mousePtr !== null) return;
@@ -9214,8 +9262,9 @@ void main(){
       // (only a real pointer can be captured; events made by a script have none)
       if (e.isTrusted) canvas.setPointerCapture(e.pointerId);
       takeOver(); pauseTour();
-      dragging = true; moved = false; mouseTravel = 0; px = e.clientX; py = e.clientY; panning = e.shiftKey || e.button === 1 || e.button === 2; if (e.button === 1) e.preventDefault();
-      rolling = !panning && e.altKey;   // (round 18a)
+      // (a click with Shift or Alt held stays one that does nothing, as when they moved or rolled the view; the middle button's
+      // press would start the page's own scrolling on some systems)
+      dragging = true; moved = false; mouseTravel = 0; px = e.clientX; py = e.clientY; mouseQuiet = e.shiftKey || e.altKey; if (e.button === 1) e.preventDefault();
     }, on);
     canvas.addEventListener('pointermove', (e) => {
       if (e.pointerId !== mousePtr || !dragging) return;
@@ -9223,36 +9272,36 @@ void main(){
       if ((dx || dy) && (coPending || coSavedKey || coHold)) coResume();
       // Small moves add up: a slow drag (including a path that comes back) must never become a click on release.
       mouseTravel += Math.abs(dx) + Math.abs(dy); if (mouseTravel > 3) moved = true;
-      if (panning) panBy(dx, dy);
-      else if (rolling) { rollUser = wrapPi(rollUser - dx * 0.006); rollEase = null; }   // (round 18a)
-      else if (camRoll) { const c = Math.cos(camRoll), sn = Math.sin(camRoll); azUser -= (dx * c - dy * sn) * 0.006; elUser = clampEl(elUser + (dx * sn + dy * c) * 0.006); }
-      else { azUser -= dx * 0.006; elUser = clampEl(elUser + dy * 0.006); }
+      turnBy(dx, dy);
       px = e.clientX; py = e.clientY;
       touched();
     }, on);
-    const endMouse = () => { mousePtr = null; dragging = false; panning = false; rolling = false; };
+    const endMouse = () => { mousePtr = null; dragging = false; };
     canvas.addEventListener('pointercancel', (e) => { if (e.pointerId === mousePtr) { const wasDrag = moved; endMouse(); moved = true; if (wasDrag) emitState(); } }, on);
     canvas.addEventListener('pointerup', (e) => {
       if (e.pointerId !== mousePtr) return;
-      const wasDrag = moved, wasPan = panning || rolling; endMouse();
+      const wasDrag = moved, quiet = mouseQuiet; endMouse();
       if (wasDrag) emitState();
-      if (wasDrag || wasPan || e.button > 0) return;   // (a click of the middle or right button, or with Shift, does nothing)
+      if (wasDrag || quiet || e.button > 0) return;   // (a click of the middle or right button, or with Shift or Alt, does nothing)
       clickAt(e.clientX, e.clientY);
     }, on);
-    // Touch, as a map on a phone: one finger moves the point looked at (what is under it follows it); two fingers pinch
-    // to zoom, twist to turn (the azimuth: what is under them turns with them) and, moved up or down together, tilt (the
-    // elevation: up for a lower view); a double tap zooms in toward the tapped point (it stays under the finger), a tap
-    // with two fingers zooms out; a single tap is a click (clickAt) once no second tap has followed. The picture takes
-    // every touch (touch-action: none): the page scrolls from outside the panel. The first touch shows a short hint.
+    // Touch: one finger turns, as the mouse's drag does (turnBy; round 18e, the owner: a drag only turns. Until then it moved
+    // the point looked at, as on a map: that is moved now from the View's arrows); two fingers pinch to zoom, twist to turn (the
+    // azimuth: what is under them turns with them) and, moved up or down together, tilt (the elevation: up for a lower view);
+    // a double tap zooms in toward the tapped point (it stays under the finger), a tap with two fingers zooms out; a single
+    // tap is a click (clickAt) once no second tap has followed. The zooms toward a point under the fingers (the pinch, the
+    // double tap) move the point looked at as they did. The picture takes every touch (touch-action: none): the page scrolls
+    // from outside the panel. The first touch shows a short hint.
     // (Round 8, the owner: "on a phone, two fingers sometimes move the view sideways". Reproduced with synthetic touches
     // (ver2/tools/disk-lab-v2/touch-check.js, in frame.html at 390 px): two fingers moved the point looked at in three
     // ways, now gone. Two fingers never pan: their middle's drift moved the view (80 px for two fingers dragged 80 px
     // sideways, 30 px for a pinch opened unevenly); a pinch now zooms toward the point under the fingers' first middle,
     // which stays there, and nothing follows the middle. A second finger that comes within LATE_MS of the first undoes the
-    // first one's pan (the start of a pinch, not a move; 24 px before). A finger left after two pans only once it has moved
-    // LIFT_PX from where it was when the other lifted (the drift of a lifting finger, 14 px, moved the view).)
+    // first one's move (the start of a pinch, not a move; 24 px before; since round 18e its turn, until then its pan). A finger
+    // left after two moves the view only once it has moved LIFT_PX from where it was when the other lifted (the drift of a
+    // lifting finger, 14 px, moved the view).)
     const TAP_MS = 300, TAP_PX = 10, DTAP_PX = 32, LATE_MS = 250, LIFT_PX = 24;
-    const tch = { pts: new Map(), last: null, t1: 0, t2: 0, moved: false, two: false, mode: '', g0: null, anc: null, pan0: null, lift: null, tapT: 0, tapX: 0, tapY: 0, tapTimer: 0, hinted: false };
+    const tch = { pts: new Map(), last: null, t1: 0, t2: 0, moved: false, two: false, mode: '', g0: null, anc: null, turn0: null, lift: null, tapT: 0, tapX: 0, tapY: 0, tapTimer: 0, hinted: false };
     // the first two fingers: their spread, angle and middle
     const twoOf = () => { const [a, b] = [...tch.pts.values()]; return { a, b, s: Math.hypot(b.x - a.x, b.y - a.y), ang: Math.atan2(b.y - a.y, b.x - a.x), mx: 0.5 * (a.x + b.x), my: 0.5 * (a.y + b.y) }; };
     // zoom by f toward the point under (cx, cy): the point looked at moves toward it, so that it stays under the finger
@@ -9271,10 +9320,10 @@ void main(){
       takeOver(); pauseTour();
       if (!tch.hinted) { tch.hinted = true; touchHint(); }
       // (taps are timed by the events' own times: a long frame does not stretch them)
-      if (tch.pts.size === 1) { tch.t1 = e.timeStamp; tch.moved = false; tch.two = false; tch.lift = null; tch.last = { x: e.clientX, y: e.clientY }; tch.pan0 = panV.slice(); }
+      if (tch.pts.size === 1) { tch.t1 = e.timeStamp; tch.moved = false; tch.two = false; tch.lift = null; tch.last = { x: e.clientX, y: e.clientY }; tch.turn0 = [azUser, elUser]; }
       else if (tch.pts.size === 2) {
-        // (a second finger soon after the first: the first one's pan is undone, it began the pinch)
-        if (!tch.two && e.timeStamp - tch.t1 < LATE_MS && tch.pan0) { panV = tch.pan0.slice(); touched(); }
+        // (a second finger soon after the first: the first one's turn is undone, it began the pinch)
+        if (!tch.two && e.timeStamp - tch.t1 < LATE_MS && tch.turn0) { azUser = tch.turn0[0]; elUser = tch.turn0[1]; touched(); }
         // (the gesture is told from where both fingers are now)
         tch.two = true; tch.t2 = e.timeStamp; tch.mode = ''; tch.g0 = null; tch.lift = null;
         for (const q of tch.pts.values()) { q.x0 = q.x; q.y0 = q.y; }
@@ -9287,7 +9336,7 @@ void main(){
         // (a finger left after two: still until it has moved LIFT_PX from where it was)
         if (tch.lift) { if (Math.hypot(p.x - tch.lift.x, p.y - tch.lift.y) < LIFT_PX) { tch.last = { x: p.x, y: p.y }; return; } tch.lift = null; }
         if (!tch.moved && Math.hypot(p.x - p.x0, p.y - p.y0) > TAP_PX) tch.moved = true;
-        if (tch.moved) { if (coPending || coSavedKey || coHold) coResume(); panBy(p.x - tch.last.x, p.y - tch.last.y); tch.last = { x: p.x, y: p.y }; touched(); }
+        if (tch.moved) { if (coPending || coSavedKey || coHold) coResume(); turnBy(p.x - tch.last.x, p.y - tch.last.y); tch.last = { x: p.x, y: p.y }; touched(); }
         return;
       }
       const g = twoOf();
@@ -9324,7 +9373,7 @@ void main(){
       tch.pts.delete(e.pointerId); touching = tch.pts.size > 0;
       const now = e.timeStamp;
       if (tch.two) {
-        // (a finger left after two: it goes on moving the point looked at, from where it is, once it has moved LIFT_PX)
+        // (a finger left after two: it goes on turning, from where it is, once it has moved LIFT_PX)
         if (tch.pts.size === 1) { const [r] = [...tch.pts.values()]; tch.last = { x: r.x, y: r.y }; tch.lift = { x: r.x, y: r.y }; tch.mode = ''; tch.g0 = null; return; }
         if (tch.pts.size) return;
         const tap = !tch.moved && !cancel && now - tch.t2 < TAP_MS;
@@ -9356,18 +9405,18 @@ void main(){
       hint.textContent = ja() ? 'クリックしてからホイールで拡大・縮小(⌘/Ctrl+ホイールでも。Tab でも可)' : 'Click the picture, then scroll to zoom (or \u2318/Ctrl + scroll; Tab works too)';
       hint.style.opacity = '1'; clearTimeout(hintT); hintT = setTimeout(() => { hint.style.opacity = '0'; }, 1600);
     };
-    // (the first touch: how to move, as on a map)
+    // (the first touch: how to move; round 18e: one finger turns, as a drag does, no longer as on a map)
     const touchHint = () => {
-      hint.textContent = ja() ? '1 本指で移動、2 本指で拡大と回転' : 'One finger moves, two zoom and turn';
+      hint.textContent = ja() ? '1 本指で回転、2 本指で拡大と回転' : 'One finger turns, two zoom and turn';
       hint.style.opacity = '1'; clearTimeout(hintT); hintT = setTimeout(() => { hint.style.opacity = '0'; }, 2200);
     };
     canvas.addEventListener('wheel', (e) => {
       if (document.activeElement !== canvas && !e.ctrlKey && !e.metaKey) { wheelHint(); return; }
       e.preventDefault(); pauseTour(); zoomBy(Math.exp(e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015))); emitState();
     }, { passive: false, signal: ac.signal });
-    // The keys: arrows turn (with Shift they move the point looked at, by a tenth of the picture), + and - zoom, Home goes
-    // back to the first view and to the star, C brings the point looked at back to the star (the view kept), space
-    // pauses; 1 to 5 the views' angles (VIEWS, in step with the preview page's buttons: the distance and the point looked
+    // The keys: arrows turn (with Shift they move the point looked at the arrow's way, by a tenth of the picture: nudge), + and
+    // - zoom, Home goes back to the first view and to the star, C brings the point looked at back to the star (the view kept),
+    // space pauses; 1 to 5 the views' angles (VIEWS, in step with the preview page's buttons: the distance and the point looked
     // at stay), P the planet, F the field lines, S the slice, A the annotations.
     const VIEWS = [[el0 * 180 / Math.PI, az0 * 180 / Math.PI, dist0], [10, -80, 85], [2, -80, 85], [89, -65, 100], [-14, -80, 85]];
     const PLANET_VIEW = { p: 1, el: 30, az: 160, d: 1.6, tx: 0, ty: 0, tz: 0 };
@@ -9378,7 +9427,7 @@ void main(){
       const view = (st) => { if (opt.slice) box.diskSlice(false); box.diskSet({ ...st, fly: 1 }); };
       if (path && (k.startsWith('Arrow') || k === '+' || k === '=' || k === '-' || k === '_')) pathGrab();   // (round 11a: a step from what is seen)
       if (k.startsWith('Arrow') && (coPending || coSavedKey || coHold)) coResume();
-      if (e.shiftKey && k.startsWith('Arrow')) { const a = 0.1 * Hh; panBy(k === 'ArrowLeft' ? -a : k === 'ArrowRight' ? a : 0, k === 'ArrowUp' ? -a : k === 'ArrowDown' ? a : 0); startFly(); }
+      if (e.shiftKey && k.startsWith('Arrow')) nudge(k === 'ArrowLeft' ? -1 : k === 'ArrowRight' ? 1 : 0, k === 'ArrowUp' ? 1 : k === 'ArrowDown' ? -1 : 0);
       else if (k === 'ArrowLeft') { azUser += 0.08; startFly(); } else if (k === 'ArrowRight') { azUser -= 0.08; startFly(); }
       else if (k === 'ArrowUp') { elUser = clampEl(elUser + 0.05); startFly(); } else if (k === 'ArrowDown') { elUser = clampEl(elUser - 0.05); startFly(); }
       else if (k === '+' || k === '=') zoomBy(0.8); else if (k === '-' || k === '_') zoomBy(1.25);
@@ -9484,7 +9533,8 @@ void main(){
     // MAT's third column). Into the uniform uMat at the next frame, and a still picture starts over (colGen). Nothing is kept
     // here: the page keeps them with its settings and in its links; MAT holds them (shared, as box.diskPalette's), so that an
     // engine built again after a lost context draws them still. Returns { now, def }: the colours now and the defaults, by
-    // key; without an argument it changes nothing.
+    // key; without an argument it changes nothing. (Round 18d: and 'field', the field lines' colour, FIELD, in the same way; it
+    // is the overlay's, put on the lines at once, so no still starts over for it)
     box.diskColours = (set) => {
       if (set !== undefined) {
         const o = set && typeof set === 'object' ? set : {};
@@ -9495,8 +9545,10 @@ void main(){
           m[1] = hex; matLin.set(linHex(hex).map((c) => c * m[2]), 3 * i); changed = true;
         });
         if (changed) { colGen++; touched(); }
+        const f = typeof o.field === 'string' && /^#[0-9a-f]{6}$/i.test(o.field) ? o.field.toLowerCase() : FIELD.DEF;
+        if (f !== FIELD.now) { FIELD.now = f; fieldPaint(); }
       }
-      return { now: Object.fromEntries(MAT.map(([key, hex]) => [key, hex])), def: { ...MAT_DEF } };
+      return { now: { ...Object.fromEntries(MAT.map(([key, hex]) => [key, hex])), field: FIELD.now }, def: { ...MAT_DEF, field: FIELD.DEF } };
     };
     // (round 14a, the owner: "let the model's parameters be changed") The model's parameters (PAR, PAR_SPEC) in one call:
     // { key: value } for PAR_SPEC's keys; a key left out, or not a finite number, takes its default, a value outside its range the
@@ -9562,8 +9614,9 @@ void main(){
       if (st.coRangeFixed != null && st.coRangeFixed !== 0 && st.coRangeFixed !== 1) delete st.coRangeFixed;
       for (const k of ['tx', 'ty', 'tz']) if (st[k] != null) st[k] = Math.min(PAN_MAX, Math.max(-PAN_MAX, st[k]));
       // (round 18a) the see-through, four factors (the gas, the pebbles, the wind, the envelope) within OPAC; one that is not a
-      // finite number is 1, a list of another length is left out
-      if (st.op != null) { if (Array.isArray(st.op) && st.op.length === 4) st.op = st.op.map((v) => { const x = finiteNumber(v); return isFinite(x) ? Math.min(OPAC[1], Math.max(OPAC[0], x)) : 1; }); else delete st.op; }
+      // finite number is 1, a list of another length is left out. (Round 18d: six, with the jet's and the field lines' (see
+      // opt.opac); a list of four, as dev.23 to dev.25 wrote them in links and kept them on the device, taken with those two at 1)
+      if (st.op != null) { if (Array.isArray(st.op) && (st.op.length === 6 || st.op.length === 4)) st.op = [...st.op, 1, 1].slice(0, 6).map((v) => { const x = finiteNumber(v); return isFinite(x) ? Math.min(OPAC[1], Math.max(OPAC[0], x)) : 1; }); else delete st.op; }
       return st;
     };
     box.diskSet = (raw) => {
@@ -9676,6 +9729,16 @@ void main(){
     box.diskPlanets = () => planets.map((p) => { const q = project(planetPosOf(p, time)); return { a: p.a, on: p.on, shown: p.amp, x: q[2] > zN ? q[0] : null, y: q[2] > zN ? q[1] : null }; });
     // back to the centre: the point looked at back to the star (the planet, when following it), the view as it is
     box.diskCenter = () => { box.diskSet({ tx: 0, ty: 0, tz: 0, fly: 1 }); emitState(); };
+    // (round 18e) the View's arrows: the point looked at stepped along the picture, dx to the right and dy up in tenths of its
+    // height (the page sends -1, 0 or 1), as Shift+arrows step it (nudge); from what is seen, as a key's step (a path left where
+    // it has brought the camera). Anything not a number, or no step, does nothing
+    box.diskNudge = (dx, dy) => {
+      const x = finiteNumber(dx), y = finiteNumber(dy);
+      if (!isFinite(x) || !isFinite(y) || (!x && !y)) return;
+      pathGrab();
+      if (coPending || coSavedKey || coHold) coResume();
+      nudge(x, y); touched(); emitState();
+    };
     // the first view and the star (the Home key, the page's button): the slice closed, the point looked at the star
     box.diskHome = () => { box.diskSet({ p: 0, slice: 0, el: el0 * 180 / Math.PI, az: az0 * 180 / Math.PI, d: dist0, tx: 0, ty: 0, tz: 0, roll: 0, fly: 1 }); emitState(); };   // (round 18a: roll 0)
     // (Round 12b) diskTilt({ el, az }): the view turned by a small offset (degrees, each at most 6), for looking in by tilting the

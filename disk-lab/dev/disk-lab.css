@@ -221,18 +221,32 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 
 /* the components (Show): a toggle each; turned on, its settings below it */
 .comps{display:grid;gap:5px}
-.comp{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:10px;row-gap:5px}
+.comp{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:10px;row-gap:5px}
 .comp>.toggle{justify-self:start}
-/* (round 13a) beside the toggle: the colours of its materials in the model look, small swatches, and the chip back to the default */
-.comp-cols{display:inline-flex;flex-wrap:wrap;align-items:center;gap:5px;justify-self:start;min-width:0}
-/* (round 18c) in the looks other than the model's the colours are hidden and the see-through's slider stays */
-.comp-cols.no-cols input[type=color],.comp-cols.no-cols [data-col-reset]{display:none}
-.comp-cols input[type=color]{width:26px;height:22px;padding:0;border:1px solid var(--line-2);border-radius:6px;background:none;cursor:pointer;flex:none}
-.comp-cols input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
-.comp-cols input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
-.comp-cols input[type=color]::-moz-color-swatch{border:none;border-radius:4px}
-.comp-cols input[type=color]:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.comp-cols .chip{min-height:24px;padding:1px 8px;font-size:11.5px}
+/* (round 13a) beside the toggle: the colours of its materials in the model look, small swatches, and the chip back to the default.
+   (Round 18c: the see-through's slider after them. Round 18d, the owner: "moving the see-through's bar makes its text appear and the
+   row breaks onto two lines; can't it go inside the colour palette?") One small round swatch, the component's colour now in the model
+   look (the pebbles' two, in halves), the half-filled mark in the other looks. It opens the component's palette below it, within the
+   column (app.js, palPlace), over the rows that follow: a row for each colour and the see-through's, all that changes kept inside it,
+   so that the toggle's row stays one line */
+.pal-btn{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:999px;color:var(--text-2);justify-self:start;transition:background-color .2s}
+.pal-btn:hover,.pal-btn[aria-expanded=true]{background:var(--wash-2)}
+.pal-btn:focus-visible{border-radius:999px}
+.pal-dot{width:16px;height:16px;border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.32)}
+.pal-btn .op-mark{display:none;width:14px;height:14px;stroke-width:1.4}
+.pal-btn.op-only .pal-dot{display:none}
+.pal-btn.op-only .op-mark{display:block}
+.pal{position:absolute;z-index:6;width:min(100%,17rem);display:grid;gap:4px;padding:7px 10px 8px;border-radius:12px;background:rgba(18,22,34,.97);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.45);scroll-margin:8px 0 36px}
+.pal-col{display:flex;align-items:center;gap:8px;min-height:28px}
+.pal-name{min-width:4.5em;font-size:12px;color:var(--text-2)}
+.pal-col input[type=color]{width:30px;height:24px;padding:0;border:1px solid var(--line-2);border-radius:6px;background:none;cursor:pointer;flex:none}
+.pal-col input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+.pal-col input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
+.pal-col input[type=color]::-moz-color-swatch{border:none;border-radius:4px}
+.pal-col input[type=color]:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.pal-col .chip{min-height:24px;padding:1px 8px;font-size:11.5px}
+.pal .mp-row{margin:2px 0 0}
+.pal-note{margin:2px 0 0;font-size:11.5px}
 .comp-opts{grid-column:1/-1;display:grid;gap:6px;justify-items:start;width:100%;margin:0 0 4px;padding:6px 0 7px 12px;border-left:1px solid var(--line-2)}
 .toggle.small{min-height:26px;padding:2px 9px;font-size:12px}
 /* (round 15a) the annotations under View: a checkbox for each kind */
@@ -271,17 +285,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .mp-row .chip[hidden],.cpd-mdot .chip[hidden]{display:inline-flex!important;visibility:hidden}
 .mp-derived{margin:4px 0 2px;font-size:11.5px}
 .gain-row{margin:2px 0 0}
-/* (round 18b, the owner: the see-through's controls more discreet) a component's see-through under its settings: a small half-filled
-   mark and a short slider, no name (its aria-label and title carry it), dimmed at rest; its value and the chip back to the default only
-   once it is changed (.changed), after the slider, which keeps its place and its length */
-.op-row{display:inline-flex;align-items:center;gap:6px;min-height:24px;margin-left:4px;color:var(--text-3)}   /* (round 18c: in the colours' span) */
-.op-row .op-mark{width:12px;height:12px;stroke-width:1.4}
-.op-row input[type=range]{flex:none;width:6.5em;min-width:0;height:18px;margin:0;accent-color:var(--text-2);opacity:.7}
-.op-row input[type=range]:hover,.op-row input[type=range]:focus-visible,.op-row.changed input[type=range]{opacity:1;accent-color:var(--accent)}
-.op-row.changed{color:var(--text-2)}
-.op-val{font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
-.op-row:not(.changed) .op-val{display:none}
-.op-row .chip{min-height:22px;padding:1px 7px;font-size:11px}
+/* (round 18b, the owner: the see-through's controls more discreet: a mark and a short slider with no name, dimmed at rest, the value and
+   the chip once changed; round 18c: in the colours' span. Round 18d: in the component's palette, a row as the parameters' (.mp-row
+   above), its name, value and chip always in their places) */
 .icon-x{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;color:var(--text-3);font-size:15px;line-height:1}
 .icon-x:hover{background:var(--wash);color:var(--text)}
 #addPlanet[aria-pressed=true]{border-color:var(--accent);color:var(--text)}
@@ -340,6 +346,14 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 /* (round 12b) the tilt switch in View (app.js, tiltInit): on shows as a move does */
 .chip[data-tilt][aria-pressed=true]{border-color:var(--accent)}
 .chip[data-tilt]:disabled{opacity:.45;cursor:default}
+/* (round 18e) the point looked at, in View under the roll: its name and the chip back to the star on a line (the chip's place kept
+   while it is hidden, as the other rows'), the four arrows under them; a press is not a double tap's zoom nor a text selection */
+.aim-pad{grid-row:2;grid-column:1/-1;display:flex;gap:5px;margin-top:2px}
+.aim{display:inline-grid;place-items:center;width:34px;height:28px;border:1px solid var(--line-2);border-radius:8px;color:var(--text-2);touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;transition:background-color .2s,border-color .2s}
+.aim:hover{background:var(--wash);border-color:rgba(255,255,255,.28);color:var(--text)}
+.aim:active{background:var(--wash-2);color:var(--text)}
+.aim svg{width:14px;height:14px}
+@media (pointer:coarse){.aim{width:44px;height:40px}}
 /* the presenter: the picture alone (the watermark and the picture's own keys kept), a black screen, the scene's name for a
    moment, and buttons in the corner while the mouse moves; the cursor hidden when it rests */
 .lab[data-present]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);grid-template-areas:"stage"}
@@ -495,12 +509,13 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 @media (pointer:coarse){
   .icon-button{width:40px;height:40px}
   .tool,.action,.chip,.toggle{min-height:40px}
-  .comp-cols input[type=color]{width:40px;height:34px}
-  .comp-cols .chip{min-height:40px}
+  .pal-btn{width:40px;height:40px}
+  .pal-dot{width:22px;height:22px}
+  .pal-col{min-height:40px}
+  .pal-col input[type=color]{width:40px;height:34px}
+  .pal-col .chip{min-height:40px}
   .mp-row .chip{min-height:40px}
-  .op-row{min-height:40px}
-  .op-row input[type=range]{width:7.5em;height:32px}
-  .op-row .chip{min-height:40px}
+  .op-row input[type=range]{height:32px}
   .ann-row{min-height:36px}
   .tool{height:40px}
   .route button{padding:9px 12px}

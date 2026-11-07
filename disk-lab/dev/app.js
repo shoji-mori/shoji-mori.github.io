@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=389a9cd3e3';
-import { WORDS } from './words.js?v=0e12645d7c';
+import { WORDS } from './words.js?v=ad491b4e48';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=a06fcbfa44';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=2db6d4efbc';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=1a7fd6b61f';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.26', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.27', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -496,6 +496,7 @@ function sync() {
   const opt = { field: s.field, marks: s.marks, asym: s.asym, waves: s.waves, drop: box.dataset.pick === 'pebbles' };
   rail.querySelectorAll('[data-opt]').forEach((b) => pressed(b, opt[b.dataset.opt]));
   rail.querySelectorAll('[data-ann]').forEach((c) => { c.checked = !!(annBits(s.ann) & Number(c.dataset.ann)); });   // (round 15a)
+  renderAim(s);   // (round 18e: the point looked at)
   rail.querySelectorAll('[data-cut]').forEach((b) => pressed(b, Number(b.dataset.cut) === s.slice));
   rail.querySelectorAll('[data-bg]').forEach((b) => pressed(b, b.dataset.bg === (s.bg || 'stars')));
   rail.querySelectorAll('[data-speed]').forEach((b) => pressed(b, Math.abs(Number(b.dataset.speed) - s.speed) < 1e-6));
@@ -514,6 +515,7 @@ function setClockRate(k) {
 // ---------- the rail (the sandbox) ----------
 rail.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b || !live()) return;
+  if (b.dataset.pal) { palToggle(b.dataset.pal); return; }   // (round 18d: a component's palette, nothing of the state changed)
   const s = S();
   // (a component may be more than one of the engine's bits, the gas with its dust: on if any is, and all turn together)
   if (b.dataset.bit) { const bit = Number(b.dataset.bit), m = s.mode & bit ? s.mode & ~bit : s.mode | bit; box.diskSet({ mode: m, ...((m & 16) && !s.planets.some((p) => p[1]) ? { planets: [...s.planets.filter((p) => roomFor([[3, 1, 1]], p[0], -1, p[2]) || !p[1]), [3, 1, 1]].slice(-4) } : {}) }); }
@@ -526,6 +528,7 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.cut) { const k = Number(b.dataset.cut); guardSwitch(keyOf({ ...s, slice: k, look: k ? 'model' : s.look })); if (k === 0) box.diskSlice(false); else box.diskSlice(true, null, k === 2 ? 'quarter' : 'half'); }
   else if (b.dataset.angle) { const [elv, az] = b.dataset.angle.split(',').map(Number); box.diskSet({ slice: 0, p: 0, el: elv, az, fly: reduce ? 0 : 1 }); }
   else if (b.id === 'recentre') box.diskCenter();
+  else if (b.dataset.aim) aimClick(b);   // (round 18e: the point looked at, a step unless a press made it)
   else if (b.id === 'resetView') goPlace(0);
   else if (b.id === 'rollReset') { box.diskSet({ roll: 0, fly: reduce ? 0 : 1 }); keepSoon(); }   // (round 18a: the roll back to 0)
   else if (b.id === 'starsReset') { box.diskSet({ stars: 1 }); renderStars(S()); keepSoon(); }   // (round 18a: the stars, the default)
@@ -543,7 +546,7 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.planetRemove != null) { const pl = S().planets; pl.splice(Number(b.dataset.planetRemove), 1); box.diskSet({ planets: pl }); }
   else if (b.id === 'addPlanet') setPick(box.dataset.pick === 'planet' ? false : 'planet');
   else if (b.dataset.cpdAuto != null) box.diskSet({ cpdMdot: 0 });   // (round 13e: the planets' accretion rate back to auto)
-  else if (b.dataset.colReset) resetCols(b.dataset.colReset);   // (round 13a: a component's colours back to the default)
+  else if (b.dataset.colReset) resetCol(b.dataset.colReset);   // (round 13a: a component's colours back to the default; round 18d: a colour's)
   else if (b.dataset.mpReset) setParam(b.dataset.mpReset, parDef && parDef[b.dataset.mpReset]);   // (round 14a: a parameter back to its default)
   else if (b.dataset.windReset) { windGain = 1; applyWind(); keepSoon(); }   // (round 14a: the wind's brightness)
   else if (b.dataset.opacReset != null) { setOpac(Number(b.dataset.opacReset), 1); keepSoon(); }   // (round 18a: the see-through)
@@ -594,7 +597,8 @@ function setAnn(bit, on) { const m = annBits(S().ann), n = on ? m | bit : m & ~b
 // lines' option from round 5, 2026-10-16; round 8, the owner: "the flow markers: an option of the gas; small arrows". They
 // show the gas's motion, drawn while the gas is shown.)
 // (round 13a) cols: the materials whose colour in the model look is chosen beside the toggle (the engine's MAT keys; see the
-// model look's colours): the gas, the pebbles' rock and ice, the wind, the jet, the envelope
+// model look's colours): the gas, the pebbles' rock and ice, the wind, the jet, the envelope. (Round 18d: in the component's
+// palette, which its swatch beside the toggle opens; see the palettes below)
 // (round 14a) the wind's brightness in the model look, a row under the wind's settings (see the wind's brightness below):
 // made here, with the components, its elements kept in wbEls
 const wbEls = {};
@@ -604,14 +608,17 @@ function wbRow() {
   wbEls.row = el('div', { class: 'mp-row gain-row', hidden: true }, wbEls.name, wbEls.input, wbEls.val, wbEls.chip);
   return wbEls.row;
 }
-// (round 18a, the owner: "the objects' transparency too") a component's see-through, a row under its settings (see the see-through
-// below): made here, its elements kept in opEls by the component's place in op; OP_MIN, the least factor, and OP_MAX, the slider's
-// end (the share taken away, %). (Round 18b, the owner: "could the see-through's controls be more discreet?") No name and no value
-// on the row: a small half-filled mark and a short slider, its name and value for the screen reader (aria-label, aria-valuetext)
-// and as the pointer's hint (title); the value and the chip back to the default only once it is changed, so that the default
-// leaves no trace. Its own class (op-row): the wind's brightness keeps its row (mp-row gain-row) as it was.
+// (round 18a, the owner: "the objects' transparency too") a component's see-through (see the see-through below): made here, its
+// elements kept in opEls by the component's place in op; OP_MIN, the least factor, and OP_MAX, the slider's end (the share taken
+// away, %). (Round 18b, the owner: "could the see-through's controls be more discreet?": a small half-filled mark and a short
+// slider with no name, the value and the chip only once it is changed. Round 18c: in the colours' span beside the toggle.)
+// (Round 18d, the owner: "moving the see-through's bar makes its text appear, and the row breaks onto two lines: deal with it;
+// can't it go inside the colour palette?") In the component's palette (see the palettes below), a row as the model's parameters'
+// (mp-row): its name over the slider, the value beside it, the chip back to the default beside the name with its place kept while
+// it is hidden, so that the slider keeps its length and its place as the value changes. Its class op-row marks it among them.
 const OP_MIN = 0.05, OP_MAX = Math.round(100 * (1 - OP_MIN));
 const opEls = [];
+// (round 18d: the face of a component's swatch in the looks other than the model's, where its palette holds the see-through alone)
 function opMark() {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', 'op-mark');
   const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); ring.setAttribute('cx', '8'); ring.setAttribute('cy', '8'); ring.setAttribute('r', '5.5');
@@ -620,17 +627,30 @@ function opMark() {
   return s;
 }
 function opRow(i) {
-  const e = { input: el('input', { type: 'range', id: 'opac' + i, min: '0', max: String(OP_MAX), step: '1', 'data-opac': String(i) }),
-    val: el('span', { class: 'op-val', 'aria-hidden': 'true' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-opac-reset': String(i), hidden: true }) };
-  e.row = el('span', { class: 'op-row' }, opMark(), e.input, e.val, e.chip);   // (round 18c: a span, inside the colours' span)
+  const e = { name: el('label', { class: 'mp-name', for: 'opac' + i }), input: el('input', { type: 'range', id: 'opac' + i, min: '0', max: String(OP_MAX), step: '1', 'data-opac': String(i) }),
+    val: el('span', { class: 'mp-val', 'aria-hidden': 'true' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-opac-reset': String(i), hidden: true }) };
+  e.row = el('div', { class: 'mp-row op-row' }, e.name, e.input, e.val, e.chip);   // (round 18d: in the palette)
   opEls[i] = e;
   return e.row;
 }
+// (round 18d) a colour's row in a component's palette: its name (the pebbles' rock and ice, else "colour"), the colour input and
+// the chip back to that colour's default, shown once it is changed
+function colRow(k) {
+  const r = { k, name: el('label', { class: 'pal-name', for: 'col-' + k }), input: el('input', { type: 'color', id: 'col-' + k, 'data-col': k }),
+    chip: el('button', { type: 'button', class: 'chip quiet', 'data-col-reset': k, hidden: true }) };
+  r.row = el('div', { class: 'pal-col' }, r.name, r.input, r.chip);
+  return r;
+}
 // (round 18a) op: the component's place in the state's op, its see-through (see the see-through below); the jet has none (its lobes
-// only shine, nothing of it takes light out of the ray), the planets' disks go with the gas's
+// only shine, nothing of it takes light out of the ray), the planets' disks go with the gas's. (Round 18d, the owner: "a see-through
+// for the jet": its place 4, a factor on its light, as its palette's note says; "for the field lines a colour palette and a
+// see-through bar": their colour 'field', drawn in the overlay, and their place 5, a factor on their lines' opacity.) opLooks: the
+// looks where the see-through has something to act on, when not all of them (the engine draws the field lines in the model look
+// alone, the jet in the model and the visible look, JET.LOOK); elsewhere its palette holds no see-through (see renderPal)
 const COMPS = [
   { key: 'gas', bit: 3, opts: ['marks'], cols: ['disk'], op: 0 }, { key: 'pebbles', bit: 4, opts: ['drop'], cols: ['rock', 'ice'], op: 1 },
-  { key: 'wind', bit: 8, opts: ['asym'], cols: ['wind'], op: 2 }, { key: 'jet', bit: 64, cols: ['jet'] }, { key: 'field', opt: 'field' },
+  { key: 'wind', bit: 8, opts: ['asym'], cols: ['wind'], op: 2 }, { key: 'jet', bit: 64, cols: ['jet'], op: 4, opLooks: ['model', 'optical'] },
+  { key: 'field', opt: 'field', cols: ['field'], op: 5, opLooks: ['model'] },
   { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32, cols: ['env'], op: 3 }
 ];   // (round 15a: the labels, a component until now, are the View's annotations, a choice for each kind)
 const compEls = COMPS.map((c) => {
@@ -645,23 +665,31 @@ const compEls = COMPS.map((c) => {
   if (c.key === 'wind') box_.append(wbRow());   // (round 14a: its brightness in the model look)
   if (c.planets) box_.append(el('p', { class: 'rail-note planets-note' }));
   // (round 13a) beside the toggle, its colours (shown in the model look once the engine has started) and the chip back to the
-  // default (shown while one of them is changed). (Round 18c, the owner: "can't the see-through's bar go in the colour palette?")
-  // Its see-through's mark and slider (opRow) sit in the same span after the colours; in the other looks the span stays, with
-  // the colours hidden (no-cols, syncComps), since the see-through works in every look.
-  const cols_ = c.cols ? el('span', { class: 'comp-cols', hidden: true }, ...c.cols.map((k) => el('input', { type: 'color', 'data-col': k })),
-    el('button', { type: 'button', class: 'chip quiet', 'data-col-reset': c.key, hidden: true }), ...(c.op != null ? [opRow(c.op)] : [])) : null;
-  const row = el('div', { class: 'comp', 'data-comp': c.key }, btn, cols_, box_);
+  // default (shown while one of them is changed). (Round 18c: the see-through's mark and slider after them.) (Round 18d) One small
+  // round swatch instead, which opens the component's palette (see the palettes below): its colours' rows and its see-through's.
+  // The palette follows the swatch in the order of the page (the Tab key goes from the swatch into it); it lies over what follows.
+  let pal = null;
+  if (c.cols || c.op != null) {
+    const id = 'pal-' + c.key, cr = (c.cols || []).map(colRow);
+    pal = { cols: cr, dot: el('span', { class: 'pal-dot', 'aria-hidden': 'true' }), note: c.key === 'jet' ? el('p', { class: 'rail-note pal-note' }) : null };   // (round 18d: the jet's, what its see-through does)
+    pal.btn = el('button', { type: 'button', class: 'pal-btn', 'data-pal': c.key, 'aria-expanded': 'false', 'aria-controls': id, hidden: true }, pal.dot, opMark());
+    pal.box = el('div', { class: 'pal', id, role: 'group', hidden: true }, ...cr.map((r) => r.row), c.op != null ? opRow(c.op) : null, pal.note);
+  }
+  const row = el('div', { class: 'comp', 'data-comp': c.key }, btn, pal && pal.btn, pal && pal.box, box_);
   $('comps').append(row);
-  return { c, row, btn, opts: box_, cols: cols_ };
+  return { c, row, btn, opts: box_, pal };
 });
 function renderComps() {
   const w = T().show;
-  for (const { c, btn, opts, cols: cs } of compEls) {
+  for (const { c, btn, opts, pal } of compEls) {
     btn.textContent = w[c.key];
-    if (cs) {   // (round 13a)
-      cs.querySelectorAll('[data-col]').forEach((i) => { const t = w.colOf(i.dataset.col); i.setAttribute('aria-label', t); i.setAttribute('title', t); });
-      const r = cs.querySelector('[data-col-reset]');
-      if (r) { r.textContent = w.colDefault; r.setAttribute('aria-label', w.colReset(w[c.key])); }
+    if (pal) {   // (round 13a; round 18d: in the palette, a chip for each colour. The swatch's name goes with the look: renderPal)
+      for (const r of pal.cols) {
+        const t = w.colOf(r.k);
+        r.name.textContent = w.colName(r.k); r.input.setAttribute('aria-label', t); r.input.setAttribute('title', t);
+        r.chip.textContent = w.colDefault; r.chip.setAttribute('aria-label', w.colReset(r.k));
+      }
+      if (pal.note) pal.note.textContent = w.opacJet;   // (round 18d: what the see-through does to the jet)
     }
     if (!opts) continue;
     opts.querySelectorAll('[data-opt]').forEach((b) => { b.textContent = w[b.dataset.opt]; });
@@ -760,11 +788,11 @@ function cpdRowSync(s) {
 function syncComps(s) {
   cpdRowSync(s);
   const opt = { field: s.field };
-  for (const { c, opts, cols: cs } of compEls) {
+  for (const { c, opts } of compEls) {
     const on = c.bit ? !!(s.mode & c.bit) : !!opt[c.opt];
     if (opts) opts.hidden = !on;
-    if (cs) { cs.hidden = !colDef; cs.classList.toggle('no-cols', s.look !== 'model'); }   // (round 13a: the colours are the model look's; round 18c: the span stays for the see-through)
   }
+  renderPal(s);   // (round 13a: the colours are the model look's; round 18d: the swatches and the palettes' rows with the look)
   // (round 14a: the wind's brightness, as the colours, the model look's)
   if (wbEls.row) wbEls.row.hidden = s.look !== 'model' || typeof box.diskWindGain !== 'function';
   renderOpac(s);   // (round 18a: the see-through, in every look)
@@ -788,20 +816,94 @@ function syncComps(s) {
     el('input', { type: 'range', min: '0', max: '1000', step: '1', value: sliderOfM(m || 1), 'data-planet-m': String(i), 'aria-label': w.massOf(i + 1) }))));
 }
 
+// ---------- the components' palettes (round 18d) ----------
+// The owner: "moving the see-through's bar makes its text appear, and the row breaks onto two lines: deal with it; can't it go
+// inside the colour palette?" Beside each toggle with colours or a see-through, one small round swatch, and nothing else that
+// changes: in the model look the component's colour now (the pebbles' rock and ice, a circle in two halves), changed or not; in
+// the other looks the half-filled mark, its palette then holding the see-through alone (no swatch there for a component with
+// nothing to show in that look: the field lines, drawn in the model look alone, and the jet beyond the visible look; COMPS'
+// opLooks). The swatch opens the component's palette below it, within the rail's column, over the rows that follow: a row for
+// each of its colours in the model look (a name, the colour input, the chip back to that colour's default once changed) and the
+// see-through's row in every look where it acts (its name, the slider, the value, the chip once changed). What changes is in
+// the palette, so the row of the toggle keeps one line. One palette open at a time (palOpen, the component's entry of compEls).
+// The swatch has aria-expanded and names its palette (aria-controls), a group named as the swatch; opened, the focus goes to
+// its first control.
+// Closed by the swatch again, by Esc (the focus back on the swatch), by a press outside it and its swatch (the focus left where
+// the press puts it), and when the focus moves on out of it (Tab past its last control, which would leave it over the rows that
+// the focus goes to). col=, op=, the settings kept (DEF_KEYS) and Reset all are as before.
+let palOpen = null;
+// the swatches as the look and the colours are, with their names (and the palettes' as the swatches'), and in each palette the
+// colours' rows in the model look only, the see-through's where it acts; shown once the engine has started (the colours' defaults
+// known)
+function renderPal(s) {
+  const w = T().show, model = s.look === 'model';
+  for (const { c, pal } of compEls) {
+    if (!pal) continue;
+    const withCols = model && pal.cols.length > 0, withOp = c.op != null && (!c.opLooks || c.opLooks.includes(s.look));
+    const label = withCols ? w.pal(w[c.key]) : w.palOp(w[c.key]);
+    pal.btn.hidden = !colDef || (!withCols && !withOp);
+    pal.btn.classList.toggle('op-only', !withCols);
+    pal.btn.setAttribute('aria-label', label); pal.btn.setAttribute('title', label); pal.box.setAttribute('aria-label', label);
+    if (colDef) { const hex = pal.cols.map((r) => cols[r.k] || colDef[r.k]); pal.dot.style.background = hex.length > 1 ? `linear-gradient(90deg, ${hex[0]} 50%, ${hex[1]} 50%)` : hex[0] || ''; }
+    for (const r of pal.cols) r.row.hidden = !model;
+    if (opEls[c.op]) opEls[c.op].row.hidden = !withOp;
+    if (pal.note) pal.note.hidden = !withOp;
+    if (palOpen && palOpen.pal === pal) {
+      if (pal.btn.hidden) palClose(false);
+      // (a look left while a colour had the focus: the see-through's slider takes it)
+      else if (!model && pal.cols.some((r) => r.input === document.activeElement) && opEls[c.op]) opEls[c.op].input.focus({ preventScroll: true });
+    }
+  }
+  palPlace();
+}
+function palToggle(key) {
+  const ce = compEls.find((x) => x.c.key === key);
+  if (!ce || !ce.pal) return;
+  const again = palOpen === ce;
+  palClose(false);
+  if (again) return;
+  palOpen = ce;
+  ce.pal.box.hidden = false; ce.pal.btn.setAttribute('aria-expanded', 'true');
+  palPlace();
+  const r0 = ce.pal.cols.find((r) => !r.row.hidden), e = opEls[ce.c.op], first = r0 ? r0.input : e && !e.row.hidden ? e.input : null;
+  if (first) first.focus({ preventScroll: true });
+  ce.pal.box.scrollIntoView({ block: 'nearest' });
+}
+function palClose(back) {
+  const ce = palOpen;
+  if (!ce) return;
+  palOpen = null;
+  ce.pal.box.hidden = true; ce.pal.btn.setAttribute('aria-expanded', 'false');
+  if (back) ce.pal.btn.focus({ preventScroll: true });
+}
+// below its swatch, as wide as its rows need and the column allows (CSS), its left edge under the swatch as far as it fits
+function palPlace() {
+  if (!palOpen) return;
+  const { row, pal } = palOpen, W = row.clientWidth, w = Math.min(W, pal.box.offsetWidth);
+  pal.box.style.top = (pal.btn.offsetTop + pal.btn.offsetHeight + 4) + 'px';
+  pal.box.style.left = Math.max(0, Math.min(pal.btn.offsetLeft - 6, W - w)) + 'px';
+}
+document.addEventListener('pointerdown', (e) => { if (palOpen && !palOpen.pal.box.contains(e.target) && !palOpen.pal.btn.contains(e.target)) palClose(false); }, { capture: true });
+rail.addEventListener('focusout', (e) => { const t = e.relatedTarget; if (palOpen && t && !palOpen.pal.box.contains(t) && !palOpen.pal.btn.contains(t)) palClose(false); });
+window.addEventListener('resize', () => palPlace());
+
 // ---------- the model look's colours (round 13a) ----------
 // The owner: "make each colour changeable". The colour of each material the model look draws (the gas, the pebbles' rock and
 // ice, the wind, the jet, the envelope: COMPS' cols) is chosen beside its component in Show, with a colour input and, while
 // one is changed, a chip back to the default. They go to the engine in one call, box.diskColours (each material not chosen
 // takes its default, the engine's MAT), are kept with the settings on this device (settingsNow, under KEY), written into a
 // link as one parameter, col= (COL-LINK), and put back by Reset all. Shown in the model look only: the observed looks show a
-// light of their own, in colours that are not the materials'. Not in the scenes (a scene is a view, not a palette).
+// light of their own, in colours that are not the materials'. Not in the scenes (a scene is a view, not a palette). (Round 18d:
+// in each component's palette; and the field lines' colour, 'field', which the engine draws in the overlay, where the field lines
+// are drawn in the model look only)
 // COL-LINK
 // The colours a link carries, in this order: the gas (the engine's 'disk'), the pebbles' rock and ice, the wind, the jet, the
-// envelope ('env'). col= holds their six hex digits in that order, separated by dots, a field left empty for a material at
-// its default and the empty ones at the end left out: col=ff8800 is the gas alone, col=.....c080ff the envelope alone, and no
-// col= at all is every default. Read back, a field that is not six hex digits is the default, and fields past the sixth are
-// passed over.
-const COL_ORDER = ['disk', 'rock', 'ice', 'wind', 'jet', 'env'];
+// envelope ('env'), the field lines ('field', round 18d). col= holds their six hex digits each in that order, separated by dots,
+// a field left empty for a colour at its default and the empty ones at the end left out: col=ff8800 is the gas alone,
+// col=.....c080ff the envelope alone, col=......ffaa00 the field lines alone, and no col= at all is every default. Read back, a
+// field that is not six hex digits is the default, and fields past the seventh are passed over (a link of six, before round
+// 18d, has the field lines' at the default).
+const COL_ORDER = ['disk', 'rock', 'ice', 'wind', 'jet', 'env', 'field'];
 // a colour as '#rrggbb' in small letters, from '#rrggbb' or 'rrggbb' in either case; null if it is not one
 function colHex(v) { return typeof v === 'string' && /^#?[0-9a-f]{6}$/i.test(v) ? '#' + v.replace('#', '').toLowerCase() : null; }
 // the colours chosen ({ key: colour }), only the keys of COL_ORDER, only real colours, none at its default (def, by key)
@@ -830,15 +932,15 @@ function applyCols() {
   if (typeof box.diskColours === 'function') colDef = box.diskColours(cols).def;
   renderCols();
 }
-// the inputs as the colours are, and each component's chip back to the default while one of its colours is changed
+// the inputs as the colours are, and each colour's chip back to its default while it is changed (round 18d: a chip for each
+// colour, in the palette; the swatches follow, renderPal)
 function renderCols() {
   if (!colDef) return;
-  for (const { c, cols: cs } of compEls) {
-    if (!cs) continue;
-    cs.querySelectorAll('[data-col]').forEach((i) => { const v = cols[i.dataset.col] || colDef[i.dataset.col]; if (v && i.value !== v) i.value = v; });
-    const r = cs.querySelector('[data-col-reset]');
-    if (r) r.hidden = !c.cols.some((k) => cols[k]);
+  for (const { pal } of compEls) {
+    if (!pal) continue;
+    for (const r of pal.cols) { const v = cols[r.k] || colDef[r.k]; if (v && r.input.value !== v) r.input.value = v; r.chip.hidden = !cols[r.k]; }
   }
+  if (live()) renderPal(S());
 }
 // a colour chosen in an input (and while it is being chosen: the picture follows)
 function setCol(k, v) {
@@ -849,11 +951,11 @@ function setCol(k, v) {
   renderMatKey(S());
   keepSoon();
 }
-// a component's colours back to their defaults (the rail's click handler then syncs, and keeps the settings)
-function resetCols(key) {
-  const c = COMPS.find((x) => x.key === key);
-  if (!c || !c.cols) return;
-  for (const k of c.cols) delete cols[k];
+// a colour back to its default (the rail's click handler then syncs, and keeps the settings). (Round 18d: each colour's own chip;
+// a component's chip put all its colours back until then)
+function resetCol(k) {
+  if (!COL_ORDER.includes(k)) return;
+  delete cols[k];
   applyCols();
 }
 // the colours kept with the settings on this device (none: the defaults)
@@ -1036,14 +1138,17 @@ function renderWind() {
   wbEls.chip.hidden = windGain === 1; wbEls.chip.textContent = w.gainDefault; wbEls.chip.setAttribute('aria-label', w.windGainReset);
 }
 // (round 18a, the owner: "the objects' transparency too") The see-through of the gas, the pebbles, the wind and the envelope, a row
-// under each one's settings: the engine's state op, four factors on what each takes out of the ray (its extinction, in every look
-// where it absorbs; its own light is left as it is), from 1 (the default, as before) to OP_MIN. The slider reads the share taken
-// away, 0 to 95 %, in steps of 1 %: a factor f = 1 - p / 100. Kept with the settings on this device (DEF_KEYS), in a link as op=
-// (the four factors, none when all are 1), put back by Reset all and by each row's chip; not in the scenes (as the colours and the
-// wind's brightness are not). The picture's mean changes with it: the automatic exposure follows.
+// under each one's settings (round 18d: in each one's palette): the engine's state op, four factors on what each takes out of the
+// ray (its extinction, in every look where it absorbs; its own light is left as it is), from 1 (the default, as before) to OP_MIN.
+// The slider reads the share taken away, 0 to 95 %, in steps of 1 %: a factor f = 1 - p / 100. Kept with the settings on this
+// device (DEF_KEYS), in a link as op= (the four factors, none when all are 1), put back by Reset all and by each row's chip; not in
+// the scenes (as the colours and the wind's brightness are not). The picture's mean changes with it: the automatic exposure follows.
+// (Round 18d, the owner: "a see-through for the jet, a see-through bar for the field lines") Six factors: [4] the jet's, on its light
+// (it only shines, nothing of it takes light out of the ray), [5] the field lines', on their lines' opacity. A list of four (the
+// links and the settings of dev.23 to dev.25) is read with those two at 1, as the engine reads it; op= has the six.
 const opPos = (f) => String(Math.round(100 * (1 - f)));
 const opOf = (pos) => Math.min(1, Math.max(OP_MIN, Number((1 - Number(pos) / 100).toFixed(2))));
-const opList = (s) => (Array.isArray(s.op) && s.op.length === 4 ? s.op : [1, 1, 1, 1]);
+const opList = (s) => (Array.isArray(s.op) && (s.op.length === 6 || s.op.length === 4) ? [...s.op, 1, 1].slice(0, 6) : [1, 1, 1, 1, 1, 1]);
 function setOpac(i, f, drag = false) {
   const op = opList(S()).slice(); op[i] = f;
   if (drag) moving();
@@ -1057,17 +1162,18 @@ function renderOpac(s) {
     const e = opEls[c.op]; if (c.op == null || !e) continue;
     const f = op[c.op], t = text(f);
     if (document.activeElement !== e.input && e.input.value !== opPos(f)) e.input.value = opPos(f);
-    // (round 18b: no name on the row; the slider's name and value in aria and its title, the value and the chip once changed)
-    e.input.setAttribute('aria-label', w.opacOf(w[c.key])); e.input.setAttribute('aria-valuetext', t); e.input.title = w.opac;
-    e.row.classList.toggle('changed', f !== 1);
+    // (round 18b: no name on the row, the value and the chip once changed. Round 18d: in the palette its name and its value again,
+    // the chip once changed; the slider's name with what it does, and its value, for the screen reader)
+    e.name.textContent = w.opac;
+    e.input.setAttribute('aria-label', w.opacOf(w[c.key], c.key)); e.input.setAttribute('aria-valuetext', t);   // (round 18d: what it does, by the component)
     e.val.textContent = t; e.val.style.minWidth = valW([text(1), text(OP_MIN)]);   // (round 15a: the widest text, the bar's length kept)
     e.chip.hidden = f === 1; e.chip.textContent = w.gainDefault; e.chip.setAttribute('aria-label', w.opacReset(w[c.key]));
   }
 }
 // (round 18a, the owner: "turn the camera about the line of sight") The roll, in the rail's View: the state's roll (degrees, -180 to
 // 180, counterclockwise), the slider setting it at once, its chip back to 0 (a flight); a place's view and the first view are
-// unrolled (places.js), Alt-drag rolls as well (the engine). Kept with the view (VIEW_KEYS), in a link as roll= (none at 0), in the
-// scenes with their view.
+// unrolled (places.js; round 18e: no gesture rolls, Alt-drag did). Kept with the view (VIEW_KEYS), in a link as roll= (none at 0), in
+// the scenes with their view.
 function renderRoll(s) {
   const w = T().view, v = Math.round(Number(s.roll) || 0), input = $('rollRange');
   if (document.activeElement !== input && input.value !== String(v)) input.value = String(v);
@@ -1075,6 +1181,45 @@ function renderRoll(s) {
   input.setAttribute('aria-label', w.rollOf); input.setAttribute('aria-valuetext', w.rollVal(v));
   $('rollVal').textContent = w.rollVal(v); $('rollVal').style.minWidth = valW([w.rollVal(-180), w.rollVal(-88)]);   // (round 15a)
   const chip = $('rollReset'); chip.hidden = !(Number(s.roll) || 0); chip.textContent = T().show.gainDefault; chip.setAttribute('aria-label', w.rollReset);
+}
+// (round 18e, the owner: "the mouse's drag is hard to follow: let a drag turn the disk only, and move the camera from the control
+// panel") The point looked at, in the rail's View under the roll. Its four arrows step it along the picture as it is drawn by a tenth
+// of the picture's height (the engine's diskNudge, as Shift+arrows: it goes the arrow's way, the picture the other): a step at the
+// press, and while the press is held a step every AIM_EVERY ms after AIM_WAIT, until the pointer is lifted, leaves the arrow or is
+// cancelled (the page hidden, the window left). A click that no press of that arrow made just before (the keyboard's Enter or Space,
+// a screen reader) is a step of its own. Its chip brings the point back to the star, or to the planet followed (the engine's
+// diskCenter, as the C key), hidden while it is there. The point is the state's tx, ty, tz, kept as before: with the view
+// (VIEW_KEYS), in a link (tx=), in the scenes; a flight, Home and the places set it.
+const AIM_WAIT = 400, AIM_EVERY = 120, AIM_CLICK = 1000;
+let aimHeld = null, aimDown = null, aimUp = null;   // (the arrow held and its timer; the arrow pressed; the one a press was last lifted from, and when)
+const aimStep = (b) => { const [x, y] = b.dataset.aim.split(',').map(Number); if (live() && typeof box.diskNudge === 'function') box.diskNudge(x, y); };
+const aimStop = () => { if (aimHeld) { clearTimeout(aimHeld.t); aimHeld = null; } };
+function aimClick(b) {
+  const own = aimUp && aimUp.b === b && performance.now() - aimUp.at < AIM_CLICK;
+  aimUp = null;
+  if (!own) aimStep(b);
+}
+rail.querySelectorAll('[data-aim]').forEach((b) => {
+  b.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !live()) return;
+    aimStop(); aimDown = b; aimUp = null; aimStep(b);
+    const on = () => { if (!live()) { aimStop(); return; } aimStep(b); aimHeld.t = setTimeout(on, AIM_EVERY); };
+    aimHeld = { b, t: setTimeout(on, AIM_WAIT) };
+  });
+  b.addEventListener('pointerup', () => { if (aimDown === b) aimUp = { b, at: performance.now() }; aimDown = null; aimStop(); });
+  b.addEventListener('pointerleave', aimStop); b.addEventListener('pointercancel', () => { aimDown = null; aimStop(); });
+  b.addEventListener('contextmenu', (e) => e.preventDefault());   // (a long press on a phone)
+});
+addEventListener('pointerup', () => { aimDown = null; });   // (a press lifted off its arrow: no click of it follows)
+addEventListener('blur', aimStop);
+document.addEventListener('visibilitychange', aimStop);
+function renderAim(s) {
+  const w = T().view, chip = $('recentre');
+  const names = { '-1,0': w.aimLeft, '0,1': w.aimUp, '0,-1': w.aimDown, '1,0': w.aimRight };
+  $('aimName').textContent = w.aim;
+  rail.querySelectorAll('[data-aim]').forEach((b) => { b.setAttribute('aria-label', names[b.dataset.aim]); b.title = names[b.dataset.aim]; });
+  chip.hidden = !(Number(s.tx) || Number(s.ty) || Number(s.tz));
+  chip.textContent = s.p ? w.aimPlanet : w.aimStar; chip.setAttribute('aria-label', s.p ? w.aimPlanetOf : w.aimStarOf);
 }
 // (round 18a, the owner: "more background stars") The number of the background's stars, in the rail's Background: the state's
 // stars, times the default's (ST_RANGE, the engine's STARS), on a log slider (0 to 1000; the default exactly at its place); the
@@ -1114,7 +1259,8 @@ box.addEventListener('diskpick', (e) => {
   setPick(false);
   note(w.placed(fmtA(a)), 3000);
 });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (box.dataset.pick) setPick(false); popClose(); } });
+// (round 18d: Esc with a component's palette open closes it alone, the focus back on its swatch)
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (palOpen) { palClose(true); return; } if (box.dataset.pick) setPick(false); popClose(); } });
 
 // (round 12a) The probe ("touch a point of the disk and the physics answers", the roadmap's second pillar). With
 // data-pick="probe" a tap on the disk in the picture sends the engine's diskpick (the midplane point under it, as placing a
@@ -1730,7 +1876,7 @@ function linkFor(s) {
   // removed, so that the link gives none back, not the start's planet)
   u.searchParams.set('pl', s.planets.map(([a, on, m]) => a + ':' + on + ':' + m).join(','));
   if (s.cpdMdot > 0) u.searchParams.set('pmd', String(s.cpdMdot));   // (round 13e: the planets' accretion rate, M_J/yr, when not auto)
-  if (opList(s).some((f) => f !== 1)) u.searchParams.set('op', opList(s).map((f) => String(f)).join(','));   // (round 18a: the see-through)
+  if (opList(s).some((f) => f !== 1)) u.searchParams.set('op', opList(s).map((f) => String(f)).join(','));   // (round 18a: the see-through; round 18d: six factors)
   u.searchParams.set('t', String(Math.round(s.time * 1000) / 1000));
   u.searchParams.set('lang', L());
   return u.href;
@@ -1956,7 +2102,8 @@ function stateFromLink() {
   // (round 17b: an empty field is no number, not 0: pl=::: made a planet at the inner end; the engine passes over a radius not a number)
   if (q.has('pl')) st.planets = q.get('pl').split(',').filter(Boolean).map((t) => t.split(':').map((x) => (x.trim() === '' ? NaN : Number(x))));
   if (q.has('pmd')) st.cpdMdot = q.get('pmd');   // (round 13e; the engine bounds it, and reads anything not positive as auto)
-  // (round 18a: the see-through, four factors; a blank one is 1; the engine bounds them and passes over a list of another length)
+  // (round 18a: the see-through, four factors; a blank one is 1; the engine bounds them and passes over a list of another length.
+  // Round 18d: six, with the jet's and the field lines'; four, as dev.23 to dev.25 wrote them, the engine takes with those at 1)
   if (q.has('op')) st.op = q.get('op').split(',').map((x) => (x.trim() === '' ? 1 : Number(x)));
   return Object.keys(st).length ? st : null;
 }
