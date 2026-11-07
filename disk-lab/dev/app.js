@@ -17,7 +17,7 @@ const ENGINE_SRC = 'engine/disk3d.js?v=57492f6d8d';   // ?v= the first ten chara
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.21', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.22', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -188,7 +188,7 @@ let posterKey = poster.getAttribute('src') || '';   // (index.html puts up the w
 // from the window, leaving the dock about 260 px.
 function setPoster(id) {
   const ar = mode === 'still' ? innerWidth / Math.max(1, innerHeight - 260) : aspect();
-  const frame = ar >= 1.2 ? 'wide' : 'tall', src = `../stills/${id}-${L()}-${frame}.webp`;
+  const frame = ar >= 1.2 ? 'wide' : 'tall', src = `stills/${id}-${L()}-${frame}.webp`;
   lab.style.setProperty('--still-ar', frame === 'wide' ? '2' : '0.8');
   if (src === posterKey) return;
   posterKey = src;
