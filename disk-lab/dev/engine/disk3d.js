@@ -33,9 +33,10 @@
 // isotropic for the disk, strongly forward for the small grains in the wind); the settled dust is a
 // sheet crossed analytically at the midplane. The turbulent factors and the field line through each point
 // are read from two maps (see MAP_GLSL) and the eddies from a volume texture (see TURB3_FS), so a step of the
-// march costs a few texture fetches. The
+// march costs a few texture fetches. In the model look the
 // gas is drawn translucent (a real disk is opaque at visible wavelengths) so that the dust sheet and
-// the snow line show through. Colour encodes temperature: amber where it is warm (inner disk,
+// the snow line show through; the starlight its small grains scatter is dimmed on its way at their own opacity, the one that
+// absorbs the starlight, as in the visible look (round 18g: see K_G). Colour encodes temperature: amber where it is warm (inner disk,
 // irradiated surface), blue where it is cold (outer midplane); icy dust is pale, rocky dust dark.
 // Brightness follows the absorbed starlight with a softened falloff beyond 1 au and an asinh stretch.
 // Clicking drops a clump of pebbles: it shears out, drifts inward and loses its ice inside
@@ -1857,10 +1858,23 @@ float transferWeight(float tau){
 vec3 absorptionFraction(vec3 tau){ return vec3(absorptionFraction(tau.x), absorptionFraction(tau.y), absorptionFraction(tau.z)); }
 vec4 absorptionFraction(vec4 tau){ return vec4(absorptionFraction(tau.x), absorptionFraction(tau.y), absorptionFraction(tau.z), absorptionFraction(tau.w)); }
 vec3 transferWeight(vec3 tau){ return vec3(transferWeight(tau.x), transferWeight(tau.y), transferWeight(tau.z)); }
-// Opacities are set for a translucent rendering (a real disk is opaque at visible wavelengths):
-// gas with small grains (also in the wind), settled pebbles (opaque out to the edge of the disk, and their
-// mostly thin millimetre-like emission).
+// Opacities. (Round 18g, the owner: "you say gas, but it holds the small grains too, and the small grains are what is opaque: is
+// the picture consistent with that?") The gas and its small grains, well mixed in the disk, its wind and its envelope alike, have
+// one opacity a band, the same per mass everywhere (per unit of the model's Sigma, Sigma(1 au) = 1700 g cm^-2 as the probe has it).
+// In visible light K_OCC, the one that absorbs the starlight and so sets its depth, tau* = K_OCC rho R, and the lit surface:
+// e^LNTAU1 sqrt(2 pi) H0 = 369.6, 0.22 cm^2 per gram of gas, about 1/920 of the interstellar grains' 200 (the small grains depleted,
+// grown or settled). It takes the visible look's light (OPT_K below), the starlight that the small grains scatter in the model
+// look on its way to the camera (SKIN_LOS) and the jet behind the disk (jetOcc). In the mid-infrared K_OCC / MIR_V (MIR_K): the
+// interstellar grains' tau_V / tau_9.7. Until round 18g the visible look and the model look's scattered light (SKIN_LOS 29, round
+// 18f) took 30 times K_G, 1/15 of K_OCC, the mid-infrared 8 times, 1/58, the wind and the envelope K_G, 1/462: the camera saw that
+// much deeper than the starlight reaches, and edge-on the far side's lit surface through the disk's outer part. The model look's
+// gas, K_G = K_OCC / 462, is drawn translucent, a picture of where the gas is (its glow
+// and what the march takes for it, so that the midplane and the snow line show; a real disk is opaque in visible light); only the
+// light its small grains scatter goes at K_OCC (SKIN_LOS). Settled pebbles: K_D (opaque out to the edge of the disk), K_MM (their
+// mostly thin millimetre-like emission). OPQ_OLD (data-opq="0", the page's ?opq=0, to compare; and with the cut of before,
+// SIG_CUT, which keeps its picture): the opacities of before (DESIGN.md section 48).
 const float K_G = 0.8, K_D = ${G(MODEL.K_D)}, K_MM = 40.0;
+const float K_OCC = ${G(+(Math.exp(MODEL.LNTAU1) * Math.sqrt(2 * Math.PI) * MODEL.H0).toPrecision(6))};   // (e^LNTAU1 sqrt(2 pi) H0; 3.4e5 the interstellar grains', see jetOcc)
 // Brightness of the components: the skin and the pebble layer per unit of absorbed starlight E (see Eabs). The gas
 // body (gas mixed with small grains, which fills the disk) glows in proportion to its density, in the colour of its
 // temperature, whatever the starlight: a picture of where the gas is rather than of what it emits. Where the gas is
@@ -1887,7 +1901,10 @@ const float G_LIT_HG = 0.55, G_LIT = 0.3, LIT_DARK = 0.6;
 // there instead of 0.4, so that seen edge-on the disk's body is a dark band, not a bright bar (its long path through the
 // shadowed midplane took the glow to its thick limit, 0.4 G_GAS MAT_DISK / EXT, about 0.12 of linear white, 0.42 on the stretch;
 // now 0.03, 0.23); the gas within the reach of the diffuse light below the surface keeps 0.4. Not with SKIN_THRU (the cut of
-// before, ?skinlos=0: see SKIN_LOS)
+// before, ?skinlos=0: see SKIN_LOS). (Round 18g: kept. It lowers the gas's own glow, the translucent layer that the small grains'
+// one opacity leaves as it was; seen edge-on the band's inner 10 au still needs it, now that the far side's lit surface no longer
+// shows through the disk there: the midplane at the star's column 0.18 on the stretch with it, 0.26 with 0.2 and 0.35 without, and
+// the band down to 0.04 from 17 au with it, 28 au with 0.2 and 34 au without. DESIGN.md section 48)
 #ifdef SKIN_THRU
 const float LIT_DEEP = 0.0;
 #else
@@ -1923,7 +1940,10 @@ const float MS_A = 0.5, MS_C = 0.04;
 // falls more slowly with height than its density, as (rho / rho_base)^(1 - WIND_RISE) with rho_base the density at the
 // line's base (rho falls some sixtyfold by chi = 1 and fifteen-hundredfold by chi = 10): the outflow and its streamers
 // show well above the disk, as a display choice like the softened falloff with distance (not in the observed looks).
-// The extinction stays rho.
+// The extinction stays rho: K_G rho in the model look, and (round 18g) in the visible look OPT_W K_G rho = K_OCC rho, the small
+// grains' as in the disk (along its lines from their base up, about 0.1 at 1 au, 0.01 at 3 au and 0.003 at 10 au; 462 times
+// less until round 18g). Its brightness there, G_WIND_OBS K_G rho, stays the picture's (the light per unit of the extinction is
+// the display's choice).
 const float G_WIND = 450.0, WIND_NEAR = 0.35, G_WIND_OBS = 200.0, WIND_RISE = 0.15;
 uniform float uWindK;   // (round 14a) the wind's brightness as the viewer chose it (box.diskWindGain), a factor on G_WIND in the model's look
 // The wind's asymmetry (an option, on by default; see opt.asym): with the field aligned with the rotation the wind is
@@ -1944,9 +1964,19 @@ const vec3 STARCOL = vec3(1.0, 0.87, 0.72);
 uniform vec3 uMat[${MAT.length}];
 ${MAT.map((m, i) => `#define MAT_${m[0].toUpperCase()} uMat[${i}]`).join('\n')}
 vec3 litCol(){ vec3 m = MAT_DISK / max(max(MAT_DISK.r, MAT_DISK.g), max(MAT_DISK.b, 1e-4)); return mix(m, vec3(1.0, 0.95, 0.88), 0.25); }   // (round 8: see G_LIT)
-// the observed looks: the gas's opacity relative to K_G (the disk opaque in scattered light and the mid-infrared), the
-// colour of scattered starlight, the forward scattering of the grains at the surface, and the gains of each look
-const float OPT_K = 30.0, MIR_K = 8.0, G_OPT_HG = 0.55, G_OPT = 1.0, G_MIR = 2.5, G_MM = 0.3;
+// the observed looks: the gas's opacity relative to K_G (the disk opaque in scattered light and the mid-infrared; round 18g: the
+// small grains' own, see K_G: K_OCC in visible light, OPT_K = K_OCC / K_G = 462, and MIR_V times less in the mid-infrared, MIR_K
+// 27.2; 30 and 8 until round 18g, OPQ_OLD), the wind's and the envelope's in visible light relative to their K_G (OPT_W: the same per
+// mass as the disk's; 1, theirs of before, with OPQ_OLD), the colour of scattered starlight, the forward scattering of the grains
+// at the surface, and the gains of each look. MIR_V, tau_V / tau_9.7 of the interstellar grains: A_V / tau_9.7 = 18.5 (Roche &
+// Aitken 1984), A_V = 1.086 tau_V
+#ifdef OPQ_OLD
+const float OPT_K = 30.0, MIR_K = 8.0, OPT_W = 1.0;
+#else
+const float MIR_V = 17.0;
+const float OPT_K = K_OCC / K_G, MIR_K = OPT_K / MIR_V, OPT_W = OPT_K;
+#endif
+const float G_OPT_HG = 0.55, G_OPT = 1.0, G_MIR = 2.5, G_MM = 0.3;
 // (Round 18f, the owner: "make the edge-on and nearly edge-on views look natural") The model look's lit skin and its diffuse
 // light are the star's light scattered by the small grains, and on their way to the camera they pass the disk's gas as that light
 // does: dimmed by it at the visible look's opacity, OPT_K times the gas's own (SKIN_LOS more than the gas's own extinction in
@@ -1958,6 +1988,15 @@ const float OPT_K = 30.0, MIR_K = 8.0, G_OPT_HG = 0.55, G_OPT = 1.0, G_MIR = 2.5
 // cut of before (SIG_CUT keeps its picture), nor for the pebbles' sheet (a component of its own, drawn through the gas): SKIN_THRU,
 // defined by init with the cut of before and with data-skinlos="0" (the page's ?skinlos=0, to compare: the lit surface seen through
 // the disk as until now, and the shadow's glow without LIT_DEEP)
+// (Round 18g) at the small grains' own opacity, K_OCC = (1 + SKIN_LOS) K_G, the one that stops the starlight (OPT_K 462: SKIN_LOS
+// 461; 29 in round 18f, 1/15 of it, OPQ_OLD). Seen edge-on the inner disk's lit surface is hidden behind the flared outer disk's
+// atmosphere, and its far side wherever the disk is (its column straight through 1 at 44 au); seen from inside the disk the lit
+// surface is gone; seen from above the diffuse light, scattered about a scale height below the skin (tau* ~ 1 / MS_C, where the
+// layers above it hold a depth of about 0.35 at 1 au, 0.5 at 3 au and 0.85 at 10 au), is dimmed by about a half at 38.6 degrees,
+// the lit skin itself by a few per cent (its depth from above about beta). The step's light needs nothing more than its integral
+// of before: in the march's steps (0.4 H to 0.18 |z|) the skin lies where the step's own depth at K_OCC is about 0.04 (tau* = 1),
+// and against a fine march the picture differs by +0.003 on the display on average (+0.005 with 29), with no steps or stripes
+// (DESIGN.md section 48)
 #ifdef SKIN_THRU
 const float SKIN_LOS = 0.0;
 #else
@@ -1986,10 +2025,14 @@ const vec3 MM_COL = vec3(1.0, 0.42, 0.12);
 // the cavity and less toward the midplane): the cavity's walls are lit, as in images of young stars still in their
 // envelopes. The density and the column include the streamers (see ENV3_FS), so a dense streamer is brighter where the
 // light reaches it and shades the envelope behind it, outward from the star: the light comes out through the gaps
-// between them in shafts that fan out from the star. Seen along the line of sight it is kept translucent, as the disk
-// is: its density is scaled by ENV_RHO relative to the gas density unit of the disk (the midplane at 1 au) and it
-// absorbs little. envLight returns the emission and the extinction per unit length, the same inside the marched
-// cylinder and outside it.
+// between them in shafts that fan out from the star. Seen along the line of sight it is kept translucent in the model look, as
+// the disk's gas is: its density is scaled by ENV_RHO relative to the gas density unit of the disk (the midplane at 1 au) and
+// it absorbs little (K_G). (Round 18g) In the visible look it absorbs as the disk does, at the small grains' K_OCC (OPT_W; the
+// same per mass as the disk's upper layers, the same depletion): with ENV_RHO, the picture's density (the rho0 of an infall of
+// 2.7e-4 M_sun/yr), and its fade with the distance, its depth toward the star is about 2 from 340 au at 14 degrees, 0.7 at 45
+// degrees and 0.7 from 100 au at 10 degrees (the interstellar grains' opacity would make them about 920 times more: a real
+// envelope's, at 1e-6 M_sun/yr, about 7 from 14 degrees; DESIGN.md section 48). envLight returns the emission and the
+// extinction per unit length, the same inside the marched cylinder and outside it.
 // (the map's column is in au, so both scale as 1 / r_c: 8 au to the sixth round, 30 au since; with r_c = 30 au, 1.07e-4
 // and 0.133, written here as the products with r_c so that they follow it, ENV.RC)
 const float ENV_RHO = ${G(3.21e-3 / ENV.RC)}, G_ENV = 70.0, ENV_KSTAR = ${G(3.99 / ENV.RC)};
@@ -2019,6 +2062,9 @@ void envLight(vec3 p, vec3 rd, out vec3 em, out vec3 ex){
   em = G_ENV * K_G * re * mix(1.0, smoothstep(0.13, 0.2, abs(p.z) / max(R, 1e-3)), gasK()) * exp(-ENV_KSTAR * st.y) / (1.0 + r * r / 3164.0) * phaseGas(dot(p, -rd) / r) * (uLook == 0 ? MAT_ENV : ENV_COL * uLstar);   // (round 15b: uLstar)
   if (uLook == 0) em += ENV_SELF * K_G * re * MAT_ENV;   // (round 8: its material's colour, no longer its temperature's)
   ex = K_G * re * EXT * uOpac.w;   // (round 18a: the envelope's see-through)
+#ifdef FULL
+  if (uLook == 1) ex *= OPT_W;   // (round 18g: in the visible look the small grains' K_OCC, as the disk's; see OPT_W)
+#endif
 }
 
 // the disk map at (ln R, φ): factors of the gas density, the skin brightness, the pebble density and the starlight
@@ -2514,8 +2560,9 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
   // wind map), weaker on the lower side as for a field aligned with the rotation. Its small grains scatter
   // starlight toward the observer (forward, phaseGas), with the softened falloff with distance used for the
   // field lines (which stand for the same grains) and dimmed by the optical depth toward the star, so it
-  // rises out of the irradiated surface. It absorbs with the opacity of the disk's small grains, which at
-  // these densities is little. wq carries the coordinates of the streaks at the previous sample (99: none); wl returns
+  // rises out of the irradiated surface. It absorbs with the opacity of the disk's small grains: in the model look their
+  // translucent K_G, which at these densities is little, and in the visible look (round 18g) their own K_OCC, OPT_W times it (along
+  // a line from its base about 0.1 at 1 au, 0.01 at 3 au). wq carries the coordinates of the streaks at the previous sample (99: none); wl returns
   // the wind's brightness here (the march takes finer steps where it is bright, to resolve the streamers).
   vec3 q = vec3(99.0);
   bool windOn = true;
@@ -2546,7 +2593,12 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       vec3 d = q - wq; d.y = mod(d.y + PI, TAU) - PI;
       float st = windTurb(q, wq.x > 50.0 ? vec3(0.0) : abs(d), w.w - log(RHO_B) + 1.5 * w.x, length(p - uCam) / max(r, 0.1));
       if ((uMode & 8) != 0) em += lit * st * (uLook == 0 ? MAT_WIND : WIND_COL) * uComp.w;   // (round 8: the model's look in its material's colour)
-      ex += K_G * rho * st * EXT * uComp.w * (wk * uOpac.z);   // (and the wind's with the wind; round 18a: its see-through, uOpac,
+      // (round 18g: in the visible look at the small grains' K_OCC, as the disk's, OPT_W; the model look's K_G as before)
+      float kw = wk * uOpac.z;
+#ifdef FULL
+      if (uLook == 1) kw *= OPT_W;
+#endif
+      ex += K_G * rho * st * EXT * uComp.w * kw;   // (and the wind's with the wind; round 18a: its see-through, uOpac,
       // on wk, so that the product added is the one of before, whatever the compiler fuses)
     }
   }
@@ -2880,7 +2932,8 @@ float occColumn(vec3 ro, vec3 rd, float t1){
   return col * ${G(+(1 / (Math.sqrt(2 * Math.PI) * MODEL.H0)).toPrecision(7))};   // (rho = Sigma / (sqrt(2 pi) H0 R^1.25) e^(-z^2 / 2 H^2))
 }
 uniform float uJetOcc;
-const float K_OCC = ${G(+(Math.exp(MODEL.LNTAU1) * Math.sqrt(2 * Math.PI) * MODEL.H0).toPrecision(6))};   // (e^LNTAU1 sqrt(2 pi) H0; 3.4e5 the interstellar alternative, see above)
+// (K_OCC, e^LNTAU1 sqrt(2 pi) H0, with K_G above since round 18g: the small grains' one opacity in visible light, which the visible
+// look and the model look's scattered light take too; 3.4e5 the interstellar alternative, see above)
 float jetOcc(vec3 ro, vec3 rd, float tc){
   if (uJetOcc <= 0.0) return 1.0;
   float t = exp(-min(K_OCC * occColumn(ro, rd, tc), 80.0));
@@ -5138,7 +5191,8 @@ void main(){
     const hdrDefs = [mpConst && 'MP_CONST', wextOld && 'WEXT_OLD', !MODEL.TAIL && 'SIG_CUT', MODEL.TAIL && MODEL.RC !== MODEL.R_OUT && 'SIG_RC ' + G(MODEL.RC),
       crest && 'CREST vec4(' + [crest.R, crest.a, crest.h, crest.th].map(G).join(', ') + ')',
       litFlat && 'LIT_FLAT', starTab && 'ST_UG ' + G(starTab.ug), 'OBS_CT vec2(' + obsCyl.map(G).join(', ') + ')',
-      (box.dataset.skinlos === '0' || !MODEL.TAIL) && 'SKIN_THRU'].filter(Boolean);   // (round 18f: ?skinlos=0 and the cut of before, see SKIN_LOS in the GLSL)
+      (box.dataset.skinlos === '0' || !MODEL.TAIL) && 'SKIN_THRU',   // (round 18f: ?skinlos=0 and the cut of before, see SKIN_LOS in the GLSL)
+      (box.dataset.opq === '0' || !MODEL.TAIL) && 'OPQ_OLD'].filter(Boolean);   // (round 18g: ?opq=0 and the cut of before, the opacities of before, see K_G in the GLSL)
     const mpHdr = (src) => hdrDefs.reduce((s, d) => (s.includes('#define ' + d + '\n') ? s : s.replace('#version 300 es\n', '#version 300 es\n#define ' + d + '\n')), src);
     let MPV = mpValues();
     const mpLoc = new Map();
