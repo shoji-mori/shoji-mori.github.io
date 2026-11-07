@@ -2457,8 +2457,12 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       // for x linear over it, times e^(xl - x)). Per unit area its total is the starlight on the skin of before (the table's g: the
       // model look's law of round 18c, over beta_t; b: for E, the observed looks'), now laid where the gas absorbs it: on the
       // surface the gas itself casts, curved, and beyond the crest on the gas over its shadow as that gas thins, with no light
-      // where there is no gas (round 18b's dxCrest put E on the crest's cone, whatever the gas there)
-      float base0 = G_SKIN * (uLook == 0 ? gF * exp(sT.g + xl - x) : E * exp(sT.b + xl - x)) * ds * dm.g * ed.x;
+      // where there is no gas (round 18b's dxCrest put E on the crest's cone, whatever the gas there).
+      // (Round 18h) And none inside 0.8 R_IN: xl is the local depth without the gas's inner edge (Sigma's smoothstep from 0.8 to
+      // 1.3 R_IN), whose value at a radius the table's normalization cancels (beta_t is over the same e^xl), but where it is 0 there
+      // is no gas: a step that ran from the lit inner edge into the hole took, at its end there, the depth of gas that is not
+      // there against x at -30 (e^(g + xl - x) to e^45), and the inner edge showed white specks (DESIGN.md section 49)
+      float base0 = R < R_IN * 0.8 ? 0.0 : G_SKIN * (uLook == 0 ? gF * exp(sT.g + xl - x) : E * exp(sT.b + xl - x)) * ds * dm.g * ed.x;
 #endif
       float base = base0 * P * exp(-ed.y);
       float Pd = 0.0;   // multiple scattering: the diffuse light absorbed over the step (see MS_C)
@@ -5082,7 +5086,11 @@ void main(){
       }
     }
     // g, b, a: beta_t and beta_d over each radius's column (NS points a cell of u, x linear in u within it; z = R t, dz = R dt;
-    // e^x_l as the shaders have it, without the inner edge's smoothstep, so that their skin's total is Es exactly)
+    // e^x_l as the shaders have it, without the inner edge's smoothstep, so that their skin's total is Es exactly: a factor of
+    // the radius alone, which this normalization cancels). (Round 18h) Inside 0.8 R_IN, where there is no gas, no light is taken
+    // (beta_t = 0: the cells below skipped, x at -30): lnN is the floor there, so that g and b hold no light. Before, the floors
+    // of Es and of R beta_t cancelled there to g 3.5 and b 69, which the shaders' skin took with the local depth of gas that is
+    // not there (white specks at the gas's inner edge, DESIGN.md section 49)
     const bn = +betaIrrJS(LIT_JS.RN).toPrecision(6);
     let jTop = 0;   // (the highest row of u with x >= -16 at some radius)
     for (let i = 0; i < NR; i++) {
@@ -5104,7 +5112,7 @@ void main(){
       const beta = betaIrrJS(R), sR = ss(MODEL.R_IN * 0.85, MODEL.R_IN * 1.5, R);
       let lnEs = Math.log(LIT_JS.F1 / 0.022 * beta * Math.max(sR, 1e-30)) - 0.5 * Math.log(Math.max(R, 0.1));
       if (!litFlat && R > LIT_JS.RN) lnEs += ss(Math.log(LIT_JS.RN), Math.log(LIT_JS.RB), lnR) * ((LIT_JS.P - 1) * Math.log(beta * sR / bn) + (0.5 - 2 * LIT_JS.P) * Math.log(R / LIT_JS.RN));
-      const lnN = -Math.log(Math.max(R * bt, 1e-30));
+      const lnN = bt > 0 ? -Math.log(R * bt) : Math.log(1e-30);
       for (let j = 0; j < NU; j++) { const k = 4 * (j * NR + i); d[k + 1] = lnEs + lnN; d[k + 2] = lnN; d[k + 3] = Math.log(Math.max(bt, 1e-30) / Math.max(bd, 1e-30)); }
       for (let j = NU - 2; j > jTop; j--) if (d[4 * (j * NR + i)] >= -16) { jTop = j; break; }
     }
