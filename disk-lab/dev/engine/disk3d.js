@@ -1983,9 +1983,11 @@ float Sigma(float R, float lnR){ return exp(-lnR - cutOut(R) + gapLn(R)) * smoot
 // crest, betaOver, which keeps the tail lit as its gas thins; the cut of before, SIG_CUT, keeps the zero). Shown with the true
 // R^-2 falloff inside 1 au, easing to R^-1.1 outside and to R^-0.2 beyond OUTER_R = 6 au (scattered-light images are
 // often scaled by R² for the same reason; the disk reaches 30 au, so its outer part would otherwise be lost in the dark).
+// (That fall is the observed looks' and the pebble sheet's; the model look's skin has its own, litModel below.)
 const float OUTER_R = 6.0, OUTER_E = 0.9;
 // With the planet's gap the starlight is redistributed: the inner rim shades the gap, and the light that passes over
-// it falls on the outer wall and beyond. That factor comes from ray tracing (the disk map's fourth channel).
+// it falls on the outer wall and beyond. That factor comes from ray tracing (the disk map's fourth channel). (Round 18c: the
+// rays traced lie below the crest's angle, so the factor goes on that share of the light only, gapLit below.)
 float litFall(float R){ return pow(1.0 + R, 0.9) / (0.66 * (R * R + 0.01)) * pow(max(R / OUTER_R, 1.0), OUTER_E); }   // (its fall with R)
 const float LIT_F1 = 2.7994;   // (litFall(1 au))
 float Eabs(float R, float lnR, float H){
@@ -1993,6 +1995,62 @@ float Eabs(float R, float lnR, float H){
   // (round 18b: or the starlight over the crest where that is more, betaOver; see CREST)
   float beta = max(max(H * sqrt(2.0 * a) / R * (0.25 - (0.625 + 0.5 * cutSlope(R)) / a), 0.0), betaOver(R, lnR, H, cut)) + 0.004 / R;
   return beta / 0.022 * litFall(R) * smoothstep(R_IN * 0.85, R_IN * 1.5, R);
+}
+// (Round 18c, the owner: "the gas in the model look glows unnaturally": since round 18b's lit tail the whole view was a grey veil
+// to the picture's edges.) The starlight on the skin in the model's look, Es, from Eabs's Ea (without the disk map) and the gap's
+// factor dma (dm.a). Round 8 eased the light's fall with the distance to R^-1/2 at every radius (litFall divided out, beta kept
+// linear): with the lit surface ending at about 20 au that kept the outer disk in sight, but with the tail taking the starlight
+// over the crest (round 18b) the skin from 15 to 40 au took nearly the light of 10 au (beta 0.015-0.017 there against 0.027,
+// and R^-1/2 only 1.7 times less at 30 au), while what it absorbs per unit area, beta / R^2, is 16 times less at 30 au and
+// 850 times less at 60 au. Now, beyond R_n = LIT_NV.x (6 au, OUTER_R; inside it the law of before, in the same operations: the
+// star's and the heat's places), that absorbed starlight to the power LIT_P, a display's compression (DESIGN.md section 44: 0.6
+// chosen from the CPU pictures, between a veil at 0.5 and a tail gone at 0.7), matched at R_n: Es(R_n) ((beta / R^2) /
+// (beta_n / R_n^2))^LIT_P, with beta_n = LIT_NV.y (Eabs's beta at R_n, betaIrrJS in the script), reached smoothly in ln R by
+// LIT_RB. The skin then fades with the gas of the tail (face-on from 20 to 40 au 5.4 times, the gas's column 7.4 times; it was
+// 4.4 times, after a plateau from 15 to 20 au). And the gap's factor dma only on the share of beta that is not the starlight
+// over the crest (overShare): gapLight traces the rays below the crest's angle (0.05-0.26 rad), and its 3.3-3.8 from 14 to 28 au
+// behind a Jupiter at 10 au (the light the gap lets through, over the tiny deposit of the smooth disk in the crest's shadow)
+// is not for the light passing over the crest, which it multiplied since round 18b (the start's view, with that planet, was
+// 3 times brighter there, falling back at 30 au where the table ends). LIT_FLAT (data-litflat="1", the page's ?litflat=1, to
+// compare; and with the cut of before, SIG_CUT, which keeps its picture): as before (1.9-dev.25). The observed looks and the
+// pebble sheet keep E's fall with the distance (litFall); the gap's factor goes on them as on the model look's skin (gapLit,
+// below: the coordinator's decision of 2026-11-07, for the same reason).
+#ifndef LIT_FLAT
+#ifndef LIT_N
+#error LIT_N, the model look's knee and the beta there, is defined by init
+#endif
+const vec2 LIT_NV = LIT_N;
+const float LIT_P = 0.6, LIT_RB = 12.0;
+// the share of Eabs's beta that is the starlight over the crest beyond the local surface's (the local beta as Eabs has it): 0
+// where betaOver is (inside half the crest's radius, and to 15.1 au where it stays under the local beta)
+float overShare(float R, float lnR, float H){
+  float cut = cutOut(R), a = max(LNTAU1 - 1.25 * lnR - cut, 1.0);
+  float bl = max(H * sqrt(2.0 * a) / R * (0.25 - (0.625 + 0.5 * cutSlope(R)) / a), 0.0), bo = betaOver(R, lnR, H, cut);
+  return max(bo - bl, 0.0) / (max(bl, bo) + 0.004 / R);
+}
+#endif
+// The gap's factor on the starlight that Eabs gives, g = (1 - f_o) dma + f_o with f_o = overShare, written dma + f_o (1 - dma): dma
+// itself where f_o is 0 and 1 itself without a gap (dma 1), in the operations of before. For every look's skin (E, and litModel)
+// and the pebbles' glow (pebLayer); the temperature's table has no gap factor (betaIrrJS), and keeps its beta. LIT_FLAT: dma.
+float gapLit(float R, float lnR, float H, float dma){
+#ifdef LIT_FLAT
+  return dma;
+#else
+  return dma + overShare(R, lnR, H) * (1.0 - dma);
+#endif
+}
+// g: gapLit's factor, as E takes it
+float litModel(float R, float lnR, float Ea, float g){
+  float lf = litFall(R), Es = Ea * g * LIT_F1 / lf * inversesqrt(max(R, 0.1));
+#ifndef LIT_FLAT
+  if (R > LIT_NV.x) {
+    // ln(beta / beta_n) (0.022 Ea / litFall is beta beyond 0.12 au) and ln(R / R_n): the new law over the old is
+    // (LIT_P - 1) ln(beta / beta_n) + (0.5 - 2 LIT_P) ln(R / R_n)
+    float lb = log(0.022 * Ea / (lf * LIT_NV.y)), lr = lnR - log(LIT_NV.x);
+    Es *= exp(smoothstep(log(LIT_NV.x), log(LIT_RB), lnR) * ((LIT_P - 1.0) * lb + (0.5 - 2.0 * LIT_P) * lr));
+  }
+#endif
+  return Es;
 }
 
 // (Disk Lab v2: the hot end turned from warm white to yellow through gold, and the ice's edge from cream to white, so
@@ -2225,7 +2283,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     float Ts = tSurf(R);
     vec4 dm = diskMap(lnR, phi);
     ed = eddies(lnR, phi, zh);
-    float E = Eabs(R, lnR, H) * dm.a;
+    float Ea = Eabs(R, lnR, H), gF = gapLit(R, lnR, H, dm.a), E = Ea * gF;   // (round 18c: the gap's factor below the crest's angle, gapLit)
     // the irradiated skin: absorbed starlight j = E |d e^-τ* / dz|, integrated exactly for x varying
     // linearly over the step. The surface is corrugated by the turbulence; slopes facing the star
     // catch more light, and crests cast shadows (both in the disk map). The eddies do the same in three dimensions:
@@ -2246,8 +2304,9 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       float P = abs(dx) > 1e-3 ? (exp(-exp(xPrev)) - exp(-exp(xs))) / dx : exp(xm - exp(xm));
       // seen by scattered starlight (near-isotropic grains); the colour stays that of the temperature
       // (round 8: in the model's look the light's fall with the distance is eased to R^-1/2, see G_LIT: the shading shows the
-      // surface's tilt toward the star, its shadows and the scattering's direction, not the light's distance)
-      float Es = uLook == 0 ? E * LIT_F1 / litFall(R) * inversesqrt(max(R, 0.1)) : E;
+      // surface's tilt toward the star, its shadows and the scattering's direction, not the light's distance. Round 18c: so
+      // inside 6 au; beyond it the absorbed starlight compressed, see litModel)
+      float Es = uLook == 0 ? litModel(R, lnR, Ea, gF) : E;
       float mu = dot(p, -rd) / max(length(p), 1e-3), base0 = (xc > xl ? G_SKIN * Es * dxCrest(R, az) : G_SKIN * Es * az / (H * H)) * ds * dm.g * ed.x, base = base0 * P * exp(-ed.y);   // (round 18b: dxCrest)
       float Pd = 0.0;   // multiple scattering: the diffuse light absorbed over the step (see MS_C)
       if (uMS > 0.0) {
@@ -2525,7 +2584,7 @@ float pebLayer(vec3 p, out float Tm, out vec4 srcG){
   sd *= uComp.z; sc *= uComp.z;   // (the pebbles as they fade, their absorption with their light; the millimetre follows them)
   vec3 alb = mix(MAT_ROCK * 0.25, 0.9 * MAT_ICE, ice);   // (round 8: rock and ice, materials; the ice was in the colour of its temperature)
   alb = mix(alb, vec3(0.85, 0.92, 1.0) * mix(0.35, 1.0, ice), sc / (sd + 1e-6));   // packed pebbles look paler
-  srcG = vec4(G_DUST * alb * Eabs(R, lnR, H) * dm.a, 1.0 + PILE * (pile - 1.0));
+  srcG = vec4(G_DUST * alb * Eabs(R, lnR, H) * gapLit(R, lnR, H, dm.a), 1.0 + PILE * (pile - 1.0));   // (round 18c: gapLit)
   return sd;
 }
 void sheet(vec3 p, vec3 rd, inout vec3 col, inout vec3 tr){
@@ -4854,8 +4913,13 @@ void main(){
     // (round 18a: SIG_CUT, the gas's cut of before; SIG_RC, another R_c for its taper; see MODEL.TAIL. Round 18b: CREST, the crest of
     // the irradiated surface for this taper, crestJS, with the tail)
     const crest = crestJS();
+    // (round 18c) the model look's starlight on the skin (litModel in the GLSL): LIT_FLAT, the law of before (data-litflat="1", the
+    // page's ?litflat=1, to compare; and with the cut of before, which keeps its picture), or LIT_N, its knee R_n (6 au, OUTER_R)
+    // and Eabs's beta there (betaIrrJS, to 6 digits; it moves with R_c)
+    const litFlat = box.dataset.litflat === '1' || !MODEL.TAIL, LIT_RN = 6;
     const hdrDefs = [mpConst && 'MP_CONST', wextOld && 'WEXT_OLD', !MODEL.TAIL && 'SIG_CUT', MODEL.TAIL && MODEL.RC !== MODEL.R_OUT && 'SIG_RC ' + G(MODEL.RC),
-      crest && 'CREST vec4(' + [crest.R, crest.a, crest.h, crest.th].map(G).join(', ') + ')'].filter(Boolean);
+      crest && 'CREST vec4(' + [crest.R, crest.a, crest.h, crest.th].map(G).join(', ') + ')',
+      litFlat ? 'LIT_FLAT' : 'LIT_N vec2(' + G(LIT_RN) + ', ' + G(+betaIrrJS(LIT_RN).toPrecision(6)) + ')'].filter(Boolean);
     const mpHdr = (src) => hdrDefs.reduce((s, d) => (s.includes('#define ' + d + '\n') ? s : s.replace('#version 300 es\n', '#version 300 es\n#define ' + d + '\n')), src);
     let MPV = mpValues();
     const mpLoc = new Map();
