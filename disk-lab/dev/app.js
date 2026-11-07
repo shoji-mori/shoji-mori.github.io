@@ -11,13 +11,13 @@ import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stash
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=1a7fd6b61f';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=c061e840c4';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.27', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.28', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -2339,9 +2339,10 @@ async function start() {
   // shortcuts while the picture moves and their share of the steps (README, the engine's FAST; round 16b: the checkerboard dropped);
   // (round 16c) the march's steps and the still's frames, for the owner's timing trials; (round 18a) the gas's surface density, its
   // cut of before (?sigtail=0) and another R_c for its tail (?rc=, au; round 18b: a Gaussian); (round 18c) the model look's starlight
-  // on the surface as before, eased to R^-1/2 at every radius (?litflat=1). Each passed as it is: the engine reads each within its
-  // range, and a value it cannot read as its default
-  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc', 'sigtail', 'rc', 'litflat']) if (q.has(k)) box.dataset[k] = q.get(k);
+  // on the surface as before, eased to R^-1/2 at every radius (?litflat=1); (round 18f) the visible and mid-infrared looks' cylinder
+  // (?obscyl=R,Z, au), and the model look's lit surface seen through the disk as before, its shadow's glow as before (?skinlos=0).
+  // Each passed as it is: the engine reads each within its range, and a value it cannot read as its default
+  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc', 'sigtail', 'rc', 'litflat', 'obscyl', 'skinlos']) if (q.has(k)) box.dataset[k] = q.get(k);
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   // (the engine's own start: the defaults Reset returns to; round 15a: with the clock's state, stopped by data-paused)
   if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), [...DEF_KEYS, 'paused']);

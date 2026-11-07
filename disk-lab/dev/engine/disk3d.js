@@ -179,6 +179,13 @@
   // (RB_JS and ZB_JS set back when the engine is built, the shaders built with WEXT_OLD defined, see mpHdr in init).
   let RB_JS = 136, ZB_JS = 102, RB_OBS = 40, ZB_OBS = 30, WIND_SOFT = 1.5;
   const WIND_EXT = { NEW: [RB_JS, ZB_JS, 240], OLD: [68, 51, 120] };   // (the cylinder's radius and height, the wind map's reach; au)
+  // (round 18f) the grid of the table of the starlight's depth along the rays from the star (starTableData, starT in the GLSL): NR
+  // radii in ln R from R0 to R1 au (the marched cylinder reaches 136 au), NU values of u = sqrt(|z| / (R + |z|)), SUB steps of the
+  // rays a cell of R, NS points a cell of u for its columns' sums; MS_C as the GLSL's (the diffuse light's depth)
+  const ST = { NR: 256, NU: 128, R0: 0.05, R1: 160, SUB: 8, NS: 8, MS_C: 0.04 };
+  // (round 18f) the continuum looks' cylinder by default (radius, half height; au): fitted to the lit tail, and that of before with the
+  // cut of before (see OBS_CT in the GLSL; the page's ?obscyl=R,Z another, OBS_CT_DEF.MIN to MAX)
+  const OBS_CT_DEF = { TAIL: [64, 40], CUT: [40, 30], MIN: [30, 20], MAX: [136, 102] };
   // Non-ideal MHD: the gas is so weakly ionized that the field slips through it. Two of the effects set where it couples
   // (Mori, Bai & Tomida 2025, and the papers it builds on):
   //   Ohmic diffusion dominates at high density, near the midplane. Its diffusivity is a Gaussian in height,
@@ -790,6 +797,18 @@ const float RB = ${G(WIND_EXT.OLD[0])}, ZB = ${G(WIND_EXT.OLD[1])};   // (round 
 const float RB = ${G(RB_JS)}, ZB = ${G(ZB_JS)};   // marched cylinder (au): past the edge of the disk, up to the top of the drawn wind
 #endif
 const float RB_OBS = ${G(RB_OBS)}, ZB_OBS = ${G(ZB_OBS)};   // (round 8) the observed looks' own, the cylinder before round 8
+// (Round 18f) The continuum looks' (visible, mid-infrared) cylinder, OBS_CT = (its radius, its half height), defined by init: by
+// default fitted to the lit tail, ${OBS_CT_DEF.TAIL.join(' x ')} au (the gas's surface, at 0.27 rad from 40 au out, is at 17 au at 64 au; above it
+// the lit gas thins out by 0.4 rad), ${OBS_CT_DEF.CUT.join(' x ')} au with the cut of before as until now; the page's ?obscyl=R,Z (data-obscyl) for
+// another. Since round 18b the lit surface went on along the tail to 50-60 au, and the cylinder of before cut it at 40 au: seen
+// edge-on and from a little above, the bright surface ended in straight, level edges (a box). The disk's light and extinction
+// fade to nothing over the cylinder's last fifth in radius and in height (OBS_FADE), so that its walls do not show. The gas
+// line's and the millimetre look's keep RB_OBS x ZB_OBS (the CO line's emission lies within it; the pebbles end at 20 au)
+#ifndef OBS_CT
+#error OBS_CT, the continuum looks' cylinder, is defined by init
+#endif
+const vec2 OBS_CT_V = OBS_CT;
+const float OBS_FADE = 0.8;
 // non-ideal MHD (see NONIDEAL in the script): the thermally ionized inner disk inside R_TI, the dead zone's top z_k (in
 // units of H; 0 where there is none) and the height over which the field bends above it (DZ_BEND H)
 // (round 14a) The model's parameters the page may change (PAR in the script, box.diskParams) reach the shaders in uMP:
@@ -1863,6 +1882,17 @@ uniform float uGGas;
 // is lowered by LIT_DARK, so the midplane and the far side, in the disk's own shadow, are darker. Not a surface glowing
 // of itself (round 3): the light is the star's, on the matter it reaches; the glow of the rest stays.
 const float G_LIT_HG = 0.55, G_LIT = 0.3, LIT_DARK = 0.6;
+// (Round 18f, the owner: "make the edge-on view look natural") and lowered by LIT_DEEP more where the diffuse light does not
+// reach either (1 - e^(-MS_C tau*): the gas deeper than tau* of about 25 below its lit surface, MS_C below): 0.1 of the lit glow
+// there instead of 0.4, so that seen edge-on the disk's body is a dark band, not a bright bar (its long path through the
+// shadowed midplane took the glow to its thick limit, 0.4 G_GAS MAT_DISK / EXT, about 0.12 of linear white, 0.42 on the stretch;
+// now 0.03, 0.23); the gas within the reach of the diffuse light below the surface keeps 0.4. Not with SKIN_THRU (the cut of
+// before, ?skinlos=0: see SKIN_LOS)
+#ifdef SKIN_THRU
+const float LIT_DEEP = 0.0;
+#else
+const float LIT_DEEP = 0.3;
+#endif
 // (Round 13a, the owner: "show the gas in proportion to its density") The gas body's glow is G_GAS K_G rho, in proportion to
 // its density as its extinction K_G rho is, and nothing else beside the starlight's LIT_DARK above. Until round 13 it was
 // also raised beyond OUTER_R by R / OUTER_R (5 times at 30 au), so that the thin outer disk read about as brightly as at 6 au
@@ -1917,6 +1947,23 @@ vec3 litCol(){ vec3 m = MAT_DISK / max(max(MAT_DISK.r, MAT_DISK.g), max(MAT_DISK
 // the observed looks: the gas's opacity relative to K_G (the disk opaque in scattered light and the mid-infrared), the
 // colour of scattered starlight, the forward scattering of the grains at the surface, and the gains of each look
 const float OPT_K = 30.0, MIR_K = 8.0, G_OPT_HG = 0.55, G_OPT = 1.0, G_MIR = 2.5, G_MM = 0.3;
+// (Round 18f, the owner: "make the edge-on and nearly edge-on views look natural") The model look's lit skin and its diffuse
+// light are the star's light scattered by the small grains, and on their way to the camera they pass the disk's gas as that light
+// does: dimmed by it at the visible look's opacity, OPT_K times the gas's own (SKIN_LOS more than the gas's own extinction in
+// the march's transmission; gTauG, the gas's column along the ray so far, see the march). The gas's glow, a picture of where the
+// gas is, stays translucent (K_G). Seen edge-on the lit surface's limb behind the disk's body, which made the bright X of
+// straight lines crossing at the star (the surface is a cone of 0.27 rad beyond 30 au, the model's own: see starTableData), and
+// the far side's surface seen through the disk are hidden as they are in the visible look: the upper and the lower lit surfaces
+// stand apart over the disk's dark band, as in the scattered light of edge-on disks (HH 30, the Flying Saucer). Not with the
+// cut of before (SIG_CUT keeps its picture), nor for the pebbles' sheet (a component of its own, drawn through the gas): SKIN_THRU,
+// defined by init with the cut of before and with data-skinlos="0" (the page's ?skinlos=0, to compare: the lit surface seen through
+// the disk as until now, and the shadow's glow without LIT_DEEP)
+#ifdef SKIN_THRU
+const float SKIN_LOS = 0.0;
+#else
+const float SKIN_LOS = OPT_K - 1.0;
+#endif
+float gTauG = 0.0, gExG = 0.0;
 // (Round 15b, the owner: "changing L* should change every observed look") uLstar: the star's luminosity over its default (the
 // parameter L*, lumBase in the script; 1 with data-lscale="0", the page's ?lscale=0, as before). The starlight the visible look
 // scatters (the disk's skin and its diffuse part, the wind's and the envelope's light) is in proportion to it; the star's own glow
@@ -2030,12 +2077,10 @@ float Eabs(float R, float lnR, float H){
 // compare; and with the cut of before, SIG_CUT, which keeps its picture): as before (1.9-dev.25). The observed looks and the
 // pebble sheet keep E's fall with the distance (litFall); the gap's factor goes on them as on the model look's skin (gapLit,
 // below: the coordinator's decision of 2026-11-07, for the same reason).
+// (Round 18f: the law, R_n 6 au, the power 0.6 and its end 12 au, is now the script's, in the table of the starlight's depth that
+// lays it where the gas absorbs it: starTableData, its g; litModel stays for the cut of before, SIG_CUT, with LIT_FLAT. With
+// ?litflat=1 the table takes round 8's law at every radius.)
 #ifndef LIT_FLAT
-#ifndef LIT_N
-#error LIT_N, the model look's knee and the beta there, is defined by init
-#endif
-const vec2 LIT_NV = LIT_N;
-const float LIT_P = 0.6, LIT_RB = 12.0;
 // the share of Eabs's beta that is the starlight over the crest beyond the local surface's (the local beta as Eabs has it): 0
 // where betaOver is (inside half the crest's radius, and to 15.1 au where it stays under the local beta)
 float overShare(float R, float lnR, float H){
@@ -2047,26 +2092,22 @@ float overShare(float R, float lnR, float H){
 // The gap's factor on the starlight that Eabs gives, g = (1 - f_o) dma + f_o with f_o = overShare, written dma + f_o (1 - dma): dma
 // itself where f_o is 0 and 1 itself without a gap (dma 1), in the operations of before. For every look's skin (E, and litModel)
 // and the pebbles' glow (pebLayer); the temperature's table has no gap factor (betaIrrJS), and keeps its beta. LIT_FLAT: dma.
+// (Round 18f: where there is no gap, dma 1, it is 1 without overShare's work: the same number.)
 float gapLit(float R, float lnR, float H, float dma){
 #ifdef LIT_FLAT
   return dma;
 #else
+  if (dma == 1.0) return 1.0;
   return dma + overShare(R, lnR, H) * (1.0 - dma);
 #endif
 }
-// g: gapLit's factor, as E takes it
+#ifdef SIG_CUT
+// g: gapLit's factor, as E takes it (round 8's law, the cut of before's: SIG_CUT defines LIT_FLAT)
 float litModel(float R, float lnR, float Ea, float g){
   float lf = litFall(R), Es = Ea * g * LIT_F1 / lf * inversesqrt(max(R, 0.1));
-#ifndef LIT_FLAT
-  if (R > LIT_NV.x) {
-    // ln(beta / beta_n) (0.022 Ea / litFall is beta beyond 0.12 au) and ln(R / R_n): the new law over the old is
-    // (LIT_P - 1) ln(beta / beta_n) + (0.5 - 2 LIT_P) ln(R / R_n)
-    float lb = log(0.022 * Ea / (lf * LIT_NV.y)), lr = lnR - log(LIT_NV.x);
-    Es *= exp(smoothstep(log(LIT_NV.x), log(LIT_RB), lnR) * ((LIT_P - 1.0) * lb + (0.5 - 2.0 * LIT_P) * lr));
-  }
-#endif
   return Es;
 }
+#endif
 
 // (Disk Lab v2: the hot end turned from warm white to yellow through gold, and the ice's edge from cream to white, so
 // that 160 K and 2000 K no longer look alike: blue, white at the snow line, orange, gold, yellow.)
@@ -2115,11 +2156,34 @@ float xRim(float R, float az, float x){
   }
   return x;
 }
+#ifndef SIG_CUT
+// (Round 18f) The starlight's depth along the rays from the star, from the script's table (starTableData; DESIGN.md section 47):
+// the depth the smooth gas gathers along the ray from the star to (R, z), at R by u = sqrt(|z| / (R + |z|)). r: x = ln tau; g: ln
+// of the model look's starlight on its skin per unit of e^x_l (Es / (R beta_t)); b: the same for the observed looks without their
+// E (1 / (R beta_t)); a: ln of the diffuse light's over the skin's (beta_t / beta_d). Above ST_UG (from init) the depth is under
+// e^-16 at every radius: nothing is fetched there (the wind's region above the disk). The planets' gaps keep their own ln
+// (gapLn) on top of it, and their tables (gapLight, xRim)
+uniform highp sampler2D uStarT;
+#ifndef ST_UG
+#error ST_UG, the table's highest u with any depth, is defined by init with the tail
+#endif
+const float ST_LN0 = ${G(+Math.log(ST.R0).toFixed(6))}, ST_DLN = ${G(+(Math.log(ST.R1 / ST.R0) / (ST.NR - 1)).toFixed(8))}, ST_NR = ${G(ST.NR)}, ST_NU = ${G(ST.NU)};
+vec4 starT(float R, float lnR, float az){
+  float u = sqrt(az / (R + az));
+  if (u >= ST_UG) return vec4(-30.0, 0.0, 0.0, 0.0);
+  return textureLod(uStarT, vec2((0.5 + (lnR - ST_LN0) / ST_DLN) / ST_NR, (0.5 + u * (ST_NU - 1.0)) / ST_NU), 0.0);
+}
+#endif
 // x = ln of the optical depth toward the star; the irradiation surface is x = 0
 float lnTauStar(vec3 p){
   float R = max(length(p.xy), 1e-3), lnR = log(R), H = H0 * exp(1.25 * lnR);
+#ifdef SIG_CUT
   // (round 18b: beyond the crest at least the crest's at this angle, xCrest)
   return clamp(max(LNTAU1 - 1.25 * lnR - cutOut(R) + gapLn(R) - 0.5 * p.z * p.z / (H * H), xCrest(R, abs(p.z))), -30.0, 30.0);
+#else
+  // (round 18f: along the ray from the star, starT, with the gaps' ln, as sampleDisk's x)
+  return clamp(starT(R, lnR, abs(p.z)).r + gapLn(R), -30.0, 30.0);
+#endif
 }
 
 // Streamers in the wind: how much gas a bundle of field lines lifts (the mass loading) varies with the place and the
@@ -2275,6 +2339,7 @@ bool gCenteredSegment = false;
 float gWindNear = 1.0;
 void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 em, out vec3 ex, out vec3 skin, out float x, out float wl){
   em = vec3(0.0); ex = vec3(0.0); skin = vec3(0.0); wl = 0.0;
+  gExG = 0.0;   // (round 18f: the gas's extinction here, for the skin's dimming, SKIN_LOS)
   float xEnd = 0.0;
   if (gCenteredSegment) { xEnd = lnTauStar(p); p -= 0.5 * ds * rd; }
   float R = max(length(p.xy), 1e-3), lnR = log(R);
@@ -2284,7 +2349,16 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
   // (round 18b: beyond the crest at least the crest's depth at this angle, xCrest; where that holds, the skin's dx/dz is the
   // crest's, dxCrest, so that the starlight absorbed across its shadow's edge is E, as across the local surface)
   float xl = LNTAU1 - 1.25 * lnR - cut + gl - 0.5 * zh * zh, xc = xCrest(R, az);
-  x = clamp(max(xl, xc), -30.0, 30.0);
+  // (round 18f) xw, the depth of before (the local one, beyond the crest the crest's shadow), for the wind's light and the cut's
+  // fade of its base, which keep it; x the depth along the ray from the star (starT, with the gaps' ln), for the skin, its
+  // diffuse light and the gas's shadow. With the cut of before, SIG_CUT, x is xw as before
+  float xw = clamp(max(xl, xc), -30.0, 30.0);
+#ifdef SIG_CUT
+  x = xw;
+#else
+  vec4 sT = starT(R, lnR, az);
+  x = clamp(sT.r + gl, -30.0, 30.0);
+#endif
   float xs = gCenteredSegment ? xEnd : x;
   if (R < R_IN * 0.7) { x = xs; wq = vec3(99.0); return; }
 
@@ -2298,7 +2372,13 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     float Ts = tSurf(R);
     vec4 dm = diskMap(lnR, phi);
     ed = eddies(lnR, phi, zh);
-    float Ea = Eabs(R, lnR, H), gF = gapLit(R, lnR, H, dm.a), E = Ea * gF;   // (round 18c: the gap's factor below the crest's angle, gapLit)
+    float gF = gapLit(R, lnR, H, dm.a);   // (round 18c: the gap's factor below the crest's angle, gapLit)
+#ifdef SIG_CUT
+    float Ea = Eabs(R, lnR, H), E = Ea * gF;
+#else
+    // (round 18f: the model look's starlight on its skin comes with the table, sT.g; the observed looks keep their E)
+    float E = uLook == 0 ? 0.0 : Eabs(R, lnR, H) * gF;
+#endif
     // the irradiated skin: absorbed starlight j = E |d e^-τ* / dz|, integrated exactly for x varying
     // linearly over the step. The surface is corrugated by the turbulence; slopes facing the star
     // catch more light, and crests cast shadows (both in the disk map). The eddies do the same in three dimensions:
@@ -2321,14 +2401,32 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       // (round 8: in the model's look the light's fall with the distance is eased to R^-1/2, see G_LIT: the shading shows the
       // surface's tilt toward the star, its shadows and the scattering's direction, not the light's distance. Round 18c: so
       // inside 6 au; beyond it the absorbed starlight compressed, see litModel)
+      float mu = dot(p, -rd) / max(length(p), 1e-3);
+#ifdef SIG_CUT
       float Es = uLook == 0 ? litModel(R, lnR, Ea, gF) : E;
-      float mu = dot(p, -rd) / max(length(p), 1e-3), base0 = (xc > xl ? G_SKIN * Es * dxCrest(R, az) : G_SKIN * Es * az / (H * H)) * ds * dm.g * ed.x, base = base0 * P * exp(-ed.y);   // (round 18b: dxCrest)
+      float base0 = (xc > xl ? G_SKIN * Es * dxCrest(R, az) : G_SKIN * Es * az / (H * H)) * ds * dm.g * ed.x;   // (round 18b: dxCrest)
+#else
+      // (Round 18f) The starlight absorbed where the gas takes it: of the star's flux reaching a point, kappa rho e^-tau, kappa rho =
+      // e^xl / R the gas's opacity to it (the model's local depth per unit length), integrated over the step as before (P, tau e^-tau
+      // for x linear over it, times e^(xl - x)). Per unit area its total is the starlight on the skin of before (the table's g: the
+      // model look's law of round 18c, over beta_t; b: for E, the observed looks'), now laid where the gas absorbs it: on the
+      // surface the gas itself casts, curved, and beyond the crest on the gas over its shadow as that gas thins, with no light
+      // where there is no gas (round 18b's dxCrest put E on the crest's cone, whatever the gas there)
+      float base0 = G_SKIN * (uLook == 0 ? gF * exp(sT.g + xl - x) : E * exp(sT.b + xl - x)) * ds * dm.g * ed.x;
+#endif
+      float base = base0 * P * exp(-ed.y);
       float Pd = 0.0;   // multiple scattering: the diffuse light absorbed over the step (see MS_C)
       if (uMS > 0.0) {
         Pd = abs(dx) > 1e-3 ? (exp(-MS_C * exp(xPrev)) - exp(-MS_C * exp(xs))) / dx : MS_C * exp(xm - MS_C * exp(xm));
+#ifdef SIG_CUT
         // (round 18b: in the crest's shadow the diffuse light is scattered by the gas there, whose own depth is the share
         // e^(xl - xc) of the starlight's: weighed by it, else it spread over the whole shadow, gas or none)
         Pd *= uMS * MS_A * base0 * exp(-0.5 * ed.y) * (xc > xl ? exp(xl - xc) : 1.0);
+#else
+        // (round 18f: base0 holds e^(xl - x), so the diffuse light is MS_C kappa rho e^(-MS_C tau), where the gas is; its total
+        // MS_A of the skin's, the table's a)
+        Pd *= uMS * MS_A * base0 * exp(sT.a - 0.5 * ed.y);
+#endif
       }
       // (the model's look: the star's light on the disk, see G_LIT; the observed looks below)
       skin = (base * hg(mu, G_LIT_HG) + Pd) * (G_LIT * uLit) * litCol();
@@ -2338,6 +2436,8 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       else if (uLook == 3) skin = vec3(0.0);
 #endif
       skin *= uComp.y;
+      // (round 18f: in the model look dimmed by the gas between it and the camera at the visible look's opacity, see SKIN_LOS)
+      if (uLook == 0) skin *= exp(-SKIN_LOS * gTauG);
     }
     // gas with small grains: translucent, glowing with its density in the colour of its temperature (cold
     // midplane; warm only inside the snow line)
@@ -2359,7 +2459,9 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
 #endif
     // (round 8: in the colour of its material, MAT_DISK, no longer of its temperature; see MAT in the script)
     // (round 13a: in proportion to the density, see uGasOuter)
-    if (glowT) em = uGGas * K_G * rho * MAT_DISK * 0.5 * (gasOn + dustOn) * (uGasOuter > 0.5 ? max(R / OUTER_R, 1.0) : 1.0) * (1.0 - uLit * LIT_DARK * (1.0 - exp(-exp(min(xs, 30.0)))));
+    // (round 18f: and LIT_DEEP where the diffuse light does not reach either, 1 - e^(-MS_C tau*))
+    float tS = exp(min(xs, 30.0));
+    if (glowT) em = uGGas * K_G * rho * MAT_DISK * 0.5 * (gasOn + dustOn) * (uGasOuter > 0.5 ? max(R / OUTER_R, 1.0) : 1.0) * (1.0 - uLit * (LIT_DARK * (1.0 - exp(-tS)) + LIT_DEEP * (1.0 - exp(-MS_C * tS))));
     // the surface accretion layer(s) (see ACC): a column ACC_SIG of the local surface density, in its streaks, across a
     // Gaussian in height ACC_W H wide. The layer is thinner than a step, so its column over the step is integrated
     // across that profile (the height changes by rd.z ds over the step) and spread over the step as a mean density.
@@ -2385,8 +2487,13 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       }
     }
     ex *= uOpac.x;   // (round 18a: the gas's see-through, its extinction alone; see uOpac)
+    gExG = dot(ex, vec3(0.2126, 0.7152, 0.0722));   // (round 18f: the gas's, before the wind's; see SKIN_LOS)
 #ifdef FULL
-    if (uLook != 0) { ex *= uLook == 1 ? OPT_K : uLook == 2 ? MIR_K : 0.0; em = vec3(0.0); }
+    if (uLook != 0) {
+      ex *= uLook == 1 ? OPT_K : uLook == 2 ? MIR_K : 0.0; em = vec3(0.0);
+      // (round 18f: the continuum looks' disk faded out toward their cylinder's walls, see OBS_CT)
+      if (uLook <= 2) { float fo = (1.0 - smoothstep(OBS_FADE * OBS_CT_V.x, OBS_CT_V.x, R)) * (1.0 - smoothstep(OBS_FADE * OBS_CT_V.y, OBS_CT_V.y, az)); ex *= fo; skin *= fo; }
+    }
 #endif
 
     // water vapor released inside the snow line, spreading outward (in the model's look)
@@ -2417,9 +2524,9 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
   windOn = uLook <= 1;   // the wind and the envelope scatter starlight; no thermal emission is drawn for them
   // (in the part cut away the wind's base goes with the disk, where the disk absorbs the starlight: from tau* = e^-4 to
   // e^-2 the wind fades out toward the disk; above it the wind is whole, its light untouched by the disk's shadows)
-  if (gDiskOff) wk = 1.0 - smoothstep(-4.0, -2.0, x);
+  if (gDiskOff) wk = 1.0 - smoothstep(-4.0, -2.0, xw);   // (round 18f: xw, the depth of before, see above)
 #endif
-  if (x < 2.5 && windOn && (uMode & 8) != 0 && wk > 0.0) {
+  if (xw < 2.5 && windOn && (uMode & 8) != 0 && wk > 0.0) {
     vec4 w = windMap(R, z);             // ln r0, azimuth relative to the foot, travel time, ln density
     // the grains that scatter and absorb: none where the gas left the disk inside about 2.5 R_IN (sublimated)
     float r0w = exp(w.x), r = length(p), rho = exp(w.w) * gapFactor(r0w) * (z > 0.0 ? 1.0 : uWindLow) * smoothstep(R_IN, 2.5 * R_IN, r0w);
@@ -2429,7 +2536,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     if (uLook != 0) { gw = G_WIND_OBS * uLstar * exp(-5.0 * smoothstep(0.55 * ZB_OBS, ZB_OBS, az) - 5.0 * smoothstep(0.55 * RB_OBS, RB_OBS, R)); rise = 0.0; }   // (round 15b: uLstar)
 #endif
     float lit = gw * gWindNear * K_G * rho / (1.0 + (uLook == 0 ? pow(r / 15.0, ${G(WIND_SOFT)}) : r * r / 225.0))
-              * phaseGas(dot(p, -rd) / max(r, 1e-3)) * exp(-gasK() * exp(xRim(R, az, x)) * (1.0 + ed.y))
+              * phaseGas(dot(p, -rd) / max(r, 1e-3)) * exp(-gasK() * exp(xRim(R, az, xw)) * (1.0 + ed.y))
               * exp(-rise * min(w.w - log(RHO_B) + 1.5 * w.x, 0.0));   // (rho / rho_base)^-WIND_RISE, see G_WIND
     lit *= wk;
     wl = lit;
@@ -3725,7 +3832,8 @@ void main(){
 #endif
 
   // (b0: the cylinder, the observed looks' smaller one (round 8, see RB_OBS); b: its part kept)
-  vec2 b0 = uLook == 0 ? boundsCyl(ro, rd) : boundsCylRZ(ro, rd, RB_OBS, ZB_OBS), b = b0;
+  // (round 18f: the continuum looks' own, OBS_CT; the millimetre's and the gas line's that of round 8)
+  vec2 b0 = uLook == 0 ? boundsCyl(ro, rd) : uLook <= 2 ? boundsCylRZ(ro, rd, OBS_CT_V.x, OBS_CT_V.y) : boundsCylRZ(ro, rd, RB_OBS, ZB_OBS), b = b0;
   b.x = max(b.x, tCut); b.y = min(b.y, tEnd);
   vec2 tSkip0 = tSkip;   // (the march clears tSkip once across)
 #ifdef FULL
@@ -4013,6 +4121,7 @@ void main(){
         col += tr * sk * ak;
         col += tr * em * ds * transferWeight(ex * ds) * ak;
         tr *= a;
+        gTauG += gExG * ds;   // (round 18f: the gas's column so far, for the skin's dimming, SKIN_LOS)
         xPrev = x; t = t1;
       }
       if (!inCut && i >= 32768) marchDone = true;   // (its last step taken as the loop ended: see cutWind's end)
@@ -4864,6 +4973,92 @@ void main(){
     }
     return d;
   }
+  // (Round 18f, the owner: "model the gas alone first, and make the edge-on and nearly edge-on views look natural") The starlight's
+  // depth along the rays from the star (starT in the GLSL, uStarT on unit 21; DESIGN.md section 47). The model's local depth tau*_l
+  // = exp(LNTAU1 - 1.25 ln R - cutOut(R) - z^2 / 2H^2) is what a ray from the star gathers per e-fold of R (K_OCC rho R, DESIGN.md
+  // 43.2 and 43.4): summed along the ray at the angle th from the midplane, tau(R, th) = (1 / cos th) int tau*_l(R', R' tan th)
+  // d ln R' from the gas's inner edge (the density's smoothstep at R_IN) out to R. Until now the shaders took the local tau*_l, and
+  // beyond the crest of its surface (18.7 au) the crest's at the same angle (xCrest, round 18b); the sum gives the surface that
+  // the gas itself casts: z_s / R 0.167 at 1 au, 0.239 at 10 au, 0.259 at 20 au, 0.268 at 30 au and 0.272 rad from 40 au on (the
+  // local estimate 0.179, 0.250, 0.260, then the crest's cone, 0.266). The smooth gas alone (no planets: their gaps keep their own
+  // ln, gapLn, and their tables, gapLight; no pebbles). Made once a build (the gas's density does not depend on the model's
+  // parameters, PAR; ?rc= and ?sigtail=0 build the engine anew), memoised on the tail and R_c; none with the cut of before.
+  // The grid: ST.NR radii uniform in ln R from ST.R0 to ST.R1 by ST.NU values of u = sqrt(|z| / (R + |z|)) from 0 to 1 (u^2 =
+  // tan th / (1 + tan th): finer at the low angles, about 0.006 rad at the inner disk's surface, 0.011 at the outer's); the rays
+  // share their steps in ln R, ST.SUB a cell of the table (its x within 0.02 of a fine integral where -14 < x < 14, 0.07 at the
+  // gas's inner edge). Four numbers a texel (half floats, linearly filtered, as the temperature's table):
+  //   r: x = ln tau along the ray (to +-30);
+  //   g: ln of the model look's starlight on its skin per unit of e^x_l, Es(R) / (R beta_t(R)), where beta_t(R) = int (e^x_l / R)
+  //      e^-tau dz (one side; e^x_l / R is kappa rho, the gas's opacity to the starlight) is the share of the star's flux that
+  //      the gas takes per unit area at R with this depth, and Es(R) the starlight on the skin per unit area of before (round 18c,
+  //      litModel's law: round 8's eased to R^-1/2 inside 6 au, the absorbed starlight beta / R^2 to the power 0.6 beyond, matched
+  //      at 6 au and reached by 12 au; beta Eabs's, betaIrrJS; with ?litflat=1 round 8's at every radius): the skin then takes, at
+  //      each point, its share kappa rho e^-tau of that light, so that its total over the column is Es as before, laid where the
+  //      gas absorbs the light;
+  //   b: ln (1 / (R beta_t(R))), the same for the observed looks, whose E (Eabs, with its own fall with the distance) the shaders
+  //      keep;
+  //   a: ln (beta_t / beta_d), beta_d = MS_C int (e^x_l / R) e^(-MS_C tau) dz: the diffuse light (MS_A of the skin's, absorbed
+  //      MS_C as strongly, see MS_C in the GLSL) laid where the gas takes it, with its total MS_A of the skin's as before.
+  // ug: the u above which x is under -16 at every radius (ST_UG in the GLSL: nothing is fetched there, no light can be taken).
+  // (ST, the grid, is defined with the cylinder, before the shaders' text that reads it)
+  const LIT_JS = { F1: 2.7994, RN: 6, RB: 12, P: 0.6 };   // (litFall(1 au), as LIT_F1 in the GLSL; round 18c's knee, its end, the power)
+  let starMemo = null;
+  function starTableData(litFlat = false) {
+    const key = MODEL.TAIL + ':' + MODEL.RC + ':' + litFlat;
+    if (starMemo && starMemo.key === key) return starMemo;
+    const { NR, NU, R0, R1, SUB, NS } = ST, l0 = Math.log(R0), dl = Math.log(R1 / R0) / (NR - 1), d = new Float32Array(NR * NU * 4);
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    // the rays' common steps in ln R: from 0.6 R_IN (no gas inside) to R0, then SUB a cell of the table; the depth's part a(R)
+    // (with the gas's inner edge) and 1 / 2h^2 at each
+    const lnA = Math.log(0.6 * MODEL.R_IN), nPre = Math.max(1, Math.ceil((l0 - lnA) / dl * SUB)), dPre = (l0 - lnA) / nPre, nS = nPre + (NR - 1) * SUB;
+    const sa = new Float64Array(nS + 1), sih = new Float64Array(nS + 1), sw = new Float64Array(nS + 1);
+    for (let k = 0; k <= nS; k++) {
+      const lnR = k <= nPre ? lnA + k * dPre : l0 + (k - nPre) * dl / SUB, R = Math.exp(lnR), h = MODEL.H0 * Math.pow(R, 0.25);
+      sa[k] = MODEL.LNTAU1 - 1.25 * lnR - cutOut(R) + Math.log(Math.max(ss(0.8 * MODEL.R_IN, 1.3 * MODEL.R_IN, R), 1e-300));
+      sih[k] = 0.5 / (h * h); sw[k] = k === 0 ? 0 : k <= nPre ? dPre : dl / SUB;
+    }
+    // r: each value of u a ray (u = 1, the axis: no gas), the trapezoid in ln R
+    for (let j = 0; j < NU; j++) {
+      if (j === NU - 1) { for (let i = 0; i < NR; i++) d[4 * (j * NR + i)] = -30; continue; }
+      const u = j / (NU - 1), s = u * u, t = s / (1 - s), t2 = t * t, ic = Math.sqrt(1 + t2);   // (tan th, 1 / cos th)
+      let tau = 0, fPrev = Math.exp(sa[0] - t2 * sih[0]);
+      for (let k = 1; k <= nS; k++) {
+        const f = Math.exp(sa[k] - t2 * sih[k]);
+        tau += 0.5 * (fPrev + f) * sw[k]; fPrev = f;
+        if (k >= nPre && (k - nPre) % SUB === 0) d[4 * (j * NR + (k - nPre) / SUB)] = Math.max(-30, Math.min(30, Math.log(Math.max(tau * ic, 1e-30))));
+      }
+    }
+    // g, b, a: beta_t and beta_d over each radius's column (NS points a cell of u, x linear in u within it; z = R t, dz = R dt;
+    // e^x_l as the shaders have it, without the inner edge's smoothstep, so that their skin's total is Es exactly)
+    const bn = +betaIrrJS(LIT_JS.RN).toPrecision(6);
+    let jTop = 0;   // (the highest row of u with x >= -16 at some radius)
+    for (let i = 0; i < NR; i++) {
+      const lnR = l0 + i * dl, R = Math.exp(lnR), h = MODEL.H0 * Math.pow(R, 0.25), a = MODEL.LNTAU1 - 1.25 * lnR - cutOut(R);
+      let bt = 0, bd = 0;
+      for (let j = 0; j < NU - 2; j++) {
+        const x0 = d[4 * (j * NR + i)], x1 = d[4 * ((j + 1) * NR + i)];
+        // (nothing taken where the light is under e^-16 of the flux, nor where it is gone, tau over 1100: e^(-MS_C tau) under e^-44)
+        if (Math.max(x0, x1) < -16 || Math.min(x0, x1) > 7) continue;
+        for (let q = 0; q < NS; q++) {
+          const w = (q + 0.5) / NS, u = (j + w) / (NU - 1), s = u * u, t = s / (1 - s), dt = 2 * u / ((1 - s) * (1 - s)) / (NU - 1) / NS;
+          const tau = Math.exp(Math.min(x0 + (x1 - x0) * w, 30)), el = Math.exp(a - 0.5 * t * t / (h * h));
+          bt += el * Math.exp(-tau) * dt; bd += el * Math.exp(-ST.MS_C * tau) * dt;
+        }
+      }
+      bd *= ST.MS_C;
+      // round 18c's law (litModel): Es = Ea LIT_F1 / litFall R^-1/2 = (LIT_F1 / 0.022) beta s R^-1/2 (s, Eabs's inner edge), and
+      // beyond R_n times ((beta / beta_n)^(p - 1) (R / R_n)^(1/2 - 2p)) reached in ln R from R_n to R_b
+      const beta = betaIrrJS(R), sR = ss(MODEL.R_IN * 0.85, MODEL.R_IN * 1.5, R);
+      let lnEs = Math.log(LIT_JS.F1 / 0.022 * beta * Math.max(sR, 1e-30)) - 0.5 * Math.log(Math.max(R, 0.1));
+      if (!litFlat && R > LIT_JS.RN) lnEs += ss(Math.log(LIT_JS.RN), Math.log(LIT_JS.RB), lnR) * ((LIT_JS.P - 1) * Math.log(beta * sR / bn) + (0.5 - 2 * LIT_JS.P) * Math.log(R / LIT_JS.RN));
+      const lnN = -Math.log(Math.max(R * bt, 1e-30));
+      for (let j = 0; j < NU; j++) { const k = 4 * (j * NR + i); d[k + 1] = lnEs + lnN; d[k + 2] = lnN; d[k + 3] = Math.log(Math.max(bt, 1e-30) / Math.max(bd, 1e-30)); }
+      for (let j = NU - 2; j > jTop; j--) if (d[4 * (j * NR + i)] >= -16) { jTop = j; break; }
+    }
+    // (beyond the row above jTop every texel, and so every value the filter makes, is under -16)
+    starMemo = { key, data: d, ug: +Math.min(1, (jTop + 1) / (NU - 1)).toPrecision(6), ms: typeof performance !== 'undefined' ? performance.now() - t0 : 0 };
+    return starMemo;
+  }
   // the numbers that follow from the parameters, for the page: R_TI (au); the snow line at the star's luminosity and in an outburst
   // (30 times it; au); the midplane at 1 au (K) and how much thicker the disk is drawn than that temperature holds up (H0 over
   // c_s / v_K at 1 au); and from the mass budget (none with data-mflux="0"): the accretion rate that reaches the star (where the gas
@@ -4928,13 +5123,22 @@ void main(){
     // (round 18a: SIG_CUT, the gas's cut of before; SIG_RC, another R_c for its taper; see MODEL.TAIL. Round 18b: CREST, the crest of
     // the irradiated surface for this taper, crestJS, with the tail)
     const crest = crestJS();
-    // (round 18c) the model look's starlight on the skin (litModel in the GLSL): LIT_FLAT, the law of before (data-litflat="1", the
-    // page's ?litflat=1, to compare; and with the cut of before, which keeps its picture), or LIT_N, its knee R_n (6 au, OUTER_R)
-    // and Eabs's beta there (betaIrrJS, to 6 digits; it moves with R_c)
-    const litFlat = box.dataset.litflat === '1' || !MODEL.TAIL, LIT_RN = 6;
+    // (round 18c) the model look's starlight on the skin: LIT_FLAT, the law of before (data-litflat="1", the page's ?litflat=1, to
+    // compare; and with the cut of before, which keeps its picture). (Round 18f: the law itself, round 18c's knee at 6 au or with
+    // LIT_FLAT round 8's, is the table's, starTableData; ST_UG, the table's highest u with any depth; none with the cut of before)
+    const litFlat = box.dataset.litflat === '1' || !MODEL.TAIL;
+    const starTab = MODEL.TAIL ? starTableData(box.dataset.litflat === '1') : null;
+    // (round 18f) the continuum looks' cylinder (OBS_CT in the GLSL): data-obscyl="R,Z" (the page's ?obscyl=), au, each within
+    // OBS_CT_DEF.MIN to MAX; else the default, fitted to the lit tail (with the cut of before, the cylinder of before)
+    const obsCyl = (() => {
+      const m = /^\s*([0-9.]+)\s*,\s*([0-9.]+)\s*$/.exec(box.dataset.obscyl || ''), d = MODEL.TAIL ? OBS_CT_DEF.TAIL : OBS_CT_DEF.CUT;
+      if (!m) return d;
+      return [0, 1].map((k) => { const v = Number(m[k + 1]); return Number.isFinite(v) ? Math.round(10 * Math.min(OBS_CT_DEF.MAX[k], Math.max(OBS_CT_DEF.MIN[k], v))) / 10 : d[k]; });
+    })();
     const hdrDefs = [mpConst && 'MP_CONST', wextOld && 'WEXT_OLD', !MODEL.TAIL && 'SIG_CUT', MODEL.TAIL && MODEL.RC !== MODEL.R_OUT && 'SIG_RC ' + G(MODEL.RC),
       crest && 'CREST vec4(' + [crest.R, crest.a, crest.h, crest.th].map(G).join(', ') + ')',
-      litFlat ? 'LIT_FLAT' : 'LIT_N vec2(' + G(LIT_RN) + ', ' + G(+betaIrrJS(LIT_RN).toPrecision(6)) + ')'].filter(Boolean);
+      litFlat && 'LIT_FLAT', starTab && 'ST_UG ' + G(starTab.ug), 'OBS_CT vec2(' + obsCyl.map(G).join(', ') + ')',
+      (box.dataset.skinlos === '0' || !MODEL.TAIL) && 'SKIN_THRU'].filter(Boolean);   // (round 18f: ?skinlos=0 and the cut of before, see SKIN_LOS in the GLSL)
     const mpHdr = (src) => hdrDefs.reduce((s, d) => (s.includes('#define ' + d + '\n') ? s : s.replace('#version 300 es\n', '#version 300 es\n#define ' + d + '\n')), src);
     let MPV = mpValues();
     const mpLoc = new Map();
@@ -5164,7 +5368,7 @@ void main(){
     };
     // (its samplers' units, as FULL's: see fullProgram)
     function fullUnits(P) {
-      gl.useProgram(P.prog); gl.uniform1i(gl.getUniformLocation(P.prog, 'uFaceA'), 12); gl.uniform1i(P.U.uDiskMap, 0); gl.uniform1i(P.U.uGapT, 14); gl.uniform1i(P.U.uThermo, 15); gl.uniform1i(P.U.uWindMap, 1); gl.uniform1i(P.U.uEnvMap, 3); gl.uniform1i(P.U.uTurb3, 4); gl.uniform1i(P.U.uEnv3, 7); gl.uniform1i(P.U.uWStr, 8); gl.uniform1i(P.U.uAccMap, 9); gl.uniform1i(P.U.uWindVel, 10);
+      gl.useProgram(P.prog); gl.uniform1i(gl.getUniformLocation(P.prog, 'uFaceA'), 12); gl.uniform1i(P.U.uDiskMap, 0); gl.uniform1i(P.U.uGapT, 14); gl.uniform1i(P.U.uThermo, 15); gl.uniform1i(gl.getUniformLocation(P.prog, 'uStarT'), 21); gl.uniform1i(P.U.uWindMap, 1); gl.uniform1i(P.U.uEnvMap, 3); gl.uniform1i(P.U.uTurb3, 4); gl.uniform1i(P.U.uEnv3, 7); gl.uniform1i(P.U.uWStr, 8); gl.uniform1i(P.U.uAccMap, 9); gl.uniform1i(P.U.uWindVel, 10);
       gl.uniform1i(P.U.uSky, 16); gl.uniform1i(gl.getUniformLocation(P.prog, 'uCoAcc'), CO_UNIT); gl.uniform1i(gl.getUniformLocation(P.prog, 'uState'), SPLIT.UNIT);
     }
     function fullProgram() {
@@ -5177,7 +5381,7 @@ void main(){
       if (fullRec) { rec({ k: 'link', ph: 1, id: fullRec.id, w: 'FULL', ms: performance.now() - fullRec.t0, ok: okF ? 1 : 0, ...(okF ? {} : { log: String(gl.getProgramInfoLog(fullP)).slice(0, 300) }) }); fullRec = null; }
       if (!okF) { console.error('disk3d:', gl.getProgramInfoLog(fullP)); full = false; return full; }
       full = { prog: fullP, U: uniforms(fullP, UNAMES) };
-      gl.useProgram(fullP); gl.uniform1i(gl.getUniformLocation(fullP, 'uFaceA'), 12); gl.uniform1i(full.U.uDiskMap, 0); gl.uniform1i(full.U.uGapT, 14); gl.uniform1i(full.U.uThermo, 15); gl.uniform1i(full.U.uWindMap, 1); gl.uniform1i(full.U.uEnvMap, 3); gl.uniform1i(full.U.uTurb3, 4); gl.uniform1i(full.U.uEnv3, 7); gl.uniform1i(full.U.uWStr, 8); gl.uniform1i(full.U.uAccMap, 9); gl.uniform1i(full.U.uWindVel, 10);
+      gl.useProgram(fullP); gl.uniform1i(gl.getUniformLocation(fullP, 'uFaceA'), 12); gl.uniform1i(full.U.uDiskMap, 0); gl.uniform1i(full.U.uGapT, 14); gl.uniform1i(full.U.uThermo, 15); gl.uniform1i(gl.getUniformLocation(fullP, 'uStarT'), 21); gl.uniform1i(full.U.uWindMap, 1); gl.uniform1i(full.U.uEnvMap, 3); gl.uniform1i(full.U.uTurb3, 4); gl.uniform1i(full.U.uEnv3, 7); gl.uniform1i(full.U.uWStr, 8); gl.uniform1i(full.U.uAccMap, 9); gl.uniform1i(full.U.uWindVel, 10);
       gl.uniform1i(full.U.uSky, 16);   // (round 8: the sky's map, see BG)
       gl.uniform1i(gl.getUniformLocation(fullP, 'uCoAcc'), CO_UNIT);   // (round 9: the moments' sums, see coAccOf)
       gl.uniform1i(gl.getUniformLocation(fullP, 'uState'), SPLIT.UNIT);   // (round 10a: the march's state in kicks, see SPLIT)
@@ -5222,6 +5426,16 @@ void main(){
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, ttNR(), TT_NZ, gl.RG, gl.FLOAT, thermoTableData());
       gl.activeTexture(gl.TEXTURE2);
     };
+    // (round 18f) the table of the starlight's depth along the rays from the star (see starTableData and starT in the GLSL), on unit
+    // 21, half floats linearly filtered as the temperature's (a 32-bit float texture cannot be filtered on the iPhones, see
+    // target): made once a build, with the tail (the cut of before has none, and an empty texel stands in)
+    const starT = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE21); gl.bindTexture(gl.TEXTURE_2D, starT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    if (starTab) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, ST.NR, ST.NU, 0, gl.RGBA, gl.FLOAT, starTab.data);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1, 1, 0, gl.RGBA, gl.FLOAT, new Float32Array([-30, 0, 0, 0]));
+    gl.activeTexture(gl.TEXTURE2);
     // the gaps' table (see gapT): ln of the factor and the slope, on unit 14
     const gapTT = gl.createTexture(), gapTD = new Float32Array(2 * GT_N);
     gl.activeTexture(gl.TEXTURE14); gl.bindTexture(gl.TEXTURE_2D, gapTT);
@@ -5387,7 +5601,7 @@ void main(){
     envX();
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, envMapT.tex);
     gl.useProgram(prog);
-    gl.uniform1i(U0.uDiskMap, 0); gl.uniform1i(U0.uGapT, 14); gl.uniform1i(U0.uThermo, 15); gl.uniform1i(U0.uWindMap, 1); gl.uniform1i(U0.uTurb3, 4); gl.uniform1i(U0.uWStr, 8); gl.uniform1i(U0.uAccMap, 9);
+    gl.uniform1i(U0.uDiskMap, 0); gl.uniform1i(U0.uGapT, 14); gl.uniform1i(U0.uThermo, 15); gl.uniform1i(gl.getUniformLocation(prog, 'uStarT'), 21); gl.uniform1i(U0.uWindMap, 1); gl.uniform1i(U0.uTurb3, 4); gl.uniform1i(U0.uWStr, 8); gl.uniform1i(U0.uAccMap, 9);
     gl.uniform1i(U0.uSky, 16); gl.uniform1i(U0.uEnvMap, 3); gl.uniform1i(U0.uEnv3, 7);   // (round 8: the envelope in both programs)
     if (FAST.lvl >= 2) gl.uniform1i(gl.getUniformLocation(prog, 'uFaceA'), 12);   // (round 16a: the empty blocks' mask, see FAST)
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, windMapT.tex);
