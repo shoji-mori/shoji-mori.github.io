@@ -5,7 +5,7 @@
 // ver2/docs/disk-lab-r11-camera.md, section 2; DESIGN.md, section 25.
 //
 // A scene (a "key"):
-//   { label, place (the place it was made at, if the view had not left it), view: { el, az, d, tx, ty, tz, p, pi } (az: the
+//   { label, place (the place it was made at, if the view had not left it), view: { el, az, d, tx, ty, tz, p, pi, roll } (az: the
 //     camera's azimuth as the engine's state gives it), aspect (the stage's width / height then: a narrower stage later moves
 //     the camera back, as the places are fitted), look, coMode, coV, set: { mode, field, ann, marks, waves, asym, ms, slice, sq,
 //     bg, planets }, clock: { paused, speed, t } (t kept for the video export to come; the live presenter sets the pause and
@@ -34,7 +34,7 @@ const pickDef = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v 
 export function keyFrom(s, { label = '', place = null, aspect = 0, hold } = {}) {
   return checkKey({
     label, place, aspect,
-    view: { el: s.el, az: s.az, d: s.d, tx: s.tx, ty: s.ty, tz: s.tz, p: s.p, pi: s.pi },
+    view: { el: s.el, az: s.az, d: s.d, tx: s.tx, ty: s.ty, tz: s.tz, p: s.p, pi: s.pi, roll: s.roll },   // (round 18a: roll)
     look: s.look, coMode: s.coMode, coV: s.coV,
     set: { mode: s.mode, field: s.field, ann: s.ann, marks: s.marks, waves: s.waves, asym: s.asym, ms: s.ms, slice: s.slice, sq: s.sq, bg: s.bg, planets: s.planets },
     clock: { paused: s.paused, speed: s.speed, t: s.time },
@@ -52,7 +52,9 @@ export function checkKey(k) {
     az: Number.isFinite(num(v.az)) ? round(((num(v.az) % 360) + 540) % 360 - 180, 100) : undefined,
     d: Number.isFinite(num(v.d)) && num(v.d) > 0 ? round(clamp(num(v.d), 0.01, 600), 1000) : undefined,
     tx: inRange(v.tx, -400, 400, 1e4), ty: inRange(v.ty, -400, 400, 1e4), tz: inRange(v.tz, -400, 400, 1e4),
-    p: bit(v.p), pi: inRange(v.pi, 0, 3, 1)
+    p: bit(v.p), pi: inRange(v.pi, 0, 3, 1),
+    // (round 18a: the camera's roll, degrees, as the azimuth; a scene of before has none: unrolled, see app.js)
+    roll: Number.isFinite(num(v.roll)) ? round(((num(v.roll) % 360) + 540) % 360 - 180, 100) : undefined
   });
   if (!['el', 'az', 'd'].some((x) => x in view)) return null;
   const out = { view };

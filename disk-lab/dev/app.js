@@ -3,21 +3,21 @@
 // what is shown, cut, variants, time, view) and the highlights (places.js), and keeps its controls in step with the
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
-import { PLACES, placeById, placeState, fitDistance } from './places.js?v=c6bd7aed40';
-import { WORDS } from './words.js?v=aacaf7df9e';
+import { PLACES, placeById, placeState, fitDistance } from './places.js?v=389a9cd3e3';
+import { WORDS } from './words.js?v=0e12645d7c';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
-import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=fc12ca1f8c';
+import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=a06fcbfa44';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=57492f6d8d';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=0e3f1a7004';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.22', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.23', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -271,6 +271,7 @@ function away() {
   if (s.slice !== target.slice || s.p !== target.p) return true;
   if (Math.abs(s.el - target.el) > 1.5 || Math.abs(Math.log(s.d / target.d)) > 0.12) return true;
   if (Math.hypot(s.tx, s.ty, s.tz) > 0.03 * s.d) return true;
+  if (Math.abs((((s.roll || 0) - (target.roll || 0)) % 360 + 540) % 360 - 180) > 3) return true;   // (round 18a: rolled away)
   const drift = s.p || reduce ? 0 : SPIN_DEG * (s.time - target.time);
   const daz = ((s.az - target.az - drift) % 360 + 540) % 360 - 180;
   return Math.abs(daz) > 3;
@@ -526,6 +527,8 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.angle) { const [elv, az] = b.dataset.angle.split(',').map(Number); box.diskSet({ slice: 0, p: 0, el: elv, az, fly: reduce ? 0 : 1 }); }
   else if (b.id === 'recentre') box.diskCenter();
   else if (b.id === 'resetView') goPlace(0);
+  else if (b.id === 'rollReset') { box.diskSet({ roll: 0, fly: reduce ? 0 : 1 }); keepSoon(); }   // (round 18a: the roll back to 0)
+  else if (b.id === 'starsReset') { box.diskSet({ stars: 1 }); renderStars(S()); keepSoon(); }   // (round 18a: the stars, the default)
   else if (b.id === 'resetAll') { resetAll(); return; }
   else if (b.dataset.speed) box.diskSpeed(Number(b.dataset.speed));
   else if (b.id === 'copyLink') copyLink();
@@ -543,6 +546,7 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.colReset) resetCols(b.dataset.colReset);   // (round 13a: a component's colours back to the default)
   else if (b.dataset.mpReset) setParam(b.dataset.mpReset, parDef && parDef[b.dataset.mpReset]);   // (round 14a: a parameter back to its default)
   else if (b.dataset.windReset) { windGain = 1; applyWind(); keepSoon(); }   // (round 14a: the wind's brightness)
+  else if (b.dataset.opacReset != null) { setOpac(Number(b.dataset.opacReset), 1); keepSoon(); }   // (round 18a: the see-through)
   sync();
 });
 // (round 9) a planet's slider: while it is dragged, the engine makes the gap's starlight anew at most every 120 ms and the
@@ -555,6 +559,9 @@ rail.addEventListener('input', (e) => {
   else if (t.dataset.cpdMdot != null) { moving(); box.diskSet({ cpdMdot: mdOf(t.value) }); cpdRowSync(S()); }   // (round 13e)
   else if (t.dataset.mp) setParam(t.dataset.mp, mpOf(t.dataset.mp, t.value), true);   // (round 14a: a parameter, see setParam)
   else if (t.dataset.windGain) { windGain = wbOf(t.value); applyWind(true); }
+  else if (t.dataset.opac != null) setOpac(Number(t.dataset.opac), opOf(t.value), true);   // (round 18a)
+  else if (t.id === 'rollRange') { moving(); box.diskSet({ roll: Number(t.value) }); renderRoll(S()); }   // (round 18a: the roll, at once)
+  else if (t.id === 'starsRange') { box.diskSet({ stars: stOf(t.value) }); renderStars(S()); }   // (round 18a)
 });
 rail.addEventListener('change', (e) => {
   const t = e.target; if (!live()) return;
@@ -564,6 +571,9 @@ rail.addEventListener('change', (e) => {
   else if (t.dataset.cpdMdot != null) { box.diskSet({ cpdMdot: mdOf(t.value) }); sync(); }   // (round 13e)
   else if (t.dataset.mp) setParam(t.dataset.mp, mpOf(t.dataset.mp, t.value));
   else if (t.dataset.windGain) { windGain = wbOf(t.value); applyWind(); keepSoon(); }
+  else if (t.dataset.opac != null) { setOpac(Number(t.dataset.opac), opOf(t.value)); keepSoon(); }   // (round 18a)
+  else if (t.id === 'rollRange') { box.diskSet({ roll: Number(t.value) }); renderRoll(S()); keepSoon(); }   // (round 18a)
+  else if (t.id === 'starsRange') { box.diskSet({ stars: stOf(t.value) }); renderStars(S()); keepSoon(); }   // (round 18a)
   else if (t.dataset.ann) setAnn(Number(t.dataset.ann), t.checked);   // (round 15a)
 });
 // (round 15a, the owner: the annotations each their own choice) the rail's View: a checkbox for each kind (data-ann, the engine's ANN
@@ -594,14 +604,28 @@ function wbRow() {
   wbEls.row = el('div', { class: 'mp-row gain-row', hidden: true }, wbEls.name, wbEls.input, wbEls.val, wbEls.chip);
   return wbEls.row;
 }
+// (round 18a, the owner: "the objects' transparency too") a component's see-through, a row under its settings as the wind's
+// brightness (see the see-through below): made here, its elements kept in opEls by the component's place in op; OP_MIN, the least
+// factor, and OP_MAX, the slider's end (the share taken away, %)
+const OP_MIN = 0.05, OP_MAX = Math.round(100 * (1 - OP_MIN));
+const opEls = [];
+function opRow(i) {
+  const id = 'opac' + i, e = { name: el('label', { class: 'mp-name', for: id }), input: el('input', { type: 'range', id, min: '0', max: String(OP_MAX), step: '1', 'data-opac': String(i) }),
+    val: el('span', { class: 'mp-val' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-opac-reset': String(i), hidden: true }) };
+  e.row = el('div', { class: 'mp-row gain-row' }, e.name, e.input, e.val, e.chip);
+  opEls[i] = e;
+  return e.row;
+}
+// (round 18a) op: the component's place in the state's op, its see-through (see the see-through below); the jet has none (its lobes
+// only shine, nothing of it takes light out of the ray), the planets' disks go with the gas's
 const COMPS = [
-  { key: 'gas', bit: 3, opts: ['marks'], cols: ['disk'] }, { key: 'pebbles', bit: 4, opts: ['drop'], cols: ['rock', 'ice'] },
-  { key: 'wind', bit: 8, opts: ['asym'], cols: ['wind'] }, { key: 'jet', bit: 64, cols: ['jet'] }, { key: 'field', opt: 'field' },
-  { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32, cols: ['env'] }
+  { key: 'gas', bit: 3, opts: ['marks'], cols: ['disk'], op: 0 }, { key: 'pebbles', bit: 4, opts: ['drop'], cols: ['rock', 'ice'], op: 1 },
+  { key: 'wind', bit: 8, opts: ['asym'], cols: ['wind'], op: 2 }, { key: 'jet', bit: 64, cols: ['jet'] }, { key: 'field', opt: 'field' },
+  { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32, cols: ['env'], op: 3 }
 ];   // (round 15a: the labels, a component until now, are the View's annotations, a choice for each kind)
 const compEls = COMPS.map((c) => {
   const btn = el('button', { type: 'button', class: 'toggle', 'aria-pressed': 'false', ...(c.bit ? { 'data-bit': String(c.bit) } : { 'data-opt': c.opt }) });
-  const box_ = c.opts || c.planets ? el('div', { class: 'comp-opts', hidden: true }) : null;
+  const box_ = c.opts || c.planets || c.op != null ? el('div', { class: 'comp-opts', hidden: true }) : null;
   if (c.planets) box_.append(el('div', { class: 'planet-list' }), el('button', { type: 'button', class: 'chip quiet', id: 'addPlanet', 'aria-pressed': 'false' }));
   for (const o of c.opts || []) box_.append(el('button', { type: 'button', class: 'toggle small', 'data-opt': o, 'aria-pressed': 'false' }));
   // (round 13e) the planets' accretion rate, which sets their own disks (see cpdRowSync)
@@ -609,6 +633,7 @@ const compEls = COMPS.map((c) => {
     el('input', { type: 'range', min: '0', max: '1000', step: '1', 'data-cpd-mdot': '' }), el('button', { type: 'button', class: 'chip quiet', 'data-cpd-auto': '', hidden: true })),
   el('p', { class: 'rail-note cpd-note', 'data-cpd-note': '' }));
   if (c.key === 'wind') box_.append(wbRow());   // (round 14a: its brightness in the model look)
+  if (c.op != null) box_.append(opRow(c.op));   // (round 18a: its see-through)
   if (c.planets) box_.append(el('p', { class: 'rail-note planets-note' }));
   // (round 13a) beside the toggle, its colours (shown in the model look once the engine has started) and the chip back to the
   // default (shown while one of them is changed)
@@ -731,6 +756,9 @@ function syncComps(s) {
   }
   // (round 14a: the wind's brightness, as the colours, the model look's)
   if (wbEls.row) wbEls.row.hidden = s.look !== 'model' || typeof box.diskWindGain !== 'function';
+  renderOpac(s);   // (round 18a: the see-through, in every look)
+  renderRoll(s);   // (round 18a: the camera's roll)
+  renderStars(s);   // (round 18a: the background's stars)
   // (round 8: the pebbles' tap mode ends with the pebbles, as its button goes with their settings)
   if (box.dataset.pick === 'pebbles' && !(s.mode & 4)) { delete box.dataset.pick; lab.classList.remove('picking'); note('', 0); }
   // the planets' rows (rebuilt when the list changes)
@@ -995,6 +1023,61 @@ function renderWind() {
   wbEls.input.setAttribute('aria-label', w.windGainOf); wbEls.input.setAttribute('aria-valuetext', t);
   wbEls.val.textContent = t; wbEls.val.style.minWidth = valW([...Array(101).keys()].map((i) => wbText(wbOf(10 * i))));   // (round 15a)
   wbEls.chip.hidden = windGain === 1; wbEls.chip.textContent = w.gainDefault; wbEls.chip.setAttribute('aria-label', w.windGainReset);
+}
+// (round 18a, the owner: "the objects' transparency too") The see-through of the gas, the pebbles, the wind and the envelope, a row
+// under each one's settings: the engine's state op, four factors on what each takes out of the ray (its extinction, in every look
+// where it absorbs; its own light is left as it is), from 1 (the default, as before) to OP_MIN. The slider reads the share taken
+// away, 0 to 95 %, in steps of 1 %: a factor f = 1 - p / 100. Kept with the settings on this device (DEF_KEYS), in a link as op=
+// (the four factors, none when all are 1), put back by Reset all and by each row's chip; not in the scenes (as the colours and the
+// wind's brightness are not). The picture's mean changes with it: the automatic exposure follows.
+const opPos = (f) => String(Math.round(100 * (1 - f)));
+const opOf = (pos) => Math.min(1, Math.max(OP_MIN, Number((1 - Number(pos) / 100).toFixed(2))));
+const opList = (s) => (Array.isArray(s.op) && s.op.length === 4 ? s.op : [1, 1, 1, 1]);
+function setOpac(i, f, drag = false) {
+  const op = opList(S()).slice(); op[i] = f;
+  if (drag) moving();
+  box.diskSet({ op });
+  renderOpac(S());
+}
+function renderOpac(s) {
+  if (!opEls.length) return;
+  const w = T().show, op = opList(s), text = (f) => w.opacVal(Math.round(100 * (1 - f)));
+  for (const c of COMPS) {
+    const e = opEls[c.op]; if (c.op == null || !e) continue;
+    const f = op[c.op], t = text(f);
+    if (document.activeElement !== e.input && e.input.value !== opPos(f)) e.input.value = opPos(f);
+    e.name.textContent = w.opac;
+    e.input.setAttribute('aria-label', w.opacOf(w[c.key])); e.input.setAttribute('aria-valuetext', t);
+    e.val.textContent = t; e.val.style.minWidth = valW([text(1), text(OP_MIN)]);   // (round 15a: the widest text, the bar's length kept)
+    e.chip.hidden = f === 1; e.chip.textContent = w.gainDefault; e.chip.setAttribute('aria-label', w.opacReset(w[c.key]));
+  }
+}
+// (round 18a, the owner: "turn the camera about the line of sight") The roll, in the rail's View: the state's roll (degrees, -180 to
+// 180, counterclockwise), the slider setting it at once, its chip back to 0 (a flight); a place's view and the first view are
+// unrolled (places.js), Alt-drag rolls as well (the engine). Kept with the view (VIEW_KEYS), in a link as roll= (none at 0), in the
+// scenes with their view.
+function renderRoll(s) {
+  const w = T().view, v = Math.round(Number(s.roll) || 0), input = $('rollRange');
+  if (document.activeElement !== input && input.value !== String(v)) input.value = String(v);
+  $('rollName').textContent = w.roll;
+  input.setAttribute('aria-label', w.rollOf); input.setAttribute('aria-valuetext', w.rollVal(v));
+  $('rollVal').textContent = w.rollVal(v); $('rollVal').style.minWidth = valW([w.rollVal(-180), w.rollVal(-88)]);   // (round 15a)
+  const chip = $('rollReset'); chip.hidden = !(Number(s.roll) || 0); chip.textContent = T().show.gainDefault; chip.setAttribute('aria-label', w.rollReset);
+}
+// (round 18a, the owner: "more background stars") The number of the background's stars, in the rail's Background: the state's
+// stars, times the default's (ST_RANGE, the engine's STARS), on a log slider (0 to 1000; the default exactly at its place); the
+// stars' brightness keeps its law. Kept with the settings (DEF_KEYS), in a link as stars= (none at 1), Reset and its chip put
+// back 1; not in the scenes. With the background off it is kept and does nothing.
+const ST_RANGE = [0.3, 5];
+const stPos = (k) => String(Math.round(1000 * Math.log(k / ST_RANGE[0]) / Math.log(ST_RANGE[1] / ST_RANGE[0])));
+const stOf = (pos) => (String(pos) === stPos(1) ? 1 : Number((ST_RANGE[0] * Math.pow(ST_RANGE[1] / ST_RANGE[0], Number(pos) / 1000)).toPrecision(2)));
+function renderStars(s) {
+  const w = T().view, k = Number(s.stars) > 0 ? Number(s.stars) : 1, text = (x) => w.starsVal(x >= 1 ? x.toFixed(1) : x.toFixed(2)), input = $('starsRange');
+  if (document.activeElement !== input && input.value !== stPos(k)) input.value = stPos(k);
+  $('starsName').textContent = w.stars;
+  input.setAttribute('aria-label', w.starsOf); input.setAttribute('aria-valuetext', text(k));
+  $('starsVal').textContent = text(k); $('starsVal').style.minWidth = valW([text(0.3), text(5), text(0.55)]);   // (round 15a)
+  const chip = $('starsReset'); chip.hidden = k === 1; chip.textContent = T().show.gainDefault; chip.setAttribute('aria-label', w.starsReset);
 }
 
 // what a click on the disk does (the engine's data-pick): 'planet', place a planet (the engine sends diskpick); 'pebbles'
@@ -1621,9 +1704,11 @@ function linkFor(s) {
   u.searchParams.set('place', PLACES[placeI].id);
   for (const k of LINK_KEYS) u.searchParams.set(k, String(s[k]));
   if (s.tx || s.ty || s.tz) for (const k of ['tx', 'ty', 'tz']) u.searchParams.set(k, String(s[k]));
+  if (s.roll) u.searchParams.set('roll', String(s.roll));   // (round 18a: the camera's roll, degrees, when not 0)
   if (s.look === 'co') { u.searchParams.set('com', s.coMode); u.searchParams.set('cov', String(s.coV)); }
   if (!s.ms) u.searchParams.set('ms', '0');
   if (s.bg && s.bg !== 'stars') u.searchParams.set('bg', s.bg);   // (round 8: the background, when not the stars)
+  if (s.stars != null && s.stars !== 1) u.searchParams.set('stars', String(s.stars));   // (round 18a: the number of its stars, when not 1)
   const cl = colDef ? colToLink(cols, colDef) : '';
   if (cl) u.searchParams.set('col', cl);   // (round 13a: the model look's colours, when not all the defaults; see COL-LINK)
   const mp = parDef ? mpToLink(params, parDef) : '';
@@ -1633,6 +1718,7 @@ function linkFor(s) {
   // removed, so that the link gives none back, not the start's planet)
   u.searchParams.set('pl', s.planets.map(([a, on, m]) => a + ':' + on + ':' + m).join(','));
   if (s.cpdMdot > 0) u.searchParams.set('pmd', String(s.cpdMdot));   // (round 13e: the planets' accretion rate, M_J/yr, when not auto)
+  if (opList(s).some((f) => f !== 1)) u.searchParams.set('op', opList(s).map((f) => String(f)).join(','));   // (round 18a: the see-through)
   u.searchParams.set('t', String(Math.round(s.time * 1000) / 1000));
   u.searchParams.set('lang', L());
   return u.href;
@@ -1844,19 +1930,22 @@ function credit(c) {
 const linkMode = (m) => (Number.isInteger(m) && (m & 3) ? m | 3 : m);
 // a link's state: the place first, then any of the engine's keys (diskSet checks every value)
 function stateFromLink() {
-  const NUM = ['p', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'mode', 'field', 'speed', 'paused', 'slice', 'ann', 'ms', 'asym', 'marks', 'waves'];
+  const NUM = ['p', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'roll', 'mode', 'field', 'speed', 'paused', 'slice', 'ann', 'ms', 'asym', 'marks', 'waves'];   // (round 18a: roll)
   const st = {};
   for (const k of NUM) if (q.has(k)) st[k] = q.get(k);
   if (st.mode != null) st.mode = linkMode(Number(st.mode));
   if (q.has('sq')) st.sq = q.get('sq');
   if (q.has('look')) st.look = q.get('look');
   if (q.has('bg')) st.bg = q.get('bg');
+  if (q.has('stars')) st.stars = q.get('stars');   // (round 18a; the engine passes over what is not a finite number and bounds it)
   if (q.has('com')) st.coMode = q.get('com');
   if (q.has('cov')) st.coV = q.get('cov');
   if (q.has('t')) st.time = q.get('t');
   // (round 17b: an empty field is no number, not 0: pl=::: made a planet at the inner end; the engine passes over a radius not a number)
   if (q.has('pl')) st.planets = q.get('pl').split(',').filter(Boolean).map((t) => t.split(':').map((x) => (x.trim() === '' ? NaN : Number(x))));
   if (q.has('pmd')) st.cpdMdot = q.get('pmd');   // (round 13e; the engine bounds it, and reads anything not positive as auto)
+  // (round 18a: the see-through, four factors; a blank one is 1; the engine bounds them and passes over a list of another length)
+  if (q.has('op')) st.op = q.get('op').split(',').map((x) => (x.trim() === '' ? 1 : Number(x)));
   return Object.keys(st).length ? st : null;
 }
 
@@ -2089,9 +2178,10 @@ async function start() {
   // (round 15b) the engine's dev switches, read from the address: a thick pebble layer, the envelope/wind exclusion, the gas line from the
   // envelope, the jet's occlusion, the gas's glow, the CPD's flare, the wind's extent, the starlight's scale (README); (round 16a) the
   // shortcuts while the picture moves and their share of the steps (README, the engine's FAST; round 16b: the checkerboard dropped);
-  // (round 16c) the march's steps and the still's frames, for the owner's timing trials. Each passed as it is: the engine reads
+  // (round 16c) the march's steps and the still's frames, for the owner's timing trials; (round 18a) the gas's surface density, its
+  // cut of before (?sigtail=0) and another R_c for its exponential tail (?rc=, au). Each passed as it is: the engine reads
   // each within its range, and a value it cannot read as its default
-  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc']) if (q.has(k)) box.dataset[k] = q.get(k);
+  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc', 'sigtail', 'rc']) if (q.has(k)) box.dataset[k] = q.get(k);
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   // (the engine's own start: the defaults Reset returns to; round 15a: with the clock's state, stopped by data-paused)
   if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), [...DEF_KEYS, 'paused']);
@@ -2366,8 +2456,8 @@ box.addEventListener('disklost', (e) => {
 // link" writes it), which wins. Not kept: the clock's time and pause, the tap modes, the saved picture's size. After a
 // visit that ended with drawing stopped they are thrown away (see record). "Reset" (the top of the rail) forgets them and
 // puts everything back as at the first visit: the engine's own start (DEF0), the first place, the device's quality.
-const DEF_KEYS = ['mode', 'field', 'marks', 'asym', 'waves', 'ann', 'bg', 'look', 'coMode', 'coV', 'slice', 'sq', 'speed', 'planets', 'ms', 'cpdMdot'];   // (round 13e: cpdMdot, the planets' accretion rate)
-const VIEW_KEYS = ['el', 'az', 'd', 'tx', 'ty', 'tz', 'p', 'pi'];
+const DEF_KEYS = ['mode', 'field', 'marks', 'asym', 'waves', 'ann', 'bg', 'look', 'coMode', 'coV', 'slice', 'sq', 'speed', 'planets', 'ms', 'cpdMdot', 'op', 'stars'];   // (round 18a: op, stars)   // (round 13e: cpdMdot, the planets' accretion rate)
+const VIEW_KEYS = ['el', 'az', 'd', 'tx', 'ty', 'tz', 'p', 'pi', 'roll'];   // (round 18a: roll, the camera's about the line of sight)
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] != null).map((k) => [k, Array.isArray(o[k]) ? o[k].map((v) => (Array.isArray(v) ? v.slice() : v)) : o[k]]));
 let DEF0 = null, defaults = null, keeping = false, keepTimer = 0;
 function settingsNow() {
@@ -2968,9 +3058,9 @@ function sceneParts(k, s0, asp, video = false) {
   return { look, coMode, slice, later, lookSet, before, view: sceneView(k, asp), clock };
 }
 // (a frame narrower than the stage the scene was made on: the camera moved back, as the places are fitted; the field of view is
-// vertical)
+// vertical. Round 18a: a view without a roll, a scene made before it or a move's leg set apart, is unrolled)
 function sceneView(k, asp) {
-  const view = { ...k.view };
+  const view = { roll: 0, ...k.view };
   if (view.d && k.aspect && asp < k.aspect - 1e-3) view.d = Math.min(600, Math.round(view.d * k.aspect / asp * 1000) / 1000);
   return view;
 }

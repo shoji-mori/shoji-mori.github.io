@@ -10,7 +10,7 @@ export const WORDS = {
   ja: {
     places: {
       whole: { short: '全体', title: '円盤の全体',
-        text: '若い星を回るガスと塵の円盤(半径 30 au)。惑星はこうした円盤で生まれます。星の光が反り返った表層を温め、赤道面は冷たいまま。円盤を貫く線は磁力線、上に淡く光るのは円盤風です。最初は 10 au に木星質量の惑星を置き、時計を止めています(「時間」の再生ボタンで動き出します)。' },
+        text: '若い星を回るガスと塵の円盤(半径およそ 30 au)。惑星はこうした円盤で生まれます。星の光が反り返った表層を温め、赤道面は冷たいまま。円盤を貫く線は磁力線、上に淡く光るのは円盤風です。最初は 10 au に木星質量の惑星を置き、時計を止めています(「時間」の再生ボタンで動き出します)。' },
       wind: { short: '磁場と風', title: '磁場と円盤風',
         text: '円盤を貫く磁力線は、回転にねじられながら外へ開きます。ガスはこの線に沿って加速し、風となって上下に吹き出します。磁場が回転と同じ向きなら、風は片側で強くなります。' },
       snow: { short: 'スノーライン', title: 'スノーライン',
@@ -161,6 +161,8 @@ export const WORDS = {
       cpdNote: '惑星のまわりの円盤(周惑星円盤)の温度・厚さ・ミリ波での明るさは、この降着率と惑星の質量から決まります。軽い惑星や外側の惑星(熱的質量が小さい)では、円盤でなく丸い包みになります。',
       // (round 14a) the wind's brightness in the model look, under the wind's settings (app.js, wbEls)
       windGain: '明るさ', windGainOf: 'モデルの見え方での円盤風の明るさ', windGainReset: '円盤風の明るさを既定に戻す', gainDefault: '既定',
+      // (round 18a) each component's see-through, under its settings (app.js, opEls): the share of its extinction taken away
+      opac: '透過', opacOf: (name) => `${name}の透過(光をさえぎる強さを弱める割合)`, opacReset: (name) => `${name}の透過を既定(0 %)に戻す`, opacVal: (p) => `${p} %`,
       planetsNote: '軌道半径 0.05〜20 au(内側の端は、星の磁場が円盤を切り取る所)、質量は地球の 10 倍から木星の 3 倍(重いほどギャップが深く広く、小石の環は孤立質量を超えるとできます)。隣どうしは相互ヒル半径の 4 倍以上離します(近すぎる軌道は不安定です)。絵の中の惑星をクリックしても動かせます。'
     },
     // (round 14a) the model's parameters, the rail's Model (app.js; the engine's box.diskParams)
@@ -168,10 +170,10 @@ export const WORDS = {
       note: '物理の値を変えると、温度、電離、円盤風が式に従って変わります。既定は文献に合わせた値です。変えた値は端末に残り、リンクにも入ります。',
       groups: { star: '星', heat: '降着と温度', wind: '円盤風', planets: '惑星' },
       names: { lum: '光度 L*', tstar: '色温度 T*', mdot: '降着率 Ṁ', alphaIn: '乱流の強さ α(熱電離した内側円盤)', tTI: '熱電離の温度',
-        lamIn: 'レバーアーム λ(塵の内縁 0.08 au)', lamTI: 'レバーアーム λ(熱電離の縁)', lamOut: 'レバーアーム λ(円盤の縁 30 au)', chic: '風の根元 χ_c(r₀ を単位に)', alphaGap: 'ギャップの粘性 α' },
+        lamIn: 'レバーアーム λ(塵の内縁 0.08 au)', lamTI: 'レバーアーム λ(熱電離の縁)', lamOut: 'レバーアーム λ(外側、30 au)', chic: '風の根元 χ_c(r₀ を単位に)', alphaGap: 'ギャップの粘性 α' },
       def: '既定', reset: (name) => `${name}を既定に戻す`,
       heat: (d) => `熱電離の縁 ${d.rTI} au、スノーライン ${d.snow} au(増光すると ${d.burst} au)、1 au の赤道面 ${d.t1} K。デッドゾーンと外側円盤の α は内側との比のまま動きます。`,
-      wind: (d) => `星へ届く降着 ${d.star} M☉/年(Ṁ の ${d.fStar} %)。円盤の縁 30 au から入る流れのうち、${d.share} % を風が運び去ります。`,
+      wind: (d) => `星へ届く降着 ${d.star} M☉/年(Ṁ の ${d.fStar} %)。30 au を内へ通る流れのうち、${d.share} % を風が運び去ります。`,
       windOff: '前の処方(?mflux=0)の間は、ここの値は風に効きません。',
       lamOld: '?lam=old の間は、λ の値は効きません(第 8 巡の λ)。',
       planets: '惑星の数、軌道、質量は「見せるもの」の惑星で変えられます。'
@@ -282,12 +284,18 @@ export const WORDS = {
       none: 'この端末からは傾きが届かないので、オフにしました。',
       touch: 'オン:画面に一度触れると、傾きのセンサーが始まります(ブラウザーが確かめることがあります)。',
       reduced: '動きを減らす設定の間は使えません。'
+    },
+    // (round 18a) the rail's View and Background: the camera's roll about the line of sight and the number of the background's stars
+    // (app.js, renderRoll and renderStars)
+    view: {
+      roll: '回転', rollOf: '視線を軸にした眺めの回転', rollReset: '回転を 0° に戻す', rollVal: (d) => `${d}°`,
+      stars: '星の数', starsOf: '背景の星の数(既定の何倍か)', starsReset: '星の数を既定に戻す', starsVal: (k) => `× ${k}`
     }
   },
   en: {
     places: {
       whole: { short: 'Whole disk', title: 'The whole disk',
-        text: 'A disk of gas and dust around a young star, 30 au in radius: the kind of disk in which planets form. Starlight warms its flared surface; the midplane stays cold. The lines threading it are magnetic field lines, and the faint glow above is a wind. It starts with a Jupiter-mass planet at 10 au and the clock stopped (the play button under Time starts it).' },
+        text: 'A disk of gas and dust around a young star, some 30 au in radius: the kind of disk in which planets form. Starlight warms its flared surface; the midplane stays cold. The lines threading it are magnetic field lines, and the faint glow above is a wind. It starts with a Jupiter-mass planet at 10 au and the clock stopped (the play button under Time starts it).' },
       wind: { short: 'Field & wind', title: 'Field and wind',
         text: 'Field lines threading the disk are wound up by its rotation and open outward. Gas speeds up along them and leaves both faces as a wind; with the field aligned with the rotation, one side blows harder.' },
       snow: { short: 'Snow line', title: 'The snow line',
@@ -429,6 +437,8 @@ export const WORDS = {
       cpdNote: 'The temperature, thickness and millimetre brightness of each planet’s own disk (its circumplanetary disk) follow from this rate and the planet’s mass; a light or distant planet (of few thermal masses) wears a round envelope rather than a disk.',
       // (round 14a) the wind's brightness in the model look, under the wind's settings (app.js, wbEls)
       windGain: 'Brightness', windGainOf: 'Brightness of the wind in the model look', windGainReset: 'Wind: back to the default brightness', gainDefault: 'Default',
+      // (round 18a) each component's see-through, under its settings (app.js, opEls): the share of its extinction taken away
+      opac: 'See-through', opacOf: (name) => `See-through of the ${name.toLowerCase()} (how much less light it blocks)`, opacReset: (name) => `${name}: back to no see-through`, opacVal: (p) => `${p} %`,
       planetsNote: 'Orbits of 0.05 to 20 au (the inner end is where the star\u2019s magnetic field cuts off the disk); masses of 10 Earths to 3 Jupiters (heavier planets open deeper, wider gaps, and those above the pebble isolation mass ring their gaps with pebbles). Neighbours are kept at least four mutual Hill radii apart (closer orbits are unstable). A planet in the picture can be clicked to move it too.'
     },
     // (round 14a) the model's parameters, the rail's Model (app.js; the engine's box.diskParams)
@@ -436,10 +446,10 @@ export const WORDS = {
       note: 'Change a physical value and the temperature, the ionization and the wind follow by the model\u2019s equations. The defaults are the values from the papers it follows. What you change is kept on this device and goes into links.',
       groups: { star: 'The star', heat: 'Accretion and heat', wind: 'The wind', planets: 'Planets' },
       names: { lum: 'Luminosity L*', tstar: 'Colour temperature T*', mdot: 'Accretion rate Ṁ', alphaIn: 'Turbulence α (the thermally ionized inner disk)', tTI: 'Thermal ionization temperature',
-        lamIn: 'Lever arm λ (the dust\u2019s inner edge, 0.08 au)', lamTI: 'Lever arm λ (the thermal ionization edge)', lamOut: 'Lever arm λ (the disk\u2019s edge, 30 au)', chic: 'Wind base χ_c (in units of r₀)', alphaGap: 'Gap viscosity α' },
+        lamIn: 'Lever arm λ (the dust\u2019s inner edge, 0.08 au)', lamTI: 'Lever arm λ (the thermal ionization edge)', lamOut: 'Lever arm λ (the outer disk, 30 au)', chic: 'Wind base χ_c (in units of r₀)', alphaGap: 'Gap viscosity α' },
       def: 'Default', reset: (name) => `${name}: back to the default`,
       heat: (d) => `Thermal ionization edge ${d.rTI} au; snow line ${d.snow} au (${d.burst} au in an outburst); the midplane at 1 au ${d.t1} K. The dead zone\u2019s and the outer disk\u2019s α keep their ratios to the inner disk\u2019s.`,
-      wind: (d) => `Reaching the star: ${d.star} M☉/yr (${d.fStar} % of Ṁ). Of the flow coming in at the disk\u2019s edge, 30 au, the wind carries away ${d.share} %.`,
+      wind: (d) => `Reaching the star: ${d.star} M☉/yr (${d.fStar} % of Ṁ). Of the flow passing 30 au on its way in, the wind carries away ${d.share} %.`,
       windOff: 'With the prescriptions of before (?mflux=0) these values do not act on the wind.',
       lamOld: 'With ?lam=old the λ values have no effect (round 8\u2019s λ).',
       planets: 'The planets\u2019 number, orbits and masses are under Show, Planets.'
@@ -543,6 +553,12 @@ export const WORDS = {
       none: 'No tilt comes from this device, so this is off.',
       touch: 'On: touch the screen once to start the tilt sensor (the browser may ask).',
       reduced: 'Not available while motion is reduced.'
+    },
+    // (round 18a) the rail's View and Background: the camera's roll about the line of sight and the number of the background's stars
+    // (app.js, renderRoll and renderStars)
+    view: {
+      roll: 'Roll', rollOf: 'Roll of the view about the line of sight', rollReset: 'Roll back to 0°', rollVal: (d) => `${d}°`,
+      stars: 'Stars', starsOf: 'Number of the background’s stars (times the default)', starsReset: 'Stars: back to the default number', starsVal: (k) => `× ${k}`
     }
   }
 };

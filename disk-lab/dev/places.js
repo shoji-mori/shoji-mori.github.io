@@ -47,8 +47,9 @@ export function fitDistance(place, aspect) {
 
 // The engine's state for arriving at a place (diskSet keys), given the components shown now and the stage's aspect.
 export function placeState(place, mode, aspect) {
+  // (round 18a: a place's view is unrolled, roll 0)
   const v = place.view, st = { p: v.p ? 1 : 0, el: v.el, az: v.az, d: Math.round(fitDistance(place, aspect) * 1000) / 1000,
-    tx: 0, ty: 0, tz: 0, look: place.look, field: place.field, mode: (mode | place.needs) & ~(place.hides ?? 0) };
+    tx: 0, ty: 0, tz: 0, roll: 0, look: place.look, field: place.field, mode: (mode | place.needs) & ~(place.hides ?? 0) };
   if (place.cut) { st.slice = place.cut.slice; st.sq = place.cut.sq; } else st.slice = 0;
   return st;
 }
