@@ -1772,6 +1772,21 @@ float gasK(){ return (uMode & 2) != 0 ? uComp.y : 0.0; }
 float gasL(){ return (uMode & 1) != 0 ? uComp.x : 0.0; }
 uniform float uMS;      // multiple scattering, approximate (on by default, a toggle; see MS_C), as it fades in or out
 uniform float uLit;     // (round 8) the model's look lit by the star (see G_LIT): its strength for the quality of the moment
+// (Round 18i, the owner: "in the model look, the pattern of its own emission alone, with no surface lit; an opacity of about 2
+// instead") The model look's light (the state's glow, SELF in the script): the starlight as until now (uSelf.x 0), or the gas's own
+// thermal light (x > 0). Then the gas with its small grains glows at its own temperature (tempAt: the laws and the depth the cut's
+// Temperature takes) through one grey opacity, for its emission and its absorption alike (Kirchhoff): j = K rho S(T), alpha = K
+// rho, x = K = kappa Sigma(1 au), kappa the state's selfk in cm^2 per gram of gas (2 by default: 3400 in Sigma's units, 9.2 times
+// K_OCC). S(T) = T, the long-wavelength (Rayleigh-Jeans) brightness, so that where the gas is thick the pixel's light is the
+// temperature where the line of sight reaches tau = 1 and where it is thin its column times its temperature (the bolometric T^4
+// shown as T^1/4 lifted the thin warm atmosphere to tau^1/4 of its temperature, 0.18 at tau = 1e-3: a veil over the whole
+// picture); y, the display's light per kelvin (SELF.G: 1000 K is the stretch's 1, so that 1500 K stays under white and 10 K shows
+// over the sky; over the outburst's exposure, so that the outburst brightens it through its temperature alone). No starlight then:
+// the lit surface, its diffuse light and the shadow's dimming of the glow go (uLit 0), and the pebbles glow at the midplane's
+// temperature through their own absorption. The wind, the envelope, the jet, the planets and their disks keep their light; the
+// march, its steps and its end at a transmission of 0.01 are as before (DESIGN.md section 50)
+uniform vec2 uSelf;
+vec3 selfCol(vec3 m){ return m / max(max(m.r, m.g), max(m.b, 1e-4)); }   // (a material's colour at its full brightness)
 uniform float uFx;      // (round 8) the finish's strength for the quality of the moment (see FX in the script): 0 to 1
 uniform float uFocus;   // (round 8) the camera's distance from the point looked at (for the depth's haze, see AIR)
 // (Round 8, item 29) Depth: what lies far behind the point looked at is drawn a little fainter, as distance veils a view
@@ -2511,6 +2526,11 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     // (round 13a: in proportion to the density, see uGasOuter)
     // (round 18f: and LIT_DEEP where the diffuse light does not reach either, 1 - e^(-MS_C tau*))
     float tS = exp(min(xs, 30.0));
+    // (round 18i: or its own thermal light, see uSelf: its temperature's brightness in its material's colour, and its absorption
+    // at the same grey opacity; the gas body's glow of the starlight's look is not made)
+    if (uSelf.x > 0.0) {
+      if (glowT) { em = uSelf.x * uSelf.y * rho * tempAt(R, lnR, zh, xw) * selfCol(MAT_DISK) * 0.5 * (gasOn + dustOn); ex = vec3(uSelf.x * rho * dustOn); }
+    } else
     if (glowT) em = uGGas * K_G * rho * MAT_DISK * 0.5 * (gasOn + dustOn) * (uGasOuter > 0.5 ? max(R / OUTER_R, 1.0) : 1.0) * (1.0 - uLit * (LIT_DARK * (1.0 - exp(-tS)) + LIT_DEEP * (1.0 - exp(-MS_C * tS))));
     // the surface accretion layer(s) (see ACC): a column ACC_SIG of the local surface density, in its streaks, across a
     // Gaussian in height ACC_W H wide. The layer is thinner than a step, so its column over the step is integrated
@@ -2762,6 +2782,10 @@ float pebLayer(vec3 p, out float Tm, out vec4 srcG){
   sd *= uComp.z; sc *= uComp.z;   // (the pebbles as they fade, their absorption with their light; the millimetre follows them)
   vec3 alb = mix(MAT_ROCK * 0.25, 0.9 * MAT_ICE, ice);   // (round 8: rock and ice, materials; the ice was in the colour of its temperature)
   alb = mix(alb, vec3(0.85, 0.92, 1.0) * mix(0.35, 1.0, ice), sc / (sd + 1e-6));   // packed pebbles look paler
+  // (round 18i: with the model look's own light, see uSelf, the source of their thermal light: the midplane's temperature, in their
+  // material's colour; no starlight, no pile-up's extra glow, whose column sd holds)
+  if (uSelf.x > 0.0) srcG = vec4(uSelf.y * Tm * selfCol(mix(MAT_ROCK, MAT_ICE, ice)), 1.0);
+  else
   srcG = vec4(G_DUST * alb * Eabs(R, lnR, H) * gapLit(R, lnR, H, dm.a), 1.0 + PILE * (pile - 1.0));   // (round 18c: gapLit)
   return sd;
 }
@@ -2784,7 +2808,8 @@ void sheet(vec3 p, vec3 rd, inout vec3 col, inout vec3 tr){
 #endif
   float tau = K_D * sd / max(mu, 0.03);
   float tmm = K_MM * sd / max(mu, 0.3);
-  vec3 src = srcG.rgb * absorptionFraction(tmm) * srcG.a;
+  // (round 18i: with the model look's own light, their thermal light through their own absorption, Kirchhoff's, as the gas's)
+  vec3 src = uSelf.x > 0.0 ? srcG.rgb * absorptionFraction(tau) : srcG.rgb * absorptionFraction(tmm) * srcG.a;
   col += tr * src;
   tr *= exp(-tau * uOpac.y);
 }
@@ -2825,6 +2850,8 @@ void pebSlab(vec3 ro, vec3 rd, float t0, float t1, float tz, inout vec3 col, ino
   if (uLook == 3) { float tm = K_MM * sd * c; col += tr * G_MM * (Tm / 100.0) * absorptionFraction(tm) * MM_COL; tr *= exp(-tm * uOpac.y); return; }   // (round 18a: uOpac.y)
 #endif
   float tauAll = K_D * sd / max(mu, 0.03), tau = K_D * sd * c;
+  if (uSelf.x > 0.0) col += tr * srcG.rgb * absorptionFraction(tau);   // (round 18i: their own light over the step's column, see sheet)
+  else
   col += tr * srcG.rgb * absorptionFraction(K_MM * sd / max(mu, 0.3)) * srcG.a * (tauAll > 1e-4 ? absorptionFraction(tau) / absorptionFraction(tauAll) : c * max(mu, 0.03));
   tr *= exp(-tau * uOpac.y);
 }
@@ -4785,6 +4812,15 @@ void main(){
   // disk stays dark whatever the gain (its 10 micron light falls by many orders of magnitude outward): a moderate gain
   // shows its rings to about 6 au.
   const LOOK_GAIN = { optical: 4, mir: 32, mm: 12 };
+  // (Round 18i, the owner: "in the model look, the pattern of its own emission alone, with no surface lit; an opacity of about 2
+  // instead") The model look's light, the state's glow: 'star', the starlight as until now, or 'self', the gas's own thermal light
+  // (uSelf in the GLSL; DESIGN.md section 50) through the grey opacity selfk, in cm^2 per gram of gas, K_MIN to K_MAX (the page's
+  // slider, on a log scale), DEF by default (the owner's "2", read in the cm^2/g in which the opacity of the starlight, 0.22, was told
+  // to him); in the model's units kappa SIGMA1, Sigma(1 au) in g cm^-2 as the probe has it. G: the display's light per kelvin of the
+  // brightness temperature (1000 K the stretch's 1; on the display the dust's sublimation, 1500 K, 0.75, 100 K 0.32, 10 K 0.06, the
+  // sky behind 0.02 to 0.04). The automatic exposure rests meanwhile (aeOn): the brightness is the temperature, the same in every
+  // view, and cannot blow out
+  const SELF = { K_MIN: 0.001, K_MAX: 100, DEF: 2, SIGMA1: 1700, G: 1e-3 };
   // the CO line's displays (see uCoMode): a channel map at a velocity, the mean velocity (moment 1), the integrated
   // intensity (moment 0)
   const CO_MODES = { chan: 0, m1: 1, m0: 2 };
@@ -5323,7 +5359,7 @@ void main(){
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
     const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
-      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV', 'uMP', 'uWindK', 'uGGas', 'uJetOcc', 'uLstar', 'uExcl', 'uCoEnv', 'uPebH', 'uFast', 'uOpac', 'uStars'];
+      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV', 'uMP', 'uWindK', 'uGGas', 'uJetOcc', 'uLstar', 'uExcl', 'uCoEnv', 'uPebH', 'uFast', 'uOpac', 'uStars', 'uSelf'];
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS, 'show'), progBloom = link(BLOOM_FS, 'bloom');
     // (round 8) the bloom's targets, a quarter of accT's size (made with it): A on unit 18 (for SHOW_FS), B on unit 19
@@ -6287,7 +6323,9 @@ void main(){
       // lines in the overlay (fieldG, the magnetosphere's magG, the cut's sliceFG)
       opac: [1, 1, 1, 1, 1, 1],
       // (round 18a) the number of the background's stars, times the default's (STARS; see uStars), the state's stars
-      stars: 1
+      stars: 1,
+      // (round 18i) the model look's light, 'star' or 'self', and the opacity of its own light, cm^2 per gram of gas (see SELF)
+      glow: 'star', selfk: SELF.DEF
     };
     const matLin = new Float32Array(MAT.flatMap(([, hex, k]) => linHex(hex).map((v) => v * k)));   // (round 8, see MAT)
     const clumps = Array.from({ length: 6 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0, crossed: true }));
@@ -7352,6 +7390,10 @@ void main(){
     // jumps; the model's own drawings (field lines, wind tracers, the envelope's streamlines) fade out in the observed
     // looks (fieldAmp, which also fades the field lines' toggle).
     let lookNow = 'model', lookT0 = -1e9, fieldAmp = 1;   // (round 9: an observed look switched to as any, once FULL is warm)
+    // (round 18i) the model look's light drawn (see SELF): a change of opt.glow dips the exposure as a change of look does and takes
+    // effect at its darkest; selfOn, the gas's own light drawn in this frame
+    let glowNow = 'star';
+    const selfOn = () => glowNow === 'self' && lookNow === 'model';
     // Other fades (in real time, as the others): the components gas, surface, pebbles and wind (compAmp, 0.6 s; uComp),
     // the model's drawings of the envelope between looks (modelAmp, 0.4 s), the scale bar when it changes its length
     // (the old bar fades out as the new one fades in, 0.25 s; both are true to scale)
@@ -7602,7 +7644,7 @@ void main(){
     let aeLo = -Infinity, aeHi = Infinity;   // ln of exposures found too dark and too bright for this view (bisection)
     let aeGen = 0, aeGenUsed = 0, aeKey = '';  // the view's count, that of the frame being measured (an older one is not used),
                                                // and the view, coarsely (the clock running does not make a new one)
-    const aeOn = () => lookNow === 'model' && !!cam && Math.hypot(cam[0], cam[1], cam[2]) < AE.D;
+    const aeOn = () => lookNow === 'model' && !selfOn() && !!cam && Math.hypot(cam[0], cam[1], cam[2]) < AE.D;   // (round 18i: not with the own light, see SELF)
     const aeHeld = () => !!burst || lookDip() < 1;
     // (the view moving: a flight, a drag, a touch on the picture)
     const viewMoving = () => !!flyV || !!flyT || !!path || !!rollEase || dragging || touching;   // (round 18a: rollEase)
@@ -8146,6 +8188,7 @@ void main(){
         if (f === true || f === false || (f && fullReady())) { lookNow = opt.look; kickResetAll(); }   // (round 10a: see kickKOf)
         else lookT0 = nowMs() - 300;
       }
+      if (glowNow !== opt.glow && (reduce || nowMs() - lookT0 >= 300)) glowNow = opt.glow;   // (round 18i: at the dip's darkest, see glowNow)
       // (round 16a) a frame of a moving picture: the view moved by a drag, a touch, a flight or a path, or the clock running (not a
       // measurement's, a script's or a snapshot's frame) takes the shortcuts (FAST); the guard predicts it from its own kind's
       // measures where there are some (gC1F). Round 16b: every frame of the motion, the state changed since the last frame or not.
@@ -8219,7 +8262,7 @@ void main(){
       const bgK = bgMoves() ? 0 : bgLeft(), bgA = bgMoves() ? 0 : viewOff() + bgK;
       // a still picture (see ACC_MAX): the same state as the last frame, drawn by the same program
       const sig = [time, ...cam, ...basis.f, rW, rH, canvas.width, opt.steps, opt.fov, opt.seed, starL, LOOKS[lookNow], rSn, opt.mode, BG.MODES[opt.bg], bgK, ...compAmp, ...opt.gain,
-        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), parGen, colGen, cpdMdot, ...opt.opac, camRoll, opt.stars, coLn, expo];   // (round 13a: colGen, the materials' colours, see box.diskColours; round 14a: parGen, the model's parameters, see box.diskParams)
+        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), parGen, colGen, cpdMdot, ...opt.opac, camRoll, opt.stars, selfOn() ? opt.selfk : 0, coLn, expo];   // (round 18i: the own light and its opacity, see SELF; round 13a: colGen, the materials' colours, see box.diskColours; round 14a: parGen, the model's parameters, see box.diskParams)
       // (a new view: the exposure is measured afresh, with its moves counted anew; a new exposure or CO range: measured again)
       const ne = sig.length - 2, viewNew = sig.length !== lastSig.length || sig.some((v, i) => i < ne && v !== lastSig[i]);
       // (Disk Lab v2) While only the clock moves, the picture is not started over but averaged with the last few frames
@@ -8343,7 +8386,10 @@ void main(){
       // (2026-11-03, the owner on Safari: "Reset all makes the gas vanish". The starlight's shading was tied to the finish's level (fx),
       // which Auto on a guarded device sets to 0: the model look then showed the gas's own glow alone, dim since round 13a's white gas.
       // Now the shading is drawn at every level; data-lit="fx" (?lit=fx) keeps the old coupling for comparison)
-      gl.uniform1f(U.uLit, modelAmp * (box.dataset.lit === 'fx' ? Math.min(fxAmp, 1) : 1)); gl.uniform1f(U.uFx, Math.min(fxAmp, 1) * modelAmp);
+      gl.uniform1f(U.uLit, selfOn() ? 0 : modelAmp * (box.dataset.lit === 'fx' ? Math.min(fxAmp, 1) : 1)); gl.uniform1f(U.uFx, Math.min(fxAmp, 1) * modelAmp);
+      // (round 18i) the model look's own light (see SELF): the opacity in the model's units, 0 with the starlight's; the display's light
+      // per kelvin over the outburst's exposure (expo above), which its temperature follows (uLum)
+      gl.uniform2f(U.uSelf, selfOn() ? opt.selfk * SELF.SIGMA1 : 0, SELF.G / Math.pow(burstL(), 0.6));
       gl.uniform1f(U.uFocus, Math.max(camD, 1e-3));
       gl.uniform1f(U.uWindLow, 1 - (1 - WIND_LOW_JS) * asymAmp * asymAmp * (3 - 2 * asymAmp));
       gl.uniform2fv(U.uAcc, accW());
@@ -8616,7 +8662,9 @@ void main(){
       const cutJa = opt.cut === 'quarter' ? '右手前の 4 分の 1 を切り取り(右の切り口を正面から見る)' : '星を通る鉛直な面で手前の半分を切り取り', cutEn = opt.cut === 'quarter' ? ' The near right quarter is cut away (its right face seen face-on)' : ' The near half is cut away along a vertical plane through the star';
       const LKD = { optical: ['可視光・近赤外線の散乱光で見た姿で、星の光を散乱する表層と円盤風が見えます。', ' Seen in scattered light (visible and near infrared): the surface and the wind scatter starlight.'],
         mir: ['中間赤外線で見た姿で、暖かい表層の熱放射が内側ほど明るく見えます。', ' Seen in the mid-infrared: the warm surface glows, brightest close in.'],
-        mm: ['ミリ波で見た姿で、赤道面に沈んだ小石の熱放射が、惑星のギャップのすぐ外の環とともに見えます。', ' Seen at millimetre wavelengths: the pebbles at the midplane glow, with a ring just outside the planet\u2019s gap.'] }[lookNow];
+        mm: ['ミリ波で見た姿で、赤道面に沈んだ小石の熱放射が、惑星のギャップのすぐ外の環とともに見えます。', ' Seen at millimetre wavelengths: the pebbles at the midplane glow, with a ring just outside the planet\u2019s gap.'],
+        // (round 18i: the model look in its own light, see SELF)
+        ...(selfOn() ? { model: ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、明るさは輝度温度です(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g)。', ' Shown in its own thermal light, with no starlight on it: the brightness is the brightness temperature (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g).'] } : {}) }[lookNow];
       const desc = ja()
         ? '原始惑星系円盤(半径およそ 30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、赤道面に沈んだ塵はスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + QN[0] + 'を色で示しています。' : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? 'ガスの輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
         : 'Volume rendering of a model of a protoplanetary disk (some 30 au in radius): warm surface layers, and a cold midplane with settled dust, icy beyond the water snow line.' + (plShown().length ? (plShown().length > 1 ? ' Planets at ' + plShown().join(', ') + ' au open gaps.' : ' A planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + QN[1] + ' in colour.' : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in an emission line of the gas: ' + CON[1] + '.' : '');
@@ -9001,7 +9049,7 @@ void main(){
     const plShown = () => planets.filter((p) => p.amp > 0.5).map((p) => +p.a.toFixed(p.a < 10 ? 1 : 0));
     // (round 13b: and the sky's ease, see bgTurn)
     const busy = () => !!(flyV || flyT || path || rollEase) || bgLeft() !== 0 || planets.some((p) => p.amp !== plWant(p)) || envAmp !== ((opt.mode & 32) ? 1 : 0) || sliceU !== (opt.slice ? 1 : 0) || (sliceU > 0 && cutA !== CUT_A[opt.cut])
-      || !annDone() || lookNow !== opt.look || waitShown || lookDip() < 1 || fieldAmp !== (showField && lookNow === 'model' ? 1 : 0) || !fadesDone()
+      || !annDone() || lookNow !== opt.look || glowNow !== opt.glow || waitShown || lookDip() < 1 || fieldAmp !== (showField && lookNow === 'model' ? 1 : 0) || !fadesDone()
       || (!aeHeld() && aeGoal !== aeLn) || coGoal !== coLn           // (the automatic exposure and the CO line's range on their way,
       || (aeOn() && !aeHeld() && !aeFresh) || (coOn() && !coHold && coSavedKey !== coKey && !coFresh) || !!coPending;  // or finding their levels)
     // Disk Lab v2 (engine-patch.py): at most data-flight (default 2; 0: no limit) frames of this loop unfinished on the
@@ -9790,7 +9838,7 @@ void main(){
     // az is measured from the planet's azimuth while following it (p = 1)
     box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 1000) / 1000, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? (opt.cut === 'quarter' ? 2 : 1) : 0, sq: opt.sliceQ, p: follow ? 1 : 0, pi: followI, gain: opt.gain.slice(), planets: planets.map((pl) => [pl.a, pl.on ? 1 : 0, pl.m]), ann: opt.ann === ANN.ALL ? 1 : opt.ann, look: opt.look, ms: opt.ms ? 1 : 0, asym: opt.asym ? 1 : 0, marks: opt.marks ? 1 : 0, waves: opt.waves ? 1 : 0, bg: opt.bg, fx: opt.fx, coMode: opt.coMode, coV: opt.coV, coRange: Math.exp(coLn), coRangeFixed: coHold ? 1 : 0,
       tx: Math.round(panV[0] * 1e4) / 1e4, ty: Math.round(panV[1] * 1e4) / 1e4, tz: Math.round(panV[2] * 1e4) / 1e4,
-      cpdMdot, op: opt.opac.slice(), roll: deg(rollUser), stars: opt.stars });   // (round 18a: op, the see-through; round 13e: the planets' disks' accretion rate, M_J/yr, 0 for a tenth of the disk's; see cpdPhys)
+      cpdMdot, op: opt.opac.slice(), roll: deg(rollUser), stars: opt.stars, glow: opt.glow, selfk: opt.selfk });   // (round 18i: glow, the model look's light, and selfk, the opacity of its own light, see SELF; round 18a: op, the see-through; round 13e: the planets' disks' accretion rate, M_J/yr, 0 for a tenth of the disk's; see cpdPhys)
     box.diskLegend = () => legendSpec();
     // (round 8) the materials' colours of the model's look (see MAT), for the page's key: key, colour (sRGB), names; with
     // { key: '#rrggbb' } or { key: ['#rrggbb', k] } a colour (and its brightness factor) is changed for this page (for trying
@@ -9866,7 +9914,7 @@ void main(){
     // text after it, or edited by hand, must not poison the picture: a NaN in the camera or the clock would blank it),
     // the distance and the speed positive, the components a mask of the six, the time within [0, TIME_MAX] (the shader's
     // clock is single precision); what fails is left as it is.
-    const NUM_KEYS = ['slice', 'p', 'pi', 'time', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'mode', 'field', 'ann', 'ms', 'asym', 'marks', 'waves', 'coV', 'coRange', 'coRangeFixed', 'speed', 'paused', 'fly', 'roll', 'stars'];
+    const NUM_KEYS = ['slice', 'p', 'pi', 'time', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'mode', 'field', 'ann', 'ms', 'asym', 'marks', 'waves', 'coV', 'coRange', 'coRangeFixed', 'speed', 'paused', 'fly', 'roll', 'stars', 'selfk'];
     const checked = (raw) => {
       const st = { ...raw };
       for (const k of NUM_KEYS) {
@@ -9893,12 +9941,15 @@ void main(){
       // finite number is 1, a list of another length is left out. (Round 18d: six, with the jet's and the field lines' (see
       // opt.opac); a list of four, as dev.23 to dev.25 wrote them in links and kept them on the device, taken with those two at 1)
       if (st.op != null) { if (Array.isArray(st.op) && (st.op.length === 6 || st.op.length === 4)) st.op = [...st.op, 1, 1].slice(0, 6).map((v) => { const x = finiteNumber(v); return isFinite(x) ? Math.min(OPAC[1], Math.max(OPAC[0], x)) : 1; }); else delete st.op; }
+      // (round 18i) the model look's light, a name it knows; the opacity of its own light, positive, to three figures within SELF's
+      if (st.glow != null && st.glow !== 'star' && st.glow !== 'self') delete st.glow;
+      if (st.selfk != null) { if (st.selfk > 0) st.selfk = Math.min(SELF.K_MAX, Math.max(SELF.K_MIN, +st.selfk.toPrecision(3))); else delete st.selfk; }
       return st;
     };
     box.diskSet = (raw) => {
       const st = checked(raw || {});
       const coBefore = [elUser, wrapPi(azUser + viewOff()), opt.dist, follow, ...panV, opt.look, opt.coMode, opt.coV];
-      const mode0 = opt.mode, slice0 = opt.slice, asym0 = opt.asym, waves0 = opt.waves, follow0 = follow;
+      const mode0 = opt.mode, slice0 = opt.slice, asym0 = opt.asym, waves0 = opt.waves, follow0 = follow, glow0 = opt.glow;   // (round 18i: glow0)
       // (round 11a: a new view on a path is taken from where the path has brought the camera, as after a drag: the keys left out
       // are what is seen)
       const viewSet = st.el != null || st.az != null || st.d != null || st.p != null || st.tx != null || st.ty != null || st.tz != null || st.roll != null;   // (round 18a: roll)
@@ -9952,6 +10003,10 @@ void main(){
         if (opt.look !== 'model' && opt.slice && st.slice == null) box.diskSlice(false);
       }
       if (opt.slice && opt.look !== 'model') { opt.look = 'model'; lookT0 = nowMs(); }
+      // (round 18i) the model look's light and the opacity of its own light (see SELF): a new light seen in the model look dips the
+      // exposure as a new look does and is drawn from the dip's darkest (glowNow); in another look it waits there, unseen
+      if (st.glow != null && st.glow !== opt.glow) { opt.glow = st.glow; if (lookNow === 'model') lookT0 = nowMs(); }
+      if (st.selfk != null) opt.selfk = st.selfk;
       if (st.speed) speed = Number(st.speed);
       if (st.paused != null) paused = !!Number(st.paused);
       // a new view: with fly the camera flies there from where it is, otherwise it is there at once
@@ -9970,7 +10025,7 @@ void main(){
       const viewJump = !Number(st.fly) && !Array.isArray(st.planets) && (dA(0) > 0.09 || dA(1) > 0.09 || Math.abs(coAfter[2] - coBefore[2]) > 0.1 * coBefore[2]
         || coAfter[3] !== coBefore[3] || Math.hypot(coAfter[4] - coBefore[4], coAfter[5] - coBefore[5], coAfter[6] - coBefore[6]) > 0.1 * coBefore[2]);
       const jump = viewJump || coAfter[7] !== coBefore[7] || coAfter[8] !== coBefore[8]
-        || [mode0, slice0, asym0, waves0].some((v, i) => v !== [opt.mode, opt.slice, opt.asym, opt.waves][i]);
+        || [mode0, slice0, asym0, waves0, glow0].some((v, i) => v !== [opt.mode, opt.slice, opt.asym, opt.waves, opt.glow][i]);   // (round 18i: and the model look's light)
       if (jump && !reduce) { probeNext = PROBE_FRAMES; for (const k in gKnown) delete gKnown[k]; kickResetAll(); }
       if (jump) cancelJob();   // (round 10a: see cancelJob)
       // A later visitor command redirects the view, so an unfinished restore no longer owns its range. The target
@@ -10130,7 +10185,7 @@ void main(){
       const e0 = [aeLn, aeGoal, coLn, coGoal], ex = Array.isArray(o.expo) && o.expo.length === 4 && o.expo.every((x) => Number.isFinite(x)) ? o.expo.slice() : e0.slice();
       try {
         await warmNow(); if (lost) return null;
-        if (flyV || flyT || path || rollEase || lookNow !== opt.look || lookDip() < 1) return { busy: true };
+        if (flyV || flyT || path || rollEase || lookNow !== opt.look || glowNow !== opt.glow || lookDip() < 1) return { busy: true };
         testT = target(rW, rH, gl.RGBA32F, gl.CLAMP_TO_EDGE, gl.NEAREST);
         [aeLn, aeGoal, coLn, coGoal] = ex; accN = 0; fadeT = 0;
         const ms = await scriptFrame('frameread', {});
@@ -10705,7 +10760,7 @@ void main(){
         // and kicks of 16 to 96 at the same views settled. So no fade moves on in either draw (fadeT: their step, dtR, is the time
         // since the last frame; every fade of the picture goes by it), the exposure and the line's range are those of the start
         // (e0), and the two draws are compared only where no flight is under way nor a look's switch, whose dip goes by the clock)
-        if (flyV || flyT || path || rollEase || lookNow !== opt.look || lookDip() < 1) return { changed: true, busy: true };
+        if (flyV || flyT || path || rollEase || lookNow !== opt.look || glowNow !== opt.glow || lookDip() < 1) return { changed: true, busy: true };
         if (isFinite(kT) && kT > 0) { kickK = Math.min(4096, Math.max(4, Math.round(kT))); kickAdapt = false; kickResetAll(); }
         testRows = isFinite(rT) && rT >= 1 ? Math.round(rT) : 0;
         // (o.maxMs: the test's time; its frame left at the end of it, and { timedOut } returned)

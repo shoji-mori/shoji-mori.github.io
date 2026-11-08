@@ -200,6 +200,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .velocity{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2)}
 .velocity input{width:120px;accent-color:var(--accent)}
 .velocity output{font-variant-numeric:tabular-nums;min-width:6.6em;color:var(--text)}
+/* (round 18i) the model look's light under the looks: its name beside its two chips; with the own light its opacity's row (.mp-row) */
+.glow-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;font-size:12.5px;color:var(--text-2)}
+.rail-context .mp-row{margin:0}
 
 /* the places' actions, the rail's toggles and chips */
 .action,.chip,.toggle{display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:3px 10px;border:1px solid var(--line-2);border-radius:999px;font-size:12.5px;color:var(--text);transition:background-color .2s,border-color .2s;text-align:left}
