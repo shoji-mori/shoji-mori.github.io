@@ -51,10 +51,16 @@ export const WORDS = {
     },
     velocity: '視線速度',
     // (round 18i) the model look's light under the looks: the starlight, or the gas's own thermal light with its opacity (app.js)
+    // (round 18l: the note by the own light's temperature: the column depth's (note), round 18k's from the depth toward the star
+    // (noteStar), round 18j's interior (noteInt); the surface's column's slider, nc)
     glow: { name: '光り方', label: 'モデルの見え方の光り方', star: '星の光', self: '自身の発光',
-      note: '星の光が照らす表層の光は描かず、ガスと塵が、星の光で熱せられて内部より熱い表層をもつ温度のまま、密度 × 温度 × 不透明度で自ら光り、同じ不透明度で吸収する姿を体積として描きます。明るさと色は輝度温度で(明るさは対数の尺度、色は絵の隅の帯)、厚い所では見る側から光学的深さ 1 の所の温度、薄い所では柱密度と温度の積を表します。',
+      note: '星の光が照らす表層の光は描かず、ガスと塵が、密度 × 温度 × 不透明度で自ら光り、同じ不透明度で吸収する姿を体積として描きます。温度は模擬の構造で、上からの鉛直の柱密度が Σ_s ほどまでの表層は星の光に熱せられた塵の温度、それより深い所は内部の温度です。明るさと色は輝度温度で(明るさは対数の尺度、色は絵の隅の帯)、厚い所では見る側から光学的深さ 1 の所の温度、薄い所では柱密度と温度の積を表します。',
+      noteStar: '星の光が照らす表層の光は描かず、ガスと塵が、密度 × 温度 × 不透明度で自ら光り、同じ不透明度で吸収する姿を体積として描きます。温度は断面の「温度」と同じで、星からの光学的深さが 1 ほどまでの表層は星の光に熱せられた塵の温度、それより深い所は内部の温度です。明るさと色は輝度温度で(明るさは対数の尺度、色は絵の隅の帯)、厚い所では見る側から光学的深さ 1 の所の温度、薄い所では柱密度と温度の積を表します。',
+      noteInt: '星の光が照らす表層の光は描かず、ガスと塵が、密度 × 温度 × 不透明度で自ら光り、同じ不透明度で吸収する姿を体積として描きます。温度は内部の温度で、星の光に直接熱せられた表層の塵の温度は除いています。明るさと色は輝度温度で(明るさは対数の尺度、色は絵の隅の帯)、厚い所では見る側から光学的深さ 1 の所の温度、薄い所では柱密度と温度の積を表します。',
       k: '不透明度 κ', kOf: '自身の発光の不透明度(ガス 1 g あたり)', kReset: '不透明度を既定に戻す', kDefault: '既定',
-      kSpoken: (n) => `ガス 1 グラムあたり ${n.k} 平方センチメートル` },
+      kSpoken: (n) => `ガス 1 グラムあたり ${n.k} 平方センチメートル`,
+      nc: '表層の柱密度 Σ_s', ncOf: '自身の発光で、星の光に熱せられた表層とする上からの柱密度', ncReset: '表層の柱密度を既定に戻す',
+      ncSpoken: (n) => `1 平方センチメートルあたり ${n.v} グラム` },
     // (round 18k) the key's bar of the own light's brightness temperature: what takes its colours (app.js renderMatKey)
     selfKey: { gas: '円盤(ガスと塵)', peb: '小石', both: '円盤と小石' },
     cutQ: { T: '温度', rho: '密度', layers: '領域' },
@@ -351,9 +357,13 @@ export const WORDS = {
     },
     velocity: 'Velocity',
     glow: { name: 'Light', label: 'Light of the model look', star: 'Starlight', self: 'Own emission',
-      note: 'No light of a surface lit by the star: the gas and its dust glow by density × temperature × opacity, at a temperature with the surface heated by the starlight hotter than the interior, and absorb at the same opacity, drawn as a volume. Brightness and colour are the brightness temperature (the brightness on a logarithmic scale, the colours in the bar in a corner): where thick, the temperature at optical depth 1 seen from the camera; where thin, the column density times the temperature.',
+      note: 'No light of a surface lit by the star: the gas and its dust glow by density × temperature × opacity and absorb at the same opacity, drawn as a volume. The temperature is a mock structure: down to a column Σ_s from above, the surface is at the temperature of grains the starlight heats; deeper, the interior’s. Brightness and colour are the brightness temperature (the brightness on a logarithmic scale, the colours in the bar in a corner): where thick, the temperature at optical depth 1 seen from the camera; where thin, the column density times the temperature.',
+      noteStar: 'No light of a surface lit by the star: the gas and its dust glow by density × temperature × opacity and absorb at the same opacity, drawn as a volume. The temperature is the cut’s: down to an optical depth of about 1 toward the star, the surface is at the temperature of grains the starlight heats; deeper, the interior’s. Brightness and colour are the brightness temperature (the brightness on a logarithmic scale, the colours in the bar in a corner): where thick, the temperature at optical depth 1 seen from the camera; where thin, the column density times the temperature.',
+      noteInt: 'No light of a surface lit by the star: the gas and its dust glow by density × temperature × opacity and absorb at the same opacity, drawn as a volume. The temperature is the interior’s, without the surface’s grains heated directly by the starlight. Brightness and colour are the brightness temperature (the brightness on a logarithmic scale, the colours in the bar in a corner): where thick, the temperature at optical depth 1 seen from the camera; where thin, the column density times the temperature.',
       k: 'Opacity κ', kOf: 'Opacity of the own emission, per gram of gas', kReset: 'Opacity: back to the default', kDefault: 'Default',
-      kSpoken: (n) => `${n.k} square centimetres per gram` },
+      kSpoken: (n) => `${n.k} square centimetres per gram`,
+      nc: 'Surface column Σ_s', ncOf: 'Column from above taken as the surface the starlight heats, in the own emission', ncReset: 'Surface column: back to the default',
+      ncSpoken: (n) => `${n.v} grams per square centimetre` },
     selfKey: { gas: 'disk (gas and dust)', peb: 'pebbles', both: 'disk and pebbles' },
     cutQ: { T: 'Temperature', rho: 'Density', layers: 'Regions' },
     cutNotes: {

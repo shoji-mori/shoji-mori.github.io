@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=389a9cd3e3';
-import { WORDS } from './words.js?v=dcc31238b4';
+import { WORDS } from './words.js?v=912a2a0a5a';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=a06fcbfa44';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=fd4672b32d';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=ce4db6392a';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.33', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.34', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -400,7 +400,7 @@ function svgIcon(d) {
 // with its own light the opacity, see the model look's light below; the note then says what the own light shows.)
 function renderRail(s) {
   const w = T(), co = s.look === 'co', cutOpen = s.slice > 0 && s.look === 'model', glowable = s.look === 'model' && typeof s.glow === 'string';
-  const lk = [L(), co, s.coMode, glowable, s.glow].join('|');
+  const lk = [L(), co, s.coMode, glowable, s.glow, ncShown(s)].join('|');   // (round 18l: and the surface's column's row)
   if (lk !== lookKey) {
     lookKey = lk;
     const kids = [];
@@ -420,14 +420,15 @@ function renderRail(s) {
     const input = lookContext.querySelector('input');
     if (input && document.activeElement !== input && Number(input.value) !== s.coV) { input.value = String(s.coV); lookContext.querySelector('output').textContent = kms(s.coV); }
   }
-  if (glowable) renderSelfk(s);   // (round 18i: the opacity's slider in step, unless it is being dragged)
+  if (glowable) { renderSelfk(s); renderSelfnc(s); }   // (round 18i: the opacity's slider in step, unless it is being dragged; round 18l: and the surface's column's)
   const shown = cutOpen ? keyItems(s) : [];
   const ck = [L(), cutOpen, s.sq, shown.join()].join('|');
   if (ck !== cutKey) {
     cutKey = ck;
     cutContext.replaceChildren(...(cutOpen ? [segmented(CUT_Q.map((k) => [k, w.cutQ[k]]), s.sq, (k) => { box.diskSet({ sq: k }); sync(); }, L() === 'ja' ? '断面に描く量' : 'Quantity on the cut'), cutKeyList(s.sq, shown)] : []));
   }
-  lookNote.textContent = co ? w.coNotes[s.coMode] : cutOpen ? w.cutNotes[s.sq] : glowable && s.glow === 'self' ? w.glow.note : w.looks[s.look].note;
+  // (round 18l: the own light's note by its temperature, see SELFNC_RANGE)
+  lookNote.textContent = co ? w.coNotes[s.coMode] : cutOpen ? w.cutNotes[s.sq] : glowable && s.glow === 'self' ? (s.selft === 'star' ? w.glow.noteStar : s.selft === 'int' ? w.glow.noteInt : w.glow.note) : w.looks[s.look].note;
 }
 const kms = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' km/s';
 // (Round 18i, the owner: "in the model look, the pattern of its own emission alone, with no surface lit; an opacity of about 2
@@ -441,8 +442,23 @@ const selfkPos = (k) => String(Math.round(1000 * Math.log(k / SELFK_RANGE[0]) / 
 const selfkOf = (pos) => (String(pos) === selfkPos(SELFK_DEF) ? SELFK_DEF : Number((SELFK_RANGE[0] * Math.pow(SELFK_RANGE[1] / SELFK_RANGE[0], Number(pos) / 1000)).toPrecision(2)));
 const selfkNum = (k) => String(Number(k.toPrecision(2)));
 const selfkText = (k) => selfkNum(k) + ' cm²/g';
+// (Round 18l, the owner: "rather than colouring by the optical depth from the centre, give the surface its temperature, as a mock, by
+// the vertical column depth") With the own light at the temperature of the column from above (the engine's state selft 'col', the
+// default) the surface's column Sigma_s, below which the gas is at the interior's temperature, on a log slider under the opacity,
+// SELFNC_RANGE in g cm^-2, 0.1 by default (the state's selfnc; the engine's SELF.NC_DEF), its value beside it and a chip back to the
+// default, a row as the opacity's. Kept with the settings on this device (DEF_KEYS), in a link as selfnc= (none at 0.1), Reset all back
+// to it; not shown with ?selflook=old (round 18j's look, at the interior's temperature). The state's selft, the own light's
+// temperature for comparisons ('star' round 18k's, from the depth toward the star, 'int' round 18j's, the interior's), has no
+// control: a link's (selft=, none at 'col'; round 18k's ?selfint=1 read as selft=int), not kept on the device (UNKEPT_KEYS), Reset
+// all back to 'col'. The note under the looks says the temperature drawn. DESIGN.md section 53
+const SELFNC_RANGE = [0.001, 10], SELFNC_DEF = 0.1;
+const selfncPos = (v) => String(Math.round(1000 * Math.log(v / SELFNC_RANGE[0]) / Math.log(SELFNC_RANGE[1] / SELFNC_RANGE[0])));
+const selfncOf = (pos) => (String(pos) === selfncPos(SELFNC_DEF) ? SELFNC_DEF : Number((SELFNC_RANGE[0] * Math.pow(SELFNC_RANGE[1] / SELFNC_RANGE[0], Number(pos) / 1000)).toPrecision(2)));
+const selfncNum = (v) => String(Number(v.toPrecision(2)));
+const selfncText = (v) => selfncNum(v) + ' g/cm²';
+const ncShown = (s) => s.look === 'model' && s.glow === 'self' && s.selft === 'col' && typeof s.selfnc === 'number' && box.dataset.selflook !== 'old';
 const glowEls = {};
-let selfkW = '';
+let selfkW = '', selfncW = '';
 function glowRows(s) {
   const w = T().glow;
   const row = el('div', { class: 'glow-row' }, el('span', { class: 'glow-name', 'aria-hidden': 'true' }, w.name),
@@ -453,7 +469,13 @@ function glowRows(s) {
       val: el('span', { class: 'mp-val', 'aria-hidden': 'true' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-self-k-reset': '1', hidden: true }) });
     glowEls.row = el('div', { class: 'mp-row selfk-row' }, glowEls.name, glowEls.input, glowEls.val, glowEls.chip);
   }
-  return [row, glowEls.row];
+  if (!ncShown(s)) return [row, glowEls.row];
+  if (!glowEls.ncRow) {   // (round 18l: the surface's column, see SELFNC_RANGE)
+    Object.assign(glowEls, { ncName: el('label', { class: 'mp-name', for: 'selfNc' }), ncInput: el('input', { type: 'range', id: 'selfNc', min: '0', max: '1000', step: '1', 'data-self-nc': '1' }),
+      ncVal: el('span', { class: 'mp-val', 'aria-hidden': 'true' }), ncChip: el('button', { type: 'button', class: 'chip quiet', 'data-self-nc-reset': '1', hidden: true }) });
+    glowEls.ncRow = el('div', { class: 'mp-row selfnc-row' }, glowEls.ncName, glowEls.ncInput, glowEls.ncVal, glowEls.ncChip);
+  }
+  return [row, glowEls.row, glowEls.ncRow];
 }
 function renderSelfk(s) {
   if (!glowEls.row || s.glow !== 'self') return;
@@ -465,6 +487,16 @@ function renderSelfk(s) {
   glowEls.val.textContent = selfkText(k); glowEls.val.style.minWidth = selfkW;
   glowEls.chip.hidden = k === SELFK_DEF; glowEls.chip.textContent = w.kDefault; glowEls.chip.setAttribute('aria-label', w.kReset);
 }
+function renderSelfnc(s) {
+  if (!glowEls.ncRow || !ncShown(s)) return;
+  const w = T().glow, v = Number.isFinite(s.selfnc) && s.selfnc > 0 ? s.selfnc : SELFNC_DEF;
+  if (document.activeElement !== glowEls.ncInput && glowEls.ncInput.value !== selfncPos(v)) glowEls.ncInput.value = selfncPos(v);
+  glowEls.ncName.textContent = w.nc;
+  glowEls.ncInput.setAttribute('aria-label', w.ncOf); glowEls.ncInput.setAttribute('aria-valuetext', w.ncSpoken({ v: selfncNum(v) }));
+  if (!selfncW) selfncW = valW([...Array(101).keys()].map((i) => selfncText(selfncOf(10 * i))));   // (the widest value, as the opacity's)
+  glowEls.ncVal.textContent = selfncText(v); glowEls.ncVal.style.minWidth = selfncW;
+  glowEls.ncChip.hidden = v === SELFNC_DEF; glowEls.ncChip.textContent = w.kDefault; glowEls.ncChip.setAttribute('aria-label', w.ncReset);
+}
 function setGlow(k) {
   if (!live()) return;
   flogAdd({ k: 'set', glow: k }); keeping = keeping || calibrated;   // (as a look chosen: see setLook)
@@ -475,6 +507,12 @@ function setSelfk(k, drag = false) {
   if (drag) moving();
   box.diskSet({ selfk: k });
   renderSelfk(S());
+}
+function setSelfnc(v, drag = false) {   // (round 18l)
+  if (!live()) return;
+  if (drag) moving();
+  box.diskSet({ selfnc: v });
+  renderSelfnc(S());
 }
 // The key of the cut (round 6): the lines the engine draws on the faces, as it draws them, and what is left clear, in place
 // of the names it wrote beside them (the owner: "the labels on the cut say poorly which line they mean"). The colours are
@@ -609,6 +647,7 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.windReset) { windGain = 1; applyWind(); keepSoon(); }   // (round 14a: the wind's brightness)
   else if (b.dataset.opacReset != null) { setOpac(Number(b.dataset.opacReset), 1); keepSoon(); }   // (round 18a: the see-through)
   else if (b.dataset.selfKReset) { setSelfk(SELFK_DEF); keepSoon(); }   // (round 18i: the own light's opacity)
+  else if (b.dataset.selfNcReset) { setSelfnc(SELFNC_DEF); keepSoon(); }   // (round 18l: the surface's column)
   sync();
 });
 // (round 9) a planet's slider: while it is dragged, the engine makes the gap's starlight anew at most every 120 ms and the
@@ -623,6 +662,7 @@ rail.addEventListener('input', (e) => {
   else if (t.dataset.windGain) { windGain = wbOf(t.value); applyWind(true); }
   else if (t.dataset.opac != null) setOpac(Number(t.dataset.opac), opOf(t.value), true);   // (round 18a)
   else if (t.dataset.selfK) setSelfk(selfkOf(t.value), true);   // (round 18i)
+  else if (t.dataset.selfNc) setSelfnc(selfncOf(t.value), true);   // (round 18l)
   else if (t.id === 'rollRange') { moving(); box.diskSet({ roll: Number(t.value) }); renderRoll(S()); }   // (round 18a: the roll, at once)
   else if (t.id === 'starsRange') { box.diskSet({ stars: stOf(t.value) }); renderStars(S()); }   // (round 18a)
 });
@@ -636,6 +676,7 @@ rail.addEventListener('change', (e) => {
   else if (t.dataset.windGain) { windGain = wbOf(t.value); applyWind(); keepSoon(); }
   else if (t.dataset.opac != null) { setOpac(Number(t.dataset.opac), opOf(t.value)); keepSoon(); }   // (round 18a)
   else if (t.dataset.selfK) { setSelfk(selfkOf(t.value)); keepSoon(); }   // (round 18i)
+  else if (t.dataset.selfNc) { setSelfnc(selfncOf(t.value)); keepSoon(); }   // (round 18l)
   else if (t.id === 'rollRange') { box.diskSet({ roll: Number(t.value) }); renderRoll(S()); keepSoon(); }   // (round 18a)
   else if (t.id === 'starsRange') { box.diskSet({ stars: stOf(t.value) }); renderStars(S()); keepSoon(); }   // (round 18a)
   else if (t.dataset.ann) setAnn(Number(t.dataset.ann), t.checked);   // (round 15a)
@@ -1940,6 +1981,9 @@ function linkFor(s) {
   if (opList(s).some((f) => f !== 1)) u.searchParams.set('op', opList(s).map((f) => String(f)).join(','));   // (round 18a: the see-through; round 18d: six factors)
   if (s.glow === 'self') u.searchParams.set('glow', 'self');   // (round 18i: the model look's own light, and its opacity when not 2)
   if (Number.isFinite(s.selfk) && s.selfk !== SELFK_DEF) u.searchParams.set('selfk', String(s.selfk));
+  // (round 18l: the own light's temperature when not the column's, and the surface's column when not 0.1; see SELFNC_RANGE)
+  if (typeof s.selft === 'string' && s.selft !== 'col') u.searchParams.set('selft', s.selft);
+  if (Number.isFinite(s.selfnc) && s.selfnc !== SELFNC_DEF) u.searchParams.set('selfnc', String(s.selfnc));
   u.searchParams.set('t', String(Math.round(s.time * 1000) / 1000));
   u.searchParams.set('lang', L());
   return u.href;
@@ -2171,6 +2215,11 @@ function stateFromLink() {
   // (round 18i: the model look's light, a name the engine knows, and its own light's opacity, which the engine bounds)
   if (q.has('glow')) st.glow = q.get('glow');
   if (q.has('selfk')) st.selfk = q.get('selfk');
+  // (round 18l: the own light's temperature, a name the engine knows, round 18k's ?selfint=1 as selft=int where no selft= is given; and
+  // the surface's column, which the engine bounds)
+  if (q.has('selft')) st.selft = q.get('selft');
+  else if (q.get('selfint') === '1') st.selft = 'int';
+  if (q.has('selfnc')) st.selfnc = q.get('selfnc');
   return Object.keys(st).length ? st : null;
 }
 
@@ -2409,10 +2458,10 @@ async function start() {
   // (?obscyl=R,Z, au), and the model look's lit surface seen through the disk as before, its shadow's glow as before (?skinlos=0);
   // (round 18g) the opacities of before, the visible and mid-infrared looks' and the model look's scattered light's, as in 1.9-dev.28
   // (?opq=0). Each passed as it is: the engine reads each within its range, and a value it cannot read as its default
-  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc', 'sigtail', 'rc', 'litflat', 'obscyl', 'skinlos', 'opq', 'selfsurf', 'selfint', 'selflook']) if (q.has(k)) box.dataset[k] = q.get(k);   // (round 18j: selfsurf, the own light with the lit surface's warm grains as in round 18i; round 18k: the default now, passed over by the engine; selfint=1, the interior's temperature; selflook=old, the look of round 18j)
+  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc', 'sigtail', 'rc', 'litflat', 'obscyl', 'skinlos', 'opq', 'selfsurf', 'selflook']) if (q.has(k)) box.dataset[k] = q.get(k);   // (round 18j: selfsurf, the own light with the lit surface's warm grains as in round 18i; round 18k: the default now, passed over by the engine; selflook=old, the look of round 18j. Round 18l: round 18k's selfint=1, the interior's temperature, is the link's selft=int, see stateFromLink)
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   // (the engine's own start: the defaults Reset returns to; round 15a: with the clock's state, stopped by data-paused)
-  if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), [...DEF_KEYS, 'paused']);
+  if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), [...DEF_KEYS, ...UNKEPT_KEYS, 'paused']);   // (round 18l: UNKEPT_KEYS)
   // (round 13a) the model look's colours, before the first picture: a link's col= (a link without it: the defaults), else those
   // kept on this device. Also after a safe start: they cost nothing to draw, and are not lost when the settings are next kept
   if (typeof box.diskColours === 'function') {
@@ -2684,7 +2733,10 @@ box.addEventListener('disklost', (e) => {
 // link" writes it), which wins. Not kept: the clock's time and pause, the tap modes, the saved picture's size. After a
 // visit that ended with drawing stopped they are thrown away (see record). "Reset" (the top of the rail) forgets them and
 // puts everything back as at the first visit: the engine's own start (DEF0), the first place, the device's quality.
-const DEF_KEYS = ['mode', 'field', 'marks', 'asym', 'waves', 'ann', 'bg', 'look', 'coMode', 'coV', 'slice', 'sq', 'speed', 'planets', 'ms', 'cpdMdot', 'op', 'stars', 'glow', 'selfk'];   // (round 18i: glow, selfk, the model look's light and its own light's opacity)   // (round 18a: op, stars)   // (round 13e: cpdMdot, the planets' accretion rate)
+const DEF_KEYS = ['mode', 'field', 'marks', 'asym', 'waves', 'ann', 'bg', 'look', 'coMode', 'coV', 'slice', 'sq', 'speed', 'planets', 'ms', 'cpdMdot', 'op', 'stars', 'glow', 'selfk', 'selfnc'];   // (round 18l: selfnc, the own light's surface column)   // (round 18i: glow, selfk, the model look's light and its own light's opacity)
+// (round 18l) the engine's state that a link carries and this device does not keep, which Reset all puts back to the engine's start:
+// the own light's temperature for comparisons, selft, which no control shows (see SELFNC_RANGE)
+const UNKEPT_KEYS = ['selft'];   // (round 18a: op, stars)   // (round 13e: cpdMdot, the planets' accretion rate)
 const VIEW_KEYS = ['el', 'az', 'd', 'tx', 'ty', 'tz', 'p', 'pi', 'roll'];   // (round 18a: roll, the camera's about the line of sight)
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] != null).map((k) => [k, Array.isArray(o[k]) ? o[k].map((v) => (Array.isArray(v) ? v.slice() : v)) : o[k]]));
 let DEF0 = null, defaults = null, keeping = false, keepTimer = 0;
@@ -2719,7 +2771,7 @@ function resetAll() {
   qChosen = false;
   const d = { ...defaults };
   guardSwitch(keyOf({ ...S(), look: d.look, slice: d.slice }));
-  box.diskSet({ ...pick(d, DEF_KEYS), paused: d.paused ? 1 : 0 });
+  box.diskSet({ ...pick(d, [...DEF_KEYS, ...UNKEPT_KEYS]), paused: d.paused ? 1 : 0 });   // (round 18l: UNKEPT_KEYS)
   box.diskSpeed(d.speed || 1);
   cols = {}; applyCols();   // (round 13a: the model look's colours, the defaults)
   params = {}; applyParams(); windGain = 1; applyWind();   // (round 14a: the model's parameters and the wind's brightness, the defaults)
