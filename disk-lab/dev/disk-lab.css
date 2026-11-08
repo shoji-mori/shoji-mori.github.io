@@ -96,6 +96,13 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .mat-list i{display:inline-block;width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 .5px rgba(255,255,255,.3)}
 .mat-list i+i{margin-left:-4px}
 .mat-list i.arr{width:auto;height:auto;border-radius:0;box-shadow:none;font-style:normal;font-size:11px;line-height:1;color:#cfeaff}
+/* (round 18k) with the own light: the bar of the brightness temperature (the gas's and the pebbles' colours), and the key's title */
+.mat-key.tb>.mat-title:not(.tb-title),.mat-key:not(.tb)>.tb-title{display:none}
+.mat-list li.tb{display:grid;gap:2px;padding:1px 0 3px}
+.mat-list i.tb-bar{width:150px;height:7px;border-radius:2px}
+.mat-list .tb-ticks{position:relative;width:150px;height:11px;font-size:9.5px;line-height:11px;color:var(--text-3)}
+.mat-list .tb-ticks span{position:absolute;top:0;transform:translateX(-50%)}
+.mat-list .tb-ticks span:first-child{transform:none}
 
 .stage-hint,.stage-note{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:4;max-width:calc(100% - 2*var(--gx));padding:6px 14px;border-radius:999px;background:rgba(12,15,23,.78);border:1px solid var(--line);font-size:12.5px;color:var(--text-2);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .5s}
 .stage-hint.on,.stage-note.on{opacity:1}

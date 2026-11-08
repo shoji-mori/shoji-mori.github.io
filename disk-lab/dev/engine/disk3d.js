@@ -1722,6 +1722,23 @@ void coMarchK0(vec3 ro, vec3 rd, vec2 b, float tCross, out vec4 I0, out vec4 Tr0
   sheetDone = tCross <= b.x || tCross >= b.y;
   dsP = 1e9; I0 = vec4(0.0); Tr0 = vec4(1.0); iF = 0.0;
 }`;
+  // (Round 18k, the owner of round 18j's own light: "this direction is good; run a loop improving its look"; and on the way: "round
+  // 18i's looked good from the disk's face too: the emissivity rho T kappa, the density in hydrostatic equilibrium, the temperature
+  // with the surface hotter than the interior by the irradiation, and a volume rendering of it, with no surface object") The own
+  // light's look (DESIGN.md section 52; uSelf in the GLSL). The gas glows at the model's temperature with the surface that the
+  // starlight heats directly (tempAt as the cut's Temperature, round 18i's); ?selfint=1 (SELF_INT) at the interior's of round 18j.
+  // The march gathers the gas's and the pebbles' brightness temperature T_b along the ray (S = T, the Rayleigh-Jeans brightness;
+  // without the depth's haze, AIR), and the pixel shows it at the end (selfLight): its brightness the logarithm of T_b, the
+  // display's value before the tone A ln(1 + T_b / TK) (the light 0.012 sinh(7.2 A ln(1 + T_b / TK)), which the stretch, asinh(L /
+  // 0.012) / 7.2, turns back into it; after the tone 10 K 0.16, 30 K 0.26, 100 K 0.40, 160 K 0.45, 300 K 0.53, 1000 K 0.69, 1500 K
+  // 0.74: the hot end where the gain of rounds 18i and 18j put it, 10 K two and a half times as bright), and its colour T_b's (HUE:
+  // the cut's temperature colours softened, stops in display values at T_b in K, linear in ln T_b between them in linear light,
+  // scaled to the luminance 1 so that the brightness stays T_b's, held beyond the ends; white at 160 K, the water ice's sublimation,
+  // as on the cut). The page's key shows them as a bar (box.diskSelfKey). G: the light per kelvin of rounds 18i and 18j, uSelf.y's
+  // (?selflook=old, SELF_OLD, draws their look: linear in T_b in the gas's colour, with the haze, at the interior's temperature, as
+  // 1.9-dev.32)
+  const SELF_LOOK = { A: 0.11, TK: 1.5, G: 1e-3,
+    HUE: [[10, [0.42, 0.50, 0.74]], [30, [0.42, 0.58, 0.90]], [90, [0.55, 0.74, 1.0]], [160, [0.96, 0.96, 0.94]], [350, [1.0, 0.70, 0.46]], [800, [1.0, 0.60, 0.30]], [1500, [1.0, 0.84, 0.45]]] };
   const FS = `#version 300 es
 precision highp float;
 layout(location = 0) out vec4 fragColor;
@@ -1786,9 +1803,32 @@ uniform float uLit;     // (round 8) the model's look lit by the star (see G_LIT
 // temperature through their own absorption. The wind, the envelope, the jet, the planets and their disks keep their light; the
 // march, its steps and its end at a transmission of 0.01 are as before (DESIGN.md section 50). (Round 18j: the temperature the gas
 // glows at is the interior's, without the surface's grains heated directly by the starlight, the lit surface's own warmth: no bright
-// surface layer; ?selfsurf=1, SELF_SURF, keeps them as round 18i did; DESIGN.md section 51)
+// surface layer; ?selfsurf=1, SELF_SURF, kept them as round 18i did; DESIGN.md section 51). (Round 18k: by default round 18i's
+// temperature again, the owner's choice, and the interior's with ?selfint=1, SELF_INT; the brightness temperature gathered apart and
+// shown at the end, its brightness its logarithm and its colour its own, see SELF_LOOK; ?selflook=old, SELF_OLD, the look of
+// round 18j, as above; DESIGN.md section 52)
 uniform vec2 uSelf;
+#ifdef SELF_OLD
 vec3 selfCol(vec3 m){ return m / max(max(m.r, m.g), max(m.b, 1e-4)); }   // (a material's colour at its full brightness)
+#else
+// (Round 18k) gTb: the own light's brightness temperature along the ray (K), each gas sample's K rho T (gSelfJ) over its step,
+// weighed by what of it reaches the camera (the transmission before it and the step's own transfer weight), and the pebbles' T_mid
+// times their absorbed fraction; apart from the other light, without the depth's haze. selfLight: the pixel's light from it at the
+// end, 0.012 sinh(7.2 A ln(1 + T_b / TK)) = 0.006 (x - 1 / x), x = (1 + T_b / TK)^(7.2 A), in T_b's colour (selfHue, the luminance 1)
+float gSelfJ = 0.0, gTb = 0.0;
+const float SELF_LN[${SELF_LOOK.HUE.length}] = float[${SELF_LOOK.HUE.length}](${SELF_LOOK.HUE.map(([T]) => G(+Math.log(T).toFixed(6))).join(', ')});
+const vec3 SELF_HUE[${SELF_LOOK.HUE.length}] = vec3[${SELF_LOOK.HUE.length}](${SELF_LOOK.HUE.map(([, c]) => 'vec3(' + c.map((v) => G(+Math.pow(v, 2.2).toFixed(6))).join(', ') + ')').join(', ')});
+vec3 selfHue(float T){
+  float l = log(max(T, 1e-3));
+  vec3 c = SELF_HUE[0];
+  for (int i = 0; i < ${SELF_LOOK.HUE.length - 1}; i++) c = mix(c, SELF_HUE[i + 1], clamp((l - SELF_LN[i]) / (SELF_LN[i + 1] - SELF_LN[i]), 0.0, 1.0));
+  return c / max(dot(c, LUMW), 1e-4);
+}
+vec3 selfLight(float Tb){
+  float x = pow(1.0 + max(Tb, 0.0) / ${G(SELF_LOOK.TK)}, ${G(+(7.2 * SELF_LOOK.A).toFixed(6))});
+  return 0.006 * (x - 1.0 / x) * selfHue(Tb);
+}
+#endif
 uniform float uFx;      // (round 8) the finish's strength for the quality of the moment (see FX in the script): 0 to 1
 uniform float uFocus;   // (round 8) the camera's distance from the point looked at (for the depth's haze, see AIR)
 // (Round 8, item 29) Depth: what lies far behind the point looked at is drawn a little fainter, as distance veils a view
@@ -2403,6 +2443,9 @@ float gWindNear = 1.0;
 void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 em, out vec3 ex, out vec3 skin, out float x, out float wl){
   em = vec3(0.0); ex = vec3(0.0); skin = vec3(0.0); wl = 0.0;
   gExG = 0.0;   // (round 18f: the gas's extinction here, for the skin's dimming, SKIN_LOS)
+#ifndef SELF_OLD
+  gSelfJ = 0.0;   // (round 18k: the own light's K rho T here, see gTb)
+#endif
   float xEnd = 0.0;
   if (gCenteredSegment) { xEnd = lnTauStar(p); p -= 0.5 * ds * rd; }
   float R = max(length(p.xy), 1e-3), lnR = log(R);
@@ -2534,13 +2577,22 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       // (round 18j, the owner: "with its own light alone, can the bright surface layer go?") at the interior's temperature at this
       // height (tempAt deep below the lit surface, x 30: the accretion's heat and the reprocessed starlight's, the thermal table),
       // without the superheated grains of the surface that the starlight heats directly (tempAt's second term, which made the warm
-      // bands edge-on and the X of the lit cones where thin); SELF_SURF (?selfsurf=1) keeps them, as round 18i
-#ifdef SELF_SURF
-      float xT = xw;
-#else
+      // bands edge-on and the X of the lit cones where thin): SELF_INT (?selfint=1), and the look of round 18j (SELF_OLD). (Round
+      // 18k, the owner: "the emissivity rho T kappa, the temperature with the surface hotter than the interior by the irradiation")
+      // By default the model's temperature with that surface (xw, the local depth with the crest's shadow, as the cut's Temperature:
+      // round 18i's); the warm bands edge-on are that surface's gas seen along it, optically thick along the line of sight where it
+      // is thin across (DESIGN.md section 52). (SELF_OLD comes with SELF_INT: see selfInt in the script)
+#ifdef SELF_INT
       float xT = 30.0;
+#else
+      float xT = xw;
 #endif
+#ifdef SELF_OLD
       if (glowT) { em = uSelf.x * uSelf.y * rho * tempAt(R, lnR, zh, xT) * selfCol(MAT_DISK) * 0.5 * (gasOn + dustOn); ex = vec3(uSelf.x * rho * dustOn); }
+#else
+      // (round 18k: its K rho T into the ray's brightness temperature, gTb, shown at the end; see selfLight)
+      if (glowT) { gSelfJ = uSelf.x * rho * tempAt(R, lnR, zh, xT) * 0.5 * (gasOn + dustOn); ex = vec3(uSelf.x * rho * dustOn); }
+#endif
     } else
     if (glowT) em = uGGas * K_G * rho * MAT_DISK * 0.5 * (gasOn + dustOn) * (uGasOuter > 0.5 ? max(R / OUTER_R, 1.0) : 1.0) * (1.0 - uLit * (LIT_DARK * (1.0 - exp(-tS)) + LIT_DEEP * (1.0 - exp(-MS_C * tS))));
     // the surface accretion layer(s) (see ACC): a column ACC_SIG of the local surface density, in its streaks, across a
@@ -2795,7 +2847,11 @@ float pebLayer(vec3 p, out float Tm, out vec4 srcG){
   alb = mix(alb, vec3(0.85, 0.92, 1.0) * mix(0.35, 1.0, ice), sc / (sd + 1e-6));   // packed pebbles look paler
   // (round 18i: with the model look's own light, see uSelf, the source of their thermal light: the midplane's temperature, in their
   // material's colour; no starlight, no pile-up's extra glow, whose column sd holds)
+#ifdef SELF_OLD
   if (uSelf.x > 0.0) srcG = vec4(uSelf.y * Tm * selfCol(mix(MAT_ROCK, MAT_ICE, ice)), 1.0);
+#else
+  if (uSelf.x > 0.0) srcG = vec4(Tm, 0.0, 0.0, 1.0);   // (round 18k: their temperature, into the ray's T_b by sheet and pebSlab)
+#endif
   else
   srcG = vec4(G_DUST * alb * Eabs(R, lnR, H) * gapLit(R, lnR, H, dm.a), 1.0 + PILE * (pile - 1.0));   // (round 18c: gapLit)
   return sd;
@@ -2820,6 +2876,10 @@ void sheet(vec3 p, vec3 rd, inout vec3 col, inout vec3 tr){
   float tau = K_D * sd / max(mu, 0.03);
   float tmm = K_MM * sd / max(mu, 0.3);
   // (round 18i: with the model look's own light, their thermal light through their own absorption, Kirchhoff's, as the gas's)
+#ifndef SELF_OLD
+  // (round 18k: T_mid times their absorbed fraction, into the ray's T_b, see gTb)
+  if (uSelf.x > 0.0) { gTb += dot(tr, LUMW) * srcG.r * absorptionFraction(tau); tr *= exp(-tau * uOpac.y); return; }
+#endif
   vec3 src = uSelf.x > 0.0 ? srcG.rgb * absorptionFraction(tau) : srcG.rgb * absorptionFraction(tmm) * srcG.a;
   col += tr * src;
   tr *= exp(-tau * uOpac.y);
@@ -2861,7 +2921,11 @@ void pebSlab(vec3 ro, vec3 rd, float t0, float t1, float tz, inout vec3 col, ino
   if (uLook == 3) { float tm = K_MM * sd * c; col += tr * G_MM * (Tm / 100.0) * absorptionFraction(tm) * MM_COL; tr *= exp(-tm * uOpac.y); return; }   // (round 18a: uOpac.y)
 #endif
   float tauAll = K_D * sd / max(mu, 0.03), tau = K_D * sd * c;
+#ifdef SELF_OLD
   if (uSelf.x > 0.0) col += tr * srcG.rgb * absorptionFraction(tau);   // (round 18i: their own light over the step's column, see sheet)
+#else
+  if (uSelf.x > 0.0) gTb += dot(tr, LUMW) * srcG.r * absorptionFraction(tau);   // (round 18k: over the step's column, into T_b, see sheet)
+#endif
   else
   col += tr * srcG.rgb * absorptionFraction(K_MM * sd / max(mu, 0.3)) * srcG.a * (tauAll > 1e-4 ? absorptionFraction(tau) / absorptionFraction(tauAll) : c * max(mu, 0.03));
   tr *= exp(-tau * uOpac.y);
@@ -4215,6 +4279,9 @@ void main(){
         float ak = airK(t1);   // (round 8: the depth's haze, see AIR)
         col += tr * sk * ak;
         col += tr * em * ds * transferWeight(ex * ds) * ak;
+#ifndef SELF_OLD
+        if (gSelfJ > 0.0) gTb += gSelfJ * ds * dot(tr * transferWeight(ex * ds), LUMW);   // (round 18k: the own light's T_b, see gTb)
+#endif
         tr *= a;
         gTauG += gExG * ds;   // (round 18f: the gas's column so far, for the skin's dimming, SKIN_LOS)
         xPrev = x; t = t1;
@@ -4254,6 +4321,11 @@ void main(){
   if (ph == PH_ENV1) {
     if (!(cyl && be.y > b0.y) || envMarch(ro, rd, b0.y, be.y, jitter, i, col, tr, budget)) ph = PH_FINAL;
   }
+#ifndef SELF_OLD
+  // (round 18k) the own light, its brightness temperature shown (see selfLight; uSelf.y over G takes the outburst's brightening off,
+  // as uSelf.y did for the light of before). The model look's ray is drawn whole (not in kicks), so gTb is all of it here
+  if (uSelf.x > 0.0 && ph == PH_FINAL) col += selfLight(gTb) * (uSelf.y * ${G(1 / SELF_LOOK.G)});
+#endif
 #ifdef FAST_SKIP
   // (round 16a) the coarse pass's verdict, 1 for not empty: its ray not marched to the end within its budget, or its volume's
   // light above a tenth of an 8-bit step at the dark end of the stretch (CONT_EPS, as the continuum's end), or its volume
@@ -4830,8 +4902,30 @@ void main(){
   // to him); in the model's units kappa SIGMA1, Sigma(1 au) in g cm^-2 as the probe has it. G: the display's light per kelvin of the
   // brightness temperature (1000 K the stretch's 1; on the display the dust's sublimation, 1500 K, 0.75, 100 K 0.32, 10 K 0.06, the
   // sky behind 0.02 to 0.04). The automatic exposure rests meanwhile (aeOn): the brightness is the temperature, the same in every
-  // view, and cannot blow out
-  const SELF = { K_MIN: 0.001, K_MAX: 100, DEF: 2, SIGMA1: 1700, G: 1e-3 };
+  // view, and cannot blow out. (Round 18k: G is uSelf.y's, the light of rounds 18i and 18j, ?selflook=old; the look of round 18k
+  // shows the brightness temperature through its own curve and colours, SELF_LOOK)
+  const SELF = { K_MIN: 0.001, K_MAX: 100, DEF: 2, SIGMA1: 1700, G: SELF_LOOK.G };
+  // (round 18k) the own light's colour and display as selfHue and selfLight in the GLSL and the volume's last stage (the stretch, the
+  // roll-off past white, the gamma) with the finish's tone at its full share: a thick gas at T_b on the display, for the page's key
+  // (box.diskSelfKey) from SELF_KEY.MIN to MAX in K (a log scale) with its ticks
+  const selfHueJS = (T) => {
+    const H = SELF_LOOK.HUE, l = Math.log(Math.max(T, 1e-3)), lin = (c) => c.map((v) => Math.pow(v, 2.2));
+    let c = lin(H[0][1]);
+    for (let i = 0; i + 1 < H.length; i++) {
+      const a = Math.log(H[i][0]), f = Math.min(1, Math.max(0, (l - a) / (Math.log(H[i + 1][0]) - a))), n = lin(H[i + 1][1]);
+      c = c.map((v, k) => v + (n[k] - v) * f);
+    }
+    const y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    return c.map((v) => v / Math.max(y, 1e-4));
+  };
+  const selfShowJS = (T) => {
+    const s = SELF_LOOK.A * Math.log1p(Math.max(T, 0) / SELF_LOOK.TK);
+    let c = selfHueJS(T).map((v) => v * Math.pow(s, 2.2));
+    const m = Math.max(...c);
+    if (m > 1) c = c.map((v) => v / m + (1 - v / m) * (1 - 1 / m));
+    return c.map((v) => { const g = Math.pow(v, 1 / 2.2), k = Math.min(1, Math.max(0, g)); return g - TONE * k * (1 - k) * (1 - k); });
+  };
+  const SELF_KEY = { MIN: 10, MAX: 1500, TICKS: [10, 30, 100, 300, 1000] };
   // the CO line's displays (see uCoMode): a channel map at a velocity, the mean velocity (moment 1), the integrated
   // intensity (moment 0)
   const CO_MODES = { chan: 0, m1: 1, m0: 2 };
@@ -5243,12 +5337,16 @@ void main(){
       if (!m) return d;
       return [0, 1].map((k) => { const v = Number(m[k + 1]); return Number.isFinite(v) ? Math.round(10 * Math.min(OBS_CT_DEF.MAX[k], Math.max(OBS_CT_DEF.MIN[k], v))) / 10 : d[k]; });
     })();
+    // (round 18k) the own light's look (see SELF_LOOK): ?selflook=old (data-selflook="old"), the look of round 18j (1.9-dev.32: linear in
+    // T_b in the gas's colour, at the interior's temperature); ?selfint=1 (data-selfint="1"), the interior's temperature in the look of
+    // round 18k; by default the temperature with the lit surface, the owner's. SELF_OLD comes with SELF_INT (the shaders test one at a time)
+    const selfOld = box.dataset.selflook === 'old', selfInt = box.dataset.selfint === '1' || selfOld;
     const hdrDefs = [mpConst && 'MP_CONST', wextOld && 'WEXT_OLD', !MODEL.TAIL && 'SIG_CUT', MODEL.TAIL && MODEL.RC !== MODEL.R_OUT && 'SIG_RC ' + G(MODEL.RC),
       crest && 'CREST vec4(' + [crest.R, crest.a, crest.h, crest.th].map(G).join(', ') + ')',
       litFlat && 'LIT_FLAT', starTab && 'ST_UG ' + G(starTab.ug), 'OBS_CT vec2(' + obsCyl.map(G).join(', ') + ')',
       (box.dataset.skinlos === '0' || !MODEL.TAIL) && 'SKIN_THRU',   // (round 18f: ?skinlos=0 and the cut of before, see SKIN_LOS in the GLSL)
       (box.dataset.opq === '0' || !MODEL.TAIL) && 'OPQ_OLD',
-      box.dataset.selfsurf === '1' && 'SELF_SURF'].filter(Boolean);   // (round 18j: ?selfsurf=1, the own light's temperature with the lit surface's grains, see uSelf)   // (round 18g: ?opq=0 and the cut of before, the opacities of before, see K_G in the GLSL)
+      selfInt && 'SELF_INT', selfOld && 'SELF_OLD'].filter(Boolean);   // (round 18k: ?selfint=1 and ?selflook=old, see SELF_LOOK; round 18j's ?selfsurf=1 is the default now and passed over)   // (round 18g: ?opq=0 and the cut of before, the opacities of before, see K_G in the GLSL)
     const mpHdr = (src) => hdrDefs.reduce((s, d) => (s.includes('#define ' + d + '\n') ? s : s.replace('#version 300 es\n', '#version 300 es\n#define ' + d + '\n')), src);
     let MPV = mpValues();
     const mpLoc = new Map();
@@ -7302,6 +7400,14 @@ void main(){
       if (c) return { title: c.title[j], description: c.description[j], units: c.units, min: c.min, max: c.max,
         rangeMode: lookNow === 'co' ? (coHold ? 'fixed' : 'auto') : 'fixed',
         items: c.swatches ? layerSwatches(c).map(([color, ja_, en]) => ({ label: j ? en : ja_, color })) : c.ticks.map(([u, label]) => ({ label, color: rgb(c.col(u)) })) };
+      // (round 18k) the own light: its colours of the brightness temperature at the ticks, then the materials that keep theirs
+      if (lookNow === 'model' && selfOn() && !selfOld) {
+        const k = box.diskSelfKey();
+        return { title: j ? 'Brightness temperature (K)' : '輝度温度(K)',
+          description: j ? 'The gas, its dust and the pebbles glow in their own thermal light: brightness and colour show the brightness temperature, the brightness on a logarithmic scale. The other colours are materials.' : 'ガスと塵、小石は自らの熱で光り、明るさと色は輝度温度(明るさは対数の尺度)を示します。ほかの色は物質の種類です。',
+          units: 'K', min: k.min, max: k.max, rangeMode: 'fixed',
+          items: k.ticks.map(([u, t]) => ({ label: t + ' K', color: k.colourAt(u) })).concat(MAT.filter(([key]) => !['disk', 'rock', 'ice', 'acc'].includes(key)).map(([, hex, , ja_, en]) => ({ label: j ? en : ja_, color: hex }))) };
+      }
       const desc = { model: ['色は物質の種類(円盤、小石、円盤風、エンベロープなど)を、明るさはその量を示します。', 'Colour shows the material (the disk, the pebbles, the wind, the envelope and so on); brightness, how much of it is there.'],
         optical: ['星の光を散乱する表層と円盤風を示します。', 'The surface and wind scatter starlight.'],
         mir: ['暖かい表層の熱放射を示します。', 'The warm surface emits thermal radiation.'],
@@ -8676,7 +8782,9 @@ void main(){
         mir: ['中間赤外線で見た姿で、暖かい表層の熱放射が内側ほど明るく見えます。', ' Seen in the mid-infrared: the warm surface glows, brightest close in.'],
         mm: ['ミリ波で見た姿で、赤道面に沈んだ小石の熱放射が、惑星のギャップのすぐ外の環とともに見えます。', ' Seen at millimetre wavelengths: the pebbles at the midplane glow, with a ring just outside the planet\u2019s gap.'],
         // (round 18i: the model look in its own light, see SELF)
-        ...(selfOn() ? { model: ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、明るさは輝度温度です(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g)。', ' Shown in its own thermal light, with no starlight on it: the brightness is the brightness temperature (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g).'] } : {}) }[lookNow];
+        // (round 18k: its brightness and colour the brightness temperature, see SELF_LOOK; ?selflook=old as before)
+        ...(selfOn() ? { model: selfOld ? ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、明るさは輝度温度です(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g)。', ' Shown in its own thermal light, with no starlight on it: the brightness is the brightness temperature (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g).']
+          : ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、明るさと色は輝度温度(明るさは対数の尺度)です(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g)。', ' Shown in its own thermal light, with no starlight on it: brightness and colour are the brightness temperature, the brightness on a logarithmic scale (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g).'] } : {}) }[lookNow];
       const desc = ja()
         ? '原始惑星系円盤(半径およそ 30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、赤道面に沈んだ塵はスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + QN[0] + 'を色で示しています。' : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? 'ガスの輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
         : 'Volume rendering of a model of a protoplanetary disk (some 30 au in radius): warm surface layers, and a cold midplane with settled dust, icy beyond the water snow line.' + (plShown().length ? (plShown().length > 1 ? ' Planets at ' + plShown().join(', ') + ' au open gaps.' : ' A planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + QN[1] + ' in colour.' : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in an emission line of the gas: ' + CON[1] + '.' : '');
@@ -9852,6 +9960,13 @@ void main(){
       tx: Math.round(panV[0] * 1e4) / 1e4, ty: Math.round(panV[1] * 1e4) / 1e4, tz: Math.round(panV[2] * 1e4) / 1e4,
       cpdMdot, op: opt.opac.slice(), roll: deg(rollUser), stars: opt.stars, glow: opt.glow, selfk: opt.selfk });   // (round 18i: glow, the model look's light, and selfk, the opacity of its own light, see SELF; round 18a: op, the see-through; round 13e: the planets' disks' accretion rate, M_J/yr, 0 for a tenth of the disk's; see cpdPhys)
     box.diskLegend = () => legendSpec();
+    // (round 18k) the own light's key for the page (see SELF_LOOK): old, true with ?selflook=old (the gas's colour, no bar); the bar
+    // from min to max K on a log scale, stops [u, css colour] (a thick gas at that T_b on the display), ticks [u, text], colourAt(u)
+    box.diskSelfKey = () => {
+      const T = (u) => SELF_KEY.MIN * Math.pow(SELF_KEY.MAX / SELF_KEY.MIN, u), css = (c) => 'rgb(' + c.map((v) => Math.round(255 * Math.min(1, Math.max(0, v)))).join(',') + ')';
+      return { old: selfOld, min: SELF_KEY.MIN, max: SELF_KEY.MAX, stops: Array.from({ length: 25 }, (_, i) => [i / 24, css(selfShowJS(T(i / 24)))]),
+        ticks: SELF_KEY.TICKS.map((t) => [Math.log(t / SELF_KEY.MIN) / Math.log(SELF_KEY.MAX / SELF_KEY.MIN), String(t)]), colourAt: (u) => css(selfShowJS(T(u))) };
+    };
     // (round 8) the materials' colours of the model's look (see MAT), for the page's key: key, colour (sRGB), names; with
     // { key: '#rrggbb' } or { key: ['#rrggbb', k] } a colour (and its brightness factor) is changed for this page (for trying
     // colours; nothing keeps it)

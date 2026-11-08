@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=389a9cd3e3';
-import { WORDS } from './words.js?v=794cab6a76';
+import { WORDS } from './words.js?v=dcc31238b4';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=a06fcbfa44';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=f0c7498cb9';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=fd4672b32d';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.32', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.33', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -203,14 +203,20 @@ const annBits = (a) => (Number(a) === 1 ? ANN_ALL : (Number(a) || 0) & ANN_ALL);
 // Only the materials shown, and those that show at this distance: the envelope from 40 au, the star's magnetosphere and
 // curtains within 2 au of the star; the pebbles' rock and ice on one row. (Round 13a: not the accretion layer, no longer drawn,
 // unless ?acclayer=1 draws it; in the colours chosen, see the model look's colours)
+// (Round 18k) With the model look's own light the gas and the pebbles take the colours of their brightness temperature: a bar of
+// them in place of their rows, from the engine (box.diskSelfKey: a thick gas at 10 to 1500 K on the display, its ticks), and the
+// key's title says so (the class tb); the look of round 18j (?selflook=old) keeps the materials' rows
 let matShown = '';
 function renderMatKey(s) {
   const on = s.look === 'model' && !s.slice && !!(annBits(s.ann) & ANN_KEY) && typeof box.diskPalette === 'function';   // (round 15a: its own annotation)
   matKey.classList.toggle('on', on);
   if (!on) return;
+  const sk = s.glow === 'self' && typeof box.diskSelfKey === 'function' ? box.diskSelfKey() : null, tb = !!sk && !sk.old && !!(s.mode & 7);
+  matKey.classList.toggle('tb', tb);
   const P = Object.fromEntries(box.diskPalette().map((m) => [m.key, m])), rows = [];
-  if (s.mode & 3) { rows.push(['disk']); if (SWITCH.accLayer) rows.push(['acc']); }
-  if (s.mode & 4) rows.push(['rock', 'ice']);
+  if (tb) rows.push(['tb', (s.mode & 3) && (s.mode & 4) ? 'both' : s.mode & 3 ? 'gas' : 'peb']);
+  if (s.mode & 3) { if (!tb) rows.push(['disk']); if (SWITCH.accLayer) rows.push(['acc']); }
+  if ((s.mode & 4) && !tb) rows.push(['rock', 'ice']);
   if (s.mode & 8) rows.push(['wind']);
   if (s.mode & 64) rows.push(['jet']);
   if ((s.mode & 32) && s.d > 40) rows.push(['env']);
@@ -221,6 +227,9 @@ function renderMatKey(s) {
   if (key === matShown) return;
   matShown = key;
   matList.replaceChildren(...rows.map((ks) => ks[0] === 'arrows' ? el('li', {}, el('i', { class: 'arr' }, '\u2192'), el('span', {}, T().arrowsKey))
+    : ks[0] === 'tb' ? el('li', { class: 'tb' }, el('span', {}, T().selfKey[ks[1]]),
+      el('i', { class: 'tb-bar', style: 'background:linear-gradient(90deg,' + sk.stops.map(([u, c]) => c + ' ' + (100 * u).toFixed(1) + '%').join(',') + ')' }),
+      el('span', { class: 'tb-ticks' }, ...sk.ticks.map(([u, t], i) => el('span', { style: 'left:' + (100 * u).toFixed(1) + '%' }, i === sk.ticks.length - 1 ? t + ' K' : t))))
     : el('li', {}, ...ks.map((k) => el('i', { style: 'background:' + P[k].hex })), el('span', {}, ks.length > 1 ? T().pebblesKey : P[ks[0]][L()]))));
 }
 
@@ -2400,7 +2409,7 @@ async function start() {
   // (?obscyl=R,Z, au), and the model look's lit surface seen through the disk as before, its shadow's glow as before (?skinlos=0);
   // (round 18g) the opacities of before, the visible and mid-infrared looks' and the model look's scattered light's, as in 1.9-dev.28
   // (?opq=0). Each passed as it is: the engine reads each within its range, and a value it cannot read as its default
-  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc', 'sigtail', 'rc', 'litflat', 'obscyl', 'skinlos', 'opq', 'selfsurf']) if (q.has(k)) box.dataset[k] = q.get(k);   // (round 18j: selfsurf, the own light with the lit surface's warm grains as in round 18i)
+  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc', 'sigtail', 'rc', 'litflat', 'obscyl', 'skinlos', 'opq', 'selfsurf', 'selfint', 'selflook']) if (q.has(k)) box.dataset[k] = q.get(k);   // (round 18j: selfsurf, the own light with the lit surface's warm grains as in round 18i; round 18k: the default now, passed over by the engine; selfint=1, the interior's temperature; selflook=old, the look of round 18j)
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   // (the engine's own start: the defaults Reset returns to; round 15a: with the clock's state, stopped by data-paused)
   if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), [...DEF_KEYS, 'paused']);

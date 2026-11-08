@@ -52,9 +52,11 @@ export const WORDS = {
     velocity: '視線速度',
     // (round 18i) the model look's light under the looks: the starlight, or the gas's own thermal light with its opacity (app.js)
     glow: { name: '光り方', label: 'モデルの見え方の光り方', star: '星の光', self: '自身の発光',
-      note: '表層を星の光で照らさず、ガスと塵が、星の光で直接熱せられた表層を除いた内部の温度で自ら光り、同じ不透明度で吸収します。明るさは輝度温度で、厚い所では見る側から光学的深さ 1 の所の温度、薄い所では柱密度と温度の積を表します。',
+      note: '星の光が照らす表層の光は描かず、ガスと塵が、星の光で熱せられて内部より熱い表層をもつ温度のまま、密度 × 温度 × 不透明度で自ら光り、同じ不透明度で吸収する姿を体積として描きます。明るさと色は輝度温度で(明るさは対数の尺度、色は絵の隅の帯)、厚い所では見る側から光学的深さ 1 の所の温度、薄い所では柱密度と温度の積を表します。',
       k: '不透明度 κ', kOf: '自身の発光の不透明度(ガス 1 g あたり)', kReset: '不透明度を既定に戻す', kDefault: '既定',
       kSpoken: (n) => `ガス 1 グラムあたり ${n.k} 平方センチメートル` },
+    // (round 18k) the key's bar of the own light's brightness temperature: what takes its colours (app.js renderMatKey)
+    selfKey: { gas: '円盤(ガスと塵)', peb: '小石', both: '円盤と小石' },
     cutQ: { T: '温度', rho: '密度', layers: '領域' },
     cutNotes: {
       T: '切り口の色は温度です(対数の尺度、左上の目盛り)。',
@@ -349,9 +351,10 @@ export const WORDS = {
     },
     velocity: 'Velocity',
     glow: { name: 'Light', label: 'Light of the model look', star: 'Starlight', self: 'Own emission',
-      note: 'No surface lit by the star: the gas and its dust glow at their interior temperature, without the surface heated directly by the starlight, and absorb at the same opacity. Brightness is the brightness temperature: where thick, the temperature at optical depth 1 seen from the camera; where thin, the column density times the temperature.',
+      note: 'No light of a surface lit by the star: the gas and its dust glow by density × temperature × opacity, at a temperature with the surface heated by the starlight hotter than the interior, and absorb at the same opacity, drawn as a volume. Brightness and colour are the brightness temperature (the brightness on a logarithmic scale, the colours in the bar in a corner): where thick, the temperature at optical depth 1 seen from the camera; where thin, the column density times the temperature.',
       k: 'Opacity κ', kOf: 'Opacity of the own emission, per gram of gas', kReset: 'Opacity: back to the default', kDefault: 'Default',
       kSpoken: (n) => `${n.k} square centimetres per gram` },
+    selfKey: { gas: 'disk (gas and dust)', peb: 'pebbles', both: 'disk and pebbles' },
     cutQ: { T: 'Temperature', rho: 'Density', layers: 'Regions' },
     cutNotes: {
       T: 'The cut face shows temperature (logarithmic; the scale at the top left).',
