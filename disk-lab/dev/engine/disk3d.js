@@ -1784,7 +1784,9 @@ uniform float uLit;     // (round 8) the model's look lit by the star (see G_LIT
 // over the sky; over the outburst's exposure, so that the outburst brightens it through its temperature alone). No starlight then:
 // the lit surface, its diffuse light and the shadow's dimming of the glow go (uLit 0), and the pebbles glow at the midplane's
 // temperature through their own absorption. The wind, the envelope, the jet, the planets and their disks keep their light; the
-// march, its steps and its end at a transmission of 0.01 are as before (DESIGN.md section 50)
+// march, its steps and its end at a transmission of 0.01 are as before (DESIGN.md section 50). (Round 18j: the temperature the gas
+// glows at is the interior's, without the surface's grains heated directly by the starlight, the lit surface's own warmth: no bright
+// surface layer; ?selfsurf=1, SELF_SURF, keeps them as round 18i did; DESIGN.md section 51)
 uniform vec2 uSelf;
 vec3 selfCol(vec3 m){ return m / max(max(m.r, m.g), max(m.b, 1e-4)); }   // (a material's colour at its full brightness)
 uniform float uFx;      // (round 8) the finish's strength for the quality of the moment (see FX in the script): 0 to 1
@@ -2529,7 +2531,16 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     // (round 18i: or its own thermal light, see uSelf: its temperature's brightness in its material's colour, and its absorption
     // at the same grey opacity; the gas body's glow of the starlight's look is not made)
     if (uSelf.x > 0.0) {
-      if (glowT) { em = uSelf.x * uSelf.y * rho * tempAt(R, lnR, zh, xw) * selfCol(MAT_DISK) * 0.5 * (gasOn + dustOn); ex = vec3(uSelf.x * rho * dustOn); }
+      // (round 18j, the owner: "with its own light alone, can the bright surface layer go?") at the interior's temperature at this
+      // height (tempAt deep below the lit surface, x 30: the accretion's heat and the reprocessed starlight's, the thermal table),
+      // without the superheated grains of the surface that the starlight heats directly (tempAt's second term, which made the warm
+      // bands edge-on and the X of the lit cones where thin); SELF_SURF (?selfsurf=1) keeps them, as round 18i
+#ifdef SELF_SURF
+      float xT = xw;
+#else
+      float xT = 30.0;
+#endif
+      if (glowT) { em = uSelf.x * uSelf.y * rho * tempAt(R, lnR, zh, xT) * selfCol(MAT_DISK) * 0.5 * (gasOn + dustOn); ex = vec3(uSelf.x * rho * dustOn); }
     } else
     if (glowT) em = uGGas * K_G * rho * MAT_DISK * 0.5 * (gasOn + dustOn) * (uGasOuter > 0.5 ? max(R / OUTER_R, 1.0) : 1.0) * (1.0 - uLit * (LIT_DARK * (1.0 - exp(-tS)) + LIT_DEEP * (1.0 - exp(-MS_C * tS))));
     // the surface accretion layer(s) (see ACC): a column ACC_SIG of the local surface density, in its streaks, across a
@@ -5236,7 +5247,8 @@ void main(){
       crest && 'CREST vec4(' + [crest.R, crest.a, crest.h, crest.th].map(G).join(', ') + ')',
       litFlat && 'LIT_FLAT', starTab && 'ST_UG ' + G(starTab.ug), 'OBS_CT vec2(' + obsCyl.map(G).join(', ') + ')',
       (box.dataset.skinlos === '0' || !MODEL.TAIL) && 'SKIN_THRU',   // (round 18f: ?skinlos=0 and the cut of before, see SKIN_LOS in the GLSL)
-      (box.dataset.opq === '0' || !MODEL.TAIL) && 'OPQ_OLD'].filter(Boolean);   // (round 18g: ?opq=0 and the cut of before, the opacities of before, see K_G in the GLSL)
+      (box.dataset.opq === '0' || !MODEL.TAIL) && 'OPQ_OLD',
+      box.dataset.selfsurf === '1' && 'SELF_SURF'].filter(Boolean);   // (round 18j: ?selfsurf=1, the own light's temperature with the lit surface's grains, see uSelf)   // (round 18g: ?opq=0 and the cut of before, the opacities of before, see K_G in the GLSL)
     const mpHdr = (src) => hdrDefs.reduce((s, d) => (s.includes('#define ' + d + '\n') ? s : s.replace('#version 300 es\n', '#version 300 es\n#define ' + d + '\n')), src);
     let MPV = mpValues();
     const mpLoc = new Map();
