@@ -232,6 +232,19 @@
   // eddies), and motions of 0.01-0.1 of the sound speed measured in outer disks (Flaherty et al. 2015-2020; DM Tau 0.25-0.33):
   // 1 : 0.1-0.15 : 0.1-0.5, here 1 : 0.12 : 0.3 (0.15 before round 8, and none in the dead zone). The pattern is the one
   // the inner disk had, carried round at the Keplerian rate (on the model's clock) and sheared, so the faster inner disk shows.
+  // (Round 18m, the owner: "is the turbulence uniform in height now? It had better have a distribution in height too: seen edge-on
+  // it looks flat") Beyond the thermally ionized inner disk (whose eddies' volume, turb3, stays as it was) the gas's fluctuations
+  // are no longer one pattern through the whole column (the disk map's, uniform in height) but vary in height, in eddies about a
+  // scale height high (TURBZ.CZ cells per H), and grow with height: the region's own strength (DZ, OUTER) at the midplane and in a
+  // dead zone below its top z_k, rising above it toward TURBZ.TOP, as 1 - e^(-(zeta^2 - z_k^2) / 4) (the fluctuation of a field
+  // that does not thin with height grows as v_A / c_s ~ rho^-1/2: a magnetically dominated, more strongly stirred upper disk in
+  // stratified simulations of the magnetorotational instability, Miller & Stone 2000, Fromang & Nelson 2006; a quiet dead zone under
+  // active layers, Fleming & Stone 2003, Okuzumi & Hirose 2011). TOP 0.6, twice the outer disk's midplane and below the inner disk's
+  // 1, is a choice for the picture. The planes, layers of the disk map with a reach of their own in R (see turbZPlanes, turbZ;
+  // DESIGN.md section 54); data-turb3d="0" (the page's ?turb3d=0, TURB3D_OFF) the turbulence of before. R0, R1: the planes' reach
+  // (au; the map's is 0.05 to 60 au, and the lit tail seen edge-on reaches past it), over whose last tenth they fade (beyond it the
+  // last column, clamped, would draw them out along R; the gas there is under 1e-5 of that at 1 au)
+  const TURBZ = { CZ: 0.6, TOP: 0.6, GAM: 0.25, R0: 0.05, R1: 120 };
   // The surface accretion: the wind's torque acts where the field bends, so the gas there loses angular momentum and
   // flows inward in a thin current layer just above the dead zone's top, laminar, while turning with the disk (the
   // steady induction equation in height, tools/bp-wind/kink.py, puts the current and the inflow there: about 2 c_s at
@@ -1050,6 +1063,10 @@ float envLnRho(float r, float mu){
 precision highp float;
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec4 fragAcc;   // the accretion layers' streaks (see accTurb)
+#ifndef TURB3D_OFF
+layout(location = 2) out vec4 fragZu;    // (round 18m) the turbulence's planes above the midplane and below it (see turbZPlanes)
+layout(location = 3) out vec4 fragZd;
+#endif
 uniform vec2 uMapRes;   // texels along ln R and φ
 uniform vec2 uAccK;     // the inflow in the accretion layers (upper, lower), in units of the sound speed
 uniform vec2 uAccC;     // the contrast of their streaks (upper, lower; see accTurb)
@@ -1148,6 +1165,63 @@ float accTurb(float lnR, float phi, float Om, float fp, float drift, float seed,
   float a = ACC_TURB * 0.215;
   return exp(ACC_TURB * n * inversesqrt(w2) - 0.5 * a * a);
 }
+#ifndef TURB3D_OFF
+// (Round 18m) The turbulence's vertical structure beyond the thermally ionized inner disk (see TURBZ in the script): the 3D value
+// noise of the structure (cells CELLS around and per unit ln R, as turb, and TZ_CZ per scale height in z/H) at its whole cells in
+// height, z/H = c / TZ_CZ for c = 0, +-1, +-2, +-3, the planes: each carried and sheared as turb carries its pattern (its bands of
+// lifetimes and staggered generations, its seed apart), faded where its cells are finer than a render pixel at the point itself
+// (fpR, ln R; fz, its height: a volume read along each ray, not a surface seen at a slant, as the eddies' volume fades its own). The
+// march reads the two planes around |z/H| and goes between them as the noise does (smoothstep: the 3D noise itself), see turbZ.
+// Each plane holds its lognormal density factor (mean 1) F = e^(s n - 0.0231 s^2 e / w2) for the strength s = 1.6 tzAmp at its height
+// (0.0231: half the variance of the noise in a plane; e / w2 what its fades keep of it). The disk map's r keeps the inner disk's share
+// of the column-wide pattern alone (see main; its g, the skin's corrugation, keeps the whole): the volume's density rho dm.r turbZ has
+// the inner disk's column-wide pattern and, beyond it, the planes'. Above |z/H| = 3 /
+// TZ_CZ (5 H) the last plane holds; inside the thermally ionized disk the factor is 1 (its eddies are the volume's, turb3). The planes
+// span ln R from LNZ_MIN over LNZ_SPAN (to TURBZ.R1, beyond the map's 60 au: the tail), on the map's texels
+const float TZ_CZ = ${G(TURBZ.CZ)}, TZ_TOP = ${G(TURBZ.TOP)}, TZ_GAM = ${G(TURBZ.GAM)}, TZ_R1 = ${G(TURBZ.R1)};
+const float LNZ_MIN = ${G(+Math.log(TURBZ.R0).toFixed(6))}, LNZ_SPAN = ${G(+Math.log(TURBZ.R1 / TURBZ.R0).toFixed(6))};
+float vnoiseZ(vec2 q, float n, float k){   // (vnoise3 at the whole z = k: the four lattice points of that plane)
+  vec2 i = floor(q), f = fract(q); f = f * f * (3.0 - 2.0 * f);
+  float i0 = mod(i.x, n), i1 = mod(i.x + 1.0, n);
+  return mix(mix(hash13(vec3(i0, i.y, k)), hash13(vec3(i1, i.y, k)), f.x), mix(hash13(vec3(i0, i.y + 1.0, k)), hash13(vec3(i1, i.y + 1.0, k)), f.x), f.y) - 0.5;
+}
+// the strength relative to the inner disk's (1.7 there) at the heights zc (in H): the region's own at the midplane and in a dead
+// zone below its top z_k (the dead zone's DZ_TURB, the outer disk's OUTER_TURB), rising above it toward TZ_TOP; none inside the
+// thermally ionized disk, fading over the map's last tenth in R
+vec4 tzAmp(float R, vec4 zc){
+  float m = mriAmp(R), o = outerAmp(R), zk = zKinkH(R), base = OUTER_TURB * o + DZ_TURB * (1.0 - o);
+  vec4 g = 1.0 - exp(-max(zc * zc - zk * zk, 0.0) * TZ_GAM);
+  return 1.7 * (1.0 - m) * (1.0 - smoothstep(0.9 * TZ_R1, TZ_R1, R)) * (base + (TZ_TOP - base) * g);
+}
+void turbZPlanes(float lnR, float phi, float R, float Om, float fpR, float fz, out vec4 up, out vec4 dn){
+  vec4 s = 1.6 * tzAmp(R, vec4(0.0, 1.0, 2.0, 3.0) / TZ_CZ);
+  up = dn = vec4(1.0);
+  if (s.x + s.w <= 0.0 || fz <= 0.0) return;
+  float b = log(LIFE / Om) * 0.7213475, bf = smoothstep(0.3, 0.7, fract(b)), tilt = CELLS.x / TAU / TILT_PITCH, w2 = 0.0, e = 0.0;
+  vec4 nu = vec4(0.0), nd = vec4(0.0);   // (z cells 0..3 and 0..-3, the midplane's in both)
+  for (int j = 0; j < 2; j++) {
+    float wb = j == 0 ? 1.0 - bf : bf;
+    if (wb <= 0.0) continue;
+    float band = floor(b) + float(j), T = uFpPeriod[int(band) + 5];
+    for (int k = 0; k < 2; k++) {
+      vec2 clock = fpPhase(band, k, 0.0); float c = clock.x;
+      float fc = clock.y, age = (AGE0 + fc) * T, w = wb * (1.0 - abs(2.0 * fc - 1.0));
+      float kr = length(vec2(CELLS.x / TAU * 1.5 * Om * age + tilt, CELLS.y));
+      vec2 q = vec2(CELLS.x / TAU * (phi - Om * age) + tilt * lnR, CELLS.y * lnR + uSeed + 101.0 + 17.0 * floor(c) + 41.0 * float(k) + 29.0 * band);
+      float a = (1.0 - smoothstep(0.3, 0.7, kr * fpR)) * fz;
+      if (a > 0.0) {
+        float n0 = vnoiseZ(q, CELLS.x, 0.0);
+        nu += w * a * vec4(n0, vnoiseZ(q, CELLS.x, 1.0), vnoiseZ(q, CELLS.x, 2.0), vnoiseZ(q, CELLS.x, 3.0));
+        nd += w * a * vec4(n0, vnoiseZ(q, CELLS.x, -1.0), vnoiseZ(q, CELLS.x, -2.0), vnoiseZ(q, CELLS.x, -3.0));
+      }
+      e += w * w * a * a; w2 += w * w;
+    }
+  }
+  vec4 v = 0.0231 * s * s * e / w2;
+  up = exp(s * nu * inversesqrt(w2) - v);
+  dn = exp(s * nd * inversesqrt(w2) - v);
+}
+#endif
 void main(){
   float lnR = LNR_MIN + gl_FragCoord.x / uMapRes.x * LNR_SPAN;
   float phi = (gl_FragCoord.y / uMapRes.y - 0.5) * TAU;
@@ -1186,6 +1260,16 @@ void main(){
   // the accretion layers' streaks, upper and lower (independent patterns), where there are layers
   float hR = H0 * exp(0.25 * lnR);
   fragAcc = accAmp(R) > 0.0 ? vec4(accTurb(lnR, phi, Om, fp, uAccK.x * hR, uSeed + 61.0, uAccC.x), accTurb(lnR, phi, Om, fp, uAccK.y * hR, uSeed + 83.0, uAccC.y), 0.0, 0.0) : vec4(1.0);
+#ifndef TURB3D_OFF
+  // (round 18m) the gas's factor of the column-wide pattern, the thermally ionized disk's share alone (1.7 mriAmp); beyond it the
+  // turbulence's planes (see turbZPlanes), at their own ln R on this texel's column: the footprint of a pixel at their midplane's point
+  // itself (au), in ln R (its floor 1.5 texels) and against their height (TZ_CZ per H)
+  { float Am = 1.7 * mriAmp(R); fragColor.r = exp(1.6 * n.x * Am / A - 0.08 * Am * Am) * (1.0 + wk); }
+  { float lz = LNZ_MIN + gl_FragCoord.x / uMapRes.x * LNZ_SPAN, Rz = exp(lz), fp3 = length(vec3(Rz * cos(phi), Rz * sin(phi), 0.0) - uCam) * uPixA;
+    vec4 zu, zd;   // (the outputs through locals, not passed as the function's out arguments themselves)
+    turbZPlanes(lz, phi, Rz, OMEGA0 * exp(-1.5 * lz), max(fp3 / Rz, 1.5 * LNZ_SPAN / uMapRes.x), 1.0 - smoothstep(0.3, 0.7, TZ_CZ * fp3 / (H0 * exp(1.25 * lz))), zu, zd);
+    fragZu = zu; fragZd = zd; }
+#endif
 }`;
   const WINDMAP_FS = `#version 300 es
 precision highp float;
@@ -1817,7 +1901,10 @@ vec3 selfCol(vec3 m){ return m / max(max(m.r, m.g), max(m.b, 1e-4)); }   // (a m
 // (Round 18k) gTb: the own light's brightness temperature along the ray (K), each gas sample's K rho T (gSelfJ) over its step,
 // weighed by what of it reaches the camera (the transmission before it and the step's own transfer weight), and the pebbles' T_mid
 // times their absorbed fraction; apart from the other light, without the depth's haze. selfLight: the pixel's light from it at the
-// end, 0.012 sinh(7.2 A ln(1 + T_b / TK)) = 0.006 (x - 1 / x), x = (1 + T_b / TK)^(7.2 A), in T_b's colour (selfHue, the luminance 1)
+// end, 0.012 sinh(7.2 A ln(1 + T_b / TK)) = 0.006 (x - 1 / x), x = (1 + T_b / TK)^(7.2 A), in T_b's colour (selfHue, the luminance 1).
+// (Round 18m, the owner: "colour it in one grey alone, keeping the contrast of the present map") Its colour apart, selfTint (after
+// the materials' colours): by default the gas's material colour scaled to the luminance 1, white by default, so that its shades are
+// the brightness temperature through the same curve; with ?selfhue=1 (SELF_TCOL) round 18k's colours of T_b, selfHue
 float gSelfJ = 0.0, gTb = 0.0;
 const float SELF_LN[${SELF_LOOK.HUE.length}] = float[${SELF_LOOK.HUE.length}](${SELF_LOOK.HUE.map(([T]) => G(+Math.log(T).toFixed(6))).join(', ')});
 const vec3 SELF_HUE[${SELF_LOOK.HUE.length}] = vec3[${SELF_LOOK.HUE.length}](${SELF_LOOK.HUE.map(([, c]) => 'vec3(' + c.map((v) => G(+Math.pow(v, 2.2).toFixed(6))).join(', ') + ')').join(', ')});
@@ -1827,9 +1914,9 @@ vec3 selfHue(float T){
   for (int i = 0; i < ${SELF_LOOK.HUE.length - 1}; i++) c = mix(c, SELF_HUE[i + 1], clamp((l - SELF_LN[i]) / (SELF_LN[i + 1] - SELF_LN[i]), 0.0, 1.0));
   return c / max(dot(c, LUMW), 1e-4);
 }
-vec3 selfLight(float Tb){
+float selfLight(float Tb){
   float x = pow(1.0 + max(Tb, 0.0) / ${G(SELF_LOOK.TK)}, ${G(+(7.2 * SELF_LOOK.A).toFixed(6))});
-  return 0.006 * (x - 1.0 / x) * selfHue(Tb);
+  return 0.006 * (x - 1.0 / x);
 }
 // (Round 18l, the owner, of round 18k's own light: "rather than colouring by the optical depth from the centre, give the surface its
 // temperature, as a mock, by the column depth along the disk's vertical") selfX: the depth x that sets the temperature the gas glows
@@ -1843,13 +1930,19 @@ vec3 selfLight(float Tb){
 // where erfc is under 1e-7 (u over 3.8, where the layer's edge lies near the star for Sigma_s 0.001 g/cm^2), and e^(-u^2) is 0
 // beyond u 9; its relative error 3e-5 at u 2, 7e-4 at 3, 3e-3 at 4. Where there is no gas (the dust-free hole inside 0.8 R_IN, sig
 // 0) the floor keeps the log finite and x is -30, tempAt's full starlight; the gas's emission there is 0 (DESIGN.md section 53)
+// (Round 18m, the owner of round 18l's mock: "right, the tail is in the shadow; the tail can be at the interior's temperature") 'col'
+// takes the deeper of the column's depth and xs, the starlight's along the ray from the star (sampleDisk's x: the table starT with the
+// gaps' ln; with the cut of before xw): the surface is hot where the column from above is thin and the starlight reaches it. Beyond
+// the crest the tail lies in its shadow (the ray from the star crosses the crest's gas, the 0.27 rad cone beyond 40 au) and keeps the
+// interior's temperature, its midplane 12 K at 55 au (41 K in round 18l); inside 30 au the starlight's surface lies below the
+// column's (3.75 against 3.85 H at 1 au, 3.05 against 3.21 at 10) and the hot layer is round 18l's (DESIGN.md section 54)
 uniform vec2 uSelfT;
-float selfX(float sig, float zh, float xw){
+float selfX(float sig, float zh, float xw, float xs){
   if (uSelfT.x < -0.5) return 30.0;
   if (uSelfT.x < 0.5) return xw;
   float u = abs(zh) * 0.70710678, t = 1.0 / (1.0 + 0.3275911 * u);
   float e = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));   // (erfc(u) e^(u^2))
-  return clamp(log(max(sig * e, 1e-30)) - u * u + uSelfT.y, -30.0, 30.0);
+  return max(clamp(log(max(sig * e, 1e-30)) - u * u + uSelfT.y, -30.0, 30.0), xs);
 }
 #endif
 uniform float uFx;      // (round 8) the finish's strength for the quality of the moment (see FX in the script): 0 to 1
@@ -1858,7 +1951,11 @@ uniform float uFocus;   // (round 8) the camera's distance from the point looked
 // (an aerial perspective, a choice of the picture): from the point looked at to AIR_D times as far, down to 1 - AIR.
 const float AIR = 0.3, AIR_D = 3.0;
 float airK(float t){ return 1.0 - AIR * uFx * smoothstep(uFocus, AIR_D * uFocus, t); }
+#ifdef TURB3D_OFF
 uniform sampler2D uDiskMap;
+#else
+uniform highp sampler2DArray uDiskMap;   // (round 18m: layer 0 the disk map, 1 and 2 the turbulence's planes above and below the midplane, see turbZ)
+#endif
 uniform sampler2D uAccMap;   // the accretion layers' streaks (upper, lower), on the disk map's grid
 uniform vec2 uAcc;           // the accretion layers' strengths (upper, lower): with the wind's asymmetry only the lower
 uniform vec2 uAccV;          // their inflow (upper, lower), in units of the sound speed (see ACC)
@@ -2043,6 +2140,16 @@ const vec3 STARCOL = vec3(1.0, 0.87, 0.72);
 // (round 8) the materials' colours in the model's look (linear; see MAT in the script): each material its own hue
 uniform vec3 uMat[${MAT.length}];
 ${MAT.map((m, i) => `#define MAT_${m[0].toUpperCase()} uMat[${i}]`).join('\n')}
+#ifndef SELF_OLD
+// (round 18m) the own light's colour (see selfLight): the gas's, at the luminance 1, or with SELF_TCOL the colour of T_b
+vec3 selfTint(float Tb){
+#ifdef SELF_TCOL
+  return selfHue(Tb);
+#else
+  return MAT_DISK / max(dot(MAT_DISK, LUMW), 1e-4);
+#endif
+}
+#endif
 vec3 litCol(){ vec3 m = MAT_DISK / max(max(MAT_DISK.r, MAT_DISK.g), max(MAT_DISK.b, 1e-4)); return mix(m, vec3(1.0, 0.95, 0.88), 0.25); }   // (round 8: see G_LIT)
 // the observed looks: the gas's opacity relative to K_G (the disk opaque in scattered light and the mid-infrared; round 18g: the
 // small grains' own, see K_G: K_OCC in visible light, OPT_K = K_OCC / K_G = 462, and MIR_V times less in the mid-infrared, MIR_K
@@ -2148,7 +2255,23 @@ void envLight(vec3 p, vec3 rd, out vec3 em, out vec3 ex){
 }
 
 // the disk map at (ln R, φ): factors of the gas density, the skin brightness, the pebble density and the starlight
+#ifdef TURB3D_OFF
 vec4 diskMap(float lnR, float phi){ return texture(uDiskMap, vec2((lnR - LNR_MIN) / LNR_SPAN, phi / TAU + 0.5)); }
+#else
+vec4 diskMap(float lnR, float phi){ return texture(uDiskMap, vec3((lnR - LNR_MIN) / LNR_SPAN, phi / TAU + 0.5, 0.0)); }
+// (Round 18m) The turbulence's vertical structure (see turbZPlanes, TURBZ in the script): the factor of the gas's density at (ln R, φ,
+// z/H) beyond the thermally ionized disk, from the disk map's planes on its side of the midplane (layer 1 above, 2 below: z cells 0
+// to 3, TZ_CZ per H; ln R from LNZ_MIN over LNZ_SPAN, to 120 au), between the two around |z/H| as the 3D noise goes (smoothstep),
+// the last held above 3 / TZ_CZ H. The disk map's r has the inner disk's share of the column-wide pattern alone
+const float TZ_CZ = ${G(TURBZ.CZ)}, LNZ_MIN = ${G(+Math.log(TURBZ.R0).toFixed(6))}, LNZ_SPAN = ${G(+Math.log(TURBZ.R1 / TURBZ.R0).toFixed(6))};
+float turbZ(float lnR, float phi, float zh){
+  vec4 f = texture(uDiskMap, vec3((lnR - LNZ_MIN) / LNZ_SPAN, phi / TAU + 0.5, zh >= 0.0 ? 1.0 : 2.0));
+  float c = min(abs(zh) * TZ_CZ, 2.999), i = floor(c), t = c - i;
+  t = t * t * (3.0 - 2.0 * t);
+  vec4 k = vec4(0.0, 1.0, 2.0, 3.0);
+  return dot(f, (1.0 - t) * vec4(equal(k, vec4(i))) + t * vec4(equal(k, vec4(i + 1.0))));
+}
+#endif
 // the eddies at (ln R, φ, z/H): the factor of the gas density, and the extra optical depth toward the star that they add
 // relative to the smooth disk's (none beyond ZMAX3 scale heights, nor beyond the inner disk the texture covers)
 vec2 eddies(float lnR, float phi, float zh){
@@ -2576,6 +2699,9 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     // midplane; warm only inside the snow line)
     float rho0 = exp(-lnR - cut + gl) * smoothstep(R_IN * 0.8, R_IN * 1.3, R) / (2.5066 * H);   // Sigma / (sqrt(2 pi) H)
     float rho = rho0 * exp(-0.5 * zh * zh) * dm.r * ed.x;   // ... e^(-z²/2H²)
+#ifndef TURB3D_OFF
+    rho *= turbZ(lnR, phi, zh);   // (round 18m: the turbulence's vertical structure, see turbZ; the skin keeps dm.g and ed)
+#endif
     // (Disk Lab v2) the absorption is the small grains' (bit 2); the glow is shared, half the gas's (bit 1), half the
     // small grains' (bit 2: well mixed with the gas, absent inside R_IN where they sublimate, as rho0 is), in the colour of
     // the temperature here (tempAt, as on the cut's face: round 7; round 6, a cos^4 rise to 2.8 times the midplane's; before,
@@ -2611,7 +2737,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
 #ifdef SELF_OLD
       float xT = 30.0;
 #else
-      float xT = selfX(rho0 * (2.5066 * H), zh, xw);
+      float xT = selfX(rho0 * (2.5066 * H), zh, xw, x);   // (round 18m: x, the starlight's depth, for the shadow)
 #endif
 #ifdef SELF_OLD
       if (glowT) { em = uSelf.x * uSelf.y * rho * tempAt(R, lnR, zh, xT) * selfCol(MAT_DISK) * 0.5 * (gasOn + dustOn); ex = vec3(uSelf.x * rho * dustOn); }
@@ -3251,6 +3377,9 @@ vec3 sliceQuantities(float Rs, float z, float phi){
   // of the fade remains, at the cylinder's edge, where the face ends.)
   float wEdge = 5.0 * smoothstep(0.55 * ZB, ZB, abs(z)) + 5.0 * smoothstep(0.55 * RB, RB, R);
   float rho = (Sigma(R, lnR) + gasIn * exp(-lnR - cutOut(R) + gapLn(R))) / (2.5066 * H) * exp(-0.5 * zh * zh) * diskMap(lnR, phi).r * eddies(lnR, phi, zh).x
+#ifndef TURB3D_OFF
+            * turbZ(lnR, phi, zh)   // (round 18m: the face's density as the volume's, see turbZ)
+#endif
             + exp(w.w + wEdge + gapLn(exp(w.x))) * (z > 0.0 ? 1.0 : uWindLow);
   // (round 15b) with the exclusion, the envelope's gas where it holds the place: Ulrich's density at the infall rate (uExcl.y), not
   // the model look's picture (ENV_RHO); before, the face showed the disk and the wind alone
@@ -3486,6 +3615,9 @@ vec4 coGas(vec3 p, vec3 rd){
   vec4 dm = diskMap(lnR, phi);
   // (the gas disk reaches the magnetosphere's edge MAG_RT, inside the dust's)
   float rhoD = exp(-lnR - cut + gl - 0.5 * zh * zh) * smoothstep(MAG_RT * 0.95, MAG_RT * 1.08, R) / (2.5066 * H) * dm.r * eddies(lnR, phi, zh).x;
+#ifndef TURB3D_OFF
+  rhoD *= turbZ(lnR, phi, zh);   // (round 18m: the gas's density as the volume's, see turbZ)
+#endif
   vec4 w = windMap(R, p.z);
   float r0w = exp(w.x), rhoW = exp(w.w) * gapFactor(r0w) * (p.z > 0.0 ? 1.0 : uWindLow) * smoothstep(R_IN, 2.5 * R_IN, r0w);
   float Td = tempAt(R, lnR, zh, x);   // (round 7: the model's temperature, see tempAt)
@@ -4350,7 +4482,7 @@ void main(){
 #ifndef SELF_OLD
   // (round 18k) the own light, its brightness temperature shown (see selfLight; uSelf.y over G takes the outburst's brightening off,
   // as uSelf.y did for the light of before). The model look's ray is drawn whole (not in kicks), so gTb is all of it here
-  if (uSelf.x > 0.0 && ph == PH_FINAL) col += selfLight(gTb) * (uSelf.y * ${G(1 / SELF_LOOK.G)});
+  if (uSelf.x > 0.0 && ph == PH_FINAL) col += selfLight(gTb) * selfTint(gTb) * (uSelf.y * ${G(1 / SELF_LOOK.G)});   // (round 18m: selfTint)
 #endif
 #ifdef FAST_SKIP
   // (round 16a) the coarse pass's verdict, 1 for not empty: its ray not marched to the end within its budget, or its volume's
@@ -4952,9 +5084,12 @@ void main(){
     const y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     return c.map((v) => v / Math.max(y, 1e-4));
   };
-  const selfShowJS = (T) => {
+  // (round 18m: hue(T), the colour at the luminance 1: by default the gas's material colour, selfTint in the GLSL; selfHueJS with
+  // ?selfhue=1)
+  const selfGasJS = () => { const c = linHex(MAT[0][1]), y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; return c.map((v) => v / Math.max(y, 1e-4)); };
+  const selfShowJS = (T, hue) => {
     const s = SELF_LOOK.A * Math.log1p(Math.max(T, 0) / SELF_LOOK.TK);
-    let c = selfHueJS(T).map((v) => v * Math.pow(s, 2.2));
+    let c = hue(T).map((v) => v * Math.pow(s, 2.2));
     const m = Math.max(...c);
     if (m > 1) c = c.map((v) => v / m + (1 - v / m) * (1 - 1 / m));
     return c.map((v) => { const g = Math.pow(v, 1 / 2.2), k = Math.min(1, Math.max(0, g)); return g - TONE * k * (1 - k) * (1 - k); });
@@ -5375,12 +5510,18 @@ void main(){
     // T_b in the gas's colour, at the interior's temperature). (Round 18l: the temperature is the state's selft, see SELF_T; the page reads
     // round 18k's ?selfint=1 as selft 'int'. SELF_INT, which took it at the build, is gone: SELF_OLD alone takes the interior's)
     const selfOld = box.dataset.selflook === 'old';
+    // (round 18m) the own light in the gas's colour, its shades the brightness temperature (selfTint in the GLSL); ?selfhue=1
+    // (data-selfhue="1", SELF_TCOL) in round 18k's colours of the brightness temperature, to compare
+    const selfTcol = box.dataset.selfhue === '1';
+    // (round 18m) the turbulence of before, uniform in height beyond the inner disk (the disk map's r alone, a 2D texture): ?turb3d=0
+    // (data-turb3d="0", TURB3D_OFF), to compare; by default the disk map is a 2D array with the turbulence's planes (see TURBZ)
+    const turbFlat = box.dataset.turb3d === '0';
     const hdrDefs = [mpConst && 'MP_CONST', wextOld && 'WEXT_OLD', !MODEL.TAIL && 'SIG_CUT', MODEL.TAIL && MODEL.RC !== MODEL.R_OUT && 'SIG_RC ' + G(MODEL.RC),
       crest && 'CREST vec4(' + [crest.R, crest.a, crest.h, crest.th].map(G).join(', ') + ')',
       litFlat && 'LIT_FLAT', starTab && 'ST_UG ' + G(starTab.ug), 'OBS_CT vec2(' + obsCyl.map(G).join(', ') + ')',
       (box.dataset.skinlos === '0' || !MODEL.TAIL) && 'SKIN_THRU',   // (round 18f: ?skinlos=0 and the cut of before, see SKIN_LOS in the GLSL)
       (box.dataset.opq === '0' || !MODEL.TAIL) && 'OPQ_OLD',
-      selfOld && 'SELF_OLD'].filter(Boolean);   // (round 18k: ?selflook=old, see SELF_LOOK; round 18j's ?selfsurf=1 is the default now and passed over; round 18l: ?selfint=1 the state's selft)   // (round 18g: ?opq=0 and the cut of before, the opacities of before, see K_G in the GLSL)
+      selfOld && 'SELF_OLD', selfTcol && 'SELF_TCOL', turbFlat && 'TURB3D_OFF'].filter(Boolean);   // (round 18k: ?selflook=old, see SELF_LOOK; round 18j's ?selfsurf=1 is the default now and passed over; round 18l: ?selfint=1 the state's selft)   // (round 18g: ?opq=0 and the cut of before, the opacities of before, see K_G in the GLSL)
     const mpHdr = (src) => hdrDefs.reduce((s, d) => (s.includes('#define ' + d + '\n') ? s : s.replace('#version 300 es\n', '#version 300 es\n#define ' + d + '\n')), src);
     let MPV = mpValues();
     const mpLoc = new Map();
@@ -5705,6 +5846,19 @@ void main(){
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       return { tex, fb, w, h };
     }
+    // (round 18m) a target of n layers (a 2D array, as target: layer 0 drawn by its framebuffer; the others attached by the caller)
+    function targetArr(w, h, n, fmt, wrapT) {
+      gl.activeTexture(gl.TEXTURE2);
+      const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
+      gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, fmt, w, h, n);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, wrapT);
+      const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex, 0, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('disk3d: map target incomplete');
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return { tex, fb, w, h };
+    }
     // a volume target (w x h x d texels, azimuth periodic), drawn NB3 layers at a time: one framebuffer per group. Where
     // the driver cannot draw into the one- or two-channel format, the four-channel one stands in.
     function target3(w, h, d, fmt) {
@@ -5850,7 +6004,8 @@ void main(){
     // disk map: 2048 texels in ln R (0.0027 per texel) resolve the sheared structure down to the footprint
     // of a pixel at the usual distances on a desktop panel; a narrower canvas (a phone) has larger pixels
     // and gets 1024 or 512, since the map costs the same whatever the size of the picture. 256 around
-    // (4 per cell of the finer octave).
+    // (4 per cell of the finer octave). (Round 18m: three layers of it, the map and the turbulence's planes above and below the
+    // midplane, see TURBZ: 12.6 MB at 2048, 8.4 MB more than the map alone; one draw writes the three and the accretion's streaks)
     // The eddies' volume (texture units 5 and 4), over the turbulent inner disk (R from 0.05 to 0.6 au): 352 x 160 x 40
     // texels on a desktop panel (about 7 texels per radial cell, 4 around, 6 per cell in height), fewer with a smaller
     // disk map; 11 MB.
@@ -5862,7 +6017,8 @@ void main(){
       const nx = Math.min(2048, Math.max(512, 2 ** Math.ceil(Math.log2(canvas.width * 0.5 * 1.6))));
       if (diskMapT && diskMapT.w === nx) return;
       if (diskMapT) { gl.deleteFramebuffer(diskMapT.fb); gl.deleteTexture(diskMapT.tex); gl.deleteTexture(accMapTex); }
-      diskMapT = target(nx, 256, gl.RGBA16F, gl.REPEAT);
+      // (round 18m: by default a 2D array, its layers 1 and 2 the turbulence's planes, see TURBZ; with ?turb3d=0 the map of before)
+      diskMapT = turbFlat ? target(nx, 256, gl.RGBA16F, gl.REPEAT) : targetArr(nx, 256, 3, gl.RGBA16F, gl.REPEAT);
       // the accretion layers' streaks (unit 9), drawn with the disk map into its second attachment
       gl.activeTexture(gl.TEXTURE9);
       accMapTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, accMapTex);
@@ -5871,11 +6027,12 @@ void main(){
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
       gl.bindFramebuffer(gl.FRAMEBUFFER, diskMapT.fb);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, accMapTex, 0);
-      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+      if (!turbFlat) { gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, diskMapT.tex, 0, 1); gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT3, diskMapT.tex, 0, 2); }
+      gl.drawBuffers(turbFlat ? [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1] : [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3]);
       if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('disk3d: map target incomplete');
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.useProgram(progDisk); gl.uniform2f(UD.uMapRes, diskMapT.w, diskMapT.h);
-      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, diskMapT.tex);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(turbFlat ? gl.TEXTURE_2D : gl.TEXTURE_2D_ARRAY, diskMapT.tex);
       drop3(t3a); drop3(t3b);
       const [w3, h3] = [nx >= 2048 ? 352 : nx >= 1024 ? 176 : 120, nx >= 2048 ? 160 : 120].map((v) => Math.min(v, MAX3));
       t3a = target3(w3, h3, 40, gl.R16F); t3b = target3(w3, h3, 40, gl.RG16F); glErr('maps');
@@ -7439,8 +7596,10 @@ void main(){
       // (round 18k) the own light: its colours of the brightness temperature at the ticks, then the materials that keep theirs
       if (lookNow === 'model' && selfOn() && !selfOld) {
         const k = box.diskSelfKey();
+        // (round 18m: by default the brightness alone, the disk in shades of its colour; ?selfhue=1 round 18k's)
         return { title: j ? 'Brightness temperature (K)' : '輝度温度(K)',
-          description: j ? 'The gas, its dust and the pebbles glow in their own thermal light: brightness and colour show the brightness temperature, the brightness on a logarithmic scale. The other colours are materials.' : 'ガスと塵、小石は自らの熱で光り、明るさと色は輝度温度(明るさは対数の尺度)を示します。ほかの色は物質の種類です。',
+          description: selfTcol ? (j ? 'The gas, its dust and the pebbles glow in their own thermal light: brightness and colour show the brightness temperature, the brightness on a logarithmic scale. The other colours are materials.' : 'ガスと塵、小石は自らの熱で光り、明るさと色は輝度温度(明るさは対数の尺度)を示します。ほかの色は物質の種類です。')
+            : (j ? 'The gas, its dust and the pebbles glow in their own thermal light: the brightness shows the brightness temperature, on a logarithmic scale, in shades of the gas\u2019s colour. The other colours are materials.' : 'ガスと塵、小石は自らの熱で光り、明るさが輝度温度(対数の尺度)を、ガスの色の濃淡で示します。ほかの色は物質の種類です。'),
           units: 'K', min: k.min, max: k.max, rangeMode: 'fixed',
           items: k.ticks.map(([u, t]) => ({ label: t + ' K', color: k.colourAt(u) })).concat(MAT.filter(([key]) => !['disk', 'rock', 'ice', 'acc'].includes(key)).map(([, hex, , ja_, en]) => ({ label: j ? en : ja_, color: hex }))) };
       }
@@ -8823,7 +8982,8 @@ void main(){
         // (round 18k: its brightness and colour the brightness temperature, see SELF_LOOK; ?selflook=old as before)
         ...(selfOn() ? { model: selfOld ? ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、明るさは輝度温度です(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g)。', ' Shown in its own thermal light, with no starlight on it: the brightness is the brightness temperature (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g).']
           // (round 18l: and with the column depth's temperature the surface's column)
-          : ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、明るさと色は輝度温度(明るさは対数の尺度)です(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g' + (opt.selft === 'col' ? '、表層の柱密度 ' + +opt.selfnc.toPrecision(2) + ' g/cm²' : '') + ')。', ' Shown in its own thermal light, with no starlight on it: brightness and colour are the brightness temperature, the brightness on a logarithmic scale (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g' + (opt.selft === 'col' ? ', the surface\u2019s column ' + +opt.selfnc.toPrecision(2) + ' g/cm\u00b2' : '') + ').'] } : {}) }[lookNow];
+          // (round 18m: the brightness alone by default, in the gas's colour; ?selfhue=1 brightness and colour)
+          : ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、' + (selfTcol ? '明るさと色は輝度温度(明るさは対数の尺度)です' : '明るさは輝度温度(対数の尺度)です') + '(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g' + (opt.selft === 'col' ? '、表層の柱密度 ' + +opt.selfnc.toPrecision(2) + ' g/cm²' : '') + ')。', ' Shown in its own thermal light, with no starlight on it: ' + (selfTcol ? 'brightness and colour are the brightness temperature, the brightness on a logarithmic scale' : 'the brightness is the brightness temperature, on a logarithmic scale') + ' (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g' + (opt.selft === 'col' ? ', the surface\u2019s column ' + +opt.selfnc.toPrecision(2) + ' g/cm\u00b2' : '') + ').'] } : {}) }[lookNow];
       const desc = ja()
         ? '原始惑星系円盤(半径およそ 30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、赤道面に沈んだ塵はスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + QN[0] + 'を色で示しています。' : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? 'ガスの輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
         : 'Volume rendering of a model of a protoplanetary disk (some 30 au in radius): warm surface layers, and a cold midplane with settled dust, icy beyond the water snow line.' + (plShown().length ? (plShown().length > 1 ? ' Planets at ' + plShown().join(', ') + ' au open gaps.' : ' A planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + QN[1] + ' in colour.' : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in an emission line of the gas: ' + CON[1] + '.' : '');
@@ -10001,10 +10161,13 @@ void main(){
     box.diskLegend = () => legendSpec();
     // (round 18k) the own light's key for the page (see SELF_LOOK): old, true with ?selflook=old (the gas's colour, no bar); the bar
     // from min to max K on a log scale, stops [u, css colour] (a thick gas at that T_b on the display), ticks [u, text], colourAt(u)
+    // (round 18m: by default the gas's colour in shades, the colour chosen for the gas as it is now; hue, true with ?selfhue=1, round
+    // 18k's colours)
     box.diskSelfKey = () => {
       const T = (u) => SELF_KEY.MIN * Math.pow(SELF_KEY.MAX / SELF_KEY.MIN, u), css = (c) => 'rgb(' + c.map((v) => Math.round(255 * Math.min(1, Math.max(0, v)))).join(',') + ')';
-      return { old: selfOld, min: SELF_KEY.MIN, max: SELF_KEY.MAX, stops: Array.from({ length: 25 }, (_, i) => [i / 24, css(selfShowJS(T(i / 24)))]),
-        ticks: SELF_KEY.TICKS.map((t) => [Math.log(t / SELF_KEY.MIN) / Math.log(SELF_KEY.MAX / SELF_KEY.MIN), String(t)]), colourAt: (u) => css(selfShowJS(T(u))) };
+      const gas = selfGasJS(), hue = selfTcol ? selfHueJS : () => gas, show = (t) => selfShowJS(t, hue);
+      return { old: selfOld, hue: selfTcol, min: SELF_KEY.MIN, max: SELF_KEY.MAX, stops: Array.from({ length: 25 }, (_, i) => [i / 24, css(show(T(i / 24)))]),
+        ticks: SELF_KEY.TICKS.map((t) => [Math.log(t / SELF_KEY.MIN) / Math.log(SELF_KEY.MAX / SELF_KEY.MIN), String(t)]), colourAt: (u) => css(show(T(u))) };
     };
     // (round 8) the materials' colours of the model's look (see MAT), for the page's key: key, colour (sRGB), names; with
     // { key: '#rrggbb' } or { key: ['#rrggbb', k] } a colour (and its brightness factor) is changed for this page (for trying

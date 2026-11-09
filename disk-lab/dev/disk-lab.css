@@ -97,7 +97,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .mat-list i+i{margin-left:-4px}
 .mat-list i.arr{width:auto;height:auto;border-radius:0;box-shadow:none;font-style:normal;font-size:11px;line-height:1;color:#cfeaff}
 /* (round 18k) with the own light: the bar of the brightness temperature (the gas's and the pebbles' colours), and the key's title */
-.mat-key.tb>.mat-title:not(.tb-title),.mat-key:not(.tb)>.tb-title{display:none}
+/* (round 18m: the bar in shades of the gas's colour, its title tb-title; with ?selfhue=1, tbh, round 18k's title) */
+.mat-key.tb>.mat-title:not(.tb-title),.mat-key:not(.tb)>.tb-title,.mat-key.tbh>.tb-title,.mat-key:not(.tbh)>.tbh-title{display:none}
+.mat-key.tb.tbh>.mat-title.tbh-title{display:inline}
 .mat-list li.tb{display:grid;gap:2px;padding:1px 0 3px}
 .mat-list i.tb-bar{width:150px;height:7px;border-radius:2px}
 .mat-list .tb-ticks{position:relative;width:150px;height:11px;font-size:9.5px;line-height:11px;color:var(--text-3)}
