@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=389a9cd3e3';
-import { WORDS } from './words.js?v=567d385f04';
+import { WORDS } from './words.js?v=a775c9debb';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=a06fcbfa44';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=86405063f3';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=4f44c2ad0b';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.35', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.36', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -431,7 +431,7 @@ function renderRail(s) {
     cutContext.replaceChildren(...(cutOpen ? [segmented(CUT_Q.map((k) => [k, w.cutQ[k]]), s.sq, (k) => { box.diskSet({ sq: k }); sync(); }, L() === 'ja' ? '断面に描く量' : 'Quantity on the cut'), cutKeyList(s.sq, shown)] : []));
   }
   // (round 18l: the own light's note by its temperature, see SELFNC_RANGE)
-  lookNote.textContent = co ? w.coNotes[s.coMode] : cutOpen ? w.cutNotes[s.sq] : glowable && s.glow === 'self' ? (s.selft === 'star' ? w.glow.noteStar : s.selft === 'int' ? w.glow.noteInt : w.glow.note) : w.looks[s.look].note;
+  lookNote.textContent = co ? w.coNotes[s.coMode] : cutOpen ? w.cutNotes[s.sq] : glowable && s.glow === 'self' ? (s.selft === 'star' ? w.glow.noteStar : s.selft === 'int' ? w.glow.noteInt : s.selft === 'colstar' ? w.glow.noteColStar : w.glow.note) : w.looks[s.look].note;
 }
 const kms = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' km/s';
 // (Round 18i, the owner: "in the model look, the pattern of its own emission alone, with no surface lit; an opacity of about 2
@@ -451,7 +451,8 @@ const selfkText = (k) => selfkNum(k) + ' cm²/g';
 // SELFNC_RANGE in g cm^-2, 0.1 by default (the state's selfnc; the engine's SELF.NC_DEF), its value beside it and a chip back to the
 // default, a row as the opacity's. Kept with the settings on this device (DEF_KEYS), in a link as selfnc= (none at 0.1), Reset all back
 // to it; not shown with ?selflook=old (round 18j's look, at the interior's temperature). The state's selft, the own light's
-// temperature for comparisons ('star' round 18k's, from the depth toward the star, 'int' round 18j's, the interior's), has no
+// temperature for comparisons ('colstar' round 18m's, the column's with the starlight's shadow (round 18n), 'star' round 18k's, from the
+// depth toward the star, 'int' round 18j's, the interior's), has no
 // control: a link's (selft=, none at 'col'; round 18k's ?selfint=1 read as selft=int), not kept on the device (UNKEPT_KEYS), Reset
 // all back to 'col'. The note under the looks says the temperature drawn. DESIGN.md section 53
 const SELFNC_RANGE = [0.001, 10], SELFNC_DEF = 0.1;
@@ -459,7 +460,7 @@ const selfncPos = (v) => String(Math.round(1000 * Math.log(v / SELFNC_RANGE[0]) 
 const selfncOf = (pos) => (String(pos) === selfncPos(SELFNC_DEF) ? SELFNC_DEF : Number((SELFNC_RANGE[0] * Math.pow(SELFNC_RANGE[1] / SELFNC_RANGE[0], Number(pos) / 1000)).toPrecision(2)));
 const selfncNum = (v) => String(Number(v.toPrecision(2)));
 const selfncText = (v) => selfncNum(v) + ' g/cm²';
-const ncShown = (s) => s.look === 'model' && s.glow === 'self' && s.selft === 'col' && typeof s.selfnc === 'number' && box.dataset.selflook !== 'old';
+const ncShown = (s) => s.look === 'model' && s.glow === 'self' && (s.selft === 'col' || s.selft === 'colstar') && typeof s.selfnc === 'number' && box.dataset.selflook !== 'old';   // (round 18n: and round 18m's, colstar)
 const glowEls = {};
 let selfkW = '', selfncW = '';
 function glowRows(s) {

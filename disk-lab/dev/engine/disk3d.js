@@ -1931,18 +1931,32 @@ float selfLight(float Tb){
 // beyond u 9; its relative error 3e-5 at u 2, 7e-4 at 3, 3e-3 at 4. Where there is no gas (the dust-free hole inside 0.8 R_IN, sig
 // 0) the floor keeps the log finite and x is -30, tempAt's full starlight; the gas's emission there is 0 (DESIGN.md section 53)
 // (Round 18m, the owner of round 18l's mock: "right, the tail is in the shadow; the tail can be at the interior's temperature") 'col'
-// takes the deeper of the column's depth and xs, the starlight's along the ray from the star (sampleDisk's x: the table starT with the
+// (round 18n: 'colstar') takes the deeper of the column's depth and xs, the starlight's along the ray from the star (sampleDisk's x: the table starT with the
 // gaps' ln; with the cut of before xw): the surface is hot where the column from above is thin and the starlight reaches it. Beyond
 // the crest the tail lies in its shadow (the ray from the star crosses the crest's gas, the 0.27 rad cone beyond 40 au) and keeps the
 // interior's temperature, its midplane 12 K at 55 au (41 K in round 18l); inside 30 au the starlight's surface lies below the
 // column's (3.75 against 3.85 H at 1 au, 3.05 against 3.21 at 10) and the hot layer is round 18l's (DESIGN.md section 54)
+// (Round 18n, the owner of round 18m's: "edge-on the disk's surface is an X again. The surface measured by the vertical column, and
+// where that surface descends, no surface: that will do") Round 18m's shadow, xs, left the thin gas above the crest's cone hot (its
+// column from above is under Sigma_s and the ray from the star passes over the crest): edge-on its two lit sheets crossed at the star
+// as an X out to the gas's edge. By default now 'col' is the column's depth alone with the surface's own share, selfW: the column's
+// surface z_s (N_perp = Sigma_s) is a surface only where it rises outward. Its tail beyond 46 au (z_s 10.3 au at 45 au, then down to
+// the midplane at 70 au, where Sigma is 2 Sigma_s) and the inner slopes of the planets' gaps keep the interior's temperature through
+// the whole column. 2, 'colstar': round 18m's, the column's depth or xs, the deeper (DESIGN.md section 55)
 uniform vec2 uSelfT;
-float selfX(float sig, float zh, float xw, float xs){
+float erfcE(float u){ float t = 1.0 / (1.0 + 0.3275911 * u); return t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))); }   // (erfc(u) e^(u^2), u >= 0)
+// (round 18n) selfW, the surface's share (below the model's constants: it takes their cutSlope and the planets' gapT)
+float selfW(float R, float sig);
+float selfX(float R, float sig, float zh, float xw, float xs){
   if (uSelfT.x < -0.5) return 30.0;
   if (uSelfT.x < 0.5) return xw;
-  float u = abs(zh) * 0.70710678, t = 1.0 / (1.0 + 0.3275911 * u);
-  float e = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));   // (erfc(u) e^(u^2))
-  return max(clamp(log(max(sig * e, 1e-30)) - u * u + uSelfT.y, -30.0, 30.0), xs);
+  float u = abs(zh) * 0.70710678;
+  float x = clamp(log(max(sig * erfcE(u), 1e-30)) - u * u + uSelfT.y, -30.0, 30.0);
+  if (uSelfT.x > 1.5) return max(x, xs);   // ('colstar', round 18m's)
+  // (round 18n: deeper than x 3 tempAt has no hot term; above, the surface's share w folded into the depth, e^(-e^x') = w e^(-e^x))
+  if (x > 3.0) return x;
+  float w = selfW(R, sig);
+  return w > 0.0 ? log(exp(x) - log(w)) : 30.0;
 }
 #endif
 uniform float uFx;      // (round 8) the finish's strength for the quality of the moment (see FX in the script): 0 to 1
@@ -2001,6 +2015,21 @@ ${NOISE_GLSL}
 ${TURB_GLSL}
 ${MAP_GLSL}
 ${ENV_GLSL}
+#ifndef SELF_OLD
+// (round 18n) selfW: the share of the hot surface at R, from Sigma's slope. With z_s = sqrt 2 H u_s and erfc(u_s) = 2 Sigma_s / Sigma,
+// q = d ln z_s / d ln R = 1.25 + (sqrt(pi) / 2) erfc(u_s) e^(u_s^2) / u_s d ln Sigma / d ln R, the slope -1 - cutSlope + gapSlope
+// (the inner edge's rise left out: q is over 1 there anyway); w = smoothstep(0, 0.5, q), so the hot layer fades as the surface stops
+// rising (40 to 45 au) and is gone where it descends; 0 where the whole column is under 2 Sigma_s (no surface). u_s: two Newton steps
+// on ln erfc from u^2 = t - ln(sqrt(pi t)) (t = ln(Sigma / 2 Sigma_s)); against the surface found by bisection, u_s within 6e-4 and
+// w within 2e-3 for Sigma_s 0.001 to 10 g cm^-2, with and without a Jupiter's gap at 10 au
+float selfW(float R, float sig){
+  float t = log(max(sig, 1e-30)) + uSelfT.y;
+  if (t <= 0.0) return 0.0;
+  float u = sqrt(max(t - 0.5 * log(3.14159265 * max(t, 0.6)), 1e-4));
+  for (int i = 0; i < 2; i++) { float e = erfcE(u); u = max(u + (log(e) - u * u + t) * 0.88622693 * e, 1e-3); }
+  return smoothstep(0.0, 0.5, 1.25 + 0.88622693 * erfcE(u) / u * (-1.0 - cutSlope(R) + gapT(R).y));
+}
+#endif
 // Absorbed fraction and the constant-source transfer integral. Optical depths
 // are nonnegative. At tau <= 1, the degree-11 absorbed-fraction series has
 // truncation error <= 1/12! = 2.09e-9, below float32 rounding. Moving the
@@ -2737,7 +2766,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
 #ifdef SELF_OLD
       float xT = 30.0;
 #else
-      float xT = selfX(rho0 * (2.5066 * H), zh, xw, x);   // (round 18m: x, the starlight's depth, for the shadow)
+      float xT = selfX(R, rho0 * (2.5066 * H), zh, xw, x);   // (round 18m: x, the starlight's depth, for the shadow, now 'colstar's; round 18n: R for selfW)
 #endif
 #ifdef SELF_OLD
       if (glowT) { em = uSelf.x * uSelf.y * rho * tempAt(R, lnR, zh, xT) * selfCol(MAT_DISK) * 0.5 * (gasOn + dustOn); ex = vec3(uSelf.x * rho * dustOn); }
@@ -5069,8 +5098,9 @@ void main(){
   // section 53)
   const SELF = { K_MIN: 0.001, K_MAX: 100, DEF: 2, SIGMA1: 1700, G: SELF_LOOK.G, NC_MIN: 0.001, NC_MAX: 10, NC_DEF: 0.1 };
   // (round 18l) the own light's temperature, the state's selft (uSelfT.x in the GLSL, see selfX): 'col' the column depth's (the
-  // default), 'star' round 18k's (the depth toward the star, P), 'int' round 18j's (the interior's)
-  const SELF_T = { col: 1, star: 0, int: -1 };
+  // default; round 18n: with the surface only where it rises outward, selfW), 'colstar' round 18m's (the column's depth with the
+  // starlight's shadow), 'star' round 18k's (the depth toward the star, P), 'int' round 18j's (the interior's)
+  const SELF_T = { col: 1, colstar: 2, star: 0, int: -1 };
   // (round 18k) the own light's colour and display as selfHue and selfLight in the GLSL and the volume's last stage (the stretch, the
   // roll-off past white, the gamma) with the finish's tone at its full share: a thick gas at T_b on the display, for the page's key
   // (box.diskSelfKey) from SELF_KEY.MIN to MAX in K (a log scale) with its ticks
@@ -8983,7 +9013,7 @@ void main(){
         ...(selfOn() ? { model: selfOld ? ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、明るさは輝度温度です(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g)。', ' Shown in its own thermal light, with no starlight on it: the brightness is the brightness temperature (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g).']
           // (round 18l: and with the column depth's temperature the surface's column)
           // (round 18m: the brightness alone by default, in the gas's colour; ?selfhue=1 brightness and colour)
-          : ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、' + (selfTcol ? '明るさと色は輝度温度(明るさは対数の尺度)です' : '明るさは輝度温度(対数の尺度)です') + '(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g' + (opt.selft === 'col' ? '、表層の柱密度 ' + +opt.selfnc.toPrecision(2) + ' g/cm²' : '') + ')。', ' Shown in its own thermal light, with no starlight on it: ' + (selfTcol ? 'brightness and colour are the brightness temperature, the brightness on a logarithmic scale' : 'the brightness is the brightness temperature, on a logarithmic scale') + ' (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g' + (opt.selft === 'col' ? ', the surface\u2019s column ' + +opt.selfnc.toPrecision(2) + ' g/cm\u00b2' : '') + ').'] } : {}) }[lookNow];
+          : ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、' + (selfTcol ? '明るさと色は輝度温度(明るさは対数の尺度)です' : '明るさは輝度温度(対数の尺度)です') + '(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? '、表層の柱密度 ' + +opt.selfnc.toPrecision(2) + ' g/cm²' : '') + ')。', ' Shown in its own thermal light, with no starlight on it: ' + (selfTcol ? 'brightness and colour are the brightness temperature, the brightness on a logarithmic scale' : 'the brightness is the brightness temperature, on a logarithmic scale') + ' (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? ', the surface\u2019s column ' + +opt.selfnc.toPrecision(2) + ' g/cm\u00b2' : '') + ').'] } : {}) }[lookNow];
       const desc = ja()
         ? '原始惑星系円盤(半径およそ 30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、赤道面に沈んだ塵はスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + QN[0] + 'を色で示しています。' : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? 'ガスの輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
         : 'Volume rendering of a model of a protoplanetary disk (some 30 au in radius): warm surface layers, and a cold midplane with settled dust, icy beyond the water snow line.' + (plShown().length ? (plShown().length > 1 ? ' Planets at ' + plShown().join(', ') + ' au open gaps.' : ' A planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + QN[1] + ' in colour.' : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in an emission line of the gas: ' + CON[1] + '.' : '');
