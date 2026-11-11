@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=389a9cd3e3';
-import { WORDS } from './words.js?v=a775c9debb';
+import { WORDS } from './words.js?v=f85d23639f';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=a06fcbfa44';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=4f44c2ad0b';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=532cb4a8ec';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.36', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.37', RELEASED = '2026-11-02';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -431,7 +431,7 @@ function renderRail(s) {
     cutContext.replaceChildren(...(cutOpen ? [segmented(CUT_Q.map((k) => [k, w.cutQ[k]]), s.sq, (k) => { box.diskSet({ sq: k }); sync(); }, L() === 'ja' ? '断面に描く量' : 'Quantity on the cut'), cutKeyList(s.sq, shown)] : []));
   }
   // (round 18l: the own light's note by its temperature, see SELFNC_RANGE)
-  lookNote.textContent = co ? w.coNotes[s.coMode] : cutOpen ? w.cutNotes[s.sq] : glowable && s.glow === 'self' ? (s.selft === 'star' ? w.glow.noteStar : s.selft === 'int' ? w.glow.noteInt : s.selft === 'colstar' ? w.glow.noteColStar : w.glow.note) : w.looks[s.look].note;
+  lookNote.textContent = co ? w.coNotes[s.coMode] : cutOpen ? w.cutNotes[s.sq] : glowable && s.glow === 'self' ? (s.selft === 'star' ? w.glow.noteStar : s.selft === 'int' ? w.glow.noteInt : s.selft === 'col' ? w.glow.noteCol : w.glow.note) : w.looks[s.look].note;
 }
 const kms = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' km/s';
 // (Round 18i, the owner: "in the model look, the pattern of its own emission alone, with no surface lit; an opacity of about 2
@@ -1986,7 +1986,7 @@ function linkFor(s) {
   if (s.glow === 'self') u.searchParams.set('glow', 'self');   // (round 18i: the model look's own light, and its opacity when not 2)
   if (Number.isFinite(s.selfk) && s.selfk !== SELFK_DEF) u.searchParams.set('selfk', String(s.selfk));
   // (round 18l: the own light's temperature when not the column's, and the surface's column when not 0.1; see SELFNC_RANGE)
-  if (typeof s.selft === 'string' && s.selft !== 'col') u.searchParams.set('selft', s.selft);
+  if (typeof s.selft === 'string' && s.selft !== 'colstar') u.searchParams.set('selft', s.selft);   // (round 19a: 'colstar' the default, 'col' until round 18n)
   if (Number.isFinite(s.selfnc) && s.selfnc !== SELFNC_DEF) u.searchParams.set('selfnc', String(s.selfnc));
   u.searchParams.set('t', String(Math.round(s.time * 1000) / 1000));
   u.searchParams.set('lang', L());
@@ -2462,7 +2462,7 @@ async function start() {
   // (?obscyl=R,Z, au), and the model look's lit surface seen through the disk as before, its shadow's glow as before (?skinlos=0);
   // (round 18g) the opacities of before, the visible and mid-infrared looks' and the model look's scattered light's, as in 1.9-dev.28
   // (?opq=0). Each passed as it is: the engine reads each within its range, and a value it cannot read as its default
-  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc', 'sigtail', 'rc', 'litflat', 'obscyl', 'skinlos', 'opq', 'selfsurf', 'selflook', 'selfhue', 'turb3d']) if (q.has(k)) box.dataset[k] = q.get(k);   // (round 18j: selfsurf, the own light with the lit surface's warm grains as in round 18i; round 18k: the default now, passed over by the engine; selflook=old, the look of round 18j. Round 18l: round 18k's selfint=1, the interior's temperature, is the link's selft=int, see stateFromLink. Round 18m: selfhue=1, the own light in round 18k's colours of the brightness temperature; turb3d=0, the turbulence of before, uniform in height)
+  for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc', 'sigtail', 'rc', 'sigp', 'aeup', 'fieldlod', 'litflat', 'obscyl', 'skinlos', 'opq', 'selfsurf', 'selflook', 'selfhue', 'turb3d']) if (q.has(k)) box.dataset[k] = q.get(k);   // (round 18j: selfsurf, the own light with the lit surface's warm grains as in round 18i; round 18k: the default now, passed over by the engine; selflook=old, the look of round 18j. Round 18l: round 18k's selfint=1, the interior's temperature, is the link's selft=int, see stateFromLink. Round 18m: selfhue=1, the own light in round 18k's colours of the brightness temperature; turb3d=0, the turbulence of before, uniform in height)
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   // (the engine's own start: the defaults Reset returns to; round 15a: with the clock's state, stopped by data-paused)
   if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), [...DEF_KEYS, ...UNKEPT_KEYS, 'paused']);   // (round 18l: UNKEPT_KEYS)

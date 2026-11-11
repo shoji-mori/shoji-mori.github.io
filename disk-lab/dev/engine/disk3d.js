@@ -82,7 +82,7 @@
   // so the disk is drawn about 1.8 times thicker than its own temperature would hold up. The surface density is kept, so
   // the midplane density falls by 1.5 and with it the grazing optical depth toward the star: LNTAU1 8.5 -> 8.5 - ln 1.5.
   // The density at the irradiation surface (RHO_B, where the wind is based) does not change: it is set by tau* = 1.)
-  const MODEL = { R_IN: 0.08, H0: 0.045, R_OUT: 30.0, P_OUT: 6.0, LNTAU1: +(8.5 - Math.log(1.5)).toFixed(4), TICE: 160.0, K_D: 1200.0, SD0: 0.012, TAIL: true, RC: 30.0, C_OVER: 0.5 };
+  const MODEL = { R_IN: 0.08, H0: 0.045, R_OUT: 30.0, P_OUT: 6.0, LNTAU1: +(8.5 - Math.log(1.5)).toFixed(4), TICE: 160.0, K_D: 1200.0, SD0: 0.012, TAIL: true, RC: 30.0, PT: 3, PT_DEF: 3, C_OVER: 0.5 };
   // (Round 18a, the owner: "the gas disk's surface density with an exponential tail") The gas disk no longer ends in the cut
   // exp(-(R/R_OUT)^P_OUT) but tapers past R_c = RC, 30 au (the owner's "radius 30 au", R_OUT), with the model's own inner law
   // kept (Sigma ∝ 1/R). Round 18a tapered it as the self-similar disk of Lynden-Bell & Pringle (1974; Hartmann et al. 1998),
@@ -765,12 +765,22 @@ const float R_OUT = ${G(MODEL.R_OUT)}, P_OUT = ${G(MODEL.P_OUT)};   // the disk'
 #ifdef SIG_CUT
 float cutOut(float R){ return pow(R / R_OUT, P_OUT); }
 float cutSlope(float R){ return P_OUT * cutOut(R); }
+#define CUT_DD 2.0   // (d cutSlope / d ln R over cutSlope in occDQ: the Gaussian's 2 kept with the cut of before, as it was)
 #else
 #ifndef SIG_RC
 #define SIG_RC ${G(MODEL.R_OUT)}
 #endif
-float cutOut(float R){ float u = R / SIG_RC; return u * u; }
-float cutSlope(float R){ return 2.0 * cutOut(R); }
+// (Round 19a, the owner, of the own light's X edge-on, the lit thin gas of the Gaussian tail over the crest's shadow: "then a model
+// with a stronger truncation may look better") The taper's exponent, exp(-(R / R_c)^p): p = SIG_P, 3 by default (MODEL.PT; the
+// Gaussian's 2 until round 18n: data-sigp="2", the page's ?sigp=2, 1 to 8), with the tail's picture kept (the crest's shadow and
+// the rest, unlike SIG_CUT's). With 3 the tail ends by about 50 au (Sigma's taper e^-4.6 there, e^-2.8 with the Gaussian) and the
+// thin gas over the crest's cone holds too little to show as the X's arms beyond the body (DESIGN.md section 56).
+#ifndef SIG_P
+#define SIG_P ${G(MODEL.PT_DEF)}
+#endif
+float cutOut(float R){ float u = R / SIG_RC; return SIG_P == 2.0 ? u * u : pow(u, SIG_P); }
+float cutSlope(float R){ return SIG_P * cutOut(R); }
+#define CUT_DD SIG_P
 #endif
 const float LNTAU1 = ${G(MODEL.LNTAU1)};               // ln of the grazing optical depth toward the star at the midplane, 1 au
 // (round 18b) the crest of the irradiated surface (crestJS in the script): CREST = (its radius, ln tau* at its midplane a, its
@@ -1943,6 +1953,12 @@ float selfLight(float Tb){
 // surface z_s (N_perp = Sigma_s) is a surface only where it rises outward. Its tail beyond 46 au (z_s 10.3 au at 45 au, then down to
 // the midplane at 70 au, where Sigma is 2 Sigma_s) and the inner slopes of the planets' gaps keep the interior's temperature through
 // the whole column. 2, 'colstar': round 18m's, the column's depth or xs, the deeper (DESIGN.md section 55)
+// (Round 19a, the owner, of round 18n's rule: "not convinced yet; decide the lit region by the column from the centre and the
+// vertical column both", and, shown that this is round 18m's and that its X is the Gaussian tail's lit thin gas: "then a model with a
+// stronger truncation may look better") 'colstar' the default again: hot only where the starlight reaches and the column from above
+// is under Sigma_s, nothing hot that the star does not light (round 18n's 'col' warmed the column's surface inside the crest's
+// shadow, 37 K against the interior's 15 K at 45 au, 8 au up, and cooled the lit gas over the cone, 84 K to 11 K at 60 au); the X
+// goes with the tail, whose taper's exponent is 3 now (see cutOut). 'col', round 18n's, by the state's selft (DESIGN.md section 56)
 uniform vec2 uSelfT;
 float erfcE(float u){ float t = 1.0 / (1.0 + 0.3275911 * u); return t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))); }   // (erfc(u) e^(u^2), u >= 0)
 // (round 18n) selfW, the surface's share (below the model's constants: it takes their cutSlope and the planets' gapT)
@@ -2166,6 +2182,12 @@ const float PILE = 0.5;                 // extra glow of the ice pile-up beyond 
 const float PEB_RING = ${G(PEB_RING)};   // (round 8) the pebbles' excess at a planet's pressure maximum, see PEB_RING in the script
 const vec3 EXT = vec3(0.90, 0.97, 1.08); // small grains absorb blue light more strongly
 const vec3 STARCOL = vec3(1.0, 0.87, 0.72);
+// (Round 19a, the visual review: "the star does not read as the light source") Its glare: one more term of the star's small
+// screen-space profile (see starGlow in main), STAR_HALO / (1 + (d / 9 px)^2), a soft glow some tens of pixels across (0.24 on
+// the display at 20 px, 0.1 at 40 px, at the exposure 1), eased with the camera's distance (1 / (1 + (d / 150 au)^2): a sixth
+// from the far view's 340 au, where the disk itself is a few tens of pixels and the glare would drown it). Dimmed as the star's
+// light is by what lies in front of it.
+const float STAR_HALO = 0.3;
 // (round 8) the materials' colours in the model's look (linear; see MAT in the script): each material its own hue
 uniform vec3 uMat[${MAT.length}];
 ${MAT.map((m, i) => `#define MAT_${m[0].toUpperCase()} uMat[${i}]`).join('\n')}
@@ -3181,13 +3203,13 @@ float occQ(vec3 ro, vec3 rd, float t){
   float R = max(length(p.xy), 1e-3), lnR = log(R), g = p.z / (H0 * exp(1.25 * lnR));
   return -2.25 * lnR - cutOut(R) + gapLn(R) + (R < R_IN * 1.3 ? log(max(smoothstep(R_IN * 0.8, R_IN * 1.3, R), 1e-30)) : 0.0) - 0.5 * g * g;
 }
-// q's first and second derivatives along the ray at t (the power law, the taper as the Gaussian's d cutSlope / d ln R = 2 cutSlope,
+// q's first and second derivatives along the ray at t (the power law, the taper's d cutSlope / d ln R = p cutSlope (CUT_DD: p, round 19a; the Gaussian's 2 until then, kept with the cut of before),
 // the vertical Gaussian; the gaps and the dust's edge left out): only the first node's distance takes them
 vec2 occDQ(vec3 ro, vec3 rd, float t){
   vec3 p = ro + rd * t;
   float R = max(length(p.xy), 1e-3), Rd = dot(p.xy, rd.xy) / R, H = H0 * pow(R, 1.25), g = p.z / H, u = Rd / R;
   float du = (dot(rd.xy, rd.xy) - 2.0 * Rd * Rd) / (R * R), dg = rd.z / H - 1.25 * g * u, ddg = -1.25 * (rd.z * u / H + dg * u + g * du), cs = cutSlope(R);
-  return vec2(-(2.25 + cs) * u - g * dg, -(2.25 + cs) * du - 2.0 * cs * u * u - dg * dg - g * ddg);
+  return vec2(-(2.25 + cs) * u - g * dg, -(2.25 + cs) * du - CUT_DD * cs * u * u - dg * dg - g * ddg);   // (round 19a: CUT_DD, the taper's exponent; 2.0, the Gaussian's)
 }
 float occColumn(vec3 ro, vec3 rd, float t1){
   if (t1 <= 1e-6) return 0.0;   // (a lobe laid in at the camera: no stretch)
@@ -4138,7 +4160,7 @@ void main(){
   vec3 sv = vec3(dot(-ro, uBasis[0]), dot(-ro, uBasis[1]), dot(-ro, uBasis[2]));
   vec2 spx = (vec2(sv.x / (sv.z * uTanHalf * aspect), sv.y / (sv.z * uTanHalf)) * 0.5 + 0.5) * uRes;
   float dpx = length(gFc - spx) / uPx;
-  vec3 starGlow = STARCOL * (40.0 * exp(-dpx * dpx / 1.2) + 0.4 * exp(-dpx / 2.0) + 0.02 / (1.0 + dpx * dpx / 50.0)) * uStar;
+  vec3 starGlow = STARCOL * (40.0 * exp(-dpx * dpx / 1.2) + 0.4 * exp(-dpx / 2.0) + 0.02 / (1.0 + dpx * dpx / 50.0) + STAR_HALO / (1.0 + dpx * dpx / 80.0) / (1.0 + roLen * roLen / 22500.0)) * uStar;
   float tStar = max(-dot(ro, rd), 0.0);
 
   // the cutaway: from a camera in the part cut away the ray enters the kept part at tCut, where it meets a cut face
@@ -4710,8 +4732,8 @@ void main(){
   const ss = (a, b, x) => { const t = Math.min(Math.max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t); };
   // (round 18a: the taper of the gas's surface density and its slope d / d ln R, as cutOut and cutSlope in the GLSL; MODEL.TAIL.
   // Round 18b: the Gaussian tail, (R / R_c)^2 and twice that; 18a's (R - 1 au) / R_c and R / R_c gave way to it)
-  const cutOut = (R) => (MODEL.TAIL ? (R / MODEL.RC) * (R / MODEL.RC) : Math.pow(R / MODEL.R_OUT, MODEL.P_OUT));
-  const cutSlope = (R) => (MODEL.TAIL ? 2 * cutOut(R) : MODEL.P_OUT * cutOut(R));
+  const cutOut = (R) => (MODEL.TAIL ? (MODEL.PT === 2 ? (R / MODEL.RC) * (R / MODEL.RC) : Math.pow(R / MODEL.RC, MODEL.PT)) : Math.pow(R / MODEL.R_OUT, MODEL.P_OUT));   // (round 19a: MODEL.PT, the taper's exponent)
+  const cutSlope = (R) => (MODEL.TAIL ? MODEL.PT * cutOut(R) : MODEL.P_OUT * cutOut(R));
   // (Round 18b, the owner: "the surface's rendering is off the gas's tail") The crest of the irradiated surface. The local surface
   // z_s = H sqrt(2a), a = ln tau*_mid (the starlight's depth at the midplane), rises as z_s / R = h sqrt(2a) (h = H / R) while the
   // disk flares, and turns over where the taper thins the disk: at the radius where a = 2.5 + 2 cutSlope (beta's first term is 0
@@ -4725,12 +4747,12 @@ void main(){
   let crestMemo = null;
   const crestJS = () => {
     if (!MODEL.TAIL) return null;
-    if (crestMemo && crestMemo.rc === MODEL.RC) return crestMemo;
+    if (crestMemo && crestMemo.rc === MODEL.RC && crestMemo.pt === MODEL.PT) return crestMemo;
     const a = (R) => MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R);
     let lo = 0.1, hi = 50 * MODEL.RC;
     for (let i = 0; i < 100; i++) { const m = Math.sqrt(lo * hi); if (a(m) - 2.5 - 2 * cutSlope(m) > 0) lo = m; else hi = m; }
     const R = Math.sqrt(lo * hi), h = MODEL.H0 * Math.pow(R, 0.25), r6 = (v) => +v.toPrecision(6);
-    crestMemo = { rc: MODEL.RC, R: r6(R), a: r6(a(R)), h: r6(h), th: r6(h * Math.sqrt(2 * a(R))) };
+    crestMemo = { rc: MODEL.RC, pt: MODEL.PT, R: r6(R), a: r6(a(R)), h: r6(h), th: r6(h * Math.sqrt(2 * a(R))) };
     return crestMemo;
   };
   // the crest's shadow (xCrest in the GLSL): ln tau* at least the crest's at the angle az / R beyond the crest, -Infinity inside it
@@ -5401,7 +5423,7 @@ void main(){
   const LIT_JS = { F1: 2.7994, RN: 6, RB: 12, P: 0.6 };   // (litFall(1 au), as LIT_F1 in the GLSL; round 18c's knee, its end, the power)
   let starMemo = null;
   function starTableData(litFlat = false) {
-    const key = MODEL.TAIL + ':' + MODEL.RC + ':' + litFlat;
+    const key = MODEL.TAIL + ':' + MODEL.RC + ':' + MODEL.PT + ':' + litFlat;
     if (starMemo && starMemo.key === key) return starMemo;
     const { NR, NU, R0, R1, SUB, NS } = ST, l0 = Math.log(R0), dl = Math.log(R1 / R0) / (NR - 1), d = new Float32Array(NR * NU * 4);
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
@@ -5494,6 +5516,7 @@ void main(){
     const rcV = Number(box.dataset.rc);
     MODEL.TAIL = box.dataset.sigtail !== '0';
     MODEL.RC = box.dataset.rc != null && box.dataset.rc !== '' && Number.isFinite(rcV) ? Math.round(10 * Math.min(200, Math.max(5, rcV))) / 10 : MODEL.R_OUT;
+    { const pv = Number(box.dataset.sigp); MODEL.PT = box.dataset.sigp != null && box.dataset.sigp !== '' && Number.isFinite(pv) ? Math.round(10 * Math.min(8, Math.max(1, pv))) / 10 : MODEL.PT_DEF; }   // (round 19a: data-sigp, the taper's exponent, 1 to 8; 3 unless given)
     // (round 13c) the mass budget's settings, before anything asks for a line's solution or draws the wind map. (Round 14a: from the
     // model's parameters, PAR, which an engine built again after a lost context keeps; the page's development switches data-mdot,
     // -lam (two numbers), -lamin and -chic taken in once, as aliases of the parameters; data-mflux and data-lam="old" switches still)
@@ -5546,7 +5569,7 @@ void main(){
     // (round 18m) the turbulence of before, uniform in height beyond the inner disk (the disk map's r alone, a 2D texture): ?turb3d=0
     // (data-turb3d="0", TURB3D_OFF), to compare; by default the disk map is a 2D array with the turbulence's planes (see TURBZ)
     const turbFlat = box.dataset.turb3d === '0';
-    const hdrDefs = [mpConst && 'MP_CONST', wextOld && 'WEXT_OLD', !MODEL.TAIL && 'SIG_CUT', MODEL.TAIL && MODEL.RC !== MODEL.R_OUT && 'SIG_RC ' + G(MODEL.RC),
+    const hdrDefs = [mpConst && 'MP_CONST', wextOld && 'WEXT_OLD', !MODEL.TAIL && 'SIG_CUT', MODEL.TAIL && MODEL.RC !== MODEL.R_OUT && 'SIG_RC ' + G(MODEL.RC), MODEL.TAIL && MODEL.PT !== MODEL.PT_DEF && 'SIG_P ' + G(MODEL.PT),
       crest && 'CREST vec4(' + [crest.R, crest.a, crest.h, crest.th].map(G).join(', ') + ')',
       litFlat && 'LIT_FLAT', starTab && 'ST_UG ' + G(starTab.ug), 'OBS_CT vec2(' + obsCyl.map(G).join(', ') + ')',
       (box.dataset.skinlos === '0' || !MODEL.TAIL) && 'SKIN_THRU',   // (round 18f: ?skinlos=0 and the cut of before, see SKIN_LOS in the GLSL)
@@ -6105,6 +6128,7 @@ void main(){
     // across the joints). The parcels of the wind (and of the envelope) are marks of the flow, not clumps of gas (round 8:
     // small arrows, see ARROW; short dashes with tails before).
     let showField = !('nofield' in box.dataset);
+    const FIELD_LOD = [0.004, 0.03], FIELD_WIN = [5, 24], FIELD_LOD_ON = box.dataset.fieldlod !== '0';   // (round 19a: see drawLines' lodK)
     // geometry: NL field lines whose feet come from a 2D Sobol sequence, quasi-uniform in ln R (0.2 to 25 au)
     // and azimuth; each line is drawn up to ZTOP, with points through the disk (diskHeights) and the heights CHI_S
     // above it; wind parcels carry a release phase in [0, 1). Below, two sets that fade into each other with the wind's
@@ -6405,15 +6429,24 @@ void main(){
     function drawField() {
       fieldPts = [];
       if (fieldAmp <= 0) { for (const e of [...halo, ...core]) setD(e, ''); return; }
-      const gain = Number(box.dataset.field || 0.5) * (opt.slice ? 0.6 : 1);   // quieter behind a slice
+      const gain = Number(box.dataset.field || 0.4) * (opt.slice ? 0.6 : 1);   // quieter behind a slice (round 19a: 0.4, a fifth lighter than the 0.5 of before, so that the disk and the star read under the lines)
       const dL = new Array(NB).fill(''), dD = new Array(NBM).fill('');
       const asymS = asymAmp * asymAmp * (3 - 2 * asymAmp);
       shapeLines(Math.round(ASYM_F_JS * asymS * 100) / 100);
       // (close to the star every other line: they are far and many there, and the magnetosphere's lines are the subject)
-      const thin = Math.hypot(cam[0], cam[1], cam[2]) < 0.5 ? 2 : 1;
+      const dStar = Math.hypot(cam[0], cam[1], cam[2]), thin = dStar < 0.5 ? 2 : 1;
+      // (Round 19a, the visual review: "in the first view the star is buried under the field lines") A line whose foot lies within
+      // a few pixels of the star on the screen is not drawn, and comes in over the next few: lines from feet under FIELD_LOD[0]
+      // of the camera's distance from the star (0.22 au from the first view's 54 au, about 4 px) out, in full from FIELD_LOD[1]
+      // (1.6 au there). Seen from afar the inner lines wound into a bright knot on the axis that hid the star and the inner
+      // disk; closer, each comes in as its foot parts from the star. data-fieldlod="0": all, as before.
+      const lodK = FIELD_LOD_ON ? (r0) => ss(FIELD_LOD[0] * dStar, FIELD_LOD[1] * dStar, r0) : () => 1;
+      // (and no line is drawn across the star's image: within FIELD_WIN[0] px of it on the screen none, in full from FIELD_WIN[1];
+      // the lines are a drawing laid over the picture, and the light source shows through its window)
+      const qS = project([0, 0, 0]), winK = FIELD_LOD_ON && qS[2] > zN ? (q) => ss(FIELD_WIN[0], FIELD_WIN[1], Math.hypot(q[0] - qS[0], q[1] - qS[1])) : () => 1;
       for (let li = 0; li < lines.length; li += thin) {
         const L = lines[li];
-        const kL = L.k(asymS);
+        const kL = L.k(asymS) * lodK(L.r0);
         if (kL <= 0.004) continue;
         const rot = L.phi0 + Omega(L.r0) * time, n0 = L.pts.length, cr = Math.cos(rot), sr = Math.sin(rot);
         // projected samples (null behind the camera, or far off the picture: beyond twice its size on any side) and their
@@ -6426,7 +6459,7 @@ void main(){
           const P = [s.R * c, s.R * sn, s.z], q = project(P);
           if (q[2] > zN && q[0] > -2 * W && q[0] < 3 * W && q[1] > -2 * Hh && q[1] < 3 * Hh && kept(P)) {
             if (qk && j < n0 - 1 && (q[0] - qk[0]) * (q[0] - qk[0]) + (q[1] - qk[1]) * (q[1] - qk[1]) < 2.25) continue;
-            const a = s.b * kL * gain * seen(P) * (1 - faceAlpha(P));
+            const a = s.b * kL * gain * seen(P) * (1 - faceAlpha(P)) * winK(q);
             Q.push(q); A.push(a); qk = q;
             if (a > 0.04) fieldPts.push(q[0], q[1]);
           } else if (qk !== null || !Q.length || Q[Q.length - 1] !== null) { Q.push(null); A.push(0); qk = null; }
@@ -6658,7 +6691,7 @@ void main(){
       // (round 18i) the model look's light, 'star' or 'self', and the opacity of its own light, cm^2 per gram of gas (see SELF)
       glow: 'star', selfk: SELF.DEF,
       // (round 18l) the own light's temperature (SELF_T) and the surface's column Sigma_s, g cm^-2 (see SELF)
-      selft: 'col', selfnc: SELF.NC_DEF
+      selft: 'colstar', selfnc: SELF.NC_DEF
     };
     const matLin = new Float32Array(MAT.flatMap(([, hex, k]) => linHex(hex).map((v) => v * k)));   // (round 8, see MAT)
     const clumps = Array.from({ length: 6 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0, crossed: true }));
@@ -7980,14 +8013,22 @@ void main(){
     // motion it is found at once (blocking reads, up to five frames). While the view moves (a flight, a drag, a touch) it
     // follows: every frame that can be measured is, whatever the view's key by the time it is read, and the step is a
     // plain one from the exposure of the frame measured (the bounds and the count of tries belong to one view).
-    const AE = { D: 12, TARGET: 0.46, BLOWN: 0.02, DEAD: 0.06, GAIN: 3, STEP: 1.2, MIN: 0.01, TRIES: 8 };
+    // (Round 19a, the visual review: "the star-lit look sinks into black seen edge-on, from above and from afar") And it rises above
+    // 1 where the picture is dim: when its brightest part, the highest of the measurement's cells (their mean display level, a
+    // cell 1/32 of the picture across: the lit nebulae edge-on, the envelope's lit cavity from afar), is under AE.PEAK, up to AE.UP
+    // times, as a camera is exposed for its subject; from anywhere, no longer within AE.D alone (D is kept for the record; the
+    // close views' rule is as it was, and a view whose brightest part is bright keeps the exposure 1 it had: the first view, the
+    // wind's). The sky and its stars are not multiplied (see main's end), nor the star's own light (uStarK). data-aeup="0" (the
+    // page's ?aeup=0): as before, never above 1 and within AE.D alone.
+    const AE = { D: 12, TARGET: 0.46, BLOWN: 0.02, DEAD: 0.06, GAIN: 3, STEP: 1.2, MIN: 0.01, TRIES: 8, UP: 8, PEAK: 0.6, PDEAD: 0.12 };
+    const aeUp = box.dataset.aeup === '0' ? 0 : Math.log(AE.UP);
     const aeT = target(AE_W, AE_H, gl.RGBA8, gl.CLAMP_TO_EDGE), aeBuf = gl.createBuffer(), aePx = new Uint8Array(AE_W * AE_H * 4);
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, aeBuf); gl.bufferData(gl.PIXEL_PACK_BUFFER, AE_W * AE_H * 4, gl.STREAM_READ); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
     let aeLn = 0, aeGoal = 0, aeSync = null, aeLnUsed = 0, aeFresh = true, aeTries = 0, aeTrack = false, aeKindUsed = '', aeSeen = null;
     let aeLo = -Infinity, aeHi = Infinity;   // ln of exposures found too dark and too bright for this view (bisection)
     let aeGen = 0, aeGenUsed = 0, aeKey = '';  // the view's count, that of the frame being measured (an older one is not used),
                                                // and the view, coarsely (the clock running does not make a new one)
-    const aeOn = () => lookNow === 'model' && !selfOn() && !!cam && Math.hypot(cam[0], cam[1], cam[2]) < AE.D;   // (round 18i: not with the own light, see SELF)
+    const aeOn = () => lookNow === 'model' && !selfOn() && !!cam && (aeUp > 0 || Math.hypot(cam[0], cam[1], cam[2]) < AE.D);   // (round 18i: not with the own light, see SELF)
     const aeHeld = () => !!burst || lookDip() < 1;
     // (the view moving: a flight, a drag, a touch on the picture)
     const viewMoving = () => !!flyV || !!flyT || !!path || !!rollEase || dragging || touching;   // (round 18a: rollEase)
@@ -8003,28 +8044,34 @@ void main(){
     // as the exposure, in ln; blown pixels count as ln 1.1 per percent over), at most AE.STEP; between exposures known to
     // be too bright and too dark for this view it goes halfway, and it settles on the darker side when they are close.
     function aeAim(px, lnUsed, track) {
-      let s = 0, b = 0, w = 0;
-      for (let i = 0; i < px.length; i += 4) { s += px[i]; b += px[i + 1]; w += px[i + 2]; }
+      let s = 0, b = 0, w = 0, pk = 0;
+      // (round 19a: pk, the brightest cell's mean level, of cells at least a quarter the volume's)
+      for (let i = 0; i < px.length; i += 4) { s += px[i]; b += px[i + 1]; w += px[i + 2]; if (px[i + 2] >= 64) pk = Math.max(pk, px[i] / px[i + 2]); }
       // (round 10a, dev.6, for checks: what the last measurement saw, diskLoops().ae.seen: the mean level and the blown share of
       // the volume's part, and that part's share of the picture)
-      aeSeen = { m: w > 0 ? Math.round(1000 * s / w) / 1000 : null, blown: w > 0 ? Math.round(10000 * b / w) / 10000 : null, vol: Math.round(1000 * w / (255 * AE_W * AE_H)) / 1000, ln: Math.round(1000 * lnUsed) / 1000 };
+      aeSeen = { m: w > 0 ? Math.round(1000 * s / w) / 1000 : null, blown: w > 0 ? Math.round(10000 * b / w) / 10000 : null, vol: Math.round(1000 * w / (255 * AE_W * AE_H)) / 1000, ln: Math.round(1000 * lnUsed) / 1000, pk: Math.round(1000 * pk) / 1000 };
       if (!track && aeTries >= AE.TRIES) { aeFresh = true; return false; }
       // (nothing to measure: cut faces or the star cover nearly all of the picture; back to 1)
       if (w < 0.05 * 255 * AE_W * AE_H) { aeFresh = true; if (lnUsed === 0) return false; aeGoal = 0; return true; }
       const m = s / w, blown = b / w, e = Math.log(Math.max(m, 1e-3) / AE.TARGET);
-      const bright = blown > AE.BLOWN || e > AE.DEAD, dark = !bright && lnUsed < 0 && e < -AE.DEAD && blown < 0.3 * AE.BLOWN;
+      // (round 19a: above 1, ep, the brightest cell's level against AE.PEAK: too bright there over the band AE.PDEAD, too dark under
+      // it; a step from it, the Newton step's part as below)
+      const ep = Math.log(Math.max(pk, 1e-3) / AE.PEAK), over = lnUsed > 0 && ep > AE.PDEAD;
+      const bright = blown > AE.BLOWN || e > AE.DEAD || over;
+      const dark = !bright && e < -AE.DEAD && blown < 0.3 * AE.BLOWN && (lnUsed < 0 || (lnUsed < aeUp && ep < -AE.PDEAD));
       if (!bright && !dark) { aeFresh = true; return false; }
+      const stepOf = () => Math.min(AE.STEP, AE.GAIN * (bright ? Math.max(e, over ? ep : 0, 0) + 10 * Math.max(blown - AE.BLOWN, 0) : lnUsed < 0 ? -e : -ep));
       // (following a moving view: a plain step from the frame measured)
       if (track) {
-        aeGoal = Math.min(0, Math.max(Math.log(AE.MIN), lnUsed + (bright ? -1 : 1) * Math.min(AE.STEP, AE.GAIN * (bright ? Math.max(e, 0) + 10 * Math.max(blown - AE.BLOWN, 0) : -e))));
+        aeGoal = Math.min(aeUp, Math.max(Math.log(AE.MIN), lnUsed + (bright ? -1 : 1) * stepOf()));
         aeFresh = false;
         return true;
       }
       if (bright) aeHi = Math.min(aeHi, lnUsed); else aeLo = Math.max(aeLo, lnUsed);
-      let goal = lnUsed + (bright ? -1 : 1) * Math.min(AE.STEP, AE.GAIN * (bright ? Math.max(e, 0) + 10 * Math.max(blown - AE.BLOWN, 0) : -e));
+      let goal = lnUsed + (bright ? -1 : 1) * stepOf();
       if (aeHi - aeLo < 0.1) goal = aeLo;
       else if (goal <= aeLo || goal >= aeHi) goal = 0.5 * (aeLo + aeHi);
-      goal = Math.min(0, Math.max(Math.log(AE.MIN), goal));
+      goal = Math.min(aeUp, Math.max(Math.log(AE.MIN), goal));
       aeTries++;
       if (Math.abs(goal - lnUsed) < 1e-3) { aeFresh = true; return false; }
       aeGoal = goal; aeFresh = false;
