@@ -20,7 +20,11 @@ export const FOV = 32;   // the engine's vertical field of view (data-fov), degr
 
 export const PLACES = [
   // (round 8: the whole disk seen from 16 degrees, 22 before, so that its flared, lit surface and the dark band under it show)
-  { id: 'whole', view: { el: 16, az: -65, d: 90 }, fitW: 31, look: 'model', field: 0, cut: null, needs: 1 | 2 | 4 | 8 },
+  // (round 15a, the owner's link of 2026-11-04: from 38.6 degrees and 53.8 au, closer and higher, with the field lines; the near edge
+  // leaves the picture at the bottom. fitW 20 au: the view kept on a stage at least 1.3 times as wide as high, as most places are,
+  // and farther on a narrower one, so that the start's planet at 10 au and its gap stay across. It was 31 at 90 au: the whole disk
+  // across down to 1.2)
+  { id: 'whole', view: { el: 38.63, az: 0.61, d: 53.8 }, fitW: 20, look: 'model', field: 1, cut: null, needs: 1 | 2 | 4 | 8 },
   { id: 'wind', view: { el: 10, az: -80, d: 60 }, fitW: 22, look: 'model', field: 1, cut: null, needs: 1 | 2 | 8 | 64, action: 'asym' },
   { id: 'snow', view: { el: 30, az: -65, d: 9 }, fitW: 3.6, look: 'model', field: 0, cut: null, needs: 1 | 2 | 4, action: 'burst' },
   { id: 'planet', view: { p: 1, el: 30, az: 160, d: 1.6 }, fitW: 0.6, look: 'model', field: 0, cut: null, needs: 1 | 2 | 4 | 16, action: 'waves' },
@@ -43,8 +47,9 @@ export function fitDistance(place, aspect) {
 
 // The engine's state for arriving at a place (diskSet keys), given the components shown now and the stage's aspect.
 export function placeState(place, mode, aspect) {
+  // (round 18a: a place's view is unrolled, roll 0)
   const v = place.view, st = { p: v.p ? 1 : 0, el: v.el, az: v.az, d: Math.round(fitDistance(place, aspect) * 1000) / 1000,
-    tx: 0, ty: 0, tz: 0, look: place.look, field: place.field, mode: (mode | place.needs) & ~(place.hides ?? 0) };
+    tx: 0, ty: 0, tz: 0, roll: 0, look: place.look, field: place.field, mode: (mode | place.needs) & ~(place.hides ?? 0) };
   if (place.cut) { st.slice = place.cut.slice; st.sq = place.cut.sq; } else st.slice = 0;
   return st;
 }

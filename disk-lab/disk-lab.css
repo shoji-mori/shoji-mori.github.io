@@ -96,6 +96,15 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .mat-list i{display:inline-block;width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 .5px rgba(255,255,255,.3)}
 .mat-list i+i{margin-left:-4px}
 .mat-list i.arr{width:auto;height:auto;border-radius:0;box-shadow:none;font-style:normal;font-size:11px;line-height:1;color:#cfeaff}
+/* (round 18k) with the own light: the bar of the brightness temperature (the gas's and the pebbles' colours), and the key's title */
+/* (round 18m: the bar in shades of the gas's colour, its title tb-title; with ?selfhue=1, tbh, round 18k's title) */
+.mat-key.tb>.mat-title:not(.tb-title),.mat-key:not(.tb)>.tb-title,.mat-key.tbh>.tb-title,.mat-key:not(.tbh)>.tbh-title{display:none}
+.mat-key.tb.tbh>.mat-title.tbh-title{display:inline}
+.mat-list li.tb{display:grid;gap:2px;padding:1px 0 3px}
+.mat-list i.tb-bar{width:150px;height:7px;border-radius:2px}
+.mat-list .tb-ticks{position:relative;width:150px;height:11px;font-size:9.5px;line-height:11px;color:var(--text-3)}
+.mat-list .tb-ticks span{position:absolute;top:0;transform:translateX(-50%)}
+.mat-list .tb-ticks span:first-child{transform:none}
 
 .stage-hint,.stage-note{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:4;max-width:calc(100% - 2*var(--gx));padding:6px 14px;border-radius:999px;background:rgba(12,15,23,.78);border:1px solid var(--line);font-size:12.5px;color:var(--text-2);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .5s}
 .stage-hint.on,.stage-note.on{opacity:1}
@@ -118,6 +127,16 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .stage-log .log-note{color:var(--text-2)}
 .stage-log pre{overflow:auto;margin:0;padding:8px;border-radius:8px;background:rgba(255,255,255,.04);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}
 .about .about-ver{margin:-8px 0 16px;font-size:12px;color:#6a6f75}
+/* (2026-11-04) the record of updates in a dialog beside About: dark like the record page it frames */
+.about.history{background:#0c0f17;color:var(--text)}
+.about.history .about-close{color:var(--text-2)}
+.about.history .history-inner{padding:36px clamp(14px,3vw,28px) 24px}
+.about.history h2{color:var(--text);font-size:17px;margin:0 0 12px}
+.history-frame{display:block;width:100%;height:min(72vh,900px);border:1px solid var(--line-2);border-radius:8px;background:#0c0f17}
+.about.history .about-log{margin:12px 0 0}
+.about .about-log{margin:-12px 0 16px;font-size:12px}
+.about .about-log a{color:var(--accent);text-decoration:none}
+.about .about-log a:hover{text-decoration:underline}
 .about #logOpen{margin-left:6px;padding:1px 9px;min-height:0;border:1px solid var(--paper-line);border-radius:999px;color:var(--paper-accent);font-size:12px}
 .lab[data-state=loading] .stage-note.on{bottom:50%;transform:translate(-50%,50%);background:none;border:0;color:var(--text-2)}
 
@@ -177,6 +196,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .segmented.small button{padding:4px 10px;font-size:12.5px}
 /* (round 7) the saved picture's size, under the save button */
 #saveSizeGroup{margin-top:8px}
+/* (round 11c) the saved picture's shape and the credit's toggle, on one line where the rail allows */
+.save-frame{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin-top:6px}
+.save-frame .toggle{min-height:26px;padding:2px 9px;font-size:12px}
 .segmented.looks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-radius:12px;width:100%}
 .segmented.looks button{border-radius:9px;padding:6px 4px;font-size:12.5px}
 .rail-context .segmented{flex-wrap:wrap;border-radius:14px}
@@ -187,6 +209,9 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .velocity{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2)}
 .velocity input{width:120px;accent-color:var(--accent)}
 .velocity output{font-variant-numeric:tabular-nums;min-width:6.6em;color:var(--text)}
+/* (round 18i) the model look's light under the looks: its name beside its two chips; with the own light its opacity's row (.mp-row) */
+.glow-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;font-size:12.5px;color:var(--text-2)}
+.rail-context .mp-row{margin:0}
 
 /* the places' actions, the rail's toggles and chips */
 .action,.chip,.toggle{display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:3px 10px;border:1px solid var(--line-2);border-radius:999px;font-size:12.5px;color:var(--text);transition:background-color .2s,border-color .2s;text-align:left}
@@ -208,10 +233,39 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 
 /* the components (Show): a toggle each; turned on, its settings below it */
 .comps{display:grid;gap:5px}
-.comp{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:10px;row-gap:5px}
+.comp{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:10px;row-gap:5px}
 .comp>.toggle{justify-self:start}
+/* (round 13a) beside the toggle: the colours of its materials in the model look, small swatches, and the chip back to the default.
+   (Round 18c: the see-through's slider after them. Round 18d, the owner: "moving the see-through's bar makes its text appear and the
+   row breaks onto two lines; can't it go inside the colour palette?") One small round swatch, the component's colour now in the model
+   look (the pebbles' two, in halves), the half-filled mark in the other looks. It opens the component's palette below it, within the
+   column (app.js, palPlace), over the rows that follow: a row for each colour and the see-through's, all that changes kept inside it,
+   so that the toggle's row stays one line */
+.pal-btn{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:999px;color:var(--text-2);justify-self:start;transition:background-color .2s}
+.pal-btn:hover,.pal-btn[aria-expanded=true]{background:var(--wash-2)}
+.pal-btn:focus-visible{border-radius:999px}
+.pal-dot{width:16px;height:16px;border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.32)}
+.pal-btn .op-mark{display:none;width:14px;height:14px;stroke-width:1.4}
+.pal-btn.op-only .pal-dot{display:none}
+.pal-btn.op-only .op-mark{display:block}
+.pal{position:absolute;z-index:6;width:min(100%,17rem);display:grid;gap:4px;padding:7px 10px 8px;border-radius:12px;background:rgba(18,22,34,.97);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.45);scroll-margin:8px 0 36px}
+.pal-col{display:flex;align-items:center;gap:8px;min-height:28px}
+.pal-name{min-width:4.5em;font-size:12px;color:var(--text-2)}
+.pal-col input[type=color]{width:30px;height:24px;padding:0;border:1px solid var(--line-2);border-radius:6px;background:none;cursor:pointer;flex:none}
+.pal-col input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+.pal-col input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
+.pal-col input[type=color]::-moz-color-swatch{border:none;border-radius:4px}
+.pal-col input[type=color]:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.pal-col .chip{min-height:24px;padding:1px 8px;font-size:11.5px}
+.pal .mp-row{margin:2px 0 0}
+.pal-note{margin:2px 0 0;font-size:11.5px}
 .comp-opts{grid-column:1/-1;display:grid;gap:6px;justify-items:start;width:100%;margin:0 0 4px;padding:6px 0 7px 12px;border-left:1px solid var(--line-2)}
 .toggle.small{min-height:26px;padding:2px 9px;font-size:12px}
+/* (round 15a) the annotations under View: a checkbox for each kind */
+.ann-group{display:grid;margin-top:8px}
+.ann-group .talk-sub{margin:4px 0 2px}
+.ann-row{display:flex;align-items:center;gap:8px;min-height:26px;font-size:12.5px;color:var(--text-2);cursor:pointer}
+.ann-row input{width:15px;height:15px;margin:0;flex:none;accent-color:var(--accent)}
 .planet-list{display:grid;gap:4px;width:100%}
 /* (round 8) two lines: the toggle, the orbit's slider and the remove button; the mass and its slider */
 .planet-row{display:grid;grid-template-columns:6.6em minmax(0,1fr) 24px;align-items:center;gap:2px 6px;width:100%}
@@ -219,18 +273,140 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .planet-row input{min-width:0;accent-color:var(--accent)}
 .planet-mass,.pop-mass{font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right;padding-right:4px}
 .planet-mass sub,.pop-mass sub{font-size:.75em}
+/* (round 13e) the planets' accretion rate: its name and value on one line, the slider and the chip back to auto on the next
+   (round 15a, the owner: the slider changed its length while dragged, as the value's text did. Now the name and the chip, its place
+   kept while it is hidden; the slider across the row; the value under it) */
+.cpd-mdot{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 6px;width:100%;margin-top:4px}
+.cpd-mdot-k{grid-row:1;grid-column:1;font-size:12px;color:var(--text)}
+.cpd-mdot .chip{grid-row:1;grid-column:2;justify-self:end}
+.cpd-mdot-v{grid-row:3;grid-column:1/-1;font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;text-align:right}
+.cpd-mdot-v sub{font-size:.75em}
+.cpd-mdot input{grid-row:2;grid-column:1/-1;min-width:0;width:100%;accent-color:var(--accent)}
+/* (round 14a) the model's parameters (the rail's Model) and the wind's brightness under the wind: the name over a slider, its value
+   with its unit and, while it is changed, the chip back to the default
+   (round 15a, the owner: the bar changed its length while dragged. The chip now beside the name, its place kept while it is hidden,
+   and the value's cell as wide as its slider's widest text (app.js, valW): the bar keeps its length and its place) */
+.mp-group{margin:2px 0 6px}
+.mp-group .talk-sub{margin:10px 0 4px}
+.mp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:1px 8px;width:100%;margin:4px 0}
+.mp-row[hidden]{display:none}
+.mp-name{grid-row:1;grid-column:1;font-size:12px;color:var(--text-2)}
+.mp-row input[type=range]{grid-row:2;grid-column:1;min-width:0;width:100%;accent-color:var(--accent)}
+.mp-val{grid-row:2;grid-column:2;font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.mp-row .chip{grid-row:1;grid-column:2;justify-self:end;min-height:24px;padding:1px 8px;font-size:11.5px}
+.mp-row .chip[hidden],.cpd-mdot .chip[hidden]{display:inline-flex!important;visibility:hidden}
+.mp-derived{margin:4px 0 2px;font-size:11.5px}
+.gain-row{margin:2px 0 0}
+/* (round 18b, the owner: the see-through's controls more discreet: a mark and a short slider with no name, dimmed at rest, the value and
+   the chip once changed; round 18c: in the colours' span. Round 18d: in the component's palette, a row as the parameters' (.mp-row
+   above), its name, value and chip always in their places) */
 .icon-x{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;color:var(--text-3);font-size:15px;line-height:1}
 .icon-x:hover{background:var(--wash);color:var(--text)}
 #addPlanet[aria-pressed=true]{border-color:var(--accent);color:var(--text)}
 .lab.picking .disk-panel canvas{cursor:crosshair}
-.planet-pop{position:absolute;z-index:7;display:grid;grid-template-columns:auto minmax(0,1fr) 24px;align-items:center;gap:4px 8px;width:250px;padding:6px 6px 6px 12px;border-radius:12px;background:rgba(16,20,30,.92);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:12px;color:var(--text);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.planet-pop{position:absolute;z-index:7;display:grid;grid-template-columns:5em minmax(0,1fr) 24px;align-items:center;gap:4px 8px;width:250px;padding:6px 6px 6px 12px;border-radius:12px;background:rgba(16,20,30,.92);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:12px;color:var(--text);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .planet-pop input{min-width:0;accent-color:var(--accent)}
+/* (round 15a: the name in a column of its own width, 5em above, so that the sliders keep their length while dragged) */
+.pop-name{font-variant-numeric:tabular-nums;white-space:pre}
+/* (round 12a) the probe's panel, beside the point tapped (along the bottom of a narrow stage), in type large enough to read
+   from across a room; and the ring at the point, which fades */
+.probe-panel{position:absolute;z-index:7;width:min(360px,calc(100% - 16px));max-height:calc(100% - 16px);overflow:auto;padding:10px 12px 10px 14px;border-radius:12px;background:rgba(14,18,27,.93);border:1px solid var(--line-2);box-shadow:0 10px 30px rgba(0,0,0,.45);font-size:15px;line-height:1.35;color:var(--text);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.probe-panel.docked{left:8px;right:8px;bottom:8px;width:auto;max-height:55%;font-size:14px}
+.probe-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.probe-title{font-weight:600;font-size:16px;font-variant-numeric:tabular-nums}
+.probe-row{display:flex;justify-content:space-between;gap:12px;padding:1px 0}
+.probe-k{color:var(--text-2)}
+.probe-v{font-variant-numeric:tabular-nums;text-align:right}
+.probe-line,.probe-physics{margin:6px 0 0}
+.probe-physics{padding-top:6px;border-top:1px solid var(--line-2)}
+.probe-note{margin:6px 0 0;font-size:11.5px;color:var(--text-2)}
+.probe-mark{position:absolute;z-index:6;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.5);pointer-events:none;animation:probe-fade 2.6s ease-out forwards}
+@keyframes probe-fade{0%{opacity:1;transform:scale(.6)}20%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.4)}}
+@media (prefers-reduced-motion:reduce){.probe-mark{animation:probe-fade 1.2s linear forwards}}
 .pop-name{font-variant-numeric:tabular-nums;white-space:pre}
 /* the site's mark, white and faint, in the lower right of the stage (the saved pictures carry it too) */
 .watermark{position:absolute;right:14px;bottom:12px;z-index:3;width:56px;height:auto;opacity:.13;pointer-events:none;user-select:none}
 .rail-note.cite{line-height:1.55}
 .cite-line{color:var(--text-2)}
 .about .cite-line{font-size:13.5px;color:var(--ink-2)}
+
+/* (round 11a) moves and talks: a section of the rail that opens (closed, it is one line); the scenes' list */
+.talk>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;list-style:none;cursor:pointer}
+.talk>summary::-webkit-details-marker{display:none}
+.talk>summary h3{margin-bottom:0}
+.talk>summary::after{content:'';flex:none;width:6px;height:6px;margin:0 4px 3px 0;border-right:1.5px solid var(--text-3);border-bottom:1.5px solid var(--text-3);transform:rotate(45deg);transition:transform .2s}
+.talk[open]>summary::after{transform:rotate(-135deg);margin-bottom:-2px}
+.talk[open]>summary{margin-bottom:9px}
+.talk .talk-pace{margin-top:8px}
+.talk .seq-run{margin-top:10px}
+.talk-sub{margin:12px 0 7px;font-size:11px;font-weight:500;color:var(--text-3);letter-spacing:.08em;text-transform:uppercase}
+.lang-ja .talk-sub{font-size:12px;letter-spacing:.1em;text-transform:none}
+.seq-list{list-style:none;margin:7px 0 0;padding:0;display:grid;gap:4px}
+.seq-list:empty{display:none}
+.seq-row{display:grid;grid-template-columns:1.5em minmax(0,1fr) auto auto auto auto;align-items:center;gap:2px}
+.seq-row .n{font-size:11px;font-variant-numeric:tabular-nums;color:var(--text-3);text-align:right;padding-right:4px}
+.seq-row[aria-current=true] .n{color:var(--accent);font-weight:600}
+.seq-row input{min-width:0;height:26px;padding:0 7px;border:1px solid var(--line);border-radius:7px;background:transparent;color:var(--text);font:12.5px/1 var(--sans)}
+.seq-row input::placeholder{color:var(--text-3)}
+.seq-row input:focus{border-color:var(--line-2);outline:none}
+.seq-row .chip{min-height:24px;padding:1px 8px}
+.icon-chip{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;color:var(--text-3);font-size:13px;line-height:1}
+.icon-chip:hover:not(:disabled){background:var(--wash);color:var(--text)}
+.icon-chip:disabled{opacity:.3;cursor:default}
+#seqClear:disabled{opacity:.4;cursor:default}
+.chip[data-move][aria-pressed=true]{border-color:var(--accent)}
+/* (round 12b) the tilt switch in View (app.js, tiltInit): on shows as a move does */
+.chip[data-tilt][aria-pressed=true]{border-color:var(--accent)}
+.chip[data-tilt]:disabled{opacity:.45;cursor:default}
+/* (round 18e) the point looked at, in View under the roll: its name and the chip back to the star on a line (the chip's place kept
+   while it is hidden, as the other rows'), the four arrows under them; a press is not a double tap's zoom nor a text selection */
+.aim-pad{grid-row:2;grid-column:1/-1;display:flex;gap:5px;margin-top:2px}
+.aim{display:inline-grid;place-items:center;width:34px;height:28px;border:1px solid var(--line-2);border-radius:8px;color:var(--text-2);touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;transition:background-color .2s,border-color .2s}
+.aim:hover{background:var(--wash);border-color:rgba(255,255,255,.28);color:var(--text)}
+.aim:active{background:var(--wash-2);color:var(--text)}
+.aim svg{width:14px;height:14px}
+@media (pointer:coarse){.aim{width:44px;height:40px}}
+/* the presenter: the picture alone (the watermark and the picture's own keys kept), a black screen, the scene's name for a
+   moment, and buttons in the corner while the mouse moves; the cursor hidden when it rests */
+.lab[data-present]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);grid-template-areas:"stage"}
+.lab[data-present] .bar,.lab[data-present] .rail,.lab[data-present] .dock,.lab[data-present] .tabs,.lab[data-present] .stage-hint,.lab[data-present] .planet-pop{display:none!important}
+.lab[data-present]:not([data-pointer]) .stage,.lab[data-present]:not([data-pointer]) .disk-panel canvas{cursor:none}
+.present-black{position:absolute;inset:0;z-index:9;background:#000;display:none}
+.lab[data-black] .present-black{display:block}
+.present-hud{position:absolute;left:28px;bottom:44px;z-index:5;display:none;gap:2px;max-width:calc(100% - 200px);pointer-events:none;opacity:0;transition:opacity .6s}
+.lab[data-present] .present-hud{display:grid}
+.present-hud.on{opacity:1}
+.present-cap{font-size:clamp(18px,2.4vw,32px);font-weight:500;line-height:1.25;color:var(--text);text-shadow:0 1px 10px rgba(0,0,0,.8)}
+.present-n{font-size:13px;font-variant-numeric:tabular-nums;color:var(--text-2);text-shadow:0 1px 6px rgba(0,0,0,.8)}
+.present-ctl{position:absolute;top:12px;right:12px;z-index:10;display:none;gap:4px;padding:3px;border-radius:999px;background:rgba(12,15,23,.7);opacity:0;visibility:hidden;transition:opacity .3s,visibility .3s}
+.lab[data-present] .present-ctl{display:flex}
+/* (review of round 11a: hidden, not merely transparent, unless the mouse moves or one of them has the focus: not reached by Tab unseen) */
+.lab[data-present][data-pointer] .present-ctl,.lab[data-present] .present-ctl:focus-within{opacity:1;visibility:visible}
+/* (round 11c) a QR code for the audience, over the stage (under the black screen, B): dark on light with its quiet zone, as
+   phones read best; as large as the stage allows (in the presenter, the screen), the address under it in letters for the back
+   of a room */
+.qr-over{position:absolute;inset:0;z-index:8;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.88);container-type:size}
+.qr-over[hidden]{display:none}
+.qr-card{display:grid;justify-items:center;gap:12px;text-align:center}
+/* (no stroke: the icons' rule for every svg above would stroke each module 1.5 modules wide in the text's colour) */
+.qr-code svg{display:block;width:min(58vh,80vw);width:min(62cqh,86cqw);height:auto;border-radius:4px;stroke:none}
+.qr-url{font-size:clamp(16px,5.2cqh,60px);font-weight:600;line-height:1.15;color:#fff;letter-spacing:.01em;overflow-wrap:anywhere}
+.qr-note{max-width:min(64ch,90cqw);font-size:clamp(12px,2.1cqh,22px);line-height:1.45;color:var(--text-2)}
+.qr-close{position:absolute;top:12px;left:12px}
+/* (round 11b) the video: its choices in "Moves and talks"; while it is made, a cover over the stage (the picture there is drawn at the
+   video's size meanwhile, stretched to the box): its frames as they come, letterboxed, the progress and Cancel */
+.talk .export-only{margin-top:4px}
+.ex-what{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2)}
+.ex-what select{flex:1;min-width:0;height:28px;padding:0 6px;border:1px solid var(--line-2);border-radius:7px;background:var(--night-2);color:var(--text);font:12.5px var(--sans)}
+.ex-what select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.talk .ex-seg{margin-top:6px}
+.talk .ex-go{margin-top:8px}
+#exGo:disabled{opacity:.4;cursor:default}
+.export-cover{position:absolute;inset:0;z-index:11;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px var(--gx);background:var(--night)}
+.export-cover[hidden]{display:none}
+.ex-preview{display:block;width:100%;max-width:960px;height:auto;max-height:calc(100% - 130px);aspect-ratio:16/9;object-fit:contain;border-radius:6px;background:#000}
+.ex-progress{font-size:13px;color:var(--text);text-align:center;font-variant-numeric:tabular-nums;min-height:1.6em}
+.ex-front{font-size:12px;color:var(--text-3);text-align:center;max-width:52ch}
 
 /* ---- the two halves as tabs, on a narrow screen only ---- */
 .tabs{display:none}
@@ -325,6 +501,16 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   /* (the still layout has no "panel" area: placed there, the dock would make the grid add unnamed columns and
      squeeze the bar into one of zero width) */
   .lab[data-state=still] .dock{grid-area:dock}
+  /* (round 11a: the scenes' editing and the presenter are for laptops and desktops, the owner's choice; a phone keeps the moves
+     and Play) */
+  .talk .seq-edit,.talk .present-only{display:none!important}
+  /* (round 11b: and the video, as the presenter) */
+  .talk .export-only{display:none!important}
+}
+/* (review of round 11a, the supervisor's decision: the presenter offered where there is a mouse or a trackpad, not by the width alone:
+   an iPad without a keyboard keeps the moves and Play) */
+@media (hover:none),(pointer:coarse){
+  .talk .present-only{display:none!important}
 }
 /* phones: the dialog's button by its short name, so that the mark, the title and the languages fit on one line */
 @media (max-width:400px){
@@ -335,6 +521,14 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 @media (pointer:coarse){
   .icon-button{width:40px;height:40px}
   .tool,.action,.chip,.toggle{min-height:40px}
+  .pal-btn{width:40px;height:40px}
+  .pal-dot{width:22px;height:22px}
+  .pal-col{min-height:40px}
+  .pal-col input[type=color]{width:40px;height:34px}
+  .pal-col .chip{min-height:40px}
+  .mp-row .chip{min-height:40px}
+  .op-row input[type=range]{height:32px}
+  .ann-row{min-height:36px}
   .tool{height:40px}
   .route button{padding:9px 12px}
   .segmented button{padding-top:9px;padding-bottom:9px}

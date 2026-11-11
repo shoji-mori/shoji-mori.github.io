@@ -11,13 +11,13 @@ import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stash
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=532cb4a8ec';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=0d9c61f083';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.37', RELEASED = '2026-11-02';
+const VERSION = '1.9-dev.43', RELEASED = '2026-11-12';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -537,7 +537,8 @@ function keyItems(s) {
 const KEY_SVG = {
   tau1: '<path d="M1 5h22" stroke="#fff3df" stroke-width="1.5"/>',
   ice: '<path d="M1 5h22" stroke="#0a0d18" stroke-opacity=".6" stroke-width="4.6" stroke-dasharray="9 2" stroke-dashoffset="1"/><path d="M1 5h22" stroke="#6fd0ff" stroke-width="2.6" stroke-dasharray="7 4"/>',
-  pebbles: '<path d="M1 5h11" stroke="#b07a52" stroke-width="2.2"/><path d="M12 5h11" stroke="#e3f1ff" stroke-width="2.2"/>',
+  // (round 19e: with the dark edge the engine draws under them, its pebHalo)
+  pebbles: '<path d="M1 5h22" stroke="#0a0d18" stroke-opacity=".45" stroke-width="3.8"/><path d="M1 5h11" stroke="#b07a52" stroke-width="2.2"/><path d="M12 5h11" stroke="#e3f1ff" stroke-width="2.2"/>',
   contour: '<path d="M1 7c6-5 16-5 22 0" stroke="#fff" stroke-opacity=".55" stroke-width=".9"/>',
   field: '<path d="M2 9c4-1 8-4 10-8M12 9c4-1 8-4 10-8" stroke="#cfe3ff" stroke-opacity=".7" stroke-width=".9"/>',
   flow: '<path d="M5 5h13M14.5 2.7 18 5l-3.5 2.3" stroke="#e8f4ff" stroke-width="1.1"/>',
@@ -2448,6 +2449,9 @@ async function start() {
   // own, about 1.8 times thinner); ?cpd=old, round 8's disk (0.4 R_H, its colours and glow); see the engine's cpdPhys)
   if (q.get('cpdh') === 'drawn') box.dataset.cpdh = 'drawn';
   if (q.get('cpd') === 'old') box.dataset.cpd = 'old';
+  // (round 19d, the visual review, to compare: ?cpdvol=0, the planet's disk in the model look as the three clouds of before; by
+  // default a volume with the planet's bright point in it, see the engine's cpdVolume)
+  if (q.get('cpdvol') === '0') box.dataset.cpdvol = '0';
   if (SWITCH.accLayer) box.dataset.acclayer = 'on';   // (round 13a: see SWITCH)
   if (q.get('lit') === 'fx') box.dataset.lit = 'fx';   // (2026-11-03: the starlight's shading tied to the finish's level, as before; see the engine's uLit)
   if (SWITCH.gasrho) box.dataset.gasrho = SWITCH.gasrho;
@@ -2463,6 +2467,8 @@ async function start() {
   // (round 18g) the opacities of before, the visible and mid-infrared looks' and the model look's scattered light's, as in 1.9-dev.28
   // (?opq=0). Each passed as it is: the engine reads each within its range, and a value it cannot read as its default
   for (const k of ['pebh', 'excl', 'coenv', 'jetocc', 'ggas', 'cpdflare', 'wext', 'lscale', 'fast', 'fastk', 'steps', 'acc', 'sigtail', 'rc', 'sigp', 'aeup', 'fieldlod', 'litflat', 'obscyl', 'skinlos', 'opq', 'selfsurf', 'selflook', 'selfhue', 'turb3d']) if (q.has(k)) box.dataset[k] = q.get(k);   // (round 18j: selfsurf, the own light with the lit surface's warm grains as in round 18i; round 18k: the default now, passed over by the engine; selflook=old, the look of round 18j. Round 18l: round 18k's selfint=1, the interior's temperature, is the link's selft=int, see stateFromLink. Round 18m: selfhue=1, the own light in round 18k's colours of the brightness temperature; turb3d=0, the turbulence of before, uniform in height)
+  // (round 19e, the visual review) ?cutlook=old: the cut faces' colours and their keys as before the review (the engine's CUT_OLD), to compare
+  if (q.has('cutlook')) box.dataset.cutlook = q.get('cutlook');
   try { await loadEngine(); } catch (e) { diag.failError = String((e && e.message) || e); record('failed'); return enterStill('failed'); }
   // (the engine's own start: the defaults Reset returns to; round 15a: with the clock's state, stopped by data-paused)
   if (typeof box.diskState === 'function') DEF0 = pick(box.diskState(), [...DEF_KEYS, ...UNKEPT_KEYS, 'paused']);   // (round 18l: UNKEPT_KEYS)

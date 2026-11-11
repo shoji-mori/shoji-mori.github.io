@@ -88,12 +88,12 @@
   })();
 </script>
 <link rel="expect" href="#posterFirst" blocking="render">
-<script type="module" src="app.js?v=f70ca3bf05"></script>
+<script type="module" src="app.js?v=f10d7f58ff"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
   <header class="bar">
-    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build dev" data-version-tag>開発版 1.9-dev.37</span></p>
+    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build dev" data-version-tag>開発版 1.9-dev.43</span></p>
     <div class="bar-end">
       <button type="button" class="text-button" id="aboutOpen" aria-haspopup="dialog"><span class="en" lang="en"><span class="long">About this model</span><span class="short">About</span></span><span class="ja" lang="ja"><span class="long">このモデルについて</span><span class="short">解説</span></span></button>
       <button type="button" class="text-button" id="historyOpen" aria-haspopup="dialog"><span class="en" lang="en"><span class="long">What’s new</span><span class="short">New</span></span><span class="ja" lang="ja"><span class="long">更新履歴</span><span class="short">履歴</span></span></button>
@@ -133,7 +133,7 @@
     <!-- (round 12a) the probe's panel: the model's numbers at the point tapped (app.js, probeRender) -->
     <div class="probe-panel" id="probePanel" role="status" aria-live="polite" hidden></div>
     <p class="stage-note" id="stageNote" role="status" aria-live="polite"></p>
-    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.9-dev.37 (2026-11-02) · engine 532cb4a8ec</p></div>
+    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.9-dev.43 (2026-11-12) · engine 0d9c61f083</p></div>
     <!-- (round 10a) the safe start's note, with its offers; the last visit's record to read and copy -->
     <div class="stage-safe" id="stageSafe" role="status" hidden></div>
     <div class="stage-log" id="stageLog" role="dialog" aria-modal="false" aria-labelledby="logTitle" hidden></div>
@@ -177,19 +177,25 @@
         <div class="model-body" id="modelBody"></div>
       </details>
     </section>
+    <!-- (round 19i, the visual review's page design: closed until opened, like Model and Moves and talks, so that the rail's
+         first screen is Look, Show and Quality, not every dial at once) -->
     <section class="rail-sec">
-      <h3><span class="en" lang="en">Cut</span><span class="ja" lang="ja">断面</span></h3>
-      <div class="segmented small" role="group" id="cutGroup">
-        <button type="button" data-cut="0" aria-pressed="true"><span class="en" lang="en">None</span><span class="ja" lang="ja">なし</span></button>
-        <button type="button" data-cut="1" aria-pressed="false"><span class="en" lang="en">Half</span><span class="ja" lang="ja">1/2</span></button>
-        <button type="button" data-cut="2" aria-pressed="false"><span class="en" lang="en">Quarter</span><span class="ja" lang="ja">1/4</span></button>
-      </div>
-      <div class="rail-context" id="cutContext"></div>
+      <details class="talk" id="cutDetails">
+        <summary><h3><span class="en" lang="en">Cut</span><span class="ja" lang="ja">断面</span></h3></summary>
+        <div class="segmented small" role="group" id="cutGroup">
+          <button type="button" data-cut="0" aria-pressed="true"><span class="en" lang="en">None</span><span class="ja" lang="ja">なし</span></button>
+          <button type="button" data-cut="1" aria-pressed="false"><span class="en" lang="en">Half</span><span class="ja" lang="ja">1/2</span></button>
+          <button type="button" data-cut="2" aria-pressed="false"><span class="en" lang="en">Quarter</span><span class="ja" lang="ja">1/4</span></button>
+        </div>
+        <div class="rail-context" id="cutContext"></div>
+      </details>
     </section>
     <section class="rail-sec" id="probeSection">
-      <h3><span class="en" lang="en">Probe</span><span class="ja" lang="ja">探針</span></h3>
-      <div class="chips"><button type="button" class="toggle" id="probeBtn" aria-pressed="false"><span class="en" lang="en">Tap to probe</span><span class="ja" lang="ja">タップで調べる</span></button></div>
-      <p class="rail-note"><span class="en" lang="en">Tap the disk in the picture for the model’s temperature, density and motion at that point of the midplane, and what the physics is doing there. Tap a planet for the planet itself (its gap and its own disk); next to the star you get the magnetosphere, and above or below the disk the wind, the jet or the envelope where the line of sight passes nearest the star.</span><span class="ja" lang="ja">絵の円盤をタップすると、その場所の赤道面の温度、密度、動きと、そこで働いている物理を示します。惑星をタップするとその惑星(ギャップと自前の円盤)を、星のすぐそばなら磁気圏を、円盤の上や下なら視線が星に最も近づく所の円盤風、ジェット、エンベロープを示します。</span></p>
+      <details class="talk" id="probeDetails">
+        <summary><h3><span class="en" lang="en">Probe</span><span class="ja" lang="ja">探針</span></h3></summary>
+        <div class="chips"><button type="button" class="toggle" id="probeBtn" aria-pressed="false"><span class="en" lang="en">Tap to probe</span><span class="ja" lang="ja">タップで調べる</span></button></div>
+        <p class="rail-note"><span class="en" lang="en">Tap the disk in the picture for the model’s temperature, density and motion at that point of the midplane, and what the physics is doing there. Tap a planet for the planet itself (its gap and its own disk); next to the star you get the magnetosphere, and above or below the disk the wind, the jet or the envelope where the line of sight passes nearest the star.</span><span class="ja" lang="ja">絵の円盤をタップすると、その場所の赤道面の温度、密度、動きと、そこで働いている物理を示します。惑星をタップするとその惑星(ギャップと自前の円盤)を、星のすぐそばなら磁気圏を、円盤の上や下なら視線が星に最も近づく所の円盤風、ジェット、エンベロープを示します。</span></p>
+      </details>
     </section>
     <section class="rail-sec" id="timeSection">
       <h3><span class="en" lang="en">Time</span><span class="ja" lang="ja">時間</span></h3>
@@ -290,36 +296,40 @@
       </details>
     </section>
     <section class="rail-sec">
-      <h3><span class="en" lang="en">Background</span><span class="ja" lang="ja">背景</span></h3>
-      <div class="segmented small" role="group" id="bgGroup" data-aria-en="Background" data-aria-ja="背景">
-        <button type="button" data-bg="off" aria-pressed="false"><span class="en" lang="en">None</span><span class="ja" lang="ja">なし</span></button>
-        <button type="button" data-bg="stars" aria-pressed="true"><span class="en" lang="en">Stars</span><span class="ja" lang="ja">星</span></button>
-        <button type="button" data-bg="cloud" aria-pressed="false"><span class="en" lang="en">Cloud</span><span class="ja" lang="ja">分子雲</span></button>
-      </div>
-      <!-- (round 18a, the owner: more background stars; app.js, renderStars: the state's stars, times the default's) -->
-      <div class="mp-row bg-stars">
-        <label class="mp-name" id="starsName" for="starsRange"></label>
-        <input type="range" id="starsRange" min="0" max="1000" step="1">
-        <span class="mp-val" id="starsVal"></span>
-        <button type="button" class="chip quiet" id="starsReset" hidden></button>
-      </div>
-      <p class="rail-note"><span class="en" lang="en">Cloud: the dark molecular cloud a young star is born in, seen as black, ragged lanes across the Milky Way’s stars; stars show reddened through its thin edges, and two bright stars nearby light its dust, blue and yellow (reflection nebulae). A backdrop, in the model and visible looks.</span><span class="ja" lang="ja">分子雲:若い星が生まれる暗い分子雲。天の川の星々を背に、黒くちぎれた筋として見えます。薄い縁からは背後の星が赤みを帯びてのぞき、近くの二つの明るい星が塵を青と黄に照らします(反射星雲)。背景の絵で、モデルと可視光の見え方に出ます。</span></p>
+      <details class="talk" id="bgDetails">
+        <summary><h3><span class="en" lang="en">Background</span><span class="ja" lang="ja">背景</span></h3></summary>
+        <div class="segmented small" role="group" id="bgGroup" data-aria-en="Background" data-aria-ja="背景">
+          <button type="button" data-bg="off" aria-pressed="false"><span class="en" lang="en">None</span><span class="ja" lang="ja">なし</span></button>
+          <button type="button" data-bg="stars" aria-pressed="true"><span class="en" lang="en">Stars</span><span class="ja" lang="ja">星</span></button>
+          <button type="button" data-bg="cloud" aria-pressed="false"><span class="en" lang="en">Cloud</span><span class="ja" lang="ja">分子雲</span></button>
+        </div>
+        <!-- (round 18a, the owner: more background stars; app.js, renderStars: the state's stars, times the default's) -->
+        <div class="mp-row bg-stars">
+          <label class="mp-name" id="starsName" for="starsRange"></label>
+          <input type="range" id="starsRange" min="0" max="1000" step="1">
+          <span class="mp-val" id="starsVal"></span>
+          <button type="button" class="chip quiet" id="starsReset" hidden></button>
+        </div>
+        <p class="rail-note"><span class="en" lang="en">Cloud: the dark molecular cloud a young star is born in, seen as black, ragged lanes across the Milky Way’s stars; stars show reddened through its thin edges, and two bright stars nearby light its dust, blue and yellow (reflection nebulae). A backdrop, in the model and visible looks.</span><span class="ja" lang="ja">分子雲:若い星が生まれる暗い分子雲。天の川の星々を背に、黒くちぎれた筋として見えます。薄い縁からは背後の星が赤みを帯びてのぞき、近くの二つの明るい星が塵を青と黄に照らします(反射星雲)。背景の絵で、モデルと可視光の見え方に出ます。</span></p>
+      </details>
     </section>
     <section class="rail-sec">
-      <h3><span class="en" lang="en">Save and share</span><span class="ja" lang="ja">保存と共有</span></h3>
-      <div class="chips">
-        <button type="button" class="chip" id="copyLink"><span class="en" lang="en">Copy a link</span><span class="ja" lang="ja">リンクをコピー</span></button>
-        <button type="button" class="chip" id="showQr"><span class="en" lang="en">QR code</span><span class="ja" lang="ja">QR コード</span></button>
-        <button type="button" class="chip" id="saveImage"><span class="en" lang="en">Save an image</span><span class="ja" lang="ja">画像を保存</span></button>
-      </div>
-      <div class="segmented small" role="group" id="saveSizeGroup"></div>
-      <!-- (round 11c) pictures for slides: the shape (the screen's, 16:9, 4:3, cut from the middle) and a credit in the corner -->
-      <div class="save-frame"><div class="segmented small" role="group" id="saveRatioGroup"></div><button type="button" class="toggle" id="saveCredit" aria-pressed="true"></button></div>
-      <p class="rail-note" id="saveSizeNote"></p>
-      <input class="link-field" id="linkField" type="text" readonly hidden data-aria-en="Link to this view" data-aria-ja="この眺めのリンク">
-      <p class="rail-note cite" id="citeRail"></p>
+      <details class="talk" id="saveDetails" open>
+        <summary><h3><span class="en" lang="en">Save and share</span><span class="ja" lang="ja">保存と共有</span></h3></summary>
+        <div class="chips">
+          <button type="button" class="chip" id="copyLink"><span class="en" lang="en">Copy a link</span><span class="ja" lang="ja">リンクをコピー</span></button>
+          <button type="button" class="chip" id="showQr"><span class="en" lang="en">QR code</span><span class="ja" lang="ja">QR コード</span></button>
+          <button type="button" class="chip" id="saveImage"><span class="en" lang="en">Save an image</span><span class="ja" lang="ja">画像を保存</span></button>
+        </div>
+        <div class="segmented small" role="group" id="saveSizeGroup"></div>
+        <!-- (round 11c) pictures for slides: the shape (the screen's, 16:9, 4:3, cut from the middle) and a credit in the corner -->
+        <div class="save-frame"><div class="segmented small" role="group" id="saveRatioGroup"></div><button type="button" class="toggle" id="saveCredit" aria-pressed="true"></button></div>
+        <p class="rail-note" id="saveSizeNote"></p>
+        <input class="link-field" id="linkField" type="text" readonly hidden data-aria-en="Link to this view" data-aria-ja="この眺めのリンク">
+        <p class="rail-note cite" id="citeRail"></p>
+      </details>
     </section>
-    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.9-dev.37 (2026-11-02) · engine 532cb4a8ec</p>
+    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.9-dev.43 (2026-11-12) · engine 0d9c61f083</p>
   </aside>
 
   <section class="dock" id="dock" aria-labelledby="dockTitle">
@@ -354,7 +364,7 @@
   <div class="about-inner">
     <button type="button" class="icon-button about-close" id="aboutClose" data-aria-en="Close" data-aria-ja="閉じる"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
     <h2 id="aboutTitle" tabindex="-1" autofocus><span class="en" lang="en">About this model</span><span class="ja" lang="ja">このモデルについて</span></h2>
-    <p class="about-ver"><span data-version>Disk Lab v1.9-dev.37 (2026-11-02) · engine 532cb4a8ec</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
+    <p class="about-ver"><span data-version>Disk Lab v1.9-dev.43 (2026-11-12) · engine 0d9c61f083</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
     <p class="about-log"><a href="/disk-lab/changelog.html"><span class="en" lang="en">What’s new, version by version</span><span class="ja" lang="ja">更新履歴(版ごとの変更)</span></a></p>
     <p class="tagline"><span class="en" lang="en">An interactive, physics-based visualization of protoplanetary disks, from magnetic fields and disk winds to planet formation and observational signatures.</span><span class="ja" lang="ja">磁場と円盤風から、惑星の形成、観測で見える姿まで。原始惑星系円盤を物理にもとづいて描き、操作しながら見られるようにしたものです。</span></p>
     <p class="lead"><span class="en" lang="en">The model is schematic: the equations and solutions come from the literature; strengths, colours and other settings are chosen so that the structure reads clearly. It is not the output of a simulation.</span><span class="ja" lang="ja">ただし模式的なモデルです。式と解は文献のものを使い、強さや色などの値は構造が読み取りやすいように選んでいます。シミュレーションの結果そのものではありません。</span></p>
@@ -432,7 +442,7 @@
       <li>Ansdell, M. et al. 2018, ApJ, 859, 21</li>
       <li>Cieza, L. A. et al. 2016, Nature, 535, 258 <span class="en" lang="en">(the snow line of V883 Ori in outburst)</span><span class="ja" lang="ja">(増光中の V883 Ori のスノーライン)</span></li>
     </ul>
-    <p class="colophon" id="colophon" data-version>Disk Lab v1.9-dev.37 (2026-11-02) · engine 532cb4a8ec</p>
+    <p class="colophon" id="colophon" data-version>Disk Lab v1.9-dev.43 (2026-11-12) · engine 0d9c61f083</p>
   </div>
 </dialog>
 <script id="posterFirst">

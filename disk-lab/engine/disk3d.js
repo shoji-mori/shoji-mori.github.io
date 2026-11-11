@@ -7,7 +7,8 @@
 //   rotation   Keplerian, Ω ∝ R^-3/2
 //   coupling   the gas is weakly ionized, so the field slips through it (non-ideal MHD, see NONIDEAL): Ohmic
 //              diffusion leaves a dead zone about the midplane, and ambipolar diffusion keeps the surface above it
-//              laminar; only the thermally ionized innermost disk (inside 0.3 au) is turbulent (the
+//              laminar; only the thermally ionized innermost disk (inside R_TI, 0.69 au since round 13c's accretion rate of
+//              1e-7 M_sun/yr, 0.3 au before) is turbulent (the
 //              magnetorotational instability), in sheared structure and eddies in three dimensions through the
 //              whole column (see CELLS3); beyond about 10 au, where the whole column couples, weakly (OUTER_TURB)
 //   heating    starlight grazes the flared surface and is absorbed where the optical depth toward
@@ -32,9 +33,10 @@
 // isotropic for the disk, strongly forward for the small grains in the wind); the settled dust is a
 // sheet crossed analytically at the midplane. The turbulent factors and the field line through each point
 // are read from two maps (see MAP_GLSL) and the eddies from a volume texture (see TURB3_FS), so a step of the
-// march costs a few texture fetches. The
+// march costs a few texture fetches. In the model look the
 // gas is drawn translucent (a real disk is opaque at visible wavelengths) so that the dust sheet and
-// the snow line show through. Colour encodes temperature: amber where it is warm (inner disk,
+// the snow line show through; the starlight its small grains scatter is dimmed on its way at their own opacity, the one that
+// absorbs the starlight, as in the visible look (round 18g: see K_G). Colour encodes temperature: amber where it is warm (inner disk,
 // irradiated surface), blue where it is cold (outer midplane); icy dust is pale, rocky dust dark.
 // Brightness follows the absorbed starlight with a softened falloff beyond 1 au and an asinh stretch.
 // Clicking drops a clump of pebbles: it shears out, drifts inward and loses its ice inside
@@ -80,7 +82,22 @@
   // so the disk is drawn about 1.8 times thicker than its own temperature would hold up. The surface density is kept, so
   // the midplane density falls by 1.5 and with it the grazing optical depth toward the star: LNTAU1 8.5 -> 8.5 - ln 1.5.
   // The density at the irradiation surface (RHO_B, where the wind is based) does not change: it is set by tau* = 1.)
-  const MODEL = { R_IN: 0.08, H0: 0.045, R_OUT: 30.0, P_OUT: 6.0, LNTAU1: +(8.5 - Math.log(1.5)).toFixed(4), TICE: 160.0, K_D: 1200.0, SD0: 0.012 };
+  const MODEL = { R_IN: 0.08, H0: 0.045, R_OUT: 30.0, P_OUT: 6.0, LNTAU1: +(8.5 - Math.log(1.5)).toFixed(4), TICE: 160.0, K_D: 1200.0, SD0: 0.012, TAIL: true, RC: 30.0, PT: 3, PT_DEF: 3, C_OVER: 0.5 };
+  // (Round 18a, the owner: "the gas disk's surface density with an exponential tail") The gas disk no longer ends in the cut
+  // exp(-(R/R_OUT)^P_OUT) but tapers past R_c = RC, 30 au (the owner's "radius 30 au", R_OUT), with the model's own inner law
+  // kept (Sigma ∝ 1/R). Round 18a tapered it as the self-similar disk of Lynden-Bell & Pringle (1974; Hartmann et al. 1998),
+  // Sigma ∝ (R/R_c)^-gamma exp(-(R/R_c)^(2 - gamma)) with gamma = 1, exp(-(R - 1 au)/R_c) normalised at 1 au. (Round 18b, the
+  // owner: "make it Sigma ∝ R^-1 exp(-(R/30 au)^2)") It tapers as a Gaussian: -ln of the taper, cutOut(R) = (R/R_c)^2, and its
+  // slope d cutOut / d ln R = 2 (R/R_c)^2 (cutSlope). A steeper tail than the self-similar one, the owner's choice (with the
+  // inner 1/R kept it is not a solution of the viscous disk, whose gamma = 1 gives exp(-R/R_c)); Sigma at 1 au is lower by
+  // e^-1/900, 0.1 %, and not normalised again. Whatever is built on Sigma takes it from there (the volume and tau*, the
+  // irradiated surface and with it the temperature, the dead zone's top, the wind's loading and the mass budget, the probe,
+  // the cut, the pressure that traps the pebbles, the jet's occultation). The pebbles keep their own edge (pebEdge: R_PEB,
+  // inside it Sigma ∝ 1/R as before: they drift in). The disk's mass: 0.0333 M_sun with the cut, 0.0372 with 18a's
+  // exponential tail, 0.0319 with the Gaussian (DESIGN.md sections 42.1 and 43). TAIL false (data-sigtail="0", the page's
+  // ?sigtail=0): the cut of before; RC another R_c (data-rc, the page's ?rc=, 5 to 200 au). Both set by init before anything of
+  // the build reads them (in the shaders SIG_CUT and SIG_RC, see CONST_GLSL). C_OVER (round 18b): the share of the starlight
+  // passing over the crest of the irradiated surface that the tail beyond it takes (see crestJS and betaOverJS).
   // (Disk Lab v2, round 8, the owner: "the pebbles' disk 1/1.5 of the gas's radius") The pebbles end at R_PEB = R_OUT / 1.5
   // = 20 au, in a cutoff of the same shape as the gas's, exp(-(R/R_PEB)^P_OUT): millimetre dust disks are smaller than
   // their gas disks (Ansdell et al. 2018, Lupus: R_CO / R_mm of 1.5 to 3; the lower optical depth of the dust at its edge
@@ -118,8 +135,18 @@
   // at 0.25 au); kappa_R = 5 cm^2/g (0.1 micron grains, Mori et al. 2019, 2021); alpha = 1e-2 where turbulent (the viscous
   // comparison of Mori et al. 2021); tau_heat = 2 (their Sigma_heat of 0.2-0.6 g cm^-2). With these the midplane is 158 K
   // at 1 au, the snow line (160 K) at 0.98 au, and 1000 K at 0.27 au (round 7, with H0 = 0.03: 147 K and 0.86 au). KI, KDS5, KM, KV: the laws' factors at 1 au (cgs).
-  const THERMO = (() => {
-    const L = 2.7, T_STAR = 4300, MDOT = 1.5e-8, KAPPA_R = 5, ALPHA = 1e-2, TAU_HEAT = 2, T_TI = 1000, T_SUB = 1500, T_FLOOR = 10;
+  // (Round 13c, the owner, after 1.9-dev.8 found the wind darker than expected: Mdot = 1e-7 M_sun/yr, for the heating as for
+  // the wind's mass budget (see MFLUX), the temperature's change accepted. R_TI moves out to 0.69 au and the snow line to
+  // 1.15 au; the midplane is 174 K at 1 au, 1490 K at 0.3 au, and the accretion's share of T^4 at 1 au 37 % (8 % before; DESIGN.md,
+  // section 33.10). ?mdot=1.5e-8 gives the values above.)
+  // (Round 14a: the laws as a function of their inputs, so that the page can change them (box.diskParams, PAR below; DESIGN.md
+  // section 34); THERMO_DEF the defaults, THERMO the laws now, set again in place when the parameters change. The page's ?mdot=
+  // reaches it as the parameter Mdot, for the heating and the budget alike; it was data-mdot, read here when the script ran.
+  // L stays THERMO_DEF.L, the temperature's table's own: the star's luminosity chosen enters as a factor with the outburst's,
+  // uLum, see lumBase.)
+  const THERMO_DEF = { L: 2.7, T_STAR: 4300, MDOT: 1e-7, KAPPA_R: 5, ALPHA: 1e-2, TAU_HEAT: 2, T_TI: 1000, T_SUB: 1500, T_FLOOR: 10 };
+  const thermoLaws = (o) => {
+    const { L, T_STAR, MDOT, KAPPA_R, ALPHA, TAU_HEAT, T_TI, T_SUB, T_FLOOR } = o;
     const sig = 5.6704e-5, au = 1.496e13, Lsun = 3.828e33, Msun = 1.989e33, yr = 3.156e7, Gc = 6.674e-8, k = 1.3807e-16, mH = 1.6726e-24, mu = 2.34;
     const Md = MDOT * Msun / yr, Om1 = Math.sqrt(Gc * Msun / (au * au * au));
     const KI = L * Lsun / (16 * Math.PI * sig * au * au);                                     // T_i^4 = KI beta / R^2
@@ -127,7 +154,8 @@
     const KM = 3 * Md * Om1 * Om1 / (32 * Math.PI * sig) * (TAU_HEAT + 1 / Math.sqrt(3));      // T_acc^4 = KM / R^3
     const KV = Math.pow(3 * KAPPA_R * Md * Md * Om1 * Om1 * Om1 * mu * mH / (128 * Math.PI * Math.PI * sig * ALPHA * k), 0.2);   // T_vis = KV R^-0.9
     return { L, T_STAR, MDOT, KAPPA_R, ALPHA, TAU_HEAT, T_TI, T_SUB, T_FLOOR, KI, KDS5, KM, KV, R_TI: Math.pow(KV / T_TI, 10 / 9) };
-  })();
+  };
+  const THERMO = thermoLaws(THERMO_DEF);
   const G = (v) => Number.isInteger(v) ? v.toFixed(1) : String(v);   // a JS number as a GLSL float literal
   // The marched region: a cylinder past the disk's edge (RB) and up to the top of the drawn wind (ZB), in au. The disk was
   // 8 au in radius until the seventh round, 30 au since; the outer parts of the picture that scale with it (the wind's and
@@ -140,7 +168,25 @@
   // of 51 au at chi of about 2, well within the table. The observed looks keep the cylinder they had (RB_OBS, ZB_OBS),
   // with the wind's fade of before toward its edges: their marches are the heaviest (the CO line's, and the continuum's
   // fine steps took 29 % longer in the larger cylinder), their wind is faint, and the CO line's emission lies within it.)
-  const RB_JS = 68, ZB_JS = 51, RB_OBS = 40, ZB_OBS = 30, WIND_SOFT = 1.5;
+  // (Round 15b, the owner: "widen the disk wind's drawn region twice") 68 x 51 -> 136 x 102 au, and with it, as in round 8, what
+  // scales the wind's extent: its fade toward the cylinder's top and side (0.55 to 1 of each; the wind map's density, see
+  // WINDMAP_FS), the wind map's reach (120 -> 240 au from the star: the cylinder's far corner is at 170 au), and the field lines'
+  // height and outer fade (ZTOP, RB_JS). The softened falloff of the starlight that lights it (WIND_SOFT) is left as it is: the
+  // wind's light at 100-170 au is 0.4-0.2 of that at 50 au. The self-similar solution reaches 102 au at chi of about 3 for the
+  // lines from the disk's edge, within the table (CHIMAX 60). The observed looks keep their cylinder (RB_OBS, ZB_OBS). (The
+  // cost: the march's steps in the wind grow with the distance, 0.05 r beyond 60 au, so the shell added, 85 to 170 au from the
+  // star, costs about ln 2 / 0.05 = 14 steps each way a ray crosses it, fewer from afar (FAR_K), within the model look's budget
+  // of uSteps (150, 300 close by); DESIGN.md section 37.) data-wext="1" (the page's ?wext=1): the extent of before, WIND_EXT.OLD
+  // (RB_JS and ZB_JS set back when the engine is built, the shaders built with WEXT_OLD defined, see mpHdr in init).
+  let RB_JS = 136, ZB_JS = 102, RB_OBS = 40, ZB_OBS = 30, WIND_SOFT = 1.5;
+  const WIND_EXT = { NEW: [RB_JS, ZB_JS, 240], OLD: [68, 51, 120] };   // (the cylinder's radius and height, the wind map's reach; au)
+  // (round 18f) the grid of the table of the starlight's depth along the rays from the star (starTableData, starT in the GLSL): NR
+  // radii in ln R from R0 to R1 au (the marched cylinder reaches 136 au), NU values of u = sqrt(|z| / (R + |z|)), SUB steps of the
+  // rays a cell of R, NS points a cell of u for its columns' sums; MS_C as the GLSL's (the diffuse light's depth)
+  const ST = { NR: 256, NU: 128, R0: 0.05, R1: 160, SUB: 8, NS: 8, MS_C: 0.04 };
+  // (round 18f) the continuum looks' cylinder by default (radius, half height; au): fitted to the lit tail, and that of before with the
+  // cut of before (see OBS_CT in the GLSL; the page's ?obscyl=R,Z another, OBS_CT_DEF.MIN to MAX)
+  const OBS_CT_DEF = { TAIL: [64, 40], CUT: [40, 30], MIN: [30, 20], MAX: [136, 102] };
   // Non-ideal MHD: the gas is so weakly ionized that the field slips through it. Two of the effects set where it couples
   // (Mori, Bai & Tomida 2025, and the papers it builds on):
   //   Ohmic diffusion dominates at high density, near the midplane. Its diffusivity is a Gaussian in height,
@@ -150,7 +196,10 @@
   //     couple: no currents flow, the field is vertical, and no turbulence can grow there. That is the dead zone,
   //     |z| < z_k(R) = sigma sqrt(2 ln(eta0 / eta_c)). eta0 / eta_c = (R_DZ / R)^Q falls outward (a lower midplane
   //     density, more of the ionizing radiation reaching it), with the disk's edge cutting it further, so the dead
-  //     zone thins outward and ends at 7.5 au: z_k = 3.1 H at 0.35 au, 2.5 H at 1 au, 1.7 H at 3 au, 0.8 H at 6 au.
+  //     zone thins outward and ends at 7.5 au: z_k = 3.1 H at 0.35 au, 2.5 H at 1 au, 1.7 H at 3 au, 0.8 H at 6 au. (Round 13c:
+  //     with THERMO's 1e-7 the zone begins beyond R_TI = 0.69 au, 2.6 H at 0.8 au; the rest as it was. Round 18a: the gas's
+  //     exponential tail thins the column beyond 1 au, 1.67 H at 3 au, 0.72 H at 6 au, and the zone ends at 7.0 au. Round
+  //     18b, the Gaussian tail: 1.68 H at 3 au, 0.81 H at 6 au, and the zone ends at 7.4 au.)
   //     (Beyond it the column is thin enough, below about 100 g cm^-2 for the minimum-mass nebula, for cosmic rays to
   //     reach the midplane, so the whole column couples. Ambipolar diffusion keeps the instability weak there: Disk Lab
   //     v2 lets it stir the outer disk a little, rising from 7.5 au to its full, small strength at 14 au (OUTER_TURB,
@@ -158,7 +207,8 @@
   //     Stone 2011, Simon et al. 2013, and the outer disks observed in CO show turbulence of a few per cent of the sound
   //     speed at most, Flaherty et al. 2015, 2017); out to 7.5 au the disk is laminar, as before.)
   //     For a surface density of 1700 g cm^-2 at 1 au (the minimum-mass solar nebula), 2.5 H leaves about 10 g cm^-2
-  //     above it, the depth to which the star's X-rays ionize the gas (Igea & Glassgold 1999). Inside R_TI = 0.3 au the disk is
+  //     above it, the depth to which the star's X-rays ionize the gas (Igea & Glassgold 1999). Inside R_TI = 0.3 au (0.69 au
+  //     with round 13c's 1e-7 M_sun/yr, see THERMO) the disk is
   //     hot enough (above about 1000 K) for alkali metals to be thermally ionized, so the whole column couples. (Round 7:
   //     R_TI is where the turbulent disk's own accretion heating reaches 1000 K, see THERMO, and the colours show it; until
   //     round 6 they showed the starlight's heating only, 280 K there.)
@@ -182,6 +232,19 @@
   // eddies), and motions of 0.01-0.1 of the sound speed measured in outer disks (Flaherty et al. 2015-2020; DM Tau 0.25-0.33):
   // 1 : 0.1-0.15 : 0.1-0.5, here 1 : 0.12 : 0.3 (0.15 before round 8, and none in the dead zone). The pattern is the one
   // the inner disk had, carried round at the Keplerian rate (on the model's clock) and sheared, so the faster inner disk shows.
+  // (Round 18m, the owner: "is the turbulence uniform in height now? It had better have a distribution in height too: seen edge-on
+  // it looks flat") Beyond the thermally ionized inner disk (whose eddies' volume, turb3, stays as it was) the gas's fluctuations
+  // are no longer one pattern through the whole column (the disk map's, uniform in height) but vary in height, in eddies about a
+  // scale height high (TURBZ.CZ cells per H), and grow with height: the region's own strength (DZ, OUTER) at the midplane and in a
+  // dead zone below its top z_k, rising above it toward TURBZ.TOP, as 1 - e^(-(zeta^2 - z_k^2) / 4) (the fluctuation of a field
+  // that does not thin with height grows as v_A / c_s ~ rho^-1/2: a magnetically dominated, more strongly stirred upper disk in
+  // stratified simulations of the magnetorotational instability, Miller & Stone 2000, Fromang & Nelson 2006; a quiet dead zone under
+  // active layers, Fleming & Stone 2003, Okuzumi & Hirose 2011). TOP 0.6, twice the outer disk's midplane and below the inner disk's
+  // 1, is a choice for the picture. The planes, layers of the disk map with a reach of their own in R (see turbZPlanes, turbZ;
+  // DESIGN.md section 54); data-turb3d="0" (the page's ?turb3d=0, TURB3D_OFF) the turbulence of before. R0, R1: the planes' reach
+  // (au; the map's is 0.05 to 60 au, and the lit tail seen edge-on reaches past it), over whose last tenth they fade (beyond it the
+  // last column, clamped, would draw them out along R; the gas there is under 1e-5 of that at 1 au)
+  const TURBZ = { CZ: 0.6, TOP: 0.6, GAM: 0.25, R0: 0.05, R1: 120 };
   // The surface accretion: the wind's torque acts where the field bends, so the gas there loses angular momentum and
   // flows inward in a thin current layer just above the dead zone's top, laminar, while turning with the disk (the
   // steady induction equation in height, tools/bp-wind/kink.py, puts the current and the inflow there: about 2 c_s at
@@ -210,7 +273,16 @@
   // is zAcc, the middle of the field's bend (OFF = BEND / 2 above the dead zone's top), down to the midplane where the dead
   // zone ends; there is a layer wherever the disk is not turbulent; with the asymmetry the lower side's layer and its bend rise
   // toward its wind base. OFF was 0.15 H, and the layer ended with the dead zone (accAmp, by 6 au).
-  const ACC = { K_SYM: 2, K_ASYM: 4, W: 0.3, OFF: 0.3, SIG: 0.02, R_END: 0.4, C_SYM: 0.6, C_ASYM: 1.6 };
+  // (Round 13a, the owner: "don't show the accretion layer") It is no longer drawn in the model's look: not its streaks, nor
+  // its amber glow, nor the column SIG it added to the gas there (a choice for the picture, see above). It stays in the
+  // physics: the cut's Regions face, the probe, the gas line's inflow and coAlpha, the temperature's heating layer and the
+  // flow arrows keep it where it is. data-acclayer="on" (the page's ?acclayer=1, a development switch; data-acc="on" and ?acc=1
+  // until round 17b, when round 16c's data-acc of the still's frames, ACC_MAX, had taken the name) draws it as before, to compare.
+  // (round 13c, after Mdot 1e-7 moved R_TI out: the accretion flow's marks end where the thermally ionized disk begins, 1.2 R_TI, not at a fixed 0.4 au)
+  const ACC = { K_SYM: 2, K_ASYM: 4, W: 0.3, OFF: 0.3, SIG: 0.02, R_END: Math.max(0.4, 1.2 * NONIDEAL.R_TI), C_SYM: 0.6, C_ASYM: 1.6 };
+  // (round 13c) the eddies' volume over the thermally ionized disk: R from 0.05 au to 0.6 au or twice R_TI, its span in ln R
+  // (round 14a: a function, as R_TI follows the parameters; the shaders take it in uMP, see CONST_GLSL)
+  const ln3Span = () => Math.log(Math.max(0.6, 2 * NONIDEAL.R_TI) / 0.05);
   // The star's magnetosphere (round 7), drawn close up only (it fades in as the camera comes within SHOW au of the star,
   // and costs nothing from farther). A T Tauri star of one solar mass and radius RS = 2 R_sun = 0.0093 au with a dipole
   // field of about 1 kG at its surface truncates the gas disk where the field's pressure balances the inflow's ram
@@ -265,8 +337,9 @@
   // thermal masses, up to 1; Jupiter at 3 au is 4.6 of them), the glow of the planet and its disk (as (m / M_J)^1/2 from 0.25
   // to 1.8, a display choice), and the pebbles' ring, which needs a pressure maximum outside the gap: only planets above the
   // pebble isolation mass make one (Lambrechts et al. 2014; Bitsch et al. 2018, eqs. 10-11 for alpha = 1e-3: M_iso = 25
-  // M_earth (h_p / 0.05)^3 (1 - (d ln P / d ln R + 2.5) / 6), with d ln P / d ln R = -2.75 - 6 (R / R_OUT)^6 here: 43
-  // M_earth at 3 au, 107 at 10 au, 195 at 20 au), the ring rising from 0.7 to 1.3 M_iso (just below it the pebbles only
+  // M_earth (h_p / 0.05)^3 (1 - (d ln P / d ln R + 2.5) / 6), with d ln P / d ln R = -2.75 - 2 (R / R_c)^2 here (round 18b, the
+  // Gaussian tail: cutSlope): 43 M_earth at 3 au, 111 at 10 au, 205 at 20 au (round 18a's exponential tail, -2.75 - R / R_c: 44,
+  // 113, 199; the cut of before, -2.75 - 6 (R / R_OUT)^6: 43, 107, 195), the ring rising from 0.7 to 1.3 M_iso (just below it the pebbles only
   // slow, a traffic jam rather than a trap: Rosotti et al. 2016). The upper end, 3 M_J: above it the gap turns eccentric for
   // alpha <= 1e-3 (Kley & Dirksen 2006; Zhang et al. 2018), which the axisymmetric profile cannot show; Kanagawa et al.
   // tested 5e-5 < q < 2e-3 (17 M_earth to 2.1 M_J), so the ends are extrapolated a little. The lower end, 10 Earth masses,
@@ -280,7 +353,7 @@
   // the smallest ratio of radii between neighbours of masses m1 and m2 (M_J)
   const minRatio = (m1, m2) => { const x = 0.5 * MASS.K_HILL * Math.cbrt((qOfM(m1) + qOfM(m2)) / 3); return x < 0.9 ? (1 + x) / (1 - x) : 19; };
   // the pebble isolation mass at a (in units of q)
-  const isoQ = (a) => 25 * MASS.ME * Math.pow(MODEL.H0 * Math.pow(a, 0.25) / 0.05, 3) * (1 + (0.25 + 6 * Math.pow(a / MODEL.R_OUT, MODEL.P_OUT)) / 6);
+  const isoQ = (a) => 25 * MASS.ME * Math.pow(MODEL.H0 * Math.pow(a, 0.25) / 0.05, 3) * (1 + (0.25 + cutSlope(a)) / 6);   // (round 18a: the taper's slope, cutSlope)
   const GT_N = 2048;   // radii of the gaps' table (see gapT)
   // the wake's strength: WAKE_FAR of its amplitude when the camera is beyond D1 au from the planet's orbit (the circle
   // R = a in the midplane; the usual view is at 23 au), all of it within D0, eased in between, so that from the usual view
@@ -349,6 +422,23 @@
   // (Disk Lab v2, round 6: r_c is the disk's outer radius by definition, ENV.RC = MODEL.R_OUT, one constant for both:
   // the owner, "Ulrich の rc は円盤外縁にセットして". Everything of the envelope that depends on r_c takes it from here.)
   const ENV = { R: 560, TH_CAV: Math.PI / 6, SPEED: 220, NS: 18, RC: MODEL.R_OUT };
+  // (Round 15b, the owner: "the envelope and the wind/jet exclude each other: P_dom = max(P_ram, P_mag), the larger holds the
+  // place") EXCL: at each point the wind holds the place where its pressure is at least the envelope's, the envelope where it is
+  // less, over an edge W either side in ln(P_wind / P_env) (the pressures within 5 %, about a texel of the maps). The wind's: the
+  // larger of its ram pressure rho v_p^2 and its field's B^2 / 8 pi, from the self-similar solution at the point (the model keeps
+  // no field strength; along a line of the steady, frozen-in flow B = (rho / k)(v - Omega0 R phi) with 4 pi k^2 = rho_A, the
+  // density at the line's Alfvén point, where its radius is sqrt(lambda) r0, so B^2 / 8 pi = rho^2 |v - Omega0 R phi|^2 / 2 rho_A:
+  // it holds the wind's base, where the gas starts from rest). The envelope's: rho_e v_ff^2, Ulrich's density with v_ff^2 = 2 GM / r,
+  // no field. The envelope's density is that of an infall rate MDOT (M_sun/yr): the model look's ENV_RHO is a picture (2.7e-4
+  // M_sun/yr in these units, which would leave the wind nowhere). 1e-7, the disk's own accretion rate (THERMO.MDOT): a late
+  // envelope that feeds the disk as fast as the disk feeds the star (Shu's collapse, 0.975 c_s^3 / G, is 2e-6 at 10 K, the main
+  // accretion phase's). At it the wind holds the inner lines' whole height and the outer disk's lines from about 15-20 au are
+  // the infall's near their bases; at 1e-6 the lines from beyond about 5-8 au (DESIGN.md section 37). The jet's ram pressure is far
+  // above both, and it runs in the envelope's cavity, as before. data-excl="0" (the page's ?excl=0): the overlap of before;
+  // data-excl="1e-6": another infall rate (1e-10 to 1e-3 M_sun/yr)
+  const EXCL = { MDOT: 1e-7, W: 0.05 };
+  // the envelope's rho0 = Mdot / 4 pi sqrt(G M r_c^3) in the model's unit (Sigma(1 au) / au, Sigma(1 au) = 1700 g cm^-2 as the probe)
+  const envRho0 = (mdot) => mdot * 1.989e33 / 3.156e7 / (4 * Math.PI * Math.sqrt(6.674e-8 * 1.989e33 * Math.pow(ENV.RC * 1.496e13, 3))) / (1700 / 1.496e13);
   // (Disk Lab v2, round 8, the owner: "in the model look, don't colour by temperature: give each material a good-looking
   // colour; looks first") The model's look colours every material by what it is: hue says which material, brightness how
   // much of it is there (as before). The temperature stays where it is a quantity: the cut's Temperature, and the observed
@@ -360,19 +450,56 @@
   // brown), and warm accents for what lies in the disk or comes from it (the amber accretion layer, brown rock and pale
   // blue ice, gold planets, the coral jet); the star's own violet magnetosphere and magenta curtains. The star keeps its
   // warm white (STARCOL).
+  // (Round 13a, the owner: "make each colour changeable") These are the defaults: the page lets the viewer choose the colours
+  // of the gas ('disk'), the pebbles' rock and ice, the wind, the jet and the envelope (box.diskColours), and keeps them with
+  // its settings and in its links. MAT_DEF holds the defaults to go back to. The accretion layer is no longer drawn (see ACC).
+  // (2026-11-03, the owner's choice from the page's colour inputs: a white gas, dark rock, grey ice, a pale blue wind, a cream jet,
+  // a lilac envelope; the blue gas, brown rock, ice blue, cyan wind, pale yellow jet and violet envelope of rounds 8 to 13a before)
   const MAT = [
-    ['disk', '#2a55ff', 0.6, '円盤(ガスと塵)', 'disk (gas and dust)'],
-    ['acc', '#ffa52e', 1.0, '降着層', 'accretion layer'],
-    ['rock', '#a0623c', 1.0, '小石(岩)', 'pebbles (rock)'],
-    ['ice', '#9fd4ff', 0.8, '小石(氷)', 'pebbles (ice)'],
-    ['wind', '#4fe0ff', 1.0, '円盤風', 'disk wind'],
-    ['jet', '#f4e87a', 1.0, 'ジェット', 'jet'],   // (round 9: pale yellow, the coral before; see JET)
-    ['env', '#b47fe0', 1.0, 'エンベロープ', 'envelope'],
+    ['disk', '#ffffff', 0.6, '円盤(ガスと塵)', 'disk (gas and dust)'],
+    ['acc', '#ffa52e', 1.0, '降着層', 'accretion layer'],   // (round 13a: drawn only with data-acclayer="on", see ACC)
+    ['rock', '#232323', 1.0, '小石(岩)', 'pebbles (rock)'],
+    ['ice', '#7a7a7a', 0.8, '小石(氷)', 'pebbles (ice)'],
+    ['wind', '#a8c6fe', 1.0, '円盤風', 'disk wind'],
+    ['jet', '#ffe4a8', 1.0, 'ジェット', 'jet'],   // (round 9: pale yellow, the coral before; see JET)
+    ['env', '#ad89d6', 1.0, 'エンベロープ', 'envelope'],
     ['mag', '#9070ff', 1.0, '磁気圏', 'magnetosphere'],
-    ['curt', '#ff4fc8', 1.0, '降着の柱', 'accretion curtains'],
+    ['curt', '#ff4fc8', 1.0, '降着のカーテン', 'accretion curtains'],
     ['planet', '#ffd040', 1.0, '惑星と周惑星円盤', 'planets and their disks']
   ];
   const linHex = (h) => [1, 3, 5].map((i) => Math.pow(parseInt(h.slice(i, i + 2), 16) / 255, 2.2));
+  const MAT_DEF = Object.fromEntries(MAT.map(([key, hex]) => [key, hex]));   // (round 13a: the defaults, see box.diskColours)
+  // (Round 18d, the owner: "for the field lines a colour palette") The field lines' colour, chosen as the materials' are
+  // (box.diskColours' 'field'), drawn in the overlay alone (the volume does not draw them: MAT and uMat stay as they were). It is
+  // their lines' core; their glow (the halo) and the magnetosphere's lines (the star's loops and the disk's open lines at its inner
+  // edge) take colours made from it in the relation the defaults have to the default core (fieldTint): on the line from white
+  // through the core, 255 - k (255 - c) a channel, the glow further from white (k 1.77, which gives the default glow to the
+  // character; less where a channel would leave the colours, so that the hue stays), the magnetosphere's nearer (k 0.48, within one
+  // unit of its default). At the default, the colours of before as they were written. The lines on the cut's face keep theirs
+  // (chosen to show on the face's colour maps, as the cut's key in the page shows them). Kept here, as MAT, so that an engine
+  // built again after a lost context draws it still.
+  const FIELD = { DEF: '#bed7ff', now: '#bed7ff', TINT: { core: '#bed7ff', halo: '#8cb8ff', mag: 'rgb(225,235,255)' }, K: { core: 1, halo: 1.77, mag: 0.48 } };
+  const fieldTint = (kind) => {
+    if (FIELD.now === FIELD.DEF) return FIELD.TINT[kind];
+    const d = [1, 3, 5].map((i) => 255 - parseInt(FIELD.now.slice(i, i + 2), 16)), k = Math.min(FIELD.K[kind], ...d.map((x) => (x > 0 ? 255 / x : Infinity)));
+    return '#' + d.map((x) => Math.round(255 - k * x).toString(16).padStart(2, '0')).join('');
+  };
+  // (Round 19e, the visual review: the cut faces' colours, designed together) The colours of the cut's faces, one source for the
+  // shader (CUT_T, CUT_RHO and LAY_* in the GLSL are written from this table) and for the keys (CBAR and the swatches, in init), in
+  // display values (sRGB).
+  //   TR   the temperature's range, K (the key's bar; the stops are even in ln T over it)
+  //   T    the temperature's map, RHO the density's (even in log10 from 1e-10 to 10^2.5), LAY the regions
+  //   A    the opacity of the regions that are see-through on the face (the others 1)
+  const CUT = {
+    TR: [30, 2000],
+    T: ['#273871', '#2d4583', '#345295', '#3c62a4', '#4572b4', '#5685c1', '#6899ce', '#8ab6df', '#e8e6e0', '#dfca9c', '#d9b276', '#d29e61', '#ca8c54', '#c17a49', '#b76a40', '#ad5a39', '#9f4b34', '#913c31', '#802e2c', '#6e2328', '#5c1b25'],
+    RHO: ['#0f1321', '#1b243f', '#27355f', '#324b78', '#3c6293', '#417ca4', '#4c97b3', '#64b1bc', '#84c9c4', '#bbdebb', '#f3edc7'],
+    LAY: { MRI: '#cd6f49', DEAD: '#232b4c', ACC: '#f5b75b', BASE: '#496b96', WIND: '#a8c6fe', WEAK: '#b28b81', HALL: '#60a49b', JET: '#ffe4a8', ENV: '#ad89d6', MAG: '#6f61be', STREAM: '#f197c2' },
+    A: { WIND: 0.3, JET: 0.6, ENV: 0.34, MAG: 0.6, STREAM: 0.9 }
+  };
+  // (a colour of the table in display values, to four decimals, as the GLSL and the keys both take it; and as a GLSL vec3)
+  const cutRGB = (hex) => [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) / 255 * 1e4) / 1e4);
+  const cutV3 = (hex) => 'vec3(' + cutRGB(hex).map(G).join(', ') + ')';
   const BP = {
     C0: 0.25, SMAX: 5.484797, CHIMAX: 60.0, A0: 2.0570, B0: -3.9977,   // table grid; dR/dz and B_phi/B_z at the surface
     XI: [1, 1.0459, 1.094, 1.1445, 1.1974, 1.253, 1.3114, 1.3727, 1.4372, 1.5049, 1.5762, 1.6512, 1.73, 1.813, 1.9003, 1.9921, 2.0887, 2.1904, 2.2973, 2.4097, 2.5279, 2.6521, 2.7827, 2.9198, 3.0638, 3.215, 3.3736, 3.5398, 3.714, 3.8963, 4.0871, 4.2865, 4.4948, 4.712, 4.9383, 5.1739, 5.4186, 5.6726, 5.9356, 6.2076, 6.4881, 6.7769, 7.0733, 7.3768, 7.6864, 8.0012, 8.3199, 8.6411, 8.963, 9.2838, 9.601, 9.9122, 10.214, 10.505, 10.779, 11.034, 11.265, 11.469, 11.64, 11.775, 11.869, 11.919, 11.919, 11.868],
@@ -406,8 +533,17 @@
   // Tabone et al. 2022): the density along a line is rho0 (ETA / kappa) (lambda_ref - 1) / (lambda - 1), with rho0 at the
   // irradiation surface's density at 1 au, where lambda = LAM.REF = 2, as RHO_B before. Lines from neighbouring feet do not
   // cross (R at fixed height grows with Rf: checked over the drawn region, see the notes).
+  // (Round 13c, the owner's choice: lambda rising outward instead, see MFLUX below. It reverses the reasoning above; with
+  // data-mflux="0" or data-lam="old" the profile of round 8 is kept.)
   const LAM = { A: 1.5, B: 0.5, MIN: 1.8, MAX: 4, REF: 2 };
-  const lamOf = (Rf) => Math.min(LAM.MAX, Math.max(LAM.MIN, LAM.A + LAM.B / Math.sqrt(Rf)));
+  // (round 13c) the mass budget's settings (see MFLUX), and its lambda in ln R through three anchors: lin at the dust's inner
+  // edge R_IN, lo at R_TI, hi at R_OUT (held inside R_IN and beyond R_OUT)
+  let MF = null;
+  const lamRise = (M, R) => (R < NONIDEAL.R_TI
+    ? M.lin + (M.lo - M.lin) * Math.min(Math.max(Math.log(R / MODEL.R_IN) / Math.log(NONIDEAL.R_TI / MODEL.R_IN), 0), 1)
+    : M.lo + (M.hi - M.lo) * Math.min(Math.log(R / NONIDEAL.R_TI) / Math.log(MODEL.R_OUT / NONIDEAL.R_TI), 1));
+  // the lines' lambda: with the budget's profile (MF.rise) that one, else round 8's; within the tables' range either way
+  const lamOf = (Rf) => Math.min(LAM.MAX, Math.max(LAM.MIN, MF && MF.rise ? lamRise(MF, Rf) : LAM.A + LAM.B / Math.sqrt(Rf)));
   const BPL = [
     { LAM: 1.8, KAP: 15.0, A0: 1.847397, B0: -11.98951, // table-l1.8-k15.json
       XI: [1, 1.0411, 1.0837, 1.1281, 1.1742, 1.2224, 1.2726, 1.325, 1.3798, 1.4371, 1.4969, 1.5596, 1.6251, 1.6937, 1.7656, 1.8408, 1.9195, 2.002, 2.0884, 2.1788, 2.2735, 2.3725, 2.4762, 2.5845, 2.6979, 2.8163, 2.9399, 3.0689, 3.2035, 3.3438, 3.4898, 3.6417, 3.7995, 3.9633, 4.1331, 4.3089, 4.4907, 4.6782, 4.8715, 5.0702, 5.2741, 5.483, 5.6963, 5.9136, 6.1344, 6.358, 6.5836, 6.8104, 7.0374, 7.2636, 7.4877, 7.7083, 7.9241, 8.1335, 8.3346, 8.5258, 8.7049, 8.8698, 9.0183, 9.1478, 9.2559, 9.3396, 9.396, 9.4219],
@@ -453,8 +589,100 @@
   const NBP = BPL.length;
   // per table: ln(ETA / kappa) with the loading's factor (lambda_ref - 1) / (lambda - 1)
   for (const T of BPL) T.LNEK = T.ETA.map((e) => Math.log(e / T.KAP) + Math.log((LAM.REF - 1) / (T.LAM - 1)));
+  // (round 15b) each solution's Alfvén point as chi, where the line's radius is sqrt(lambda) r0 (the cold wind's r_A): the field's
+  // pressure in the exclusion (EXCL); the wind map takes it in uBPL[j].w, bpOf mixes it as the rest
+  for (const T of BPL) { const xa = Math.sqrt(T.LAM); let i = 0; while (i < T.XI.length - 2 && T.XI[i + 1] < xa) i++; const f = i + Math.min(1, Math.max(0, (xa - T.XI[i]) / (T.XI[i + 1] - T.XI[i]))); T.CHIA = BP.C0 * (Math.exp(f * BP.SMAX / 63) - 1); }
   // ln(ETA / kappa) at chi = 0.03 (CHI_C) for the reference lever arm LAM.REF: the wind's density there is RHO_B r0^-3/2
   const LNREF = (() => { const T = BPL.find((t) => t.LAM === LAM.REF), f = Math.log(1 + 0.03 / BP.C0) * (63 / BP.SMAX), i = Math.floor(f); return T.LNEK[i] + (T.LNEK[i + 1] - T.LNEK[i]) * (f - i); })();
+  // (Round 13c, the owner: "does the accretion velocity satisfy steady mass conservation, d/dr (2 pi r Sigma v_r) + [2 pi r
+  // rho v_z]_bottom^top = 0?") It did not (ver2/docs/accretion-mass-flux.md): the inflow's speed, the column it moved and the
+  // wind's loading were set apart, and the loading of round 8 (rho0 at tau* = 1 times 1 / (lambda - 1)) asks, through the
+  // wind's torque, for an accretion rate that does not change with radius, which the mass the wind takes forbids. Now one
+  // budget sets the wind and the inflow (P-B', the owner's choice; DESIGN.md, section 33), mass and angular momentum together,
+  // taken at the radius r where the wind leaves the disk (its base):
+  //   the accretion rate grows outward by what the wind takes, d ln Mdot_acc / d ln r = g / 2 (lambda - 1), from Mdot_TI =
+  //     THERMO.MDOT at R_TI, where the layers hand their inflow to the turbulent inner disk (g = exp(-cutOut(r)): the disk's
+  //     edge; inside R_TI the same law carries on, the turbulent disk's own inflow, which is not drawn);
+  //   the wind takes W(r) = Mdot_acc(r) g(r) / 2 (lambda(r) - 1) r per unit radius, both sides together (the torque of a wind
+  //     that carries lambda times the specific angular momentum where it leaves, Bai et al. 2016, eq. 25, which round 8 cited
+  //     for the loading; with mass conservation, dMdot_acc/dr = W);
+  //   its density at the base is that flux over the base's speed, rho_b = q / v_K(r0) F(chi_c), q = W share / 2 pi r the flux
+  //     per unit area (share: a half each with the symmetric wind; with the asymmetry 1 / (1 + WIND_LOW) above and WIND_LOW of
+  //     that below), and along the line it keeps the solution's flux, rho = rho_b (F xi J)(chi_c) / (F xi J)(chi), J = xi -
+  //     chi dxi/dchi (ETA = kappa / (xi J F), the self-similar profile, without the tables' first row, which stands for the
+  //     divergence at rest); held at rho_b below chi_c;
+  //   chi_c = CHI_C, 0.015 (0.03 until round 13c, 0.003 in 1.9-dev.7 and dev.8): the base at tau* = 1 is below the sonic
+  //     point, the gas starting slower, so that the base's density stays near the disk's at tau* = 1 while the wind carries only
+  //     W (above it, rho is the flux over the speed, whatever chi_c). With the accretion rate 1e-7, 0.003 put the base at 4.6
+  //     times the disk's density at tau* = 1 near 1 au, a step up; 0.015 keeps it at or below the disk's everywhere;
+  //   lambda rising outward, from LAM_LO at R_TI to LAM_HI at the disk's edge R_OUT, in ln R and held beyond (the owner's:
+  //     round 8 had it falling, see LAM): the lines take the tables' solution for their foot's lambda, within the tables' 1.8
+  //     to 4 (lamOf), the budget the lambda itself at the base's radius (lamBud). (The owner, after 1.9-dev.7: 1.2 at R_TI to 5
+  //     at R_OUT, the inner wind strong and the outer weak; magneto-thermal winds, which the gas's pressure helps to launch,
+  //     can have lambda near 1, where no cold solution exists (it needs more than 3/2). So the lines inside about 0.6 au keep
+  //     the shape and speed of the cold solution for 1.8, and beyond about 9 au those of 4; a warm solution would be needed
+  //     for a geometry consistent with the budget's lambda there. It was 1.5 to 2.5 in 1.9-dev.7: data-lam="1.5,2.5"
+  //     data-lamin="1.5".) Inside R_TI lambda rises again toward the dust's inner edge, LAM_IN (4) at R_IN: the owner, "about
+  //     half should reach the star". The thermally ionized inner rim couples the field ideally, and ideal-MHD winds have
+  //     large lever arms (4-6, Jacquemin-Ide et al. 2021, as round 8 read them); with the 1.2 at R_TI the inner wind takes
+  //     about half of what reaches R_TI. There the lines and the budget agree (lambda 1.8 to 4, within the tables), except
+  //     close to R_TI. The inner lines then open wider than their neighbours outside and cross them above about 10 au (R falls
+  //     back by up to 12 % at 20 au, feet near 0.2 au), a fold of the kind the dead zone's onset has made since round 8 (8 %
+  //     there, near R_TI): the wind map's footRadius takes one of the lines where they cross. data-lamin="1.2" gives the
+  //     single rise of before.
+  //   the accretion layers keep their speed K c_s and their place: the column that moves is the budget's, Sigma_s =
+  //     Mdot_acc / 2 pi R sum_s w_s K_s c_s on each layer, a thin sheet where the field bends (the gas line's inflow follows it,
+  //     see coGas; the flow arrows, the cut's Regions and the temperature's heating layer are unchanged).
+  // MF: this page's settings, from its development switches (mfluxSet, called by init before the wind map is drawn):
+  // data-mflux="0" all the prescriptions of before (round 8's density and lambda, chi_c 0.03, the gas line's inflow of the
+  // layers' whole gas); data-lam="old", or "lo,hi"; data-mdot, M_sun/yr; data-chic. (Round 14a: called by parApply from the
+  // model's parameters, PAR, which the numbers among these switches only set as aliases; Mdot is THERMO's too.) MF.tab: the budget's I = ln(Mdot_acc / Mdot_TI) and its slope dI/dln r at N nodes in ln r from
+  // X0 to X1, for a cubic Hermite (the wind map's and the script's); MF.tabV the same at NV nodes, for the gas line's sheet
+  // (within 6 % of the other next to R_TI, less farther out; the sheet's own effect is 1e-3 to 1e-2 of the flow). K: the solar mass in the model's unit,
+  // Sigma(1 au) au^2, for Sigma(1 au) = 1700 g cm^-2 (PROBE.SIG1, the probe's scale: the model's own Sigma is dimensionless).
+  const MFLUX = { LAM_IN: 4.0, LAM_LO: 1.2, LAM_HI: 5.0, CHI_C: 0.015, N: 128, NV: 16, X0: Math.log(0.04), X1: Math.log(128), K: 1.989e33 / (1700 * 1.496e13 * 1.496e13) };
+  const RHO_B_JS = Math.exp(-MODEL.LNTAU1) / (Math.sqrt(2 * Math.PI) * MODEL.H0);   // (as RHO_B in the GLSL: the gas at tau* = 1 at 1 au)
+  // the budget's lambda at the radius where the wind leaves: the rising profile unclamped, or round 8's as the lines have it
+  const lamBud = (r) => (MF.rise ? lamRise(MF, r) : Math.min(LAM.MAX, Math.max(LAM.MIN, LAM.A + LAM.B / Math.sqrt(r))));
+  const mfSlope = (x) => { const r = Math.exp(x); return Math.exp(-cutOut(r)) / (2 * (lamBud(r) - 1)); };   // dI/dln r
+  // I at r from n nodes (tab: I and its slope, interleaved), by the cubic Hermite, as mfHermite in the GLSL
+  const mfHerm = (tab, n, r) => {
+    const d = (MFLUX.X1 - MFLUX.X0) / (n - 1), f = Math.min(Math.max((Math.log(r) - MFLUX.X0) / d, 0), n - 1.001), k = Math.floor(f), t = f - k, t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * tab[2 * k] + (t3 - 2 * t2 + t) * d * tab[2 * k + 1] + (3 * t2 - 2 * t3) * tab[2 * k + 2] + (t3 - t2) * d * tab[2 * k + 3];
+  };
+  const mfI = (r) => mfHerm(MF.tab, MFLUX.N, r);
+  const mdotAccJS = (r) => MF.mdot * Math.exp(mfI(r));                                                // M_sun/yr
+  const windWJS = (r) => mdotAccJS(r) * Math.exp(-cutOut(r)) / (2 * (lamBud(r) - 1) * r);             // M_sun/yr per au, both sides
+  function mfluxSet(d = {}) {
+    const num = (v, lo, hi, def) => { const x = Number(v); return v != null && v !== '' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : def; };
+    const on = d.mflux !== '0', m = /^\s*([0-9.]+)\s*,\s*([0-9.]+)\s*$/.exec(d.lam || '');
+    MF = { on, rise: on && d.lam !== 'old', lo: m ? num(m[1], 1.05, 10, MFLUX.LAM_LO) : MFLUX.LAM_LO, hi: m ? num(m[2], 1.05, 10, MFLUX.LAM_HI) : MFLUX.LAM_HI,
+      lin: num(d.lamin, 1.05, 10, MFLUX.LAM_IN), chic: num(d.chic, 1e-4, 0.05, MFLUX.CHI_C), mdot: num(d.mdot, 1e-10, 1e-5, THERMO.MDOT) };
+    // the nodes: I = 0 at R_TI, by Simpson's rule from node to node (steps of at most 0.004 in ln r)
+    const xTI = Math.log(NONIDEAL.R_TI);
+    const simpson = (a, b, n) => { const h = (b - a) / n; let t = mfSlope(a) + mfSlope(b); for (let i = 1; i < n; i++) t += (i % 2 ? 4 : 2) * mfSlope(a + i * h); return t * h / 3; };
+    const nodes = (n) => {
+      const dx = (MFLUX.X1 - MFLUX.X0) / (n - 1), sub = 2 * Math.ceil(dx / 0.008), x = (k) => MFLUX.X0 + k * dx, I = new Float64Array(n), out = new Float32Array(2 * n);
+      const k0 = Math.floor((xTI - MFLUX.X0) / dx);
+      I[k0] = -simpson(x(k0), xTI, sub);
+      for (let k = k0 + 1; k < n; k++) I[k] = I[k - 1] + simpson(x(k - 1), x(k), sub);
+      for (let k = k0 - 1; k >= 0; k--) I[k] = I[k + 1] - simpson(x(k), x(k + 1), sub);
+      for (let k = 0; k < n; k++) { out[2 * k] = I[k]; out[2 * k + 1] = mfSlope(x(k)); }
+      return out;
+    };
+    MF.tab = nodes(MFLUX.N); MF.tabV = nodes(MFLUX.NV);
+    bpMemo.clear();   // (the lines' solutions follow lambda)
+    return MF;
+  }
+  // (round 13c) the budget in the GLSL: I at r from the nodes in the uniform array u (n of them, two to an element), the cubic
+  // Hermite of mfHerm; and the budget's lambda at the base's radius, from uLamP (see lamOf in FIELD_GLSL)
+  const mfHermite = (fn, u, n) => `float ${fn}(float r){
+  const float D = ${G(+((MFLUX.X1 - MFLUX.X0) / (n - 1)).toPrecision(8))};
+  float f = clamp((log(r) - (${G(+MFLUX.X0.toPrecision(8))})) / D, 0.0, ${G(n - 1.001)}), t = f - floor(f), t2 = t * t, t3 = t2 * t;
+  int k = int(f); vec4 a = ${u}[k / 2], b = ${u}[(k + 1) / 2];
+  vec2 p = k % 2 == 0 ? a.xy : a.zw, q = k % 2 == 0 ? a.zw : b.xy;   // (I, dI/dln r) at the nodes k and k + 1
+  return (2.0 * t3 - 3.0 * t2 + 1.0) * p.x + (t3 - 2.0 * t2 + t) * D * p.y + (3.0 * t2 - 2.0 * t3) * q.x + (t3 - t2) * D * q.y;
+}`;
   const FIELD_GLSL = `
 // (round 8) the solutions for several lever arms (BPL in the script) as a texture, NBP rows of (xi, PHI, TAU, ln(ETA / kappa)
 // with the loading's factor) at chi_i = C0 (e^(s_i) - 1), s_i = i SMAX / 63, and NBP more of (F, G, XIP); uBPL[j]: the
@@ -464,9 +692,13 @@
 uniform highp sampler2D uBPT;
 uniform vec4 uBPL[NBP];
 const float C0 = ${G(BP.C0)}, SMAX = ${G(BP.SMAX)}, CHIMAX = ${G(BP.CHIMAX)};
-float cutOut(float R){ return pow(R / R_OUT, P_OUT); }      // -ln of the density cutoff
 float zBase(float Rf){ float H = H0 * pow(Rf, 1.25); return H * sqrt(2.0 * max(${G(MODEL.LNTAU1)} - 1.25 * log(Rf) - cutOut(Rf), 1.0)); }
-float lamOf(float Rf){ return clamp(${G(LAM.A)} + ${G(LAM.B)} * inversesqrt(Rf), ${G(LAM.MIN)}, ${G(LAM.MAX)}); }
+// (round 13c) the lever arm's profile (MF in the script): uLamP.x 1, in ln R through uLamP.w at R_IN, uLamP.y at R_TI and
+// uLamP.z at R_OUT (lamProf, held outside them); 0, round 8's; the lines' solutions within the tables' range (set in the wind
+// map, the one program that asks for it)
+uniform vec4 uLamP;
+float lamProf(float r){ return r < R_TI ? mix(uLamP.w, uLamP.y, clamp(log(r / R_IN) / log(R_TI / R_IN), 0.0, 1.0)) : mix(uLamP.y, uLamP.z, clamp(log(r / R_TI) / log(R_OUT / R_TI), 0.0, 1.0)); }
+float lamOf(float Rf){ return clamp(uLamP.x > 0.5 ? lamProf(Rf) : ${G(LAM.A)} + ${G(LAM.B)} * inversesqrt(Rf), ${G(LAM.MIN)}, ${G(LAM.MAX)}); }
 // the rows of the line with foot Rf: j, and the share of row j + 1
 vec2 lamRow(float Rf){
   float l = lamOf(Rf); int j = 0;
@@ -542,8 +774,53 @@ layout(location = 0) in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`
   const CONST_GLSL = `
 const float PI = 3.14159265, TAU = 6.2831853;
 const float R_IN = ${G(MODEL.R_IN)}, H0 = ${G(MODEL.H0)}, TICE = ${G(MODEL.TICE)};
-const float R_OUT = ${G(MODEL.R_OUT)}, P_OUT = ${G(MODEL.P_OUT)};   // the disk ends in a density cutoff exp(-(R/R_OUT)^P_OUT)
+const float R_OUT = ${G(MODEL.R_OUT)}, P_OUT = ${G(MODEL.P_OUT)};   // the disk's radius, and the exponent of its cut of before
+// (round 18a) -ln of the gas's surface density's taper, and its slope d / d ln R (cutOut, cutSlope; MODEL.TAIL in the script):
+// (round 18b) the Gaussian tail, (R / R_c)^2 (SIG_RC, R_OUT unless the page's ?rc= gives another; round 18a's exponential
+// (R - 1 au) / R_c gave way to it), or with SIG_CUT (data-sigtail="0") the cut of before, exp(-(R/R_OUT)^P_OUT)
+#ifdef SIG_CUT
+float cutOut(float R){ return pow(R / R_OUT, P_OUT); }
+float cutSlope(float R){ return P_OUT * cutOut(R); }
+#define CUT_DD 2.0   // (d cutSlope / d ln R over cutSlope in occDQ: the Gaussian's 2 kept with the cut of before, as it was)
+#else
+#ifndef SIG_RC
+#define SIG_RC ${G(MODEL.R_OUT)}
+#endif
+// (Round 19a, the owner, of the own light's X edge-on, the lit thin gas of the Gaussian tail over the crest's shadow: "then a model
+// with a stronger truncation may look better") The taper's exponent, exp(-(R / R_c)^p): p = SIG_P, 3 by default (MODEL.PT; the
+// Gaussian's 2 until round 18n: data-sigp="2", the page's ?sigp=2, 1 to 8), with the tail's picture kept (the crest's shadow and
+// the rest, unlike SIG_CUT's). With 3 the tail ends by about 50 au (Sigma's taper e^-4.6 there, e^-2.8 with the Gaussian) and the
+// thin gas over the crest's cone holds too little to show as the X's arms beyond the body (DESIGN.md section 56).
+#ifndef SIG_P
+#define SIG_P ${G(MODEL.PT_DEF)}
+#endif
+float cutOut(float R){ float u = R / SIG_RC; return SIG_P == 2.0 ? u * u : pow(u, SIG_P); }
+float cutSlope(float R){ return SIG_P * cutOut(R); }
+#define CUT_DD SIG_P
+#endif
 const float LNTAU1 = ${G(MODEL.LNTAU1)};               // ln of the grazing optical depth toward the star at the midplane, 1 au
+// (round 18b) the crest of the irradiated surface (crestJS in the script): CREST = (its radius, ln tau* at its midplane a, its
+// h = H / R, its angle h sqrt(2a)), defined by init (mpHdr) with the tail. Beyond it the starlight's depth at the angle th = az / R
+// is at least the crest's at that angle (xCrest: the crest's shadow, as behind a gap's inner rim, xRim; dxCrest its slope in z),
+// and the gas takes the starlight that passes over the crest (betaOver, see Eabs and betaOverJS). With SIG_CUT neither: the cut
+// of before keeps its picture.
+#ifdef SIG_CUT
+float xCrest(float R, float az){ return -1e30; }
+float dxCrest(float R, float az){ return 0.0; }
+float betaOver(float R, float lnR, float H, float cut){ return 0.0; }
+#else
+#ifndef CREST
+#error CREST, the crest of the irradiated surface, is defined by init with the tail
+#endif
+const vec4 CREST_V = CREST;
+float xCrest(float R, float az){ if (R <= CREST_V.x) return -1e30; float th = az / R; return CREST_V.y - 0.5 * th * th / (CREST_V.z * CREST_V.z); }
+float dxCrest(float R, float az){ return az / (R * R * CREST_V.z * CREST_V.z); }
+float betaOver(float R, float lnR, float H, float cut){
+  if (R <= 0.5 * CREST_V.x) return 0.0;
+  float h = H / R;
+  return ${G(MODEL.C_OVER)} / CREST_V.w * h * h * exp(LNTAU1 - 1.25 * lnR - cut - 0.5 * CREST_V.w * CREST_V.w / (h * h));
+}
+#endif
 // the temperature (round 7, see THERMO in the script): T_i^4 = TH_KI beta / R^2 and T_ds^5 = TH_KDS5 / R^2, both times the
 // star's luminosity uLum (the outburst), T_acc^4 = TH_KM / R^3 (at the midplane), T_vis = TH_KV R^-0.9
 const float TH_KI = ${G(+THERMO.KI.toPrecision(6))}, TH_KDS5 = ${G(+THERMO.KDS5.toPrecision(6))}, TH_KM = ${G(+THERMO.KM.toPrecision(6))}, TH_KV = ${G(+THERMO.KV.toPrecision(6))};
@@ -554,16 +831,45 @@ const float MAG_DL = ${G(MAG.DL)};   // the curtains' bundle of lines: L from MA
 // the curtains' density across the magnetic azimuth, from a curtain's middle (dph): cos^2(dph / 2) cubed, half at 54
 // degrees: two broad arcs, as the funnel flows of a slightly tilted dipole (Romanova et al. 2003, 2004), not narrow streams
 float magAz(float dph){ float c = 0.5 + 0.5 * cos(dph); return c * c * c; }
+#ifdef WEXT_OLD
+const float RB = ${G(WIND_EXT.OLD[0])}, ZB = ${G(WIND_EXT.OLD[1])};   // (round 15b: the wind's extent of before, data-wext="1")
+#else
 const float RB = ${G(RB_JS)}, ZB = ${G(ZB_JS)};   // marched cylinder (au): past the edge of the disk, up to the top of the drawn wind
+#endif
 const float RB_OBS = ${G(RB_OBS)}, ZB_OBS = ${G(ZB_OBS)};   // (round 8) the observed looks' own, the cylinder before round 8
+// (Round 18f) The continuum looks' (visible, mid-infrared) cylinder, OBS_CT = (its radius, its half height), defined by init: by
+// default fitted to the lit tail, ${OBS_CT_DEF.TAIL.join(' x ')} au (the gas's surface, at 0.27 rad from 40 au out, is at 17 au at 64 au; above it
+// the lit gas thins out by 0.4 rad), ${OBS_CT_DEF.CUT.join(' x ')} au with the cut of before as until now; the page's ?obscyl=R,Z (data-obscyl) for
+// another. Since round 18b the lit surface went on along the tail to 50-60 au, and the cylinder of before cut it at 40 au: seen
+// edge-on and from a little above, the bright surface ended in straight, level edges (a box). The disk's light and extinction
+// fade to nothing over the cylinder's last fifth in radius and in height (OBS_FADE), so that its walls do not show. The gas
+// line's and the millimetre look's keep RB_OBS x ZB_OBS (the CO line's emission lies within it; the pebbles end at 20 au)
+#ifndef OBS_CT
+#error OBS_CT, the continuum looks' cylinder, is defined by init
+#endif
+const vec2 OBS_CT_V = OBS_CT;
+const float OBS_FADE = 0.8;
 // non-ideal MHD (see NONIDEAL in the script): the thermally ionized inner disk inside R_TI, the dead zone's top z_k (in
 // units of H; 0 where there is none) and the height over which the field bends above it (DZ_BEND H)
-const float R_TI = ${G(NONIDEAL.R_TI)}, R_DZ = ${G(NONIDEAL.R_DZ)}, DZ_Q = ${G(NONIDEAL.Q)}, DZ_BEND = ${G(NONIDEAL.BEND)}, DZ_TI = ${G(NONIDEAL.TI)};
+// (round 14a) The model's parameters the page may change (PAR in the script, box.diskParams) reach the shaders in uMP:
+// uMP[0] = (R_TI, the eddies' volume's span in ln R LN3_SPAN, the star's colour temperature over its default MP_TS, -),
+// uMP[1] = (the turbulence's alpha in the thermally ionized disk, the dead zone and the outer disk: CO_ALPHA, -). With
+// MP_CONST (the page's ?mpconst=1, to compare the default picture with that of before) they are the defaults as constants,
+// as until round 14, and the parameters do not reach the shaders.
+#ifdef MP_CONST
+const float R_TI = ${G(NONIDEAL.R_TI)};
+#define MP_TS 1.0
+#else
+uniform vec4 uMP[2];
+#define R_TI uMP[0].x
+#define MP_TS uMP[0].z
+#endif
+const float R_DZ = ${G(NONIDEAL.R_DZ)}, DZ_Q = ${G(NONIDEAL.Q)}, DZ_BEND = ${G(NONIDEAL.BEND)}, DZ_TI = ${G(NONIDEAL.TI)};
 float mriAmp(float R){ return 1.0 - smoothstep(0.75 * R_TI, 1.15 * R_TI, R); }   // where the magnetorotational instability stirs the gas
 // (Disk Lab v2) and where it stirs the outer disk a little, at OUTER_TURB of the inner disk's strength (see NONIDEAL)
 const float OUTER_TURB = ${G(NONIDEAL.OUTER)}, DZ_TURB = ${G(NONIDEAL.DZ)}, R_OT0 = ${G(NONIDEAL.R_OT[0])}, R_OT1 = ${G(NONIDEAL.R_OT[1])};
 float outerAmp(float R){ return smoothstep(R_OT0, R_OT1, R); }
-float zKinkH(float R){ return sqrt(2.0 * max(DZ_Q * log(R_DZ / R) - 0.5 * pow(R / R_OUT, P_OUT) - DZ_TI * mriAmp(R), 0.0)); }
+float zKinkH(float R){ return sqrt(2.0 * max(DZ_Q * log(R_DZ / R) - 0.5 * cutOut(R) - DZ_TI * mriAmp(R), 0.0)); }
 // the accretion layer (see ACC in the script): centred at zAccH, ACC_W H wide, wherever the disk is not turbulent (accAmp)
 const float ACC_W = ${G(ACC.W)}, ACC_OFF = ${G(ACC.OFF)}, ACC_SIG = ${G(ACC.SIG)};
 // (round 8) its centre, in units of H: the middle of the field's bend above the dead zone's top, coming down to the midplane
@@ -702,7 +1008,7 @@ vec3 turbL(float lnR, float phi, float Om, float fp, float seed, bool fine, floa
   return n * inversesqrt(w2);
 }
 vec3 turb(float lnR, float phi, float Om, float fp, float seed, bool fine, float launchOffset, vec2 cells){ return turbL(lnR, phi, Om, fp, seed, fine, launchOffset, cells, LIFE); }
-// Strength of the turbulent structure: in the thermally ionized innermost disk (inside R_TI = 0.3 au), where the
+// Strength of the turbulent structure: in the thermally ionized innermost disk (inside R_TI, 0.69 au with THERMO's 1e-7), where the
 // magnetorotational instability works, and weakly in the outer disk (outerAmp, see NONIDEAL); laminar in between
 float turbAmp(float R){ float m = mriAmp(R), o = outerAmp(R); return 1.7 * (m + OUTER_TURB * o + DZ_TURB * (1.0 - m) * (1.0 - o)); }   // (round 8: DZ_TURB in the dead zone, see NONIDEAL)
 // The structure above spans the whole column (large, slowly sheared structures). Within it, the gas is stirred into
@@ -727,17 +1033,66 @@ float turb3Amp(float R, float zeta){ return A3_IN * mriAmp(R) * (1.0 - smoothste
   //     the field line through each point (the radius r0 where it leaves the disk and its azimuth relative
   //     to the foot), the travel time of a gas parcel up to that point, and the gas density of the wind.
   const MAP_GLSL = `
-const float LNR_MIN = ${G(Math.log(0.05))}, LNR_SPAN = ${G(Math.log(42 / 0.05))};   // disk map: R from 0.05 to 42 au
-const float LN3_MIN = ${G(Math.log(0.05))}, LN3_SPAN = ${G(Math.log(0.6 / 0.05))};       // the eddies' volume: R from 0.05 to 0.6 au
-const float LNW_MIN = ${G(Math.log(0.04))}, LNW_SPAN = ${G(Math.log(120.0 / 0.04))};   // wind map: r from 0.04 to 120 au (70 before round 8)
+// disk map: R from 0.05 to 60 au (round 18a: 42 until then, and with SIG_CUT: the gas now reaches past 42 au, and so do the
+// wakes of the outer planets, to 2.5 a, 50 au from 20 au; beyond the map its last column, clamped, is the neutral 1. Round
+// 18b kept it for the Gaussian tail: Sigma at 50 au is still 1/800 of that at 1 au, where the wakes reach, and ?rc= stretches it)
+#ifdef SIG_CUT
+const float LNR_MIN = ${G(Math.log(0.05))}, LNR_SPAN = ${G(Math.log(42 / 0.05))};
+#else
+const float LNR_MIN = ${G(Math.log(0.05))}, LNR_SPAN = ${G(Math.log(60 / 0.05))};
+#endif
+const float LN3_MIN = ${G(Math.log(0.05))};   // the eddies' volume: R from 0.05 to 0.6 au (round 13c: or twice R_TI, 1.37 au with Mdot = 1e-7; ln3Span)
+#ifdef MP_CONST
+const float LN3_SPAN = ${G(ln3Span())};
+#else
+#define LN3_SPAN uMP[0].y
+#endif
+#ifdef WEXT_OLD
+const float LNW_MIN = ${G(Math.log(0.04))}, LNW_SPAN = ${G(Math.log(WIND_EXT.OLD[2] / 0.04))};   // (round 15b: data-wext="1", as before)
+#else
+const float LNW_MIN = ${G(Math.log(0.04))}, LNW_SPAN = ${G(Math.log(WIND_EXT.NEW[2] / 0.04))};   // wind map: r from 0.04 to 240 au (70 before round 8, 120 before round 15b)
+#endif
 const float RHO_B = ${G(Math.exp(-MODEL.LNTAU1) / (Math.sqrt(2 * Math.PI) * MODEL.H0))};   // gas density at the irradiation surface at 1 au
 const float CHI_C = 0.03, WIND_BLEED = 0.03;   // wind density: held below CHI_C, fading into the disk below the base (units of r0)
 const float LNE_MIN = ${G(Math.log(0.5))}, LNE_SPAN = ${G(Math.log(ENV.R / 0.5))};   // envelope map: r from 0.5 au to ENV.R
+`;
+  // (round 15b: here, before the wind map that includes it too, see EXCL)
+  // The envelope map, drawn once on (ln r, θ) (θ the angle above the midplane): ln of the envelope's density (Ulrich
+  // 1976, see ENV; 1 at r_c on the midplane far out), with the cavity along the axis and a fade at the outer edge, and
+  // its column from the star (from 0.5 au) out to this point along the same direction, which dims the starlight.
+  const ENV_GLSL = `
+const float TH_CAV = ${G(+ENV.TH_CAV.toFixed(5))}, ENV_R = ${G(ENV.R)};
+const float R_C = ${G(ENV.RC)};   // the centrifugal radius r_c: the disk's outer radius (ENV.RC = MODEL.R_OUT)
+float cbrt(float v){ return sign(v) * pow(abs(v), 1.0 / 3.0); }
+// cos theta0 of the streamline through the point at r (au), mu = cos of the polar angle: the root in [mu, 1] of
+// m^3 + (x - 1) m - x mu = 0 with x = r / r_c (one real root for x > 1, Cardano; three for x < 1, the largest; then two
+// Newton steps)
+float envMu0(float r, float mu){
+  float x = r / R_C;
+  float pp = x - 1.0, q = -x * mu, D = 0.25 * q * q + pp * pp * pp / 27.0, m;
+  if (D > 0.0) { float sD = sqrt(D); m = cbrt(-0.5 * q + sD) + cbrt(-0.5 * q - sD); }
+  else { float pn = min(pp, -1e-6); m = 2.0 * sqrt(-pn / 3.0) * cos(acos(clamp(1.5 * q / pn * sqrt(-3.0 / pn), -1.0, 1.0)) / 3.0); }
+  for (int i = 0; i < 2; i++) m -= (m * m * m + pp * m + q) / max(3.0 * m * m + pp, 1e-4);
+  return clamp(m, max(mu, 1e-4), 1.0);
+}
+// ln of the density at r (au), mu = cos of the polar angle
+float envLnRho(float r, float mu){
+  float x = r / R_C, mu0 = envMu0(r, mu);   // x: r in units of r_c
+  // density, with the pile-up where the streamlines meet at r_c on the midplane held finite
+  float lnrho = -1.5 * log(x) - 0.5 * log(1.0 + mu / mu0) - log(max(mu / mu0 + 2.0 * mu0 * mu0 / x, 0.05));
+  // the cavity: streamlines that start within TH_CAV of the axis are emptied (a little gas is left in it)
+  float open = 1.0 - smoothstep(cos(TH_CAV + 0.08), cos(TH_CAV - 0.08), mu0);
+  return lnrho + log(max(mix(0.015, 1.0, open) * (1.0 - smoothstep(0.65 * ENV_R, ENV_R, r)), 1e-30));
+}
 `;
   const DISKMAP_FS = `#version 300 es
 precision highp float;
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec4 fragAcc;   // the accretion layers' streaks (see accTurb)
+#ifndef TURB3D_OFF
+layout(location = 2) out vec4 fragZu;    // (round 18m) the turbulence's planes above the midplane and below it (see turbZPlanes)
+layout(location = 3) out vec4 fragZd;
+#endif
 uniform vec2 uMapRes;   // texels along ln R and φ
 uniform vec2 uAccK;     // the inflow in the accretion layers (upper, lower), in units of the sound speed
 uniform vec2 uAccC;     // the contrast of their streaks (upper, lower; see accTurb)
@@ -836,6 +1191,63 @@ float accTurb(float lnR, float phi, float Om, float fp, float drift, float seed,
   float a = ACC_TURB * 0.215;
   return exp(ACC_TURB * n * inversesqrt(w2) - 0.5 * a * a);
 }
+#ifndef TURB3D_OFF
+// (Round 18m) The turbulence's vertical structure beyond the thermally ionized inner disk (see TURBZ in the script): the 3D value
+// noise of the structure (cells CELLS around and per unit ln R, as turb, and TZ_CZ per scale height in z/H) at its whole cells in
+// height, z/H = c / TZ_CZ for c = 0, +-1, +-2, +-3, the planes: each carried and sheared as turb carries its pattern (its bands of
+// lifetimes and staggered generations, its seed apart), faded where its cells are finer than a render pixel at the point itself
+// (fpR, ln R; fz, its height: a volume read along each ray, not a surface seen at a slant, as the eddies' volume fades its own). The
+// march reads the two planes around |z/H| and goes between them as the noise does (smoothstep: the 3D noise itself), see turbZ.
+// Each plane holds its lognormal density factor (mean 1) F = e^(s n - 0.0231 s^2 e / w2) for the strength s = 1.6 tzAmp at its height
+// (0.0231: half the variance of the noise in a plane; e / w2 what its fades keep of it). The disk map's r keeps the inner disk's share
+// of the column-wide pattern alone (see main; its g, the skin's corrugation, keeps the whole): the volume's density rho dm.r turbZ has
+// the inner disk's column-wide pattern and, beyond it, the planes'. Above |z/H| = 3 /
+// TZ_CZ (5 H) the last plane holds; inside the thermally ionized disk the factor is 1 (its eddies are the volume's, turb3). The planes
+// span ln R from LNZ_MIN over LNZ_SPAN (to TURBZ.R1, beyond the map's 60 au: the tail), on the map's texels
+const float TZ_CZ = ${G(TURBZ.CZ)}, TZ_TOP = ${G(TURBZ.TOP)}, TZ_GAM = ${G(TURBZ.GAM)}, TZ_R1 = ${G(TURBZ.R1)};
+const float LNZ_MIN = ${G(+Math.log(TURBZ.R0).toFixed(6))}, LNZ_SPAN = ${G(+Math.log(TURBZ.R1 / TURBZ.R0).toFixed(6))};
+float vnoiseZ(vec2 q, float n, float k){   // (vnoise3 at the whole z = k: the four lattice points of that plane)
+  vec2 i = floor(q), f = fract(q); f = f * f * (3.0 - 2.0 * f);
+  float i0 = mod(i.x, n), i1 = mod(i.x + 1.0, n);
+  return mix(mix(hash13(vec3(i0, i.y, k)), hash13(vec3(i1, i.y, k)), f.x), mix(hash13(vec3(i0, i.y + 1.0, k)), hash13(vec3(i1, i.y + 1.0, k)), f.x), f.y) - 0.5;
+}
+// the strength relative to the inner disk's (1.7 there) at the heights zc (in H): the region's own at the midplane and in a dead
+// zone below its top z_k (the dead zone's DZ_TURB, the outer disk's OUTER_TURB), rising above it toward TZ_TOP; none inside the
+// thermally ionized disk, fading over the map's last tenth in R
+vec4 tzAmp(float R, vec4 zc){
+  float m = mriAmp(R), o = outerAmp(R), zk = zKinkH(R), base = OUTER_TURB * o + DZ_TURB * (1.0 - o);
+  vec4 g = 1.0 - exp(-max(zc * zc - zk * zk, 0.0) * TZ_GAM);
+  return 1.7 * (1.0 - m) * (1.0 - smoothstep(0.9 * TZ_R1, TZ_R1, R)) * (base + (TZ_TOP - base) * g);
+}
+void turbZPlanes(float lnR, float phi, float R, float Om, float fpR, float fz, out vec4 up, out vec4 dn){
+  vec4 s = 1.6 * tzAmp(R, vec4(0.0, 1.0, 2.0, 3.0) / TZ_CZ);
+  up = dn = vec4(1.0);
+  if (s.x + s.w <= 0.0 || fz <= 0.0) return;
+  float b = log(LIFE / Om) * 0.7213475, bf = smoothstep(0.3, 0.7, fract(b)), tilt = CELLS.x / TAU / TILT_PITCH, w2 = 0.0, e = 0.0;
+  vec4 nu = vec4(0.0), nd = vec4(0.0);   // (z cells 0..3 and 0..-3, the midplane's in both)
+  for (int j = 0; j < 2; j++) {
+    float wb = j == 0 ? 1.0 - bf : bf;
+    if (wb <= 0.0) continue;
+    float band = floor(b) + float(j), T = uFpPeriod[int(band) + 5];
+    for (int k = 0; k < 2; k++) {
+      vec2 clock = fpPhase(band, k, 0.0); float c = clock.x;
+      float fc = clock.y, age = (AGE0 + fc) * T, w = wb * (1.0 - abs(2.0 * fc - 1.0));
+      float kr = length(vec2(CELLS.x / TAU * 1.5 * Om * age + tilt, CELLS.y));
+      vec2 q = vec2(CELLS.x / TAU * (phi - Om * age) + tilt * lnR, CELLS.y * lnR + uSeed + 101.0 + 17.0 * floor(c) + 41.0 * float(k) + 29.0 * band);
+      float a = (1.0 - smoothstep(0.3, 0.7, kr * fpR)) * fz;
+      if (a > 0.0) {
+        float n0 = vnoiseZ(q, CELLS.x, 0.0);
+        nu += w * a * vec4(n0, vnoiseZ(q, CELLS.x, 1.0), vnoiseZ(q, CELLS.x, 2.0), vnoiseZ(q, CELLS.x, 3.0));
+        nd += w * a * vec4(n0, vnoiseZ(q, CELLS.x, -1.0), vnoiseZ(q, CELLS.x, -2.0), vnoiseZ(q, CELLS.x, -3.0));
+      }
+      e += w * w * a * a; w2 += w * w;
+    }
+  }
+  vec4 v = 0.0231 * s * s * e / w2;
+  up = exp(s * nu * inversesqrt(w2) - v);
+  dn = exp(s * nd * inversesqrt(w2) - v);
+}
+#endif
 void main(){
   float lnR = LNR_MIN + gl_FragCoord.x / uMapRes.x * LNR_SPAN;
   float phi = (gl_FragCoord.y / uMapRes.y - 0.5) * TAU;
@@ -874,6 +1286,16 @@ void main(){
   // the accretion layers' streaks, upper and lower (independent patterns), where there are layers
   float hR = H0 * exp(0.25 * lnR);
   fragAcc = accAmp(R) > 0.0 ? vec4(accTurb(lnR, phi, Om, fp, uAccK.x * hR, uSeed + 61.0, uAccC.x), accTurb(lnR, phi, Om, fp, uAccK.y * hR, uSeed + 83.0, uAccC.y), 0.0, 0.0) : vec4(1.0);
+#ifndef TURB3D_OFF
+  // (round 18m) the gas's factor of the column-wide pattern, the thermally ionized disk's share alone (1.7 mriAmp); beyond it the
+  // turbulence's planes (see turbZPlanes), at their own ln R on this texel's column: the footprint of a pixel at their midplane's point
+  // itself (au), in ln R (its floor 1.5 texels) and against their height (TZ_CZ per H)
+  { float Am = 1.7 * mriAmp(R); fragColor.r = exp(1.6 * n.x * Am / A - 0.08 * Am * Am) * (1.0 + wk); }
+  { float lz = LNZ_MIN + gl_FragCoord.x / uMapRes.x * LNZ_SPAN, Rz = exp(lz), fp3 = length(vec3(Rz * cos(phi), Rz * sin(phi), 0.0) - uCam) * uPixA;
+    vec4 zu, zd;   // (the outputs through locals, not passed as the function's out arguments themselves)
+    turbZPlanes(lz, phi, Rz, OMEGA0 * exp(-1.5 * lz), max(fp3 / Rz, 1.5 * LNZ_SPAN / uMapRes.x), 1.0 - smoothstep(0.3, 0.7, TZ_CZ * fp3 / (H0 * exp(1.25 * lz))), zu, zd);
+    fragZu = zu; fragZd = zd; }
+#endif
 }`;
   const WINDMAP_FS = `#version 300 es
 precision highp float;
@@ -881,9 +1303,24 @@ layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec4 fragVel;   // the gas velocity in units of v_K(r0): (v_R, v_phi, v_z), for the CO line
 uniform vec2 uMapRes;
 uniform float uAsymS;                    // the asymmetry's share of the dead zone's field now (ASYM_F times its fade)
+uniform vec4 uMflux;                     // (round 13c) x: 1 the mass budget (see MFLUX in the script), 0 round 8's density; y: chi_c; z: Mdot_TI (M_sun/yr)
+uniform vec4 uMdotT[${MFLUX.N / 2}];             // the budget's I = ln(Mdot_acc / Mdot_TI) and dI/dln r at its nodes, two to an element
+uniform vec2 uExcl;                      // (round 15b) x: 1 the wind and the envelope exclusive (EXCL in the script), 0 as before; y: ln of the envelope's rho0
 ${CONST_GLSL}
 ${FIELD_GLSL}
 ${MAP_GLSL}
+${ENV_GLSL}
+${mfHermite('mfI', 'uMdotT', MFLUX.N)}
+float lamBud(float r){ return uLamP.x > 0.5 ? lamProf(r) : clamp(${G(LAM.A)} + ${G(LAM.B)} * inversesqrt(r), ${G(LAM.MIN)}, ${G(LAM.MAX)}); }
+const float EXCL_W = ${G(EXCL.W)};
+// (round 15b) the part of ln rho that changes along the line with foot Rf, at chi (held below the base as the density is): the mass
+// budget's -ln(F xi (xi - chi xi')) (uMflux.x 1), or round 8's ln(ETA / kappa) (windLnRho in the script); and the line's Alfvén
+// point as chi (each solution's in uBPL[j].w, mixed as the rest)
+float windShape(float chi, float Rf){
+  if (uMflux.x > 0.5) { float ch = max(chi, uMflux.y); vec4 tt = tabAt(ch, Rf), vt = tabVAt(ch, Rf); return -log(vt.x * tt.x * (tt.x - ch * vt.z)); }
+  return tabAt(max(chi, CHI_C), Rf).w;
+}
+float lineChiA(float Rf){ vec2 r = lamRow(Rf); int j = int(r.x); return mix(uBPL[j].w, uBPL[j + 1].w, r.y); }
 void main(){
   // (both hemispheres: theta from -90 to 90 degrees; the lower one's lines bend as the side s says)
   float r = exp(LNW_MIN + gl_FragCoord.x / uMapRes.x * LNW_SPAN), th = (gl_FragCoord.y / uMapRes.y - 0.5) * PI;
@@ -894,19 +1331,77 @@ void main(){
   // held at its value at CHI_C below that height, where the cold solution, starting from rest at the
   // surface, has it diverge; RHO_B puts that value at the density of the disk gas at its irradiation
   // surface (tau* = 1) at 1 au. Below the base the wind fades into the disk over WIND_BLEED. Lines only
-  // carry gas where the disk has it (its inner edge, as Sigma, and the density cutoff at R_OUT). The wind
+  // carry gas where the disk has it (its inner edge, as Sigma, and its taper, cutOut: round 18b's Gaussian tail). The wind
   // fades out toward the top and the side of the marched cylinder, so its edge does not show: exponentially from
   // 0.55 of the way (the display stretch is logarithmic for bright light, so a fade that only reaches zero at the edge
-  // shows the edge as a hard line once the wind is bright, as in an outburst), and to zero over the last 15%.
+  // shows the edge as a hard line once the wind is bright, as in an outburst, or once the exposure is raised for a dim
+  // view: round 19a continued, the coefficient 9 rather than 5, about 2.9 dex down by 0.85 of the way rather than 1.8,
+  // so that no longer shows it either), and to zero over the last 15%.
   float lnrho = log(RHO_B) - 1.5 * log(r0) + tabAt(max(chi, CHI_C), Rf).w - ${G(+LNREF.toFixed(6))} + min(chi, 0.0) / WIND_BLEED - cutOut(r0)
-              - 5.0 * smoothstep(0.55 * ZB, ZB, h) - 5.0 * smoothstep(0.55 * RB, RB, R)
+              - 9.0 * smoothstep(0.55 * ZB, ZB, h) - 9.0 * smoothstep(0.55 * RB, RB, R)
               + log(max(smoothstep(R_IN * 0.8, R_IN * 1.3, r0) * (1.0 - smoothstep(0.85 * ZB, ZB, h)) * (1.0 - smoothstep(0.85 * RB, RB, R)), 1e-30));
+  // (round 13c, P-B': see MFLUX in the script) the density from the mass budget instead: the flux per unit area at the base,
+  // q = W share / 2 pi rb with W = Mdot_acc g / 2 (lambda - 1) rb (rb = r0 xi(chi_c), where the line leaves), over the speed
+  // there, v_K(r0) F (au a year: 2 pi r0^-1/2), times the solution's (F xi J)(chi_c) / (F xi J)(chi); round 8's part is taken
+  // back out (the fades and the inner edge stay, the disk's edge is the budget's g at rb)
+  if (uMflux.x > 0.5) {
+    float cc = uMflux.y, ch = max(chi, cc);
+    vec4 tc = tabAt(cc, Rf), vc = tabVAt(cc, Rf), tt = tabAt(ch, Rf), vt = tabVAt(ch, Rf);
+    float rb = r0 * tc.x, share = 1.0 / (2.0 - ${G(+(1 - WIND_LOW_JS).toFixed(6))} * uAsymS / ASYM_F);
+    lnrho += log(${G(+MFLUX.K.toPrecision(7))} * uMflux.z * share * tc.x * (tc.x - cc * vc.z) / (TAU * TAU * (2.0 * lamBud(rb) - 2.0) * rb * rb * vt.x * tt.x * (tt.x - ch * vt.z)))
+           + mfI(rb) - cutOut(rb) + 0.5 * log(r0)
+           - (log(RHO_B) - 1.5 * log(r0) + tabAt(max(chi, CHI_C), Rf).w - ${G(+LNREF.toFixed(6))} - cutOut(r0));
+  }
+  // (round 15b) The wind and the envelope exclusive (EXCL in the script; DESIGN.md section 37): the wind's pressure, the larger of
+  // rho v_p^2 and rho^2 |v - Omega0 R phi|^2 / 2 rho_A (its field's), against the envelope's infall's rho_e v_ff^2 (uExcl.y its rho0),
+  // in the solution's density, without the fades toward the cylinder's edges (a picture; lnFade, as in lnrho above), in the model's
+  // unit times v_K(1 au)^2; with the asymmetry the lower side's density WIND_LOW of the upper's (uWindLow, applied where the map is
+  // read). wS, the wind's share of the place, takes its density down; the envelope's, 1 - wS, goes to the envelope map through the
+  // velocities' w (ENVX_FS)
+  float wS = 1.0;
+  if (uExcl.x > 0.5) {
+    // (round 19a continued: the coefficient 9 here too, to match lnrho above exactly, since lnSol below undoes this same fade)
+    float lnFade = - 9.0 * smoothstep(0.55 * ZB, ZB, h) - 9.0 * smoothstep(0.55 * RB, RB, R) + log(max((1.0 - smoothstep(0.85 * ZB, ZB, h)) * (1.0 - smoothstep(0.85 * RB, RB, R)), 1e-30));
+    float ch = max(chi, uMflux.x > 0.5 ? uMflux.y : CHI_C);
+    vec4 tt = tabAt(ch, Rf), tv = tabVAt(ch, Rf);
+    float lnSol = lnrho - lnFade, vp2 = tv.x * tv.x * (1.0 + tv.z * tv.z), vr = tv.y - tt.x;
+    float lnA = lnSol - windShape(ch, Rf) - min(chi, 0.0) / WIND_BLEED + windShape(lineChiA(Rf), Rf);
+    float lnPw = max(lnSol + log(vp2 / r0), 2.0 * lnSol - lnA - log(2.0) + log((vp2 + vr * vr) / r0));
+    if (th < 0.0) lnPw += log(max(1.0 - ${G(+(1 - WIND_LOW_JS).toFixed(6))} * uAsymS / ASYM_F, 1e-6));
+    wS = smoothstep(-EXCL_W, EXCL_W, lnPw - (uExcl.y + envLnRho(r, abs(sin(th))) + log(2.0 / r)));
+    lnrho += log(max(wS, 1e-30));
+  }
   // ln r0, azimuth of the line relative to its foot, travel time of the gas from the base, ln density
   fragColor = vec4(log(r0), fieldRP(Rf, h, s).y, tabAt(max(chi, 0.0), Rf).z, lnrho);
   // the velocity along the line, v_K(r0) (F dxi/dchi, G, F) in (R, phi, z) above the base; below it the gas turns with
-  // the disk (Keplerian at R)
+  // the disk (Keplerian at R); (round 15b) w: the envelope's share of the place, 1 - wS (1 without the exclusion)
   vec3 t = tabVAt(max(chi, 0.0), Rf).xyz;
-  fragVel = chi > 0.0 ? vec4(t.x * t.z, t.y, t.x, 1.0) : vec4(0.0, sqrt(r0 / max(R, 1e-3)), 0.0, 0.0);   // (v_z: away from the midplane)
+  fragVel = vec4(chi > 0.0 ? vec3(t.x * t.z, t.y, t.x) : vec3(0.0, sqrt(r0 / max(R, 1e-3)), 0.0), uExcl.x > 0.5 ? 1.0 - wS : 1.0);   // (v_z: away from the midplane)
+}`;
+  // (Round 15b) The envelope's share of the place (1 - the wind's, see EXCL and WINDMAP_FS), into the envelope map's b (above the
+  // midplane) and a (below), from the wind map's velocities' w at the envelope map's texels (and beyond the wind map's reach, its
+  // edge's, along the same direction); drawn into those channels alone after each wind map (envX in init)
+  const ENVX_FS = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform vec2 uMapRes;
+uniform sampler2D uWindVel;
+${CONST_GLSL}
+${MAP_GLSL}
+${ENV_GLSL}
+void main(){
+  float lnr = LNE_MIN + gl_FragCoord.x / uMapRes.x * LNE_SPAN, th = gl_FragCoord.y / uMapRes.y * 0.5 * PI, u = (lnr - LNW_MIN) / LNW_SPAN;
+  // (round 19c, see ENV_M in the volume's shader) g: the part of the envelope's column from the star out to here that is there,
+  // the wind's share of the places on the way taken out (above the midplane): summed over the map's own texels along the
+  // direction (256 across, the loop's bound), the last one by half
+  float mu = sin(th), dl = LNE_SPAN / uMapRes.x, N = 0.0, Nx = 0.0;
+  for (int i = 0; i < 256; i++) {
+    float l = LNE_MIN + (float(i) + 0.5) * dl;
+    if (l > lnr + 0.25 * dl) break;
+    float f = exp(envLnRho(exp(l), mu) + l) * (l > lnr - 0.25 * dl ? 0.5 : 1.0);
+    N += f; Nx += f * texture(uWindVel, vec2((l - LNW_MIN) / LNW_SPAN, 0.5 + th / PI)).w;
+  }
+  fragColor = vec4(0.0, N > 0.0 ? Nx / N : 1.0, texture(uWindVel, vec2(u, 0.5 + th / PI)).w, texture(uWindVel, vec2(u, 0.5 - th / PI)).w);
 }`;
   // The wind's streamers (see windTurb): their cells (a few bundles around the disk and per unit ln r0), lifetime (in
   // units of the disk's) and contrast; WSTR_TAU, the travel time (in 1/Omega(r0)) their texture reaches (the table's
@@ -1019,7 +1514,7 @@ ${MAP_GLSL}
 const float SHADOW3 = 2.0;   // the shadows drawn twice as deep as the eddies make them, for the picture
 void main(){
   float u = gl_FragCoord.x / uRes3.x, v = gl_FragCoord.y / uRes3.y, lnR = LN3_MIN + u * LN3_SPAN;
-  float a0 = LNTAU1 - 1.25 * lnR - pow(exp(lnR) / R_OUT, P_OUT);   // ln tau* at the midplane
+  float a0 = LNTAU1 - 1.25 * lnR - cutOut(exp(lnR));   // ln tau* at the midplane
   vec2 o[${nb}];
   for (int k = 0; k < ${nb}; k++) {
     float w = (uLayer0 + float(k) + 0.5) / uRes3.z, zeta = ZMAX3 * (2.0 * w - 1.0), x = a0 - 0.5 * zeta * zeta;
@@ -1040,34 +1535,7 @@ ${Array.from({ length: nb }, (_, i) => `  o${i} = vec4(o[${i}], 0.0, 0.0);`).joi
 
   // The volume. Two programs are made from it: the usual one, and FULL (defined) with the slice and the planet seen
   // close up (and the envelope), which costs registers in the march even when unused; FULL is compiled in the
-  // background and used only while one of those shows.  // The envelope map, drawn once on (ln r, θ) (θ the angle above the midplane): ln of the envelope's density (Ulrich
-  // 1976, see ENV; 1 at r_c on the midplane far out), with the cavity along the axis and a fade at the outer edge, and
-  // its column from the star (from 0.5 au) out to this point along the same direction, which dims the starlight.
-  const ENV_GLSL = `
-const float TH_CAV = ${G(+ENV.TH_CAV.toFixed(5))}, ENV_R = ${G(ENV.R)};
-const float R_C = ${G(ENV.RC)};   // the centrifugal radius r_c: the disk's outer radius (ENV.RC = MODEL.R_OUT)
-float cbrt(float v){ return sign(v) * pow(abs(v), 1.0 / 3.0); }
-// cos theta0 of the streamline through the point at r (au), mu = cos of the polar angle: the root in [mu, 1] of
-// m^3 + (x - 1) m - x mu = 0 with x = r / r_c (one real root for x > 1, Cardano; three for x < 1, the largest; then two
-// Newton steps)
-float envMu0(float r, float mu){
-  float x = r / R_C;
-  float pp = x - 1.0, q = -x * mu, D = 0.25 * q * q + pp * pp * pp / 27.0, m;
-  if (D > 0.0) { float sD = sqrt(D); m = cbrt(-0.5 * q + sD) + cbrt(-0.5 * q - sD); }
-  else { float pn = min(pp, -1e-6); m = 2.0 * sqrt(-pn / 3.0) * cos(acos(clamp(1.5 * q / pn * sqrt(-3.0 / pn), -1.0, 1.0)) / 3.0); }
-  for (int i = 0; i < 2; i++) m -= (m * m * m + pp * m + q) / max(3.0 * m * m + pp, 1e-4);
-  return clamp(m, max(mu, 1e-4), 1.0);
-}
-// ln of the density at r (au), mu = cos of the polar angle
-float envLnRho(float r, float mu){
-  float x = r / R_C, mu0 = envMu0(r, mu);   // x: r in units of r_c
-  // density, with the pile-up where the streamlines meet at r_c on the midplane held finite
-  float lnrho = -1.5 * log(x) - 0.5 * log(1.0 + mu / mu0) - log(max(mu / mu0 + 2.0 * mu0 * mu0 / x, 0.05));
-  // the cavity: streamlines that start within TH_CAV of the axis are emptied (a little gas is left in it)
-  float open = 1.0 - smoothstep(cos(TH_CAV + 0.08), cos(TH_CAV - 0.08), mu0);
-  return lnrho + log(max(mix(0.015, 1.0, open) * (1.0 - smoothstep(0.65 * ENV_R, ENV_R, r)), 1e-30));
-}
-`;
+  // background and used only while one of those shows.
   // (Disk Lab v2, round 8, the owner: "the background on and off, and a more realistic mode") The background: none (the
   // dark gradient alone), the sparse stars of before, or the sky of a star-forming region, as a young disk would have it
   // around: SKY_FS draws it once into an equirectangular map (BG.W x BG.H, on unit 16; drawn the first time it is asked
@@ -1142,7 +1610,7 @@ void main(){
   // the column from 0.5 au, integrated in ln r (48 steps, trapezoid)
   float N = 0.0, f0 = exp(envLnRho(exp(LNE_MIN), mu) + LNE_MIN), dl = (lnr - LNE_MIN) / 48.0;
   for (int i = 1; i <= 48; i++) { float l = LNE_MIN + float(i) * dl, f1 = exp(envLnRho(exp(l), mu) + l); N += 0.5 * (f0 + f1) * dl; f0 = f1; }
-  fragColor = vec4(envLnRho(exp(lnr), mu), N, 0.0, 0.0);
+  fragColor = vec4(envLnRho(exp(lnr), mu), N, 1.0, 1.0);   // (round 15b: b, a the envelope's share of the place, 1 until ENVX_FS writes it)
 }`;
   // The envelope's streamers, in a volume texture made once (in idle time after the start, or when the envelope first
   // shows), on (ln r, φ, the signed angle above the midplane): the factor by which they change the density, and the
@@ -1193,6 +1661,14 @@ ${Array.from({ length: nb }, (_, i) => `  o${i} = vec4(o[${i}], 0.0, 0.0);`).joi
   // and the segment's update inline (passed to functions, the arrays would be copied in and out at every call):
   // coChannel for the channel map (one group: the channel's width) and coMoments (CO_Q groups, CO_N = 4 CO_Q velocities)
   const CO_Q = 6;
+  // (round 10c) Moment 0's base range (K km/s): the top of its colours before the automatic range raises it (coAim), and with
+  // CO_MASK where moment 1 is left out; the colour bar's labels follow it. 900 until round 10c, whose line width and
+  // normalization (see CO_TH2) made moment 0 0.76 to 0.87 times as large over the disk (the median over the pixels of a view:
+  // face-on 0.76, at 45 degrees 0.80, the page's start at 16 degrees 0.87; seen face-on moment 0 goes nearly as the line's width,
+  // and the more inclined the view, the more the velocities' gradient along the ray widens the line instead). 730 keeps the
+  // mean of the colour map's argument, sqrt(moment 0 / CO_M0) at the base range, within 4 % of what it was in each of those
+  // views (DESIGN.md 24)
+  const CO_M0_JS = 730;
   // (round 9) A bound on each ray's work. A ray that grazes the inner disk's midplane (seen nearly edge-on from close by,
   // as the temperature's place, d 2.4 au at 6 degrees) met steps of 0.001 au (a quarter of the 0.004 au floor), halved up
   // to four times where the line-of-sight velocity sweeps by more than 4 % of the line width in a step (it does there all
@@ -1251,6 +1727,7 @@ ${Array.from({ length: nb }, (_, i) => `  o${i} = vec4(o[${i}], 0.0, 0.0);`).joi
       if (refine >= int(uMarch.z) || (uRayB > 0 && float(i) >= uCoIt.x)) break;   // (round 9: no halving on a long ray)
       if (uCoRec > 0 && tm - t <= geo * 0.0156251) break;   // (rec: not below 1/64 of the geometric step)
       vec4 gm = coGas(ro + rd * (0.5 * (t + tm)), rd);
+      if (gCoEnvDom > 0.5) break;   // (round 15b: not where the envelope's thin gas is most, see coGas)
       float rhoMax = max(kP / K_CO, max(g.x, gm.x)), rhoMin = min(kP / K_CO, min(g.x, gm.x));
       float margin = 8.0 * max(wP, max(g.w, gm.w));
       float lo = min(uP, min(g.z, gm.z)) - margin, hi = max(uP, max(g.z, gm.z)) + margin;
@@ -1369,6 +1846,25 @@ void coMarchK0(vec3 ro, vec3 rd, vec2 b, float tCross, out vec4 I0, out vec4 Tr0
   sheetDone = tCross <= b.x || tCross >= b.y;
   dsP = 1e9; I0 = vec4(0.0); Tr0 = vec4(1.0); iF = 0.0;
 }`;
+  // (Round 18k, the owner of round 18j's own light: "this direction is good; run a loop improving its look"; and on the way: "round
+  // 18i's looked good from the disk's face too: the emissivity rho T kappa, the density in hydrostatic equilibrium, the temperature
+  // with the surface hotter than the interior by the irradiation, and a volume rendering of it, with no surface object") The own
+  // light's look (DESIGN.md section 52; uSelf in the GLSL). The gas glows at the model's temperature with the surface that the
+  // starlight heats directly (tempAt as the cut's Temperature, round 18i's); ?selfint=1 (SELF_INT) at the interior's of round 18j.
+  // (Round 18l: by default its surface set by the vertical column from above instead, and P and the interior's by the state's selft,
+  // see selfX and SELF_T; ?selfint=1 is selft 'int')
+  // The march gathers the gas's and the pebbles' brightness temperature T_b along the ray (S = T, the Rayleigh-Jeans brightness;
+  // without the depth's haze, AIR), and the pixel shows it at the end (selfLight): its brightness the logarithm of T_b, the
+  // display's value before the tone A ln(1 + T_b / TK) (the light 0.012 sinh(7.2 A ln(1 + T_b / TK)), which the stretch, asinh(L /
+  // 0.012) / 7.2, turns back into it; after the tone 10 K 0.16, 30 K 0.26, 100 K 0.40, 160 K 0.45, 300 K 0.53, 1000 K 0.69, 1500 K
+  // 0.74: the hot end where the gain of rounds 18i and 18j put it, 10 K two and a half times as bright), and its colour T_b's (HUE:
+  // the cut's temperature colours softened, stops in display values at T_b in K, linear in ln T_b between them in linear light,
+  // scaled to the luminance 1 so that the brightness stays T_b's, held beyond the ends; white at 160 K, the water ice's sublimation,
+  // as on the cut). The page's key shows them as a bar (box.diskSelfKey). G: the light per kelvin of rounds 18i and 18j, uSelf.y's
+  // (?selflook=old, SELF_OLD, draws their look: linear in T_b in the gas's colour, with the haze, at the interior's temperature, as
+  // 1.9-dev.32)
+  const SELF_LOOK = { A: 0.11, TK: 1.5, G: 1e-3,
+    HUE: [[10, [0.42, 0.50, 0.74]], [30, [0.42, 0.58, 0.90]], [90, [0.55, 0.74, 1.0]], [160, [0.96, 0.96, 0.94]], [350, [1.0, 0.70, 0.46]], [800, [1.0, 0.60, 0.30]], [1500, [1.0, 0.84, 0.45]]] };
   const FS = `#version 300 es
 precision highp float;
 layout(location = 0) out vec4 fragColor;
@@ -1393,6 +1889,14 @@ uniform float uStar;    // the star's glow relative to quiescence (an outburst b
 // I ∝ T (1 - e^-tau); no scattered light, the gas transparent). The observed looks are drawn by the FULL program.
 uniform int uLook;
 uniform int uSteps;
+#ifdef FAST_SKIP
+// (round 16a, see FAST in the script) x: 1, the coarse pass that marks the blocks whose volume gathers nothing (its ray the
+// march itself within a budget of y iterations, the parts it adds analytically left out); 2, the volume pass with that mask
+// (uFaceA in this use): the ray of an empty block starts where the march ends early (PH_BACK), which adds those parts; zw,
+// the mask's size. 0: neither
+uniform vec4 uFast;
+const float FAST_T = 3e-3;   // (the most of the light behind it a block's volume may take and still be empty)
+#endif
 uniform float uSeed;
 uniform float uPx;      // render pixels per CSS pixel
 uniform vec3 uJit;      // a still picture's frame: offset of the ray within the pixel (render pixels), of the march's jitter
@@ -1411,16 +1915,113 @@ float gasK(){ return (uMode & 2) != 0 ? uComp.y : 0.0; }
 float gasL(){ return (uMode & 1) != 0 ? uComp.x : 0.0; }
 uniform float uMS;      // multiple scattering, approximate (on by default, a toggle; see MS_C), as it fades in or out
 uniform float uLit;     // (round 8) the model's look lit by the star (see G_LIT): its strength for the quality of the moment
+// (Round 18i, the owner: "in the model look, the pattern of its own emission alone, with no surface lit; an opacity of about 2
+// instead") The model look's light (the state's glow, SELF in the script): the starlight as until now (uSelf.x 0), or the gas's own
+// thermal light (x > 0). Then the gas with its small grains glows at its own temperature (tempAt: the laws and the depth the cut's
+// Temperature takes) through one grey opacity, for its emission and its absorption alike (Kirchhoff): j = K rho S(T), alpha = K
+// rho, x = K = kappa Sigma(1 au), kappa the state's selfk in cm^2 per gram of gas (2 by default: 3400 in Sigma's units, 9.2 times
+// K_OCC). S(T) = T, the long-wavelength (Rayleigh-Jeans) brightness, so that where the gas is thick the pixel's light is the
+// temperature where the line of sight reaches tau = 1 and where it is thin its column times its temperature (the bolometric T^4
+// shown as T^1/4 lifted the thin warm atmosphere to tau^1/4 of its temperature, 0.18 at tau = 1e-3: a veil over the whole
+// picture); y, the display's light per kelvin (SELF.G: 1000 K is the stretch's 1, so that 1500 K stays under white and 10 K shows
+// over the sky; over the outburst's exposure, so that the outburst brightens it through its temperature alone). No starlight then:
+// the lit surface, its diffuse light and the shadow's dimming of the glow go (uLit 0), and the pebbles glow at the midplane's
+// temperature through their own absorption. The wind, the envelope, the jet, the planets and their disks keep their light; the
+// march, its steps and its end at a transmission of 0.01 are as before (DESIGN.md section 50). (Round 18j: the temperature the gas
+// glows at is the interior's, without the surface's grains heated directly by the starlight, the lit surface's own warmth: no bright
+// surface layer; ?selfsurf=1, SELF_SURF, kept them as round 18i did; DESIGN.md section 51). (Round 18k: by default round 18i's
+// temperature again, the owner's choice, and the interior's with ?selfint=1, SELF_INT; the brightness temperature gathered apart and
+// shown at the end, its brightness its logarithm and its colour its own, see SELF_LOOK; ?selflook=old, SELF_OLD, the look of
+// round 18j, as above; DESIGN.md section 52). (Round 18l: by default the temperature of a surface set by the vertical column from
+// above, the owner's mock, and round 18k's and round 18j's by the state's selft, see uSelfT; SELF_INT gone; DESIGN.md section 53)
+uniform vec2 uSelf;
+#ifdef SELF_OLD
+vec3 selfCol(vec3 m){ return m / max(max(m.r, m.g), max(m.b, 1e-4)); }   // (a material's colour at its full brightness)
+#else
+// (Round 18k) gTb: the own light's brightness temperature along the ray (K), each gas sample's K rho T (gSelfJ) over its step,
+// weighed by what of it reaches the camera (the transmission before it and the step's own transfer weight), and the pebbles' T_mid
+// times their absorbed fraction; apart from the other light, without the depth's haze. selfLight: the pixel's light from it at the
+// end, 0.012 sinh(7.2 A ln(1 + T_b / TK)) = 0.006 (x - 1 / x), x = (1 + T_b / TK)^(7.2 A), in T_b's colour (selfHue, the luminance 1).
+// (Round 18m, the owner: "colour it in one grey alone, keeping the contrast of the present map") Its colour apart, selfTint (after
+// the materials' colours): by default the gas's material colour scaled to the luminance 1, white by default, so that its shades are
+// the brightness temperature through the same curve; with ?selfhue=1 (SELF_TCOL) round 18k's colours of T_b, selfHue
+float gSelfJ = 0.0, gTb = 0.0;
+const float SELF_LN[${SELF_LOOK.HUE.length}] = float[${SELF_LOOK.HUE.length}](${SELF_LOOK.HUE.map(([T]) => G(+Math.log(T).toFixed(6))).join(', ')});
+const vec3 SELF_HUE[${SELF_LOOK.HUE.length}] = vec3[${SELF_LOOK.HUE.length}](${SELF_LOOK.HUE.map(([, c]) => 'vec3(' + c.map((v) => G(+Math.pow(v, 2.2).toFixed(6))).join(', ') + ')').join(', ')});
+vec3 selfHue(float T){
+  float l = log(max(T, 1e-3));
+  vec3 c = SELF_HUE[0];
+  for (int i = 0; i < ${SELF_LOOK.HUE.length - 1}; i++) c = mix(c, SELF_HUE[i + 1], clamp((l - SELF_LN[i]) / (SELF_LN[i + 1] - SELF_LN[i]), 0.0, 1.0));
+  return c / max(dot(c, LUMW), 1e-4);
+}
+float selfLight(float Tb){
+  float x = pow(1.0 + max(Tb, 0.0) / ${G(SELF_LOOK.TK)}, ${G(+(7.2 * SELF_LOOK.A).toFixed(6))});
+  return 0.006 * (x - 1.0 / x);
+}
+// (Round 18l, the owner, of round 18k's own light: "rather than colouring by the optical depth from the centre, give the surface its
+// temperature, as a mock, by the column depth along the disk's vertical") selfX: the depth x that sets the temperature the gas glows
+// at (tempAt's), by the state's selft (SELF_T in the script) in uSelfT.x. 1, 'col' (by default): the vertical column from above,
+// N_perp = Sigma / 2 erfc(|z| / (sqrt 2 H)) (sig, Sigma(R) in the model's units with the gaps' ln and the inner edge; the eddies and
+// the disk map left out), over Sigma_s, the state's selfnc in g cm^-2: x = ln(N_perp / Sigma_s), with uSelfT.y = ln(SIGMA1 / (2
+// Sigma_s)); so T^5 = T_int^5 + T_ds^5 e^(-N_perp / Sigma_s), the cut's law with tau* replaced: the surface above the column Sigma_s at
+// the temperature of the grains the starlight heats directly, the gas below at the interior's. 0, 'star' (round 18k's P): xw, the
+// local depth toward the star with the crest's shadow, as the cut's Temperature. -1, 'int' (round 18j's): 30, the interior's. erfc as
+// erfA's (Abramowitz & Stegun 7.1.26) in its own form, t P(t) e^(-u^2), taken in logs: 1 - erf keeps no digits in single precision
+// where erfc is under 1e-7 (u over 3.8, where the layer's edge lies near the star for Sigma_s 0.001 g/cm^2), and e^(-u^2) is 0
+// beyond u 9; its relative error 3e-5 at u 2, 7e-4 at 3, 3e-3 at 4. Where there is no gas (the dust-free hole inside 0.8 R_IN, sig
+// 0) the floor keeps the log finite and x is -30, tempAt's full starlight; the gas's emission there is 0 (DESIGN.md section 53)
+// (Round 18m, the owner of round 18l's mock: "right, the tail is in the shadow; the tail can be at the interior's temperature") 'col'
+// (round 18n: 'colstar') takes the deeper of the column's depth and xs, the starlight's along the ray from the star (sampleDisk's x: the table starT with the
+// gaps' ln; with the cut of before xw): the surface is hot where the column from above is thin and the starlight reaches it. Beyond
+// the crest the tail lies in its shadow (the ray from the star crosses the crest's gas, the 0.27 rad cone beyond 40 au) and keeps the
+// interior's temperature, its midplane 12 K at 55 au (41 K in round 18l); inside 30 au the starlight's surface lies below the
+// column's (3.75 against 3.85 H at 1 au, 3.05 against 3.21 at 10) and the hot layer is round 18l's (DESIGN.md section 54)
+// (Round 18n, the owner of round 18m's: "edge-on the disk's surface is an X again. The surface measured by the vertical column, and
+// where that surface descends, no surface: that will do") Round 18m's shadow, xs, left the thin gas above the crest's cone hot (its
+// column from above is under Sigma_s and the ray from the star passes over the crest): edge-on its two lit sheets crossed at the star
+// as an X out to the gas's edge. By default now 'col' is the column's depth alone with the surface's own share, selfW: the column's
+// surface z_s (N_perp = Sigma_s) is a surface only where it rises outward. Its tail beyond 46 au (z_s 10.3 au at 45 au, then down to
+// the midplane at 70 au, where Sigma is 2 Sigma_s) and the inner slopes of the planets' gaps keep the interior's temperature through
+// the whole column. 2, 'colstar': round 18m's, the column's depth or xs, the deeper (DESIGN.md section 55)
+// (Round 19a, the owner, of round 18n's rule: "not convinced yet; decide the lit region by the column from the centre and the
+// vertical column both", and, shown that this is round 18m's and that its X is the Gaussian tail's lit thin gas: "then a model with a
+// stronger truncation may look better") 'colstar' the default again: hot only where the starlight reaches and the column from above
+// is under Sigma_s, nothing hot that the star does not light (round 18n's 'col' warmed the column's surface inside the crest's
+// shadow, 37 K against the interior's 15 K at 45 au, 8 au up, and cooled the lit gas over the cone, 84 K to 11 K at 60 au); the X
+// goes with the tail, whose taper's exponent is 3 now (see cutOut). 'col', round 18n's, by the state's selft (DESIGN.md section 56)
+uniform vec2 uSelfT;
+float erfcE(float u){ float t = 1.0 / (1.0 + 0.3275911 * u); return t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))); }   // (erfc(u) e^(u^2), u >= 0)
+// (round 18n) selfW, the surface's share (below the model's constants: it takes their cutSlope and the planets' gapT)
+float selfW(float R, float sig);
+float selfX(float R, float sig, float zh, float xw, float xs){
+  if (uSelfT.x < -0.5) return 30.0;
+  if (uSelfT.x < 0.5) return xw;
+  float u = abs(zh) * 0.70710678;
+  float x = clamp(log(max(sig * erfcE(u), 1e-30)) - u * u + uSelfT.y, -30.0, 30.0);
+  if (uSelfT.x > 1.5) return max(x, xs);   // ('colstar', round 18m's)
+  // (round 18n: deeper than x 3 tempAt has no hot term; above, the surface's share w folded into the depth, e^(-e^x') = w e^(-e^x))
+  if (x > 3.0) return x;
+  float w = selfW(R, sig);
+  return w > 0.0 ? log(exp(x) - log(w)) : 30.0;
+}
+#endif
 uniform float uFx;      // (round 8) the finish's strength for the quality of the moment (see FX in the script): 0 to 1
 uniform float uFocus;   // (round 8) the camera's distance from the point looked at (for the depth's haze, see AIR)
 // (Round 8, item 29) Depth: what lies far behind the point looked at is drawn a little fainter, as distance veils a view
 // (an aerial perspective, a choice of the picture): from the point looked at to AIR_D times as far, down to 1 - AIR.
 const float AIR = 0.3, AIR_D = 3.0;
 float airK(float t){ return 1.0 - AIR * uFx * smoothstep(uFocus, AIR_D * uFocus, t); }
+#ifdef TURB3D_OFF
 uniform sampler2D uDiskMap;
+#else
+uniform highp sampler2DArray uDiskMap;   // (round 18m: layer 0 the disk map, 1 and 2 the turbulence's planes above and below the midplane, see turbZ)
+#endif
 uniform sampler2D uAccMap;   // the accretion layers' streaks (upper, lower), on the disk map's grid
 uniform vec2 uAcc;           // the accretion layers' strengths (upper, lower): with the wind's asymmetry only the lower
 uniform vec2 uAccV;          // their inflow (upper, lower), in units of the sound speed (see ACC)
+uniform vec4 uMflux;         // (round 13c) the mass budget (see MFLUX in the script): x 1 on; z Mdot_TI (M_sun/yr)
+uniform vec4 uMdotV[${MFLUX.NV / 2}];      // its I at NV nodes, for the gas line's sheet (see coGas)
+${mfHermite('mfIV', 'uMdotV', MFLUX.NV)}
 uniform sampler2D uWindMap;
 uniform sampler2D uEnvMap;
 uniform highp sampler3D uTurb3;   // the eddies (see CELLS3): density factor, extra optical depth toward the star
@@ -1432,6 +2033,7 @@ uniform float uStarK;    // 1 over the automatic exposure's factor: the star and
 uniform vec3 uMagAxis;   // the dipole's axis now: tilted by MAG.TILT toward the azimuth the star has turned to
 uniform vec3 uMagE1;     // the zero of the magnetic azimuth: toward the tilt, perpendicular to the axis
 uniform float uMagT;     // the model's clock (modulo 600 s), for the columns' fluctuations
+uniform vec4 uDbg, uDbg2, uDbg3;   // R19DBG
 // The cutaway: the part of space toward the camera between two vertical planes through the star (containing the
 // axis) is cut away, and the cut faces show a quantity in false colour (uSliceQ: 1 temperature, 2 gas density, 4 the
 // regions of the coupling; Disk Lab v2, round 6: 0, the cut alone, and 3, the optical depth toward the star, are gone). One plane faces the camera (its normal the camera's horizontal
@@ -1459,6 +2061,22 @@ ${SCATTER_GLSL}
 ${NOISE_GLSL}
 ${TURB_GLSL}
 ${MAP_GLSL}
+${ENV_GLSL}
+#ifndef SELF_OLD
+// (round 18n) selfW: the share of the hot surface at R, from Sigma's slope. With z_s = sqrt 2 H u_s and erfc(u_s) = 2 Sigma_s / Sigma,
+// q = d ln z_s / d ln R = 1.25 + (sqrt(pi) / 2) erfc(u_s) e^(u_s^2) / u_s d ln Sigma / d ln R, the slope -1 - cutSlope + gapSlope
+// (the inner edge's rise left out: q is over 1 there anyway); w = smoothstep(0, 0.5, q), so the hot layer fades as the surface stops
+// rising (40 to 45 au) and is gone where it descends; 0 where the whole column is under 2 Sigma_s (no surface). u_s: two Newton steps
+// on ln erfc from u^2 = t - ln(sqrt(pi t)) (t = ln(Sigma / 2 Sigma_s)); against the surface found by bisection, u_s within 6e-4 and
+// w within 2e-3 for Sigma_s 0.001 to 10 g cm^-2, with and without a Jupiter's gap at 10 au
+float selfW(float R, float sig){
+  float t = log(max(sig, 1e-30)) + uSelfT.y;
+  if (t <= 0.0) return 0.0;
+  float u = sqrt(max(t - 0.5 * log(3.14159265 * max(t, 0.6)), 1e-4));
+  for (int i = 0; i < 2; i++) { float e = erfcE(u); u = max(u + (log(e) - u * u + t) * 0.88622693 * e, 1e-3); }
+  return smoothstep(0.0, 0.5, 1.25 + 0.88622693 * erfcE(u) / u * (-1.0 - cutSlope(R) + gapT(R).y));
+}
+#endif
 // Absorbed fraction and the constant-source transfer integral. Optical depths
 // are nonnegative. At tau <= 1, the degree-11 absorbed-fraction series has
 // truncation error <= 1/12! = 2.09e-9, below float32 rounding. Moving the
@@ -1493,16 +2111,35 @@ float transferWeight(float tau){
 vec3 absorptionFraction(vec3 tau){ return vec3(absorptionFraction(tau.x), absorptionFraction(tau.y), absorptionFraction(tau.z)); }
 vec4 absorptionFraction(vec4 tau){ return vec4(absorptionFraction(tau.x), absorptionFraction(tau.y), absorptionFraction(tau.z), absorptionFraction(tau.w)); }
 vec3 transferWeight(vec3 tau){ return vec3(transferWeight(tau.x), transferWeight(tau.y), transferWeight(tau.z)); }
-// Opacities are set for a translucent rendering (a real disk is opaque at visible wavelengths):
-// gas with small grains (also in the wind), settled pebbles (opaque out to the edge of the disk, and their
-// mostly thin millimetre-like emission).
+// Opacities. (Round 18g, the owner: "you say gas, but it holds the small grains too, and the small grains are what is opaque: is
+// the picture consistent with that?") The gas and its small grains, well mixed in the disk, its wind and its envelope alike, have
+// one opacity a band, the same per mass everywhere (per unit of the model's Sigma, Sigma(1 au) = 1700 g cm^-2 as the probe has it).
+// In visible light K_OCC, the one that absorbs the starlight and so sets its depth, tau* = K_OCC rho R, and the lit surface:
+// e^LNTAU1 sqrt(2 pi) H0 = 369.6, 0.22 cm^2 per gram of gas, about 1/920 of the interstellar grains' 200 (the small grains depleted,
+// grown or settled). It takes the visible look's light (OPT_K below), the starlight that the small grains scatter in the model
+// look on its way to the camera (SKIN_LOS) and the jet behind the disk (jetOcc). In the mid-infrared K_OCC / MIR_V (MIR_K): the
+// interstellar grains' tau_V / tau_9.7. Until round 18g the visible look and the model look's scattered light (SKIN_LOS 29, round
+// 18f) took 30 times K_G, 1/15 of K_OCC, the mid-infrared 8 times, 1/58, the wind and the envelope K_G, 1/462: the camera saw that
+// much deeper than the starlight reaches, and edge-on the far side's lit surface through the disk's outer part. The model look's
+// gas, K_G = K_OCC / 462, is drawn translucent, a picture of where the gas is (its glow
+// and what the march takes for it, so that the midplane and the snow line show; a real disk is opaque in visible light); only the
+// light its small grains scatter goes at K_OCC (SKIN_LOS). Settled pebbles: K_D (opaque out to the edge of the disk), K_MM (their
+// mostly thin millimetre-like emission). OPQ_OLD (data-opq="0", the page's ?opq=0, to compare; and with the cut of before,
+// SIG_CUT, which keeps its picture): the opacities of before (DESIGN.md section 48).
 const float K_G = 0.8, K_D = ${G(MODEL.K_D)}, K_MM = 40.0;
+const float K_OCC = ${G(+(Math.exp(MODEL.LNTAU1) * Math.sqrt(2 * Math.PI) * MODEL.H0).toPrecision(6))};   // (e^LNTAU1 sqrt(2 pi) H0; 3.4e5 the interstellar grains', see jetOcc)
 // Brightness of the components: the skin and the pebble layer per unit of absorbed starlight E (see Eabs). The gas
 // body (gas mixed with small grains, which fills the disk) glows in proportion to its density, in the colour of its
 // temperature, whatever the starlight: a picture of where the gas is rather than of what it emits. Where the gas is
 // thick the glow saturates at G_GAS times the colour (emission over extinction), so the midplane shows as a band
 // without hiding the surface and the snow line.
-const float G_SKIN = 0.04, G_GAS = 0.2, G_DUST = 1.4;
+const float G_SKIN = 0.04, G_DUST = 1.4;
+// (Round 15b, the owner: "seen from inside the disk only the surface glows; there is plenty of emitting gas in front") G_GAS,
+// the gas body's glow, is uGGas: 0.5 by default (0.2 until round 15b; data-ggas, the page's ?ggas=0.2, to compare). Where the gas
+// is thick its light tends to uGGas MAT_DISK (1 - LIT_DARK in the disk's shadow) over EXT, whatever its density: 0.30 of linear
+// white lit and 0.12 in the shadow with the white gas (MAT_DISK 0.6), against about 8 for the stretch's white (the asinh below,
+// see main's end), so the glow cannot blow the picture out by itself, and LIT_DARK's far side stays 0.4 of the lit side's
+uniform float uGGas;
 // (Round 8, the owner: "even at a very high resolution the disk looks flat") The model's look lit by the star: the small
 // grains at the flared surface scatter its light, strongly forward, as the visible look's do (one Henyey-Greenstein
 // function, g = G_LIT_HG = 0.55: the near side of a disk at 50 degrees about 10 times brighter than the far one at the
@@ -1512,10 +2149,33 @@ const float G_SKIN = 0.04, G_GAS = 0.2, G_DUST = 1.4;
 // is lowered by LIT_DARK, so the midplane and the far side, in the disk's own shadow, are darker. Not a surface glowing
 // of itself (round 3): the light is the star's, on the matter it reaches; the glow of the rest stays.
 const float G_LIT_HG = 0.55, G_LIT = 0.3, LIT_DARK = 0.6;
+// (Round 18f, the owner: "make the edge-on view look natural") and lowered by LIT_DEEP more where the diffuse light does not
+// reach either (1 - e^(-MS_C tau*): the gas deeper than tau* of about 25 below its lit surface, MS_C below): 0.1 of the lit glow
+// there instead of 0.4, so that seen edge-on the disk's body is a dark band, not a bright bar (its long path through the
+// shadowed midplane took the glow to its thick limit, 0.4 G_GAS MAT_DISK / EXT, about 0.12 of linear white, 0.42 on the stretch;
+// now 0.03, 0.23); the gas within the reach of the diffuse light below the surface keeps 0.4. Not with SKIN_THRU (the cut of
+// before, ?skinlos=0: see SKIN_LOS). (Round 18g: kept. It lowers the gas's own glow, the translucent layer that the small grains'
+// one opacity leaves as it was; seen edge-on the band's inner 10 au still needs it, now that the far side's lit surface no longer
+// shows through the disk there: the midplane at the star's column 0.18 on the stretch with it, 0.26 with 0.2 and 0.35 without, and
+// the band down to 0.04 from 17 au with it, 28 au with 0.2 and 34 au without. DESIGN.md section 48)
+#ifdef SKIN_THRU
+const float LIT_DEEP = 0.0;
+#else
+const float LIT_DEEP = 0.3;
+#endif
+// (Round 13a, the owner: "show the gas in proportion to its density") The gas body's glow is G_GAS K_G rho, in proportion to
+// its density as its extinction K_G rho is, and nothing else beside the starlight's LIT_DARK above. Until round 13 it was
+// also raised beyond OUTER_R by R / OUTER_R (5 times at 30 au), so that the thin outer disk read about as brightly as at 6 au
+// (Sigma falls as 1 / R, and the glow of a thin column with it). uGasOuter: 1 draws that law of before (data-gasrho="old",
+// the page's ?gasrho=old, a development switch, to compare), 0 by default. Where the gas is thick along a ray its light
+// still tends to G_GAS times the colour over EXT (emission over extinction), whatever the density: an absorbing gas drawn
+// with both in proportion to its density shows its column only where it is thin.
+uniform float uGasOuter;
 // the accretion layer's glow per unit of its density (relative to the gas body's G_GAS) and its colour (see ACC): a thin
 // sheet (its column absorbs little) that glows, a picture of the flow
 const float G_ACC = 7.0;
 const vec3 ACC_COL = vec3(1.0, 0.50, 0.14);
+uniform float uAccDraw;   // (round 13a) the accretion layer drawn in the model's look: 0 by default, 1 with data-acclayer="on" (see ACC)
 // Multiple scattering, approximated as in two-stream diffusion (on by default, a toggle): of the starlight absorbed in
 // the skin, a part MS_A comes out again as diffuse light (grains of albedo about one half), half of it going down into
 // the disk, where it fades with the vertical optical depth from the surface, tau_v ≈ beta tau* (beta the grazing angle),
@@ -1533,8 +2193,12 @@ const float MS_A = 0.5, MS_C = 0.04;
 // falls more slowly with height than its density, as (rho / rho_base)^(1 - WIND_RISE) with rho_base the density at the
 // line's base (rho falls some sixtyfold by chi = 1 and fifteen-hundredfold by chi = 10): the outflow and its streamers
 // show well above the disk, as a display choice like the softened falloff with distance (not in the observed looks).
-// The extinction stays rho.
+// The extinction stays rho: K_G rho in the model look, and (round 18g) in the visible look OPT_W K_G rho = K_OCC rho, the small
+// grains' as in the disk (along its lines from their base up, about 0.1 at 1 au, 0.01 at 3 au and 0.003 at 10 au; 462 times
+// less until round 18g). Its brightness there, G_WIND_OBS K_G rho, stays the picture's (the light per unit of the extinction is
+// the display's choice).
 const float G_WIND = 450.0, WIND_NEAR = 0.35, G_WIND_OBS = 200.0, WIND_RISE = 0.15;
+uniform float uWindK;   // (round 14a) the wind's brightness as the viewer chose it (box.diskWindGain), a factor on G_WIND in the model's look
 // The wind's asymmetry (an option, on by default; see opt.asym): with the field aligned with the rotation the wind is
 // much weaker on one side, the side where the current layer and the surface accretion are (Mori, Bai & Tomida 2025:
 // the mass-loss rate there an order of magnitude lower). uWindLow: the lower side's wind relative to the upper, WIND_LOW
@@ -1549,13 +2213,79 @@ const float PILE = 0.5;                 // extra glow of the ice pile-up beyond 
 const float PEB_RING = ${G(PEB_RING)};   // (round 8) the pebbles' excess at a planet's pressure maximum, see PEB_RING in the script
 const vec3 EXT = vec3(0.90, 0.97, 1.08); // small grains absorb blue light more strongly
 const vec3 STARCOL = vec3(1.0, 0.87, 0.72);
+// (Round 19a, the visual review: "the star does not read as the light source") Its glare: one more term of the star's small
+// screen-space profile (see starGlow in main), STAR_HALO / (1 + (d / 9 px)^2), a soft glow some tens of pixels across (0.24 on
+// the display at 20 px, 0.1 at 40 px, at the exposure 1), eased with the camera's distance (1 / (1 + (d / 150 au)^2): a sixth
+// from the far view's 340 au, where the disk itself is a few tens of pixels and the glare would drown it). Dimmed as the star's
+// light is by what lies in front of it.
+const float STAR_HALO = 0.3;
 // (round 8) the materials' colours in the model's look (linear; see MAT in the script): each material its own hue
 uniform vec3 uMat[${MAT.length}];
 ${MAT.map((m, i) => `#define MAT_${m[0].toUpperCase()} uMat[${i}]`).join('\n')}
-vec3 litCol(){ vec3 m = MAT_DISK / max(max(MAT_DISK.r, MAT_DISK.g), max(MAT_DISK.b, 1e-4)); return mix(m, vec3(1.0, 0.95, 0.88), 0.25); }   // (round 8: see G_LIT)
-// the observed looks: the gas's opacity relative to K_G (the disk opaque in scattered light and the mid-infrared), the
-// colour of scattered starlight, the forward scattering of the grains at the surface, and the gains of each look
-const float OPT_K = 30.0, MIR_K = 8.0, G_OPT_HG = 0.55, G_OPT = 1.0, G_MIR = 2.5, G_MM = 0.3;
+#ifndef SELF_OLD
+// (round 18m) the own light's colour (see selfLight): the gas's, at the luminance 1, or with SELF_TCOL the colour of T_b
+vec3 selfTint(float Tb){
+#ifdef SELF_TCOL
+  return selfHue(Tb);
+#else
+  return MAT_DISK / max(dot(MAT_DISK, LUMW), 1e-4);
+#endif
+}
+#endif
+// (Round 19a, the visual review: "the lit disk is a neutral grey; nothing says that it is lit by a star") The lit surface takes half
+// of the star's colour (STARCOL, a warm white: the light of a 4300 K star on grains that scatter all colours alike would be warmer
+// still): the gas's material colour times mix(white, STARCOL, 0.5), (1, 0.935, 0.86) on the white gas. Until round 19a a mix of a
+// quarter toward (1, 0.95, 0.88), nearly neutral. The gas's own glow, in the shadow and through the body, keeps the material's
+// colour: warm where the star lights it, neutral where it does not.
+vec3 litCol(){ vec3 m = MAT_DISK / max(max(MAT_DISK.r, MAT_DISK.g), max(MAT_DISK.b, 1e-4)); return m * mix(vec3(1.0), STARCOL, 0.5); }   // (round 8: see G_LIT)
+// the observed looks: the gas's opacity relative to K_G (the disk opaque in scattered light and the mid-infrared; round 18g: the
+// small grains' own, see K_G: K_OCC in visible light, OPT_K = K_OCC / K_G = 462, and MIR_V times less in the mid-infrared, MIR_K
+// 27.2; 30 and 8 until round 18g, OPQ_OLD), the wind's and the envelope's in visible light relative to their K_G (OPT_W: the same per
+// mass as the disk's; 1, theirs of before, with OPQ_OLD), the colour of scattered starlight, the forward scattering of the grains
+// at the surface, and the gains of each look. MIR_V, tau_V / tau_9.7 of the interstellar grains: A_V / tau_9.7 = 18.5 (Roche &
+// Aitken 1984), A_V = 1.086 tau_V
+#ifdef OPQ_OLD
+const float OPT_K = 30.0, MIR_K = 8.0, OPT_W = 1.0;
+#else
+const float MIR_V = 17.0;
+const float OPT_K = K_OCC / K_G, MIR_K = OPT_K / MIR_V, OPT_W = OPT_K;
+#endif
+const float G_OPT_HG = 0.55, G_OPT = 1.0, G_MIR = 2.5, G_MM = 0.3;
+// (Round 18f, the owner: "make the edge-on and nearly edge-on views look natural") The model look's lit skin and its diffuse
+// light are the star's light scattered by the small grains, and on their way to the camera they pass the disk's gas as that light
+// does: dimmed by it at the visible look's opacity, OPT_K times the gas's own (SKIN_LOS more than the gas's own extinction in
+// the march's transmission; gTauG, the gas's column along the ray so far, see the march). The gas's glow, a picture of where the
+// gas is, stays translucent (K_G). Seen edge-on the lit surface's limb behind the disk's body, which made the bright X of
+// straight lines crossing at the star (the surface is a cone of 0.27 rad beyond 30 au, the model's own: see starTableData), and
+// the far side's surface seen through the disk are hidden as they are in the visible look: the upper and the lower lit surfaces
+// stand apart over the disk's dark band, as in the scattered light of edge-on disks (HH 30, the Flying Saucer). Not with the
+// cut of before (SIG_CUT keeps its picture), nor for the pebbles' sheet (a component of its own, drawn through the gas): SKIN_THRU,
+// defined by init with the cut of before and with data-skinlos="0" (the page's ?skinlos=0, to compare: the lit surface seen through
+// the disk as until now, and the shadow's glow without LIT_DEEP)
+// (Round 18g) at the small grains' own opacity, K_OCC = (1 + SKIN_LOS) K_G, the one that stops the starlight (OPT_K 462: SKIN_LOS
+// 461; 29 in round 18f, 1/15 of it, OPQ_OLD). Seen edge-on the inner disk's lit surface is hidden behind the flared outer disk's
+// atmosphere, and its far side wherever the disk is (its column straight through 1 at 44 au); seen from inside the disk the lit
+// surface is gone; seen from above the diffuse light, scattered about a scale height below the skin (tau* ~ 1 / MS_C, where the
+// layers above it hold a depth of about 0.35 at 1 au, 0.5 at 3 au and 0.85 at 10 au), is dimmed by about a half at 38.6 degrees,
+// the lit skin itself by a few per cent (its depth from above about beta). The step's light needs nothing more than its integral
+// of before: in the march's steps (0.4 H to 0.18 |z|) the skin lies where the step's own depth at K_OCC is about 0.04 (tau* = 1),
+// and against a fine march the picture differs by +0.003 on the display on average (+0.005 with 29), with no steps or stripes
+// (DESIGN.md section 48)
+#ifdef SKIN_THRU
+const float SKIN_LOS = 0.0;
+#else
+const float SKIN_LOS = OPT_K - 1.0;
+#endif
+float gTauG = 0.0, gExG = 0.0;
+// (Round 15b, the owner: "changing L* should change every observed look") uLstar: the star's luminosity over its default (the
+// parameter L*, lumBase in the script; 1 with data-lscale="0", the page's ?lscale=0, as before). The starlight the visible look
+// scatters (the disk's skin and its diffuse part, the wind's and the envelope's light) is in proportion to it; the star's own glow
+// too, in every observed look (see starL in the script). What shines of itself does not follow (the jet, the magnetosphere's
+// columns, the planets and their disks), nor the model look (a picture, not an observation). The mid-infrared, millimetre and
+// gas-line looks followed L* already, through the temperatures (uLum). The observed looks' exposure is fixed (the automatic one
+// works in the model look only): the visible look grows brighter with L*, by L* / 2.7 L_sun (0.07 to 7.4 over the slider), its
+// light against the self-luminous parts in that ratio too
+uniform float uLstar;
 const vec3 SCAT_COL = vec3(1.0, 0.94, 0.86);
 // mid-infrared: B_nu(10 microns, T) relative to 300 K, softly capped, and a thermal palette (red to pale yellow)
 float mirPlanck(float T){ float b = (exp(1439.0 / 300.0) - 1.0) / (exp(1439.0 / max(T, 20.0)) - 1.0); return b / (1.0 + b / 6.0); }
@@ -1569,10 +2299,14 @@ const vec3 MM_COL = vec3(1.0, 0.42, 0.12);
 // the cavity and less toward the midplane): the cavity's walls are lit, as in images of young stars still in their
 // envelopes. The density and the column include the streamers (see ENV3_FS), so a dense streamer is brighter where the
 // light reaches it and shades the envelope behind it, outward from the star: the light comes out through the gaps
-// between them in shafts that fan out from the star. Seen along the line of sight it is kept translucent, as the disk
-// is: its density is scaled by ENV_RHO relative to the gas density unit of the disk (the midplane at 1 au) and it
-// absorbs little. envLight returns the emission and the extinction per unit length, the same inside the marched
-// cylinder and outside it.
+// between them in shafts that fan out from the star. Seen along the line of sight it is kept translucent in the model look, as
+// the disk's gas is: its density is scaled by ENV_RHO relative to the gas density unit of the disk (the midplane at 1 au) and
+// it absorbs little (K_G). (Round 18g) In the visible look it absorbs as the disk does, at the small grains' K_OCC (OPT_W; the
+// same per mass as the disk's upper layers, the same depletion): with ENV_RHO, the picture's density (the rho0 of an infall of
+// 2.7e-4 M_sun/yr), and its fade with the distance, its depth toward the star is about 2 from 340 au at 14 degrees, 0.7 at 45
+// degrees and 0.7 from 100 au at 10 degrees (the interstellar grains' opacity would make them about 920 times more: a real
+// envelope's, at 1e-6 M_sun/yr, about 7 from 14 degrees; DESIGN.md section 48). envLight returns the emission and the
+// extinction per unit length, the same inside the marched cylinder and outside it.
 // (the map's column is in au, so both scale as 1 / r_c: 8 au to the sixth round, 30 au since; with r_c = 30 au, 1.07e-4
 // and 0.133, written here as the products with r_c so that they follow it, ENV.RC)
 const float ENV_RHO = ${G(3.21e-3 / ENV.RC)}, G_ENV = 70.0, ENV_KSTAR = ${G(3.99 / ENV.RC)};
@@ -1584,20 +2318,59 @@ const vec3 ENV_COL = vec3(0.55, 0.66, 0.95);
 // this leaves out). ENV_SELF, relative to the lit part's G_ENV, chosen by eye (DESIGN.md, section 17). Density only, not
 // a weight by temperature, so that no lit surface stands out as a sheet (round 3).
 const float ENV_SELF = 3.0;
+#ifndef ENV_TRY
+#define ENV_TRY vec4(120.0, 8.0, 1.0, 110.0)
+#endif
+const vec4 ENV_M = vec4(ENV_TRY.x, ENV_TRY.y / R_C, ENV_TRY.z, ENV_TRY.w);
+// (Round 18a, the owner: "the objects' transparency too") The see-through of each component (box.diskSet's op, opt.opac in the
+// script): factors from 0.05 to 1 on the extinction, what each takes out of the ray, its emission left as it is: x the gas
+// (with the planets' disks and the accretion layer drawn; and the jet's occultation, see jetOcc), y the pebbles (the sheet and
+// its layer), z the wind, w the envelope. In every look where each absorbs (the gas line's continuum: the pebbles). 1, 1, 1, 1
+// by default: each factor is a multiplication by 1.0 at the end of what it scales, so that the picture is the one of before,
+// to the bit. (The jet has no extinction of its own: its lobes only shine, laid in where the ray passes the axis.)
+uniform vec4 uOpac;
 vec3 tcolor(float T);   // (defined below, with the temperature palette)
 const int ENV_N = 40;                   // samples of the envelope in front of and behind the marched cylinder
 void envLight(vec3 p, vec3 rd, out vec3 em, out vec3 ex){
   float r = max(length(p), 0.5), R = length(p.xy), lr = (log(r) - LNE_MIN) / LNE_SPAN, th = atan(p.z, R);
-  float m = texture(uEnvMap, vec2(lr, abs(th) / (0.5 * PI))).r;
+  vec4 mE = texture(uEnvMap, vec2(lr, abs(th) / (0.5 * PI)));   // (round 15b: b, a the envelope's share of the place above and below, see EXCL)
+  float m = mE.r;
   vec2 st = texture(uEnv3, vec3(lr, atan(p.y, p.x) / TAU + 0.5, th / PI + 0.5)).rg;   // the streamers: density factor, column
-  float re = ENV_RHO * uEnv * exp(m) * st.x;
-  em = G_ENV * K_G * re * mix(1.0, smoothstep(0.13, 0.2, abs(p.z) / max(R, 1e-3)), gasK()) * exp(-ENV_KSTAR * st.y) / (1.0 + r * r / 3164.0) * phaseGas(dot(p, -rd) / r) * (uLook == 0 ? MAT_ENV : ENV_COL);
+  float re = ENV_RHO * uEnv * exp(m) * st.x * (p.z >= 0.0 ? mE.b : mE.a);
+#ifdef ENV_OLD
+  em = G_ENV * K_G * re * mix(1.0, smoothstep(0.13, 0.2, abs(p.z) / max(R, 1e-3)), gasK()) * exp(-ENV_KSTAR * st.y) / (1.0 + r * r / 3164.0) * phaseGas(dot(p, -rd) / r) * (uLook == 0 ? MAT_ENV : ENV_COL * uLstar);   // (round 15b: uLstar)
   if (uLook == 0) em += ENV_SELF * K_G * re * MAT_ENV;   // (round 8: its material's colour, no longer its temperature's)
-  ex = K_G * re * EXT;
+#else
+  // (round 19c: the model look's own constants, ENV_M; the visible look's as they were)
+  float lit = mix(1.0, smoothstep(0.13, 0.2, abs(p.z) / max(R, 1e-3)), gasK()) * phaseGas(dot(p, -rd) / r);
+  float cf = p.z >= 0.0 ? mE.g : max(mE.g, mE.a - mE.b);
+  if (uLook == 0) em = (ENV_M.x * lit * exp(-ENV_M.y * st.y * cf) / (1.0 + r * r / (ENV_M.w * ENV_M.w)) + ENV_M.z) * K_G * re * MAT_ENV;
+  else em = G_ENV * K_G * re * lit * exp(-ENV_KSTAR * st.y) / (1.0 + r * r / 3164.0) * ENV_COL * uLstar;   // (round 15b: uLstar)
+#endif
+  ex = K_G * re * EXT * uOpac.w;   // (round 18a: the envelope's see-through)
+#ifdef FULL
+  if (uLook == 1) ex *= OPT_W;   // (round 18g: in the visible look the small grains' K_OCC, as the disk's; see OPT_W)
+#endif
 }
 
 // the disk map at (ln R, φ): factors of the gas density, the skin brightness, the pebble density and the starlight
+#ifdef TURB3D_OFF
 vec4 diskMap(float lnR, float phi){ return texture(uDiskMap, vec2((lnR - LNR_MIN) / LNR_SPAN, phi / TAU + 0.5)); }
+#else
+vec4 diskMap(float lnR, float phi){ return texture(uDiskMap, vec3((lnR - LNR_MIN) / LNR_SPAN, phi / TAU + 0.5, 0.0)); }
+// (Round 18m) The turbulence's vertical structure (see turbZPlanes, TURBZ in the script): the factor of the gas's density at (ln R, φ,
+// z/H) beyond the thermally ionized disk, from the disk map's planes on its side of the midplane (layer 1 above, 2 below: z cells 0
+// to 3, TZ_CZ per H; ln R from LNZ_MIN over LNZ_SPAN, to 120 au), between the two around |z/H| as the 3D noise goes (smoothstep),
+// the last held above 3 / TZ_CZ H. The disk map's r has the inner disk's share of the column-wide pattern alone
+const float TZ_CZ = ${G(TURBZ.CZ)}, LNZ_MIN = ${G(+Math.log(TURBZ.R0).toFixed(6))}, LNZ_SPAN = ${G(+Math.log(TURBZ.R1 / TURBZ.R0).toFixed(6))};
+float turbZ(float lnR, float phi, float zh){
+  vec4 f = texture(uDiskMap, vec3((lnR - LNZ_MIN) / LNZ_SPAN, phi / TAU + 0.5, zh >= 0.0 ? 1.0 : 2.0));
+  float c = min(abs(zh) * TZ_CZ, 2.999), i = floor(c), t = c - i;
+  t = t * t * (3.0 - 2.0 * t);
+  vec4 k = vec4(0.0, 1.0, 2.0, 3.0);
+  return dot(f, (1.0 - t) * vec4(equal(k, vec4(i))) + t * vec4(equal(k, vec4(i + 1.0))));
+}
+#endif
 // the eddies at (ln R, φ, z/H): the factor of the gas density, and the extra optical depth toward the star that they add
 // relative to the smooth disk's (none beyond ZMAX3 scale heights, nor beyond the inner disk the texture covers)
 vec2 eddies(float lnR, float phi, float zh){
@@ -1610,24 +2383,79 @@ vec2 eddies(float lnR, float phi, float zh){
 vec4 windMap(float R, float z){
   return texture(uWindMap, vec2((0.5 * log(R * R + z * z) - LNW_MIN) / LNW_SPAN, 0.5 + atan(z, R) / PI));
 }
-// The disk ends in a density cutoff at R_OUT (exp(-(R/R_OUT)^P_OUT)); its tapering edge lies in the shadow of
-// the flared disk, so the light fades with the surface.
+// The disk tapers beyond R_c (exp(-cutOut), see CONST_GLSL: round 18b's Gaussian, round 18a's exponential; until then a cut at
+// R_OUT, exp(-(R/R_OUT)^P_OUT)); its tapering edge lies in the shadow of the flared disk's crest, and (round 18b) its gas above
+// that shadow takes the starlight passing over the crest, so the light fades with the gas (see CREST).
 float Sigma(float R, float lnR){ return exp(-lnR - cutOut(R) + gapLn(R)) * smoothstep(R_IN * 0.8, R_IN * 1.3, R); }
 // Starlight absorbed per unit area of the surface, L β / 4πR², with β the grazing angle of the
 // irradiation surface z_s = H sqrt(2 a), a = ln τ* at the midplane. Where the density cutoff brings the
-// surface down, β drops to zero: the edge lies in the shadow of the disk's crest. Shown with the true
+// surface down, β drops to zero: the edge lies in the shadow of the disk's crest (round 18b: and takes the starlight over the
+// crest, betaOver, which keeps the tail lit as its gas thins; the cut of before, SIG_CUT, keeps the zero). Shown with the true
 // R^-2 falloff inside 1 au, easing to R^-1.1 outside and to R^-0.2 beyond OUTER_R = 6 au (scattered-light images are
 // often scaled by R² for the same reason; the disk reaches 30 au, so its outer part would otherwise be lost in the dark).
+// (That fall is the observed looks' and the pebble sheet's; the model look's skin has its own, litModel below.)
 const float OUTER_R = 6.0, OUTER_E = 0.9;
 // With the planet's gap the starlight is redistributed: the inner rim shades the gap, and the light that passes over
-// it falls on the outer wall and beyond. That factor comes from ray tracing (the disk map's fourth channel).
+// it falls on the outer wall and beyond. That factor comes from ray tracing (the disk map's fourth channel). (Round 18c: the
+// rays traced lie below the crest's angle, so the factor goes on that share of the light only, gapLit below.)
 float litFall(float R){ return pow(1.0 + R, 0.9) / (0.66 * (R * R + 0.01)) * pow(max(R / OUTER_R, 1.0), OUTER_E); }   // (its fall with R)
 const float LIT_F1 = 2.7994;   // (litFall(1 au))
 float Eabs(float R, float lnR, float H){
   float cut = cutOut(R), a = max(LNTAU1 - 1.25 * lnR - cut, 1.0);
-  float beta = max(H * sqrt(2.0 * a) / R * (0.25 - (0.625 + 0.5 * P_OUT * cut) / a), 0.0) + 0.004 / R;
+  // (round 18b: or the starlight over the crest where that is more, betaOver; see CREST)
+  float beta = max(max(H * sqrt(2.0 * a) / R * (0.25 - (0.625 + 0.5 * cutSlope(R)) / a), 0.0), betaOver(R, lnR, H, cut)) + 0.004 / R;
   return beta / 0.022 * litFall(R) * smoothstep(R_IN * 0.85, R_IN * 1.5, R);
 }
+// (Round 18c, the owner: "the gas in the model look glows unnaturally": since round 18b's lit tail the whole view was a grey veil
+// to the picture's edges.) The starlight on the skin in the model's look, Es, from Eabs's Ea (without the disk map) and the gap's
+// factor dma (dm.a). Round 8 eased the light's fall with the distance to R^-1/2 at every radius (litFall divided out, beta kept
+// linear): with the lit surface ending at about 20 au that kept the outer disk in sight, but with the tail taking the starlight
+// over the crest (round 18b) the skin from 15 to 40 au took nearly the light of 10 au (beta 0.015-0.017 there against 0.027,
+// and R^-1/2 only 1.7 times less at 30 au), while what it absorbs per unit area, beta / R^2, is 16 times less at 30 au and
+// 850 times less at 60 au. Now, beyond R_n = LIT_NV.x (6 au, OUTER_R; inside it the law of before, in the same operations: the
+// star's and the heat's places), that absorbed starlight to the power LIT_P, a display's compression (DESIGN.md section 44: 0.6
+// chosen from the CPU pictures, between a veil at 0.5 and a tail gone at 0.7), matched at R_n: Es(R_n) ((beta / R^2) /
+// (beta_n / R_n^2))^LIT_P, with beta_n = LIT_NV.y (Eabs's beta at R_n, betaIrrJS in the script), reached smoothly in ln R by
+// LIT_RB. The skin then fades with the gas of the tail (face-on from 20 to 40 au 5.4 times, the gas's column 7.4 times; it was
+// 4.4 times, after a plateau from 15 to 20 au). And the gap's factor dma only on the share of beta that is not the starlight
+// over the crest (overShare): gapLight traces the rays below the crest's angle (0.05-0.26 rad), and its 3.3-3.8 from 14 to 28 au
+// behind a Jupiter at 10 au (the light the gap lets through, over the tiny deposit of the smooth disk in the crest's shadow)
+// is not for the light passing over the crest, which it multiplied since round 18b (the start's view, with that planet, was
+// 3 times brighter there, falling back at 30 au where the table ends). LIT_FLAT (data-litflat="1", the page's ?litflat=1, to
+// compare; and with the cut of before, SIG_CUT, which keeps its picture): as before (1.9-dev.25). The observed looks and the
+// pebble sheet keep E's fall with the distance (litFall); the gap's factor goes on them as on the model look's skin (gapLit,
+// below: the coordinator's decision of 2026-11-07, for the same reason).
+// (Round 18f: the law, R_n 6 au, the power 0.6 and its end 12 au, is now the script's, in the table of the starlight's depth that
+// lays it where the gas absorbs it: starTableData, its g; litModel stays for the cut of before, SIG_CUT, with LIT_FLAT. With
+// ?litflat=1 the table takes round 8's law at every radius.)
+#ifndef LIT_FLAT
+// the share of Eabs's beta that is the starlight over the crest beyond the local surface's (the local beta as Eabs has it): 0
+// where betaOver is (inside half the crest's radius, and to 15.1 au where it stays under the local beta)
+float overShare(float R, float lnR, float H){
+  float cut = cutOut(R), a = max(LNTAU1 - 1.25 * lnR - cut, 1.0);
+  float bl = max(H * sqrt(2.0 * a) / R * (0.25 - (0.625 + 0.5 * cutSlope(R)) / a), 0.0), bo = betaOver(R, lnR, H, cut);
+  return max(bo - bl, 0.0) / (max(bl, bo) + 0.004 / R);
+}
+#endif
+// The gap's factor on the starlight that Eabs gives, g = (1 - f_o) dma + f_o with f_o = overShare, written dma + f_o (1 - dma): dma
+// itself where f_o is 0 and 1 itself without a gap (dma 1), in the operations of before. For every look's skin (E, and litModel)
+// and the pebbles' glow (pebLayer); the temperature's table has no gap factor (betaIrrJS), and keeps its beta. LIT_FLAT: dma.
+// (Round 18f: where there is no gap, dma 1, it is 1 without overShare's work: the same number.)
+float gapLit(float R, float lnR, float H, float dma){
+#ifdef LIT_FLAT
+  return dma;
+#else
+  if (dma == 1.0) return 1.0;
+  return dma + overShare(R, lnR, H) * (1.0 - dma);
+#endif
+}
+#ifdef SIG_CUT
+// g: gapLit's factor, as E takes it (round 8's law, the cut of before's: SIG_CUT defines LIT_FLAT)
+float litModel(float R, float lnR, float Ea, float g){
+  float lf = litFall(R), Es = Ea * g * LIT_F1 / lf * inversesqrt(max(R, 0.1));
+  return Es;
+}
+#endif
 
 // (Disk Lab v2: the hot end turned from warm white to yellow through gold, and the ice's edge from cream to white, so
 // that 160 K and 2000 K no longer look alike: blue, white at the snow line, orange, gold, yellow.)
@@ -1676,10 +2504,34 @@ float xRim(float R, float az, float x){
   }
   return x;
 }
+#ifndef SIG_CUT
+// (Round 18f) The starlight's depth along the rays from the star, from the script's table (starTableData; DESIGN.md section 47):
+// the depth the smooth gas gathers along the ray from the star to (R, z), at R by u = sqrt(|z| / (R + |z|)). r: x = ln tau; g: ln
+// of the model look's starlight on its skin per unit of e^x_l (Es / (R beta_t)); b: the same for the observed looks without their
+// E (1 / (R beta_t)); a: ln of the diffuse light's over the skin's (beta_t / beta_d). Above ST_UG (from init) the depth is under
+// e^-16 at every radius: nothing is fetched there (the wind's region above the disk). The planets' gaps keep their own ln
+// (gapLn) on top of it, and their tables (gapLight, xRim)
+uniform highp sampler2D uStarT;
+#ifndef ST_UG
+#error ST_UG, the table's highest u with any depth, is defined by init with the tail
+#endif
+const float ST_LN0 = ${G(+Math.log(ST.R0).toFixed(6))}, ST_DLN = ${G(+(Math.log(ST.R1 / ST.R0) / (ST.NR - 1)).toFixed(8))}, ST_NR = ${G(ST.NR)}, ST_NU = ${G(ST.NU)};
+vec4 starT(float R, float lnR, float az){
+  float u = sqrt(az / (R + az));
+  if (u >= ST_UG) return vec4(-30.0, 0.0, 0.0, 0.0);
+  return textureLod(uStarT, vec2((0.5 + (lnR - ST_LN0) / ST_DLN) / ST_NR, (0.5 + u * (ST_NU - 1.0)) / ST_NU), 0.0);
+}
+#endif
 // x = ln of the optical depth toward the star; the irradiation surface is x = 0
 float lnTauStar(vec3 p){
   float R = max(length(p.xy), 1e-3), lnR = log(R), H = H0 * exp(1.25 * lnR);
-  return clamp(LNTAU1 - 1.25 * lnR - cutOut(R) + gapLn(R) - 0.5 * p.z * p.z / (H * H), -30.0, 30.0);
+#ifdef SIG_CUT
+  // (round 18b: beyond the crest at least the crest's at this angle, xCrest)
+  return clamp(max(LNTAU1 - 1.25 * lnR - cutOut(R) + gapLn(R) - 0.5 * p.z * p.z / (H * H), xCrest(R, abs(p.z))), -30.0, 30.0);
+#else
+  // (round 18f: along the ray from the star, starT, with the gaps' ln, as sampleDisk's x)
+  return clamp(starT(R, lnR, abs(p.z)).r + gapLn(R), -30.0, 30.0);
+#endif
 }
 
 // Streamers in the wind: how much gas a bundle of field lines lifts (the mass loading) varies with the place and the
@@ -1779,11 +2631,18 @@ float accColumn(float z0, float z1, float za, float ds, float dzh){
 // laminar or turbulent, with the floor) and g, T_i (the reprocessed starlight's, for the star's own luminosity; it scales
 // as uLum^1/4). Evaluated at every sample of the march, the expressions themselves cost about as much again as the rest of
 // the disk's sample (the snow line's view took twice the GPU time); from the table, with the superheated term only where
-// tau* < 20 and the sublimation's cap only above 900 K, a few per cent.
+// tau* < 20 and the sublimation's cap only above 900 K, a few per cent. (Round 18a: 605 radii to 160 au with the disk's
+// exponential tail, which reaches past the marched cylinder's 136 au, in the same steps of ln R; 512 to 40 au with SIG_CUT, the
+// cut of before; see ttNR and ttSpan in the script. Round 18b kept it for the Gaussian tail, which thins sooner: the cut's face
+// colours the temperature out to the cylinder's edge, and ?rc= stretches the tail)
 uniform highp sampler2D uThermo;
-const float TT_LN0 = ${G(+Math.log(0.02).toFixed(6))}, TT_DLN = ${G(+(Math.log(2000) / 511).toFixed(8))};
+#ifdef SIG_CUT
+const float TT_LN0 = ${G(+Math.log(0.02).toFixed(6))}, TT_DLN = ${G(+(Math.log(2000) / 511).toFixed(8))}, TT_NR = 512.0;
+#else
+const float TT_LN0 = ${G(+Math.log(0.02).toFixed(6))}, TT_DLN = ${G(+(Math.log(8000) / 604).toFixed(8))}, TT_NR = 605.0;
+#endif
 float tInt4(float lnR, float zh){
-  vec2 t = texture(uThermo, vec2((0.5 + (lnR - TT_LN0) / TT_DLN) / 512.0, (0.5 + min(abs(zh), 8.0) * ${G(127 / 8)}) / 128.0)).rg;
+  vec2 t = texture(uThermo, vec2((0.5 + (lnR - TT_LN0) / TT_DLN) / TT_NR, (0.5 + min(abs(zh), 8.0) * ${G(127 / 8)}) / 128.0)).rg;
   t *= t; t *= t;
   return t.y * uLum + t.x;
 }
@@ -1791,10 +2650,10 @@ float subCap(float T){ if (T <= 900.0) return T; float r = T / TH_TSUB; r *= r; 
 float tempAt(float R, float lnR, float zh, float x){
   float t4 = tInt4(lnR, zh);
   // (below tau* = 20 the superheated term is under e^-20 of T_ds^5: nothing)
-  return subCap(x > 3.0 ? sqrt(sqrt(t4)) : pow(t4 * sqrt(sqrt(t4)) + TH_KDS5 * uLum * exp(-2.0 * lnR - exp(x)), 0.2));
+  return subCap(x > 3.0 ? sqrt(sqrt(t4)) : pow(t4 * sqrt(sqrt(t4)) + TH_KDS5 * uLum * MP_TS * exp(-2.0 * lnR - exp(x)), 0.2));
 }
 float tMid(float R, float lnR){ return subCap(sqrt(sqrt(tInt4(lnR, 0.0)))); }
-float tSurf(float R){ return subCap(pow(TH_KDS5 * uLum / (R * R), 0.2)); }   // the superheated grains in full starlight
+float tSurf(float R){ return subCap(pow(TH_KDS5 * uLum * MP_TS / (R * R), 0.2)); }   // the superheated grains in full starlight (round 14a: MP_TS, T* over its default)
 #ifdef FULL
 // in the part cut away the disk is left out (gDiskOff, see cutWind): its gas, its lit surface, the accretion layers and
 // the vapour; the wind and the envelope stay
@@ -1810,8 +2669,10 @@ float envStep(float r){ return max(1.5, 0.08 * r); }
 // (round 10a) The march in kicks (SPLIT in the script; DESIGN.md, section 23): the work a step of each loop counts against a
 // kick's budget, in steps of the march (KW_: the envelope's steps outside the cylinder, the star's light with the
 // magnetosphere's columns (magLight), a lobe of the jet, the planet's light; from their costs on the M1 Max, rounded up);
-// the ray's stages (PH_); and its marks, carried from kick to kick (F_)
-const float KW_ENV = 0.25, KW_STAR = 8.0, KW_JET = 2.0, KW_PL = 4.0;
+// the ray's stages (PH_); and its marks, carried from kick to kick (F_). (Round 18b: KW_JET 2 -> 5, the occultation's column, 31
+// evaluations of the smooth disk's density a lobe beside its 16 of the jet's light, an estimate: not measured on the GPU; the
+// picture does not depend on it)
+const float KW_ENV = 0.25, KW_STAR = 8.0, KW_JET = 5.0, KW_PL = 4.0;
 const int PH_ENV0 = 1, PH_CUT0 = 2, PH_MARCH = 3, PH_BACK = 4, PH_CUT1 = 5, PH_ENV1 = 6, PH_FINAL = 7, PH_DONE = 8;
 const int F_SHEET = 1, F_STAR = 2, F_PG = 4, F_JU = 8, F_JL = 16, F_PL = 32, F_SKIP = 64, F_FINE = 128, F_CFINE = 256, F_CUT = 1024;
 // One step of the ray march, from the previous sample (with ln τ* = xPrev) to p over a length ds.
@@ -1826,13 +2687,29 @@ bool gCenteredSegment = false;
 float gWindNear = 1.0;
 void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 em, out vec3 ex, out vec3 skin, out float x, out float wl){
   em = vec3(0.0); ex = vec3(0.0); skin = vec3(0.0); wl = 0.0;
+  gExG = 0.0;   // (round 18f: the gas's extinction here, for the skin's dimming, SKIN_LOS)
+#ifndef SELF_OLD
+  gSelfJ = 0.0;   // (round 18k: the own light's K rho T here, see gTb)
+#endif
   float xEnd = 0.0;
   if (gCenteredSegment) { xEnd = lnTauStar(p); p -= 0.5 * ds * rd; }
   float R = max(length(p.xy), 1e-3), lnR = log(R);
   float H = H0 * exp(1.25 * lnR);
   float z = p.z, az = abs(z), zh = z / H;
   float gl = gapLn(R), cut = cutOut(R);
-  x = clamp(LNTAU1 - 1.25 * lnR - cut + gl - 0.5 * zh * zh, -30.0, 30.0);
+  // (round 18b: beyond the crest at least the crest's depth at this angle, xCrest; where that holds, the skin's dx/dz is the
+  // crest's, dxCrest, so that the starlight absorbed across its shadow's edge is E, as across the local surface)
+  float xl = LNTAU1 - 1.25 * lnR - cut + gl - 0.5 * zh * zh, xc = xCrest(R, az);
+  // (round 18f) xw, the depth of before (the local one, beyond the crest the crest's shadow), for the wind's light and the cut's
+  // fade of its base, which keep it; x the depth along the ray from the star (starT, with the gaps' ln), for the skin, its
+  // diffuse light and the gas's shadow. With the cut of before, SIG_CUT, x is xw as before
+  float xw = clamp(max(xl, xc), -30.0, 30.0);
+#ifdef SIG_CUT
+  x = xw;
+#else
+  vec4 sT = starT(R, lnR, az);
+  x = clamp(sT.r + gl, -30.0, 30.0);
+#endif
   float xs = gCenteredSegment ? xEnd : x;
   if (R < R_IN * 0.7) { x = xs; wq = vec3(99.0); return; }
 
@@ -1846,7 +2723,13 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     float Ts = tSurf(R);
     vec4 dm = diskMap(lnR, phi);
     ed = eddies(lnR, phi, zh);
-    float E = Eabs(R, lnR, H) * dm.a;
+    float gF = gapLit(R, lnR, H, dm.a);   // (round 18c: the gap's factor below the crest's angle, gapLit)
+#ifdef SIG_CUT
+    float Ea = Eabs(R, lnR, H), E = Ea * gF;
+#else
+    // (round 18f: the model look's starlight on its skin comes with the table, sT.g; the observed looks keep their E)
+    float E = uLook == 0 ? 0.0 : Eabs(R, lnR, H) * gF;
+#endif
     // the irradiated skin: absorbed starlight j = E |d e^-τ* / dz|, integrated exactly for x varying
     // linearly over the step. The surface is corrugated by the turbulence; slopes facing the star
     // catch more light, and crests cast shadows (both in the disk map). The eddies do the same in three dimensions:
@@ -1867,27 +2750,57 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       float P = abs(dx) > 1e-3 ? (exp(-exp(xPrev)) - exp(-exp(xs))) / dx : exp(xm - exp(xm));
       // seen by scattered starlight (near-isotropic grains); the colour stays that of the temperature
       // (round 8: in the model's look the light's fall with the distance is eased to R^-1/2, see G_LIT: the shading shows the
-      // surface's tilt toward the star, its shadows and the scattering's direction, not the light's distance)
-      float Es = uLook == 0 ? E * LIT_F1 / litFall(R) * inversesqrt(max(R, 0.1)) : E;
-      float mu = dot(p, -rd) / max(length(p), 1e-3), base0 = G_SKIN * Es * az / (H * H) * ds * dm.g * ed.x, base = base0 * P * exp(-ed.y);
+      // surface's tilt toward the star, its shadows and the scattering's direction, not the light's distance. Round 18c: so
+      // inside 6 au; beyond it the absorbed starlight compressed, see litModel)
+      float mu = dot(p, -rd) / max(length(p), 1e-3);
+#ifdef SIG_CUT
+      float Es = uLook == 0 ? litModel(R, lnR, Ea, gF) : E;
+      float base0 = (xc > xl ? G_SKIN * Es * dxCrest(R, az) : G_SKIN * Es * az / (H * H)) * ds * dm.g * ed.x;   // (round 18b: dxCrest)
+#else
+      // (Round 18f) The starlight absorbed where the gas takes it: of the star's flux reaching a point, kappa rho e^-tau, kappa rho =
+      // e^xl / R the gas's opacity to it (the model's local depth per unit length), integrated over the step as before (P, tau e^-tau
+      // for x linear over it, times e^(xl - x)). Per unit area its total is the starlight on the skin of before (the table's g: the
+      // model look's law of round 18c, over beta_t; b: for E, the observed looks'), now laid where the gas absorbs it: on the
+      // surface the gas itself casts, curved, and beyond the crest on the gas over its shadow as that gas thins, with no light
+      // where there is no gas (round 18b's dxCrest put E on the crest's cone, whatever the gas there).
+      // (Round 18h) And none inside 0.8 R_IN: xl is the local depth without the gas's inner edge (Sigma's smoothstep from 0.8 to
+      // 1.3 R_IN), whose value at a radius the table's normalization cancels (beta_t is over the same e^xl), but where it is 0 there
+      // is no gas: a step that ran from the lit inner edge into the hole took, at its end there, the depth of gas that is not
+      // there against x at -30 (e^(g + xl - x) to e^45), and the inner edge showed white specks (DESIGN.md section 49)
+      float base0 = R < R_IN * 0.8 ? 0.0 : G_SKIN * (uLook == 0 ? gF * exp(sT.g + xl - x) : E * exp(sT.b + xl - x)) * ds * dm.g * ed.x;
+#endif
+      float base = base0 * P * exp(-ed.y);
       float Pd = 0.0;   // multiple scattering: the diffuse light absorbed over the step (see MS_C)
       if (uMS > 0.0) {
         Pd = abs(dx) > 1e-3 ? (exp(-MS_C * exp(xPrev)) - exp(-MS_C * exp(xs))) / dx : MS_C * exp(xm - MS_C * exp(xm));
-        Pd *= uMS * MS_A * base0 * exp(-0.5 * ed.y);
+#ifdef SIG_CUT
+        // (round 18b: in the crest's shadow the diffuse light is scattered by the gas there, whose own depth is the share
+        // e^(xl - xc) of the starlight's: weighed by it, else it spread over the whole shadow, gas or none)
+        Pd *= uMS * MS_A * base0 * exp(-0.5 * ed.y) * (xc > xl ? exp(xl - xc) : 1.0);
+#else
+        // (round 18f: base0 holds e^(xl - x), so the diffuse light is MS_C kappa rho e^(-MS_C tau), where the gas is; its total
+        // MS_A of the skin's, the table's a)
+        Pd *= uMS * MS_A * base0 * exp(sT.a - 0.5 * ed.y);
+#endif
       }
       // (the model's look: the star's light on the disk, see G_LIT; the observed looks below)
       skin = (base * hg(mu, G_LIT_HG) + Pd) * (G_LIT * uLit) * litCol();
 #ifdef FULL
-      if (uLook == 1) skin = (base * hg(mu, G_OPT_HG) + Pd) * G_OPT * SCAT_COL;
+      if (uLook == 1) skin = (base * hg(mu, G_OPT_HG) + Pd) * G_OPT * SCAT_COL * uLstar;   // (round 15b: with L*, see uLstar)
       else if (uLook == 2) skin = base * G_MIR * mirPlanck(Ts) * mirColor(Ts);
       else if (uLook == 3) skin = vec3(0.0);
 #endif
       skin *= uComp.y;
+      // (round 18f: in the model look dimmed by the gas between it and the camera at the visible look's opacity, see SKIN_LOS)
+      if (uLook == 0) skin *= exp(-SKIN_LOS * gTauG);
     }
     // gas with small grains: translucent, glowing with its density in the colour of its temperature (cold
     // midplane; warm only inside the snow line)
     float rho0 = exp(-lnR - cut + gl) * smoothstep(R_IN * 0.8, R_IN * 1.3, R) / (2.5066 * H);   // Sigma / (sqrt(2 pi) H)
     float rho = rho0 * exp(-0.5 * zh * zh) * dm.r * ed.x;   // ... e^(-z²/2H²)
+#ifndef TURB3D_OFF
+    rho *= turbZ(lnR, phi, zh);   // (round 18m: the turbulence's vertical structure, see turbZ; the skin keeps dm.g and ed)
+#endif
     // (Disk Lab v2) the absorption is the small grains' (bit 2); the glow is shared, half the gas's (bit 1), half the
     // small grains' (bit 2: well mixed with the gas, absent inside R_IN where they sublimate, as rho0 is), in the colour of
     // the temperature here (tempAt, as on the cut's face: round 7; round 6, a cos^4 rise to 2.8 times the midplane's; before,
@@ -1895,19 +2808,50 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     // gas as a mixture with its dust")
     float dustOn = (uMode & 2) != 0 ? uComp.y : 0.0, gasOn = (uMode & 1) != 0 ? uComp.x : 0.0;
     ex = K_G * rho * EXT * dustOn;
-    // (beyond OUTER_R the glow is raised as the column thins, by R / OUTER_R, a picture of where the gas is; the temperature
-    // is wanted only for this glow, so only where the gas shows and in the model's look: the observed looks set em to 0)
+    // (beyond OUTER_R the glow was raised as the column thins, by R / OUTER_R, a picture of where the gas is: until round 13,
+    // and with uGasOuter since; the temperature is wanted only for this glow, so only where the gas shows and in the model's
+    // look: the observed looks set em to 0)
     bool glowT = gasOn + dustOn > 0.0;
 #ifdef FULL
     glowT = glowT && uLook == 0;
 #endif
     // (round 8: in the colour of its material, MAT_DISK, no longer of its temperature; see MAT in the script)
-    if (glowT) em = G_GAS * K_G * rho * MAT_DISK * 0.5 * (gasOn + dustOn) * max(R / OUTER_R, 1.0) * (1.0 - uLit * LIT_DARK * (1.0 - exp(-exp(min(xs, 30.0)))));
+    // (round 13a: in proportion to the density, see uGasOuter)
+    // (round 18f: and LIT_DEEP where the diffuse light does not reach either, 1 - e^(-MS_C tau*))
+    float tS = exp(min(xs, 30.0));
+    // (round 18i: or its own thermal light, see uSelf: its temperature's brightness in its material's colour, and its absorption
+    // at the same grey opacity; the gas body's glow of the starlight's look is not made)
+    if (uSelf.x > 0.0) {
+      // (round 18j, the owner: "with its own light alone, can the bright surface layer go?") at the interior's temperature at this
+      // height (tempAt deep below the lit surface, x 30: the accretion's heat and the reprocessed starlight's, the thermal table),
+      // without the superheated grains of the surface that the starlight heats directly (tempAt's second term, which made the warm
+      // bands edge-on and the X of the lit cones where thin): the state's selft 'int' (?selfint=1; SELF_INT until round 18l), and the
+      // look of round 18j (SELF_OLD). (Round
+      // 18k, the owner: "the emissivity rho T kappa, the temperature with the surface hotter than the interior by the irradiation")
+      // The model's temperature with that surface (xw, the local depth with the crest's shadow, as the cut's Temperature: round
+      // 18i's); the warm bands edge-on are that surface's gas seen along it, optically thick along the line of sight where it is thin
+      // across (DESIGN.md section 52). (Round 18l, the owner: "give the surface its temperature by the vertical column depth") By
+      // default the same law with the depth the vertical column from above over Sigma_s, and the others by the state's selft (see
+      // selfX; sig is Sigma here, rho0's column); SELF_OLD, round 18j's look, at the interior's as before
+#ifdef SELF_OLD
+      float xT = 30.0;
+#else
+      float xT = selfX(R, rho0 * (2.5066 * H), zh, xw, x);   // (round 18m: x, the starlight's depth, for the shadow, now 'colstar's; round 18n: R for selfW)
+#endif
+#ifdef SELF_OLD
+      if (glowT) { em = uSelf.x * uSelf.y * rho * tempAt(R, lnR, zh, xT) * selfCol(MAT_DISK) * 0.5 * (gasOn + dustOn); ex = vec3(uSelf.x * rho * dustOn); }
+#else
+      // (round 18k: its K rho T into the ray's brightness temperature, gTb, shown at the end; see selfLight)
+      if (glowT) { gSelfJ = uSelf.x * rho * tempAt(R, lnR, zh, xT) * 0.5 * (gasOn + dustOn); ex = vec3(uSelf.x * rho * dustOn); }
+#endif
+    } else
+    if (glowT) em = uGGas * K_G * rho * MAT_DISK * 0.5 * (gasOn + dustOn) * (uGasOuter > 0.5 ? max(R / OUTER_R, 1.0) : 1.0) * (1.0 - uLit * (LIT_DARK * (1.0 - exp(-tS)) + LIT_DEEP * (1.0 - exp(-MS_C * tS))));
     // the surface accretion layer(s) (see ACC): a column ACC_SIG of the local surface density, in its streaks, across a
     // Gaussian in height ACC_W H wide. The layer is thinner than a step, so its column over the step is integrated
     // across that profile (the height changes by rd.z ds over the step) and spread over the step as a mean density.
-    // Drawn in the model's look only, with the gas (uMode & 1).
-    float aa = accAmp(R) * float(uMode & 1) * uComp.x;
+    // Drawn in the model's look only, with the gas (uMode & 1). (Round 13a: and only with uAccDraw, the page's ?acclayer=1; by
+    // default aa is 0, and neither its light nor its column is evaluated)
+    float aa = accAmp(R) * float(uMode & 1) * uComp.x * uAccDraw;
 #ifdef FULL
     if (uLook != 0) aa = 0.0;
 #endif
@@ -1926,8 +2870,14 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
         em += G_ACC * K_G * rA * MAT_ACC;   // (round 8: its material's colour; ACC_COL before)
       }
     }
+    ex *= uOpac.x;   // (round 18a: the gas's see-through, its extinction alone; see uOpac)
+    gExG = dot(ex, vec3(0.2126, 0.7152, 0.0722));   // (round 18f: the gas's, before the wind's; see SKIN_LOS)
 #ifdef FULL
-    if (uLook != 0) { ex *= uLook == 1 ? OPT_K : uLook == 2 ? MIR_K : 0.0; em = vec3(0.0); }
+    if (uLook != 0) {
+      ex *= uLook == 1 ? OPT_K : uLook == 2 ? MIR_K : 0.0; em = vec3(0.0);
+      // (round 18f: the continuum looks' disk faded out toward their cylinder's walls, see OBS_CT)
+      if (uLook <= 2) { float fo = (1.0 - smoothstep(OBS_FADE * OBS_CT_V.x, OBS_CT_V.x, R)) * (1.0 - smoothstep(OBS_FADE * OBS_CT_V.y, OBS_CT_V.y, az)); ex *= fo; skin *= fo; }
+    }
 #endif
 
     // water vapor released inside the snow line, spreading outward (in the model's look)
@@ -1948,8 +2898,9 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
   // wind map), weaker on the lower side as for a field aligned with the rotation. Its small grains scatter
   // starlight toward the observer (forward, phaseGas), with the softened falloff with distance used for the
   // field lines (which stand for the same grains) and dimmed by the optical depth toward the star, so it
-  // rises out of the irradiated surface. It absorbs with the opacity of the disk's small grains, which at
-  // these densities is little. wq carries the coordinates of the streaks at the previous sample (99: none); wl returns
+  // rises out of the irradiated surface. It absorbs with the opacity of the disk's small grains: in the model look their
+  // translucent K_G, which at these densities is little, and in the visible look (round 18g) their own K_OCC, OPT_W times it (along
+  // a line from its base about 0.1 at 1 au, 0.01 at 3 au). wq carries the coordinates of the streaks at the previous sample (99: none); wl returns
   // the wind's brightness here (the march takes finer steps where it is bright, to resolve the streamers).
   vec3 q = vec3(99.0);
   bool windOn = true;
@@ -1958,19 +2909,20 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
   windOn = uLook <= 1;   // the wind and the envelope scatter starlight; no thermal emission is drawn for them
   // (in the part cut away the wind's base goes with the disk, where the disk absorbs the starlight: from tau* = e^-4 to
   // e^-2 the wind fades out toward the disk; above it the wind is whole, its light untouched by the disk's shadows)
-  if (gDiskOff) wk = 1.0 - smoothstep(-4.0, -2.0, x);
+  if (gDiskOff) wk = 1.0 - smoothstep(-4.0, -2.0, xw);   // (round 18f: xw, the depth of before, see above)
 #endif
-  if (x < 2.5 && windOn && (uMode & 8) != 0 && wk > 0.0) {
+  if (xw < 2.5 && windOn && (uMode & 8) != 0 && wk > 0.0) {
     vec4 w = windMap(R, z);             // ln r0, azimuth relative to the foot, travel time, ln density
     // the grains that scatter and absorb: none where the gas left the disk inside about 2.5 R_IN (sublimated)
     float r0w = exp(w.x), r = length(p), rho = exp(w.w) * gapFactor(r0w) * (z > 0.0 ? 1.0 : uWindLow) * smoothstep(R_IN, 2.5 * R_IN, r0w);
-    float gw = G_WIND, rise = WIND_RISE;
+    float gw = G_WIND * uWindK, rise = WIND_RISE;
 #ifdef FULL
-    // (round 8: in their cylinder of before, with the wind's fade of before toward its top and side)
-    if (uLook != 0) { gw = G_WIND_OBS * exp(-5.0 * smoothstep(0.55 * ZB_OBS, ZB_OBS, az) - 5.0 * smoothstep(0.55 * RB_OBS, RB_OBS, R)); rise = 0.0; }
+    // (round 8: in their cylinder of before, with the wind's fade of before toward its top and side; round 19a continued:
+    // the coefficient 9 rather than 5, to match the model look's fade)
+    if (uLook != 0) { gw = G_WIND_OBS * uLstar * exp(-9.0 * smoothstep(0.55 * ZB_OBS, ZB_OBS, az) - 9.0 * smoothstep(0.55 * RB_OBS, RB_OBS, R)); rise = 0.0; }   // (round 15b: uLstar)
 #endif
     float lit = gw * gWindNear * K_G * rho / (1.0 + (uLook == 0 ? pow(r / 15.0, ${G(WIND_SOFT)}) : r * r / 225.0))
-              * phaseGas(dot(p, -rd) / max(r, 1e-3)) * exp(-gasK() * exp(xRim(R, az, x)) * (1.0 + ed.y))
+              * phaseGas(dot(p, -rd) / max(r, 1e-3)) * exp(-gasK() * exp(xRim(R, az, xw)) * (1.0 + ed.y))
               * exp(-rise * min(w.w - log(RHO_B) + 1.5 * w.x, 0.0));   // (rho / rho_base)^-WIND_RISE, see G_WIND
     lit *= wk;
     wl = lit;
@@ -1980,7 +2932,13 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       vec3 d = q - wq; d.y = mod(d.y + PI, TAU) - PI;
       float st = windTurb(q, wq.x > 50.0 ? vec3(0.0) : abs(d), w.w - log(RHO_B) + 1.5 * w.x, length(p - uCam) / max(r, 0.1));
       if ((uMode & 8) != 0) em += lit * st * (uLook == 0 ? MAT_WIND : WIND_COL) * uComp.w;   // (round 8: the model's look in its material's colour)
-      ex += K_G * rho * st * EXT * uComp.w * wk;   // (and the wind's with the wind)
+      // (round 18g: in the visible look at the small grains' K_OCC, as the disk's, OPT_W; the model look's K_G as before)
+      float kw = wk * uOpac.z;
+#ifdef FULL
+      if (uLook == 1) kw *= OPT_W;
+#endif
+      ex += K_G * rho * st * EXT * uComp.w * kw;   // (and the wind's with the wind; round 18a: its see-through, uOpac,
+      // on wk, so that the product added is the one of before, whatever the compiler fuses)
     }
   }
   wq = q;
@@ -2007,6 +2965,7 @@ float maxChannel(vec3 v){ return max(v.x, max(v.y, v.z)); }
 // starlight is blocked within the angle of the disk's surface seen from the star (z/R below about 0.16)
 // (round 10a: from its step i, until the kick's budget is spent, see SPLIT: true when it has ended; whole where the ray is
 // drawn in one go, the budget unbounded. Its part cut away (skip), never given, is gone)
+const float ENV_B = 30.0;
 bool envMarch(vec3 ro, vec3 rd, float t0, float t1, float jitter, inout int i, inout vec3 col, inout vec3 tr, inout float budget){
   if (t1 <= t0) return true;
   int n = uEnv < 0.5 ? ENV_N / 2 : ENV_N;   // (round 8: half as many while it is faint, from 40 to 110 au away)
@@ -2014,11 +2973,18 @@ bool envMarch(vec3 ro, vec3 rd, float t0, float t1, float jitter, inout int i, i
   if (uLook == 1) n = 640;
 #endif
   float ds = (t1 - t0) / float(n);
+#ifndef ENV_OLD
+  float tc = -dot(ro, rd), bi = max(length(ro + rd * tc), ENV_B), s0 = asinh((t0 - tc) / bi), dsn = (asinh((t1 - tc) / bi) - s0) / float(n);
+  bool even = uLook != 0;
+#endif
   for (int k = 0; k < 640; k++) {
     if (i >= n || max(tr.r, max(tr.g, tr.b)) < 0.004) return true;   // (round 8: not behind what hides it)
     if (budget <= 0.0) return false;
     budget -= KW_ENV;
     float t = t0 + (float(i) + jitter) * ds;
+#ifndef ENV_OLD
+    if (!even) { float sn = s0 + (float(i) + jitter) * dsn; t = tc + bi * sinh(sn); ds = bi * cosh(sn) * dsn; }
+#endif
     i++;
     vec3 em, ex; envLight(ro + rd * t, rd, em, ex);
     vec3 a = exp(-ex * ds);
@@ -2092,14 +3058,20 @@ vec2 boundsSphere(vec3 ro, vec3 rd, float R){
 // crosses the midplane: a sheet of surface density Σ_d(R, φ), icy beyond the snow line. It hides
 // what lies behind it, and glows in proportion to its (millimetre-like, mostly thin) optical depth,
 // so pile-ups and clumps of pebbles stand out.
-void sheet(vec3 p, vec3 rd, inout vec3 col, inout vec3 tr){
-  if (uComp.z <= 0.0) return;   // (pebbles off: absent, nor do they absorb)
-  float mu = abs(rd.z);
+// (round 15b) pebLayer: the layer at (R, phi) of p, on the midplane under or over it: its column sd (the clumps in it, with
+// uComp.z; 0 where there is none), the midplane's temperature Tm, and the model look's light of the whole layer (srcG.rgb times
+// srcG.a, the pile-up's extra glow) before its millimetre-like absorbed fraction; the sheet (the plane) and pebSlab (the layer
+// as a volume, see uPebH) take it
+// (gPebVol: the march takes the layer in its steps, pebSlab, and the sheet at its crossing stands aside)
+bool gPebVol = false;
+float pebLayer(vec3 p, out float Tm, out vec4 srcG){
+  Tm = 0.0; srcG = vec4(0.0);
+  if (uComp.z <= 0.0) return 0.0;   // (pebbles off: absent, nor do they absorb)
   float R = length(p.xy);
-  if (R < R_IN || R > RB) return;
+  if (R < R_IN || R > RB) return 0.0;
   float lnR = log(R), phi = atan(p.y, p.x);
   float Om = OMEGA0 * exp(-1.5 * lnR), H = H0 * exp(1.25 * lnR);
-  float Tm = tMid(R, lnR);   // (round 7: the midplane's temperature, see tempAt)
+  Tm = tMid(R, lnR);   // (round 7: the midplane's temperature, see tempAt)
   float ice = 1.0 - smoothstep(TICE - 6.0, TICE + 6.0, Tm);
   float pile = 1.0 + 1.2 * ice * exp(-pow((R - 1.15 * uRSnow) / (0.13 * uRSnow), 2.0));
   // with the planet, pebbles are filtered out of the gap (deeper and a little wider than in the gas) and collect
@@ -2131,23 +3103,92 @@ void sheet(vec3 p, vec3 rd, inout vec3 col, inout vec3 tr){
   }
   sd += sc;
   sd *= uComp.z; sc *= uComp.z;   // (the pebbles as they fade, their absorption with their light; the millimetre follows them)
+  vec3 alb = mix(MAT_ROCK * 0.25, 0.9 * MAT_ICE, ice);   // (round 8: rock and ice, materials; the ice was in the colour of its temperature)
+  alb = mix(alb, vec3(0.85, 0.92, 1.0) * mix(0.35, 1.0, ice), sc / (sd + 1e-6));   // packed pebbles look paler
+  // (round 18i: with the model look's own light, see uSelf, the source of their thermal light: the midplane's temperature, in their
+  // material's colour; no starlight, no pile-up's extra glow, whose column sd holds)
+#ifdef SELF_OLD
+  if (uSelf.x > 0.0) srcG = vec4(uSelf.y * Tm * selfCol(mix(MAT_ROCK, MAT_ICE, ice)), 1.0);
+#else
+  if (uSelf.x > 0.0) srcG = vec4(Tm, 0.0, 0.0, 1.0);   // (round 18k: their temperature, into the ray's T_b by sheet and pebSlab)
+#endif
+  else
+  srcG = vec4(G_DUST * alb * Eabs(R, lnR, H) * gapLit(R, lnR, H, dm.a), 1.0 + PILE * (pile - 1.0));   // (round 18c: gapLit)
+  return sd;
+}
+void sheet(vec3 p, vec3 rd, inout vec3 col, inout vec3 tr){
+  if (gPebVol) return;   // (round 15b: the march's steps take the layer, pebSlab)
+  float Tm; vec4 srcG;
+  float sd = pebLayer(p, Tm, srcG);
+  if (sd <= 0.0) return;
+  float mu = abs(rd.z);
 #ifdef FULL
   if (uLook != 0) {
     // millimetre: the pebbles' thermal emission (Rayleigh-Jeans, nearly thin); in scattered light and the
     // mid-infrared they lie inside the opaque disk
-    if (uLook == 3) { float tm = K_MM * sd / max(mu, 0.15); col += tr * G_MM * (Tm / 100.0) * absorptionFraction(tm) * MM_COL; tr *= exp(-tm); }
-    else if (uLook == 4) tr *= exp(-K_MM * sd / max(mu, 0.15));
-    else tr *= exp(-K_D * sd / max(mu, 0.03));
+    // (round 18a: the pebbles' see-through, uOpac.y, on what they take out of the ray, here and below)
+    if (uLook == 3) { float tm = K_MM * sd / max(mu, 0.15); col += tr * G_MM * (Tm / 100.0) * absorptionFraction(tm) * MM_COL; tr *= exp(-tm * uOpac.y); }
+    else if (uLook == 4) tr *= exp(-K_MM * sd / max(mu, 0.15) * uOpac.y);
+    else tr *= exp(-K_D * sd / max(mu, 0.03) * uOpac.y);
     return;
   }
 #endif
   float tau = K_D * sd / max(mu, 0.03);
   float tmm = K_MM * sd / max(mu, 0.3);
-  vec3 alb = mix(MAT_ROCK * 0.25, 0.9 * MAT_ICE, ice);   // (round 8: rock and ice, materials; the ice was in the colour of its temperature)
-  alb = mix(alb, vec3(0.85, 0.92, 1.0) * mix(0.35, 1.0, ice), sc / (sd + 1e-6));   // packed pebbles look paler
-  vec3 src = G_DUST * alb * Eabs(R, lnR, H) * dm.a * absorptionFraction(tmm) * (1.0 + PILE * (pile - 1.0));
+  // (round 18i: with the model look's own light, their thermal light through their own absorption, Kirchhoff's, as the gas's)
+#ifndef SELF_OLD
+  // (round 18k: T_mid times their absorbed fraction, into the ray's T_b, see gTb)
+  if (uSelf.x > 0.0) { gTb += dot(tr, LUMW) * srcG.r * absorptionFraction(tau); tr *= exp(-tau * uOpac.y); return; }
+#endif
+  vec3 src = uSelf.x > 0.0 ? srcG.rgb * absorptionFraction(tau) : srcG.rgb * absorptionFraction(tmm) * srcG.a;
   col += tr * src;
-  tr *= exp(-tau);
+  tr *= exp(-tau * uOpac.y);
+}
+// (Round 15b, the owner: "I'd like the pebbles' thickness considered, at least roughly (a plane now?)") The pebble layer as a
+// volume in the model look and the millimetre look: a Gaussian in height, H_peb = uPebH H (PEB_H, 0.1 by default: millimetre
+// pebbles of St 0.01-0.1 settle to H_p / H = sqrt(alpha / St), about 0.1-0.3 for alpha 1e-4 to 1e-3; H the drawn one), taken
+// by the march in the steps that cross |z| < 4 H_peb (pebSlab, before the step's gas, where the sheet was laid in; at 3 H_peb a
+// level ray through 10 au of the layer still has an optical depth of 0.8, at 4 H_peb 0.02, so the band's edge does not show). Over a step
+// from height z0 to z1 its column is the layer's sd times c (pebColumn, as accColumn: the share of the Gaussian crossed over
+// |dz / ds|, or the Gaussian times the step where the ray runs level), the layer read at the step's place nearest the midplane
+// (the crossing, where the step has it: a ray that crosses the layer in one step takes the plane's numbers). The millimetre
+// look: the layer's own light, source G_MM T_mid / 100 and opacity K_MM, through each step's column (the plane's light where mu
+// > 0.15, thicker toward edge-on, where the plane held the column at sd / 0.15). The model look: the plane's light src (with
+// its millimetre-like saturation) spread over the layer as a uniform source across it, src / absorptionFraction(K_D sd / mu')
+// times each step's absorbed fraction, so that a ray through the whole layer at one place gives the plane's src (seen through
+// the layer's own front, as the plane's was not). Edge-on the layer shows its thickness: opaque to about 2.5 H_peb within 20 au.
+// uPebH 0 (data-pebh="0", the page's ?pebh=0): the plane as before. The visible and mid-infrared looks and the gas line keep
+// the plane (the pebbles lie inside the opaque disk there; the gas line's march splits at the sheet). (The cost: a ray that
+// crosses the layer at a slant reads it in 1 to 3 steps instead of once; one that runs within 4 H_peb of the midplane, edge-on,
+// reads it at every step there, the slowest ray edge-on through the star about a third more per step; DESIGN.md section 37)
+uniform float uPebH;
+float pebColumn(float z0, float z1, float ds, float Hp){
+  float dz = z1 - z0;
+  if (abs(dz) < 0.05 * Hp) { float u = 0.5 * (z0 + z1) / Hp; return exp(-0.5 * u * u) * ds / (2.5066283 * Hp); }
+  return ds / abs(dz) * 0.5 * abs(erfA(z1 / Hp * 0.70710678) - erfA(z0 / Hp * 0.70710678));
+}
+void pebSlab(vec3 ro, vec3 rd, float t0, float t1, float tz, inout vec3 col, inout vec3 tr){
+  vec3 p0 = ro + rd * t0, p1 = ro + rd * t1;
+  float te = abs(rd.z) < 1e-5 ? 0.5 * (t0 + t1) : tz > t0 && tz < t1 ? tz : abs(p0.z) < abs(p1.z) ? t0 : t1;
+  vec3 pe = ro + rd * te;
+  float Hp = uPebH * H0 * pow(max(length(pe.xy), 0.05), 1.25);
+  if (min(p0.z, p1.z) > 4.0 * Hp || max(p0.z, p1.z) < -4.0 * Hp) return;
+  float Tm; vec4 srcG;
+  float sd = pebLayer(pe, Tm, srcG);
+  if (sd <= 0.0) return;
+  float c = pebColumn(p0.z, p1.z, t1 - t0, Hp), mu = abs(rd.z);
+#ifdef FULL
+  if (uLook == 3) { float tm = K_MM * sd * c; col += tr * G_MM * (Tm / 100.0) * absorptionFraction(tm) * MM_COL; tr *= exp(-tm * uOpac.y); return; }   // (round 18a: uOpac.y)
+#endif
+  float tauAll = K_D * sd / max(mu, 0.03), tau = K_D * sd * c;
+#ifdef SELF_OLD
+  if (uSelf.x > 0.0) col += tr * srcG.rgb * absorptionFraction(tau);   // (round 18i: their own light over the step's column, see sheet)
+#else
+  if (uSelf.x > 0.0) gTb += dot(tr, LUMW) * srcG.r * absorptionFraction(tau);   // (round 18k: over the step's column, into T_b, see sheet)
+#endif
+  else
+  col += tr * srcG.rgb * absorptionFraction(K_MM * sd / max(mu, 0.3)) * srcG.a * (tauAll > 1e-4 ? absorptionFraction(tau) / absorptionFraction(tauAll) : c * max(mu, 0.03));
+  tr *= exp(-tau * uOpac.y);
 }
 
 // (round 8) The jet (see JET in the script): its emission per unit length at p (relative; its density, as 1 / r^2, times the
@@ -2168,6 +3209,31 @@ const float JET_SOFT = 0.3;
 const float G_JET = 0.025;
 // (round 9, see JET: a cone from its foot, then one of CONE; until round 8 the widening as the square root of the height)
 float jetR(float az){ return min(JET_RL + JET_BASE * az, JET_RC + JET_TAN * az); }
+// (Round 19c, the visual review: "a flat, uniformly translucent ribbon with soft edges: no bright spine, the knots barely show")
+// The jet's light across and along it, drawn anew; the model's jet is as it was (jetR, the width measured; its light per volume
+// as its density, 1 / r^2, softened at the foot by JET_SOFT; the knots' periods, speed and where they form). The stretch (the
+// asinh of the luminance, see main's end) shows a Gaussian as wide as it is bright: the one Gaussian of before, about 0.3 on the
+// display at its axis, read as a ribbon five half widths across with a flat top. Now:
+// - across, a spine within a sheath, as the jets' nested structure has it (the faster, denser gas nearer the axis: DG Tau,
+//   Bacciotti et al. 2000; the density of an X-wind or a disk wind stratified in cylinders, rho ∝ 1 / R^2 off the axis: Shu et al.
+//   1995, Shang et al. 1998). The sheath is the Gaussian of before (jetR its half width at half maximum) with JET_SH of its
+//   light; the spine a Gaussian 1 / sqrt(JET_FS) as wide (0.354) with JET_SS / JET_FS of it (0.5). Per length 0.62 of the light of
+//   before, on the axis 1.5 times: the spine carries the brightness, the sheath stays a faint halo, the jet reads as narrow as it is.
+// - the knots (internal working surfaces: the faster gas runs into the slower, and the shocked gas is squeezed out sideways,
+//   wider than the beam: Raga et al. 1990) are a light of their own, a Gaussian 1 / sqrt(JET_FK) as wide as the sheath (0.5),
+//   wider than the spine, and JET_KL of the jet's half width long (its sigma along the axis; never longer than before, 0.0566 and
+//   0.0849 of their spacings): beads on the spine that grow with the jet, where before the same length at every height drew bars
+//   across it far out and long smears near the disk. JET_KG times the model's contrasts JET_K1 and JET_K2: at a knot's centre
+//   3.4 and 1.9 times the light between the knots on the axis (4 and 2.2 times before).
+// - sp, the pixel's size there (its sigma, au): each Gaussian is drawn as wide as the pixel at least, with the same light per
+//   length (sigma^2 + sp^2, its height sigma^2 / (sigma^2 + sp^2) of it), so that the spine, thinner than a pixel near its foot
+//   from afar, neither flickers nor breaks into dots while the view moves.
+// data-jetlook="old" (the page's ?jetlook=old, JET_OLD): the drawing of before, with its lobes' stretch (see jetLobe).
+#ifndef JET_TRY
+#define JET_TRY vec4(0.12, 4.0, 2.4, 1.0)
+#endif
+const float JET_SH = JET_TRY.x, JET_SS = JET_TRY.y, JET_FS = 8.0, JET_FK = 4.0, JET_KL = 0.75, JET_KG = JET_TRY.z;
+#ifdef JET_OLD
 float jetEm(vec3 p){
   float az = abs(p.z);
   if (az < JET_Z0 || az > JET_ZMAX) return 0.0;
@@ -2178,9 +3244,113 @@ float jetEm(vec3 p){
   float k = 1.0 + JET_K1 * smoothstep(20.0, 80.0, az) * exp(-u1 * u1 / 0.0064) + JET_K2 * smoothstep(3.0, 25.0, az) * exp(-u2 * u2 / 0.0144);
   return k / (low * (r * r + JET_SOFT * JET_SOFT)) * exp(-0.5 * d2 / (sg * sg)) * smoothstep(JET_Z0, 3.0 * JET_Z0, az) * (1.0 - smoothstep(0.85 * JET_ZMAX, JET_ZMAX, az));
 }
+#else
+float jetEm(vec3 p, float sp){
+  float az = abs(p.z);
+  if (az < JET_Z0 || az > JET_ZMAX) return 0.0;
+  float r = jetR(az), s2 = 0.7225 * r * r, q2 = sp * sp, d2 = dot(p.xy, p.xy);   // (s2: the sheath's sigma^2, (0.85 r)^2)
+  if (d2 > 16.0 * (s2 + q2)) return 0.0;
+  float low = p.z < 0.0 ? uJetLow : 1.0, v = JET_V * low, tl = uJetT - az / v;   // (the time this gas was launched)
+  float u1 = fract(tl / JET_P1) - 0.5, u2 = fract(tl / JET_P2) - 0.5;
+  float l1 = min(JET_KL * r / (v * JET_P1), 0.0566), l2 = min(JET_KL * r / (v * JET_P2), 0.0849);   // (the knots' sigma, in their spacing)
+  float kn = JET_KG * (JET_K1 * smoothstep(20.0, 80.0, az) * exp(-0.5 * u1 * u1 / (l1 * l1)) + JET_K2 * smoothstep(3.0, 25.0, az) * exp(-0.5 * u2 * u2 / (l2 * l2)));
+  float wh = s2 + q2, ws = s2 / JET_FS + q2, wk = s2 / JET_FK + q2;
+  float e = JET_SH * s2 / wh * exp(-0.5 * d2 / wh) + JET_SS * s2 / (JET_FS * ws) * exp(-0.5 * d2 / ws) + kn * s2 / (JET_FK * wk) * exp(-0.5 * d2 / wk);
+  return JET_TRY.w * e / (low * (r * r + JET_SOFT * JET_SOFT)) * smoothstep(JET_Z0, 3.0 * JET_Z0, az) * (1.0 - smoothstep(0.85 * JET_ZMAX, JET_ZMAX, az));
+}
+#endif
+// (Round 15b, the owner: "the light of the jet behind the disk shows through it; better to take the jet as hidden at once") The
+// disk hides a lobe behind it: where the ray from the camera to the place the lobe is laid in (tc) crosses the midplane, at R_x
+// (the camera on the other side of the midplane from the lobe), the disk's column in the visible is K_OCC Sigma(R_x) / |rd.z|, and
+// the lobe's light is taken down by e^-tau. K_OCC: the visible extinction of the small grains per gram of gas, about 200 cm^2/g
+// (the interstellar A_V / N_H = 5.3e-22 mag cm^2), times SIG1 = 1700 g cm^-2, the model's Sigma at 1 au (Sigma in the model's
+// unit): tau of order 1e5 / R au through the disk, so it hides the lobe out to its edge (tau = 1 near 43 au with the cut; with the
+// exponential tail of round 18a, near 220 au; with round 18b's Gaussian, near 86 au) and
+// through a planet's gap (a Jupiter's at 3 au, Sigma_min / Sigma_0 about 0.02: tau about 2000). (Those numbers are for that
+// interstellar K_OCC; round 18b, below, takes the model's own, 920 times less.) Inside R_IN the gas is dust-free and the jet is seen through it, as
+// is right. One factor per lobe, where its light is laid in: the same in kicks and drawn whole, no state carried, nothing more
+// in the march. The disk's own translucency (the model look's K_G rho EXT) and its other light behind it are left as they are.
+// uJetOcc: 1, or 0 (data-jetocc="0", the page's ?jetocc=0) as before
+// (Round 18b, the owner: "the jet's see-through is too discrete in the inclination; can't it simply be a high opacity in the
+// model?") Until then a lobe was hidden only when the camera was on the other side of the midplane, by the whole column at the
+// crossing: crossing the midplane flipped a lobe whole from seen to hidden (from any camera within the 86 au where the disk is
+// opaque). Now tau = K_OCC times the disk's column between the camera and the lobe along the ray, through the model's own smooth
+// disk (Sigma's taper, its gaps and dust-free hole, e^(-z^2 / 2 H^2)): a camera on either side, inside the disk or outside it.
+// The lobe comes out of the disk from its foot as the camera rises, and both lobes' feet are hidden edge-on.
+// K_OCC (round 18b, the coordinator's choice): the model's own opacity for the starlight, the one that sets tau* and with it the
+// lit surface: tau* = e^LNTAU1 R^-1.25 e^-cut e^(-z^2 / 2 H^2) = K_OCC rho R with K_OCC = e^LNTAU1 sqrt(2 pi) H0 = 369.6 in Sigma's
+// unit. The model look draws the disk's gas translucent; the jet is hidden by the opacity that stops the starlight, where the lit
+// surface is, not 920 times sooner by the interstellar dust's visible opacity of round 15b (200 cm^2/g x SIG1 = 3.4e5, the
+// alternative, no switch: from inside the disk's extent below about 20 degrees, the wind place's 10 degrees and 60 au, it hid the
+// jet whole). Through the disk tau is 370 at 1 au, 120 at 3 au, 33 at 10 au, 4.5 at 30 au and 1 at 44 au (straight through):
+// behind the disk's body the far lobe stays hidden, seen through the tail beyond about 44 au it shows.
+// occColumn: the column in Sigma's unit from the camera (t = 0) to t1 along the ray. q = ln rho has one peak on the stretch, which
+// ends before the lobe (|z| / H changes one way on each side of the midplane, and R falls along it): found by golden section, the
+// ends and the midplane's crossing tried too (a narrow peak the search may step over). Its scale there, where q changes by about 1
+// (occDQ: q's first and second derivatives along the ray), sets the first of 8 nodes on each side, spaced geometrically out to the
+// stretch's ends; between nodes q is taken as linear, e^q integrated exactly (the exponential's own rule: exact for a steep fall,
+// within a few per cent across a Gaussian peak, and it follows a broad one-sided fall where a parabola about the peak does not).
+// Against a fine integral of the same density over 1260 rays (cameras at 0.3-340 au, -25 to 70 degrees, the lobes from 0.06 to 200
+// au): the transmission within 0.03, the column within 8 % where 0.05 < tau < 20 (DESIGN.md section 43.4). For each lobe once, at
+// the place its light is laid in: the lobe's 16 samples lie within 3.5 widths of the axis, at least JET_Z0 from the midplane,
+// where the disk has no gas (H < 0.01 au within 0.3 au of the star), and the ray crosses the midplane before the lobe's first, so
+// each sample's column is the lobe's (31 evaluations of the density a lobe, and KW_JET 5)
+float occQ(vec3 ro, vec3 rd, float t){
+  vec3 p = ro + rd * t;
+  float R = max(length(p.xy), 1e-3), lnR = log(R), g = p.z / (H0 * exp(1.25 * lnR));
+  return -2.25 * lnR - cutOut(R) + gapLn(R) + (R < R_IN * 1.3 ? log(max(smoothstep(R_IN * 0.8, R_IN * 1.3, R), 1e-30)) : 0.0) - 0.5 * g * g;
+}
+// q's first and second derivatives along the ray at t (the power law, the taper's d cutSlope / d ln R = p cutSlope (CUT_DD: p, round 19a; the Gaussian's 2 until then, kept with the cut of before),
+// the vertical Gaussian; the gaps and the dust's edge left out): only the first node's distance takes them
+vec2 occDQ(vec3 ro, vec3 rd, float t){
+  vec3 p = ro + rd * t;
+  float R = max(length(p.xy), 1e-3), Rd = dot(p.xy, rd.xy) / R, H = H0 * pow(R, 1.25), g = p.z / H, u = Rd / R;
+  float du = (dot(rd.xy, rd.xy) - 2.0 * Rd * Rd) / (R * R), dg = rd.z / H - 1.25 * g * u, ddg = -1.25 * (rd.z * u / H + dg * u + g * du), cs = cutSlope(R);
+  return vec2(-(2.25 + cs) * u - g * dg, -(2.25 + cs) * du - CUT_DD * cs * u * u - dg * dg - g * ddg);   // (round 19a: CUT_DD, the taper's exponent; 2.0, the Gaussian's)
+}
+float occColumn(vec3 ro, vec3 rd, float t1){
+  if (t1 <= 1e-6) return 0.0;   // (a lobe laid in at the camera: no stretch)
+  const float GR = 0.381966;
+  float a = 0.0, b = t1, x1 = GR * t1, x2 = t1 - GR * t1, f1 = occQ(ro, rd, x1), f2 = occQ(ro, rd, x2);
+  for (int i = 0; i < 10; i++) {
+    if (f1 < f2) { a = x1; x1 = x2; f1 = f2; x2 = b - GR * (b - a); f2 = occQ(ro, rd, x2); }
+    else { b = x2; x2 = x1; f2 = f1; x1 = a + GR * (b - a); f1 = occQ(ro, rd, x1); }
+  }
+  float ts = f1 > f2 ? x1 : x2, qs = max(f1, f2), q0 = occQ(ro, rd, 0.0), q1e = occQ(ro, rd, t1);
+  if (q0 > qs) { ts = 0.0; qs = q0; }
+  if (q1e > qs) { ts = t1; qs = q1e; }
+  float tx = abs(rd.z) > 1e-6 ? -ro.z / rd.z : -1.0;
+  if (tx > 0.0 && tx < t1) { float fx = occQ(ro, rd, tx); if (fx > qs) { ts = tx; qs = fx; } }
+  vec2 dq = occDQ(ro, rd, ts);
+  float d0 = clamp(0.5 * inversesqrt(dq.x * dq.x + max(-dq.y, 0.0) + 1e-12), 1e-6 * t1, max(b - a, 1e-6 * t1)), col = 0.0;
+  for (int side = 0; side < 2; side++) {
+    float L = side == 0 ? ts : t1 - ts, sg = side == 0 ? -1.0 : 1.0;
+    if (L <= 0.0) continue;
+    int n = L <= d0 ? 1 : 8;
+    float r = n > 1 ? pow(L / d0, 1.0 / 7.0) : 1.0, d = d0, tp = ts, qp = qs;
+    for (int k = 1; k <= 8; k++) {
+      if (k > n) break;
+      float t = ts + sg * (k == n ? L : d), qn = occQ(ro, rd, t), dt = abs(t - tp), e = qn - qp;
+      col += abs(e) > 1e-4 ? dt * (exp(qn) - exp(qp)) / e : dt * exp(0.5 * (qn + qp));
+      tp = t; qp = qn; d *= r;
+    }
+  }
+  return col * ${G(+(1 / (Math.sqrt(2 * Math.PI) * MODEL.H0)).toPrecision(7))};   // (rho = Sigma / (sqrt(2 pi) H0 R^1.25) e^(-z^2 / 2 H^2))
+}
+uniform float uJetOcc;
+// (K_OCC, e^LNTAU1 sqrt(2 pi) H0, with K_G above since round 18g: the small grains' one opacity in visible light, which the visible
+// look and the model look's scattered light take too; 3.4e5 the interstellar alternative, see above)
+float jetOcc(vec3 ro, vec3 rd, float tc){
+  if (uJetOcc <= 0.0) return 1.0;
+  float t = exp(-min(K_OCC * occColumn(ro, rd, tc), 80.0));
+  // (round 18a: with the gas's see-through, uOpac.x, the disk's opacity as one sheet's, 1 - t, times it: its optical depth, of
+  // order 1e5 / R au then, would hide the lobe at any factor; with round 18b's K_OCC, 370 / R au, kept so)
+  return uOpac.x < 1.0 ? mix(1.0, t, uOpac.x) : t;
+}
 // a lobe (side +1 or -1): its light (relative, x; times jetCol) and where it is laid in (y; 1e9: none). (Two numbers a
 // lobe, carried through the march: the four of a colour and a place each slowed the whole march, as the registers grew)
 // (round 10a: light false, the place alone, its light 0: the light's 16 samples are taken when it is laid in, see main)
+#ifdef JET_OLD
 vec2 jetLobe(vec3 ro, vec3 rd, float side, float jitter, bool light){
   if (abs(rd.z) < 1e-6) return vec2(0.0, 1e9);
   float ta = (side * JET_Z0 - ro.z) / rd.z, tb = (side * JET_ZMAX - ro.z) / rd.z, t0 = max(min(ta, tb), 0.0), t1 = max(ta, tb);
@@ -2194,8 +3364,69 @@ vec2 jetLobe(vec3 ro, vec3 rd, float side, float jitter, bool light){
   // (round 8: faded close to the camera, within half its distance from the point looked at: looking down the axis the camera
   // sits in the jet's wide part, which then veiled the whole view)
   if (light) for (int i = 0; i < 16; i++) { float ti = c - L + (float(i) + jitter) * ds; e += jetEm(ro + rd * ti) * smoothstep(0.15, 0.5, ti / uFocus); }
-  return vec2(G_JET * uJet * e * ds, c);
+  return vec2(G_JET * uJet * e * ds * (light ? jetOcc(ro, rd, c) : 1.0), c);   // (round 15b: hidden behind the disk, jetOcc; round 18b: by its column along the ray)
 }
+#else
+// (Round 19c, the visual review, the coordinator: "from straight above the jet fills the inner 1.2 au with a flat glow and leaves
+// a dark round hole beside the star; at 70 degrees a seam through the star") The stretch of before was 3.5 widths either side of
+// the place nearest the axis, by the jet's width at that place alone, and none where that place was farther from the axis than
+// 3.5 of its widths: right for a ray across the jet, wrong for one along it (within 24 degrees of the axis, the foot's cone at 3.5
+// widths), which passes through the jet higher up, where it is wider: such a ray's nearest place is the lobe's foot, and it was
+// left out whole where it met the midplane more than 3.5 of the foot's widths (0.23 au) from the star: the hole (the circle on the
+// star and the point under the camera as a diameter, less the foot's 0.23 au), and the seam (the rays that end on the near side of
+// the star against those that cross the axis). Now the stretch is the ray's part within 3.5 widths of the axis itself, exactly:
+// the lobe's heights (JET_Z0 to JET_ZMAX), and inside both cones of jetR (jetClip: a quadratic each; the pixel's size added to
+// the width, see jetEm's sp). Its 16 samples are spaced as the height above JET_ZS under the foot (a geometric series along the
+// ray; evenly where the height hardly changes: a ray across the jet, as before): along the jet, where its light per length falls
+// as 1 / r^2 from the foot, each sample then weighs alike, and the column down the axis is smooth, brightest on the axis.
+// JET_W: 3.5 sigma in jetR's widths (3.5 x 0.85)
+const float JET_W = 2.975, JET_ZS = 1.0;
+// the part of the stretch t (x to y, along the ray from the place nearest the axis) within P + Q t of the axis (P + Q t > 0 all
+// along it: the lobe's own side of the cone), the ray's distance from the axis there sqrt(a t^2 + 2 b t + c)
+vec2 jetClip(vec2 t, float a, float b, float c, float P, float Q){
+  float qa = a - Q * Q, qb = b - P * Q, qc = c - P * P;
+  if (abs(qa) < 1e-9) {   // (the ray along the cone's side: 2 qb t + qc <= 0)
+    if (abs(qb) < 1e-12) return qc <= 0.0 ? t : vec2(1.0, 0.0);
+    float tx = -0.5 * qc / qb;
+    return qb > 0.0 ? vec2(t.x, min(t.y, tx)) : vec2(max(t.x, tx), t.y);
+  }
+  float D = qb * qb - qa * qc;
+  if (D <= 0.0) return qa > 0.0 ? vec2(1.0, 0.0) : t;   // (it misses the cone; or, steeper than its side, it is within it all along)
+  float sD = sqrt(D), q = -(qb + (qb >= 0.0 ? sD : -sD)), r1 = q / qa, r2 = qc / q, lo = min(r1, r2), hi = max(r1, r2);
+  if (qa > 0.0) return vec2(max(t.x, lo), min(t.y, hi));
+  // (steeper than the cone's side: within it before lo or after hi, one of them the cone's other half beyond its apex, where
+  // P + Q t < 0, which the stretch does not reach)
+  return min(t.y, lo) > t.x ? vec2(t.x, min(t.y, lo)) : vec2(max(t.x, hi), t.y);
+}
+vec2 jetLobe(vec3 ro, vec3 rd, float side, float jitter, bool light){
+  if (abs(rd.z) < 1e-6) return vec2(0.0, 1e9);
+  float ta = (side * JET_Z0 - ro.z) / rd.z, tb = (side * JET_ZMAX - ro.z) / rd.z, t0 = max(min(ta, tb), 0.0), t1 = max(ta, tb);
+  if (t1 <= t0) return vec2(0.0, 1e9);
+  float a = dot(rd.xy, rd.xy), tc = a > 1e-8 ? clamp(-dot(ro.xy, rd.xy) / a, t0, t1) : t0;
+  vec3 pc = ro + rd * tc;
+  // (from pc, the place nearest the axis, so that the quadratic's terms are small ones; px: half a pixel's angle, its sigma)
+  float b = dot(pc.xy, rd.xy), c0 = dot(pc.xy, pc.xy), A = side * pc.z, B = side * rd.z, px = uTanHalf / uRes.y;
+  vec2 tt = jetClip(vec2(t0 - tc, t1 - tc), a, b, c0, JET_W * (JET_RL + JET_BASE * A) + 3.5 * px * tc, JET_W * JET_BASE * B + 3.5 * px);
+  tt = jetClip(tt, a, b, c0, JET_W * (JET_RC + JET_TAN * A) + 3.5 * px * tc, JET_W * JET_TAN * B + 3.5 * px);
+  if (tt.y <= tt.x) return vec2(0.0, 1e9);
+  float L = tt.y - tt.x, c = tc + clamp(0.0, tt.x, tt.y), ds = L / 16.0, e = 0.0;
+  if (light) {
+    // (the samples' places: t = tt.x + L (g^w - 1) / (g - 1), w from 0 to 1, g the ratio of the heights above -JET_ZS at the
+    // stretch's ends; their weights dt/dw = L ln g g^w / (g - 1))
+    float lam = log((JET_ZS + A + B * tt.y) / (JET_ZS + A + B * tt.x)), gs = exp(lam / 16.0), gw = exp(lam * jitter / 16.0);
+    bool even = abs(lam) < 1e-3;
+    float g1 = even ? 1.0 : exp(lam) - 1.0;
+    // (round 8: faded close to the camera, within half its distance from the point looked at: looking down the axis the camera
+    // sits in the jet's wide part, which then veiled the whole view)
+    for (int i = 0; i < 16; i++) {
+      float ti = tc + tt.x + L * (even ? (float(i) + jitter) / 16.0 : (gw - 1.0) / g1);
+      e += jetEm(ro + rd * ti, px * ti) * (even ? 1.0 : lam * gw / g1) * smoothstep(0.15, 0.5, ti / uFocus);
+      gw *= gs;
+    }
+  }
+  return vec2(G_JET * uJet * e * ds * (light ? jetOcc(ro, rd, c) : 1.0), c);   // (round 15b: hidden behind the disk, jetOcc; round 18b: by its column along the ray)
+}
+#endif
 // (its colour: the visible look the red of its lines)
 vec3 jetCol(){ return uLook == 0 ? MAT_JET : vec3(1.0, 0.22, 0.28); }
 
@@ -2227,13 +3458,19 @@ const float LIGHT_MAX = 1e4, CONT_EPS = 3e-5;   // (round 9: the continuum's end
 uniform int uProbe;       // (round 9) 1: the volume pass writes the march's iterations instead of light (diskRayProbe); 2: the gas line's values
 uniform int uBg;          // (round 8) the background: 0 none, 1 the stars, 2 the sky of a star-forming region (see BG)
 uniform sampler2D uSky;   // its map (see SKY_FS), with uBg = 2
+uniform vec2 uBgTurn;     // (round 13b) the sky's turn about the disk's axis, (cos, sin): the view's own turn with the clock (see bgTurn)
 // stars fixed on the sky, at a density per CSS pixel so small panels are not crowded: in cells of cell CSS px, a star in
 // the share dens of them, its brightness from bmin to bmin + bmax (most faint), the brightest with a soft glow; ext dims
 // and reddens it (the cloud's transmission), except for a few in front of the cloud. (Round 9: a star is at least 0.6
 // render pixels wide, its light kept, so that it neither vanishes between the pixels' centres nor flickers as the view
 // turns at a low render scale; before, 0.55 CSS px at any scale.)
-vec3 starsIn(vec3 rd, float pixA, float cell, float dens, float bmax, float bmin, float glow, float seed, vec3 ext){
-  float cs = cell * uPx * pixA;
+// (Round 18a, the owner: "more background stars") uStars, the number of them (the state's stars, 0.3 to 5; 1 by default): the
+// share of cells with a star, dens, times it (at most every cell), the brightness drawn from the same law over them, u uniform
+// in 0 to 1; a star of the default sky stays where it is as more come (h is the cell's), its brightness moving within that law.
+// At 1 the share is dens itself, the sky of before to the bit
+uniform float uStars;
+vec3 starsIn(vec3 rd, float pixA, float cell, float dens0, float bmax, float bmin, float glow, float seed, vec3 ext){
+  float cs = cell * uPx * pixA, dens = min(dens0 * uStars, 1.0);
   vec3 c = floor(rd / cs);
   float h = hash13(c + 0.37 * uSeed + seed);
   if (h < 1.0 - dens) return vec3(0.0);
@@ -2283,26 +3520,149 @@ float cloud(vec3 q, vec3 rd, float s, float zeta){
 // a planet of under a few thermal masses (q_th <~ 1-3, 10 Earth masses everywhere here) wears a nearly round envelope
 // rather than a disk, as the simulations find (Ayliffe & Bate 2009; Sagynbayeva et al. 2024). uCpd.w: its glow for the
 // planet's mass (see glowOf).)
-uniform vec4 uCpd;
+// (Round 13e, the first step of the CPD's study, ver2/docs/cpd-detail-study.md 7.1-7.3, and DESIGN.md section 35: the disk's
+// size, kind, temperature, thickness and millimetre optical depth come from the script's cpdPhys, for the planet's mass, its
+// orbit and its accretion rate. uCpd[0]: the clouds' H/r (their half-light radii) and the model look's glow (glowOf);
+// uCpd[1]: the disk's outer radius R_out (au; it was rCPD, 0.4 R_H; the clouds' widths stay 0.1, 0.3, 0.55 of it) and the
+// clouds' temperatures (K, at their half-light radii); uCpd[2]: the factor on CPD_TAU in the millimetre look (the disk's own
+// optical depth there), the blend D from envelope (0) to disk (1), CPD_DISP the observed looks' one display factor (the
+// brightness otherwise physical: the laws the disk's own light follows in each look, cpdSrc), and 1 for the disk of round 8
+// to compare (data-cpd="old": 0.4 R_H, its colours and glow). The model's look keeps its material colours and glow; the
+// millimetre look draws the CPD's dust as the pebbles' sheet is drawn, G_MM (T/100)(1 - e^-tau) MM_COL, with its own tau.)
+uniform vec4 uCpd[3];
 const vec3 CPD_TAU = vec3(2.84, 1.93, 1.23), CPD_G = vec3(1.4, 0.9, 0.6);
+// (round 13e) the near infrared (2.2 microns, the K band) for the look "visible light" (scattered light, visible and near
+// infrared): B_nu relative to 1500 K, capped softly as mirPlanck; a disk below some 600 K hardly shows there
+float nirPlanck(float T){ float b = (exp(6540.0 / 1500.0) - 1.0) / (exp(6540.0 / max(T, 150.0)) - 1.0); return b / (1.0 + b / 6.0); }
+// (round 13e) the light of the CPD's material at T in an observed look, by the law the disk's own light follows there (its
+// surface in the mid-infrared, G_MIR mirPlanck mirColor; its pebbles in the millimetre, G_MM (T/100) MM_COL), per unit optical depth
+vec3 cpdSrc(float T){
+  if (uLook == 2) return G_MIR * mirPlanck(T) * mirColor(T);
+  if (uLook == 3) return G_MM * (T / 100.0) * MM_COL;
+  return G_OPT * nirPlanck(T) * tcolor(T);
+}
+#ifndef CPD_VOL_OFF
+// (Round 19d, the visual review: "a formless yellow smudge on a dark grey fog: one cannot tell the planet from its disk, see the
+// disk as a disk, or read its size".) In the model look the planet's disk is drawn as the volume the script's cpdPhys describes,
+// where the three clouds stood for it. The clouds, opaque in the middle and each of one brightness, made a flat yellow ellipse
+// without a centre, and their Gaussian skirts kept it in sight to 1.4 R_out (the outer cloud, 0.55 R_out wide, has a slant
+// optical depth of 0.15 there from this place): beyond the radius that the probe and the name tag give the disk. Now:
+//   the gas: Sigma ∝ r^-3/4 (steady accretion, what the clouds' weights were fitted to in round 7) out to the truncation at
+//     R_out, where it falls over about a quarter of R_out, e^-(r/R_out)^8 (an edge about H wide: Martin & Lubow 2011); its
+//     vertical optical depth CPD_TE at R_out, a translucent picture as the parent disk's is (the clouds' 1.5 at 0.45 R_out,
+//     0.64 here, made a thick body of it: with H/r 0.2 and more, as thick on the screen from this place as its ellipse is
+//     high); vertically the Gaussian of H = (H/r) r, with H/r through the three values the script gives (uCpd[0].xyz, at
+//     0.15, 0.45 and 0.825 R_out: CPD.HALF CPD.X), linear in ln r between and beyond them, within cpdPhys's 0.1 to 0.8,
+//     and r the distance from the planet, so that it is e^-(sin^2 / 2 (H/r)^2) of the latitude: that Gaussian for a thin
+//     disk, and a light planet's envelope (H/r 0.8) stays round. H is at least half a render pixel's footprint (the thin
+//     inner disk would flicker between the pixels' rays), its column kept;
+//   its light, by its temperature: T(r) through the script's three temperatures (uCpd[1].yzw), a power law between and beyond
+//     them, up to cpdPhys's T_MAX (3000 K); per unit optical depth (T / T_2)^CPD_PT, T_2 the middle one: the disk's own
+//     sigma T^4 to the power 1/2, a display's compression (as LIT_P is for the starlight), which the stretch lays out as an even
+//     ramp from the edge to the middle. And less with height, e^-(CPD_HZ z^2 / 2 H^2) for a disk (times the script's D: an
+//     envelope's light follows its gas): a disk heated by accretion is hottest at its midplane (T^4 ∝ tau from the surface
+//     down, the grey atmosphere's law: its e^-(z^2 / 2 H^2) column from above to the power 1/2 to 1 is about this Gaussian
+//     with 1 to 2.3), so that the eye meets the bright sheet of the midplane inside a soft, thicker body. The level is the
+//     material's (the glow, uCpd[0].w, times CPD_GV), so that a cold disk shows too; the hue the planet's, a little lighter
+//     where hotter (CPD_W of white for each e-fold of T above T_2, to 0.35, the inner cloud's);
+//   the planet: the point of before, behind the gas on its own line of sight (the disk as the script has it, from its inner
+//     edge CPD_RIN, 1.5 planetary radii, cpdPhys's R_IN: seen from above about 25 degrees, hidden from nearer the disk's
+//     plane; it was dimmed by a quarter of the whole column of this pixel, e^-0.25 tt, 0.05 from this place: a faint dot),
+//     and brighter (CPD_PA; 4 before): the picture's highlight, white on the disk's gold.
+// The ray is integrated where it passes within CPD_RB R_out of the planet, emission and absorption sample by sample: CPD_NS
+// samples either side of its closest approach to the planet, even in u with s = c sinh u (s the path from the closest approach;
+// c^2 = b^2 + eps^2, b the ray's distance from the planet, eps the softening: the disk's inner edge, or 3/4 of a render pixel
+// there where that is more). The distance from the planet is then c cosh u: the samples follow the structure's scale (close
+// together near the planet, in a constant ratio far from it), and the gas's layer is (H/r) / |rd.z| thick in u wherever the ray
+// crosses it. Jittered as the march is (the still's frames average it). The planet's light is laid in between the two halves.
+// Returns the light and the optical depth, as planetLight.
+// CPD_GV is set so that the automatic exposure (AE in the script), which takes the picture's brightest cell to AE.PEAK, stays
+// at 1 at the planet's place: the gap around the planet is then as dark as the exposure allows, the disk the bright thing in it.
+// Only the model look: the observed looks keep the clouds and the brightness that cpd-check.mjs reckons for them.
+// data-cpdvol="0" (the page's ?cpdvol=0, CPD_VOL_OFF): the clouds in the model look too, as before.
+const float CPD_TE = 0.35, CPD_RB = 1.3, CPD_RIN = 0.0009, CPD_PT = 2.0, CPD_HZ = 2.0, CPD_GV = 4.0, CPD_W = 0.15, CPD_PA = 10.0, CPD_PR = 10.0;
+const int CPD_NS = 14, CPD_NP = 12;
+float asinhS(float x){ float a = abs(x); return sign(x) * log(a + sqrt(a * a + 1.0)); }   // (odd: no cancellation for x < 0)
+vec4 cpdVolume(vec3 q, vec3 rd, float aspect){
+  float R = uCpd[1].x, t0 = -dot(q, rd), Rb = CPD_RB * R;
+  vec3 B = q + rd * t0;
+  float b2 = dot(B, B);
+  // the planet on the screen: this pixel's distance from it (CSS px) and a render pixel's footprint at its depth (au)
+  vec3 pv = vec3(dot(-q, uBasis[0]), dot(-q, uBasis[1]), dot(-q, uBasis[2]));
+  float fp = max(pv.z, 1e-6) * 2.0 * uTanHalf / uRes.y, dp = 1e9;
+  if (pv.z > 0.0) dp = length(gFc - (vec2(pv.x / (pv.z * uTanHalf * aspect), pv.y / (pv.z * uTanHalf)) * 0.5 + 0.5) * uRes) / uPx;
+  bool inD = b2 < Rb * Rb, inP = dp < CPD_PR;
+  if (!inD && !inP) return vec4(0.0);
+  // (the inner edge: no farther out than a tenth of R_out, for the smallest envelopes)
+  float rin = min(CPD_RIN, 0.1 * R), eps = max(rin, 0.75 * fp), c = sqrt(b2 + eps * eps), sm = inD ? sqrt(Rb * Rb - b2) : 0.0;
+  float ua = asinhS(max(-sm, -t0) / c), ub = asinhS(sm / c);
+  // (ln of 0.45, the middle radius of the script's values in R_out, and of the ratios to it of 0.15 and of 0.825; the slopes of
+  // H/r and of ln T between them)
+  const float LR2 = -0.798508, DA = 1.098612, DB = 0.606136;
+  float hA = (uCpd[0].y - uCpd[0].x) / DA, hB = (uCpd[0].z - uCpd[0].y) / DB;
+  float sA = log(uCpd[1].y / uCpd[1].z) / DA, sB = log(uCpd[1].z / uCpd[1].w) / DB, lTm = log(3000.0 / uCpd[1].z);
+  float lc = log(c / R), iR2 = 1.0 / (R * R), kf2 = 0.25 * fp * fp, hz = 0.5 * CPD_HZ * uCpd[2].y;
+  float jj = fract(52.9829189 * fract(0.06711056 * gFc.x + 0.00583715 * gFc.y) + uJit.z);
+  vec3 col = vec3(0.0);
+  float tr = 1.0, tau = 0.0;
+  for (int h = 0; h < 2; h++) {
+    float u0 = h == 0 ? ua : max(ua, 0.0), u1 = h == 0 ? min(ub, 0.0) : ub;
+    // the planet, a point (its radius, 1.5 Jupiter radii, is below a pixel unless the camera is within about 0.3 au), behind the
+    // disk's gas on its own line of sight: the column from the inner edge outward at the camera's latitude
+    if (h == 1 && inP) {
+      float st2 = q.z * q.z / dot(q, q), lx0 = log(rin / R), dl = max(log(CPD_RB) - lx0, 0.0) / float(CPD_NP), tp = 0.0;
+      for (int k = 0; k < CPD_NP; k++) {
+        float lx = lx0 + (float(k) + 0.5) * dl, dd = lx - LR2, hp = clamp(uCpd[0].y + dd * (dd < 0.0 ? hA : hB), 0.1, 0.8);
+        tp += exp(-0.75 * lx - exp(8.0 * lx) - 0.5 * st2 / (hp * hp)) / hp;
+      }
+      float e = max(dp - 0.0007 / (fp * uPx), 0.0);
+      col += exp(-CPD_TE / 2.5066 * tp * dl) / CPD_GV * mix(MAT_PLANET, vec3(1.0), 0.5) * (CPD_PA * exp(-e * e / 0.8) + 0.1 * exp(-dp / 2.5));
+    }
+    if (u1 <= u0) continue;
+    float du = (u1 - u0) / float(CPD_NS), E = exp(u0 + jj * du), kE = exp(du);
+    for (int i = 0; i < CPD_NS; i++) {
+      float ch = 0.5 * (E + 1.0 / E), rr = c * ch, z = B.z + rd.z * 0.5 * c * (E - 1.0 / E);
+      E *= kE;
+      float lr = lc + log(ch), d = lr - LR2;
+      float hr = clamp(uCpd[0].y + d * (d < 0.0 ? hA : hB), 0.1, 0.8);
+      float H2 = hr * hr * rr * rr + kf2, w2 = z * z / H2, x2 = rr * rr * iR2, x8 = x2 * x2;
+      x8 *= x8;
+      float ar = -0.75 * lr - x8 - 0.5 * w2;
+      if (ar < -14.0) continue;
+      float dt = CPD_TE / 2.5066 * du * rr * inversesqrt(H2) * exp(ar), lT = min(-d * (d < 0.0 ? sA : sB), lTm), a = exp(-dt);
+      col += tr * (1.0 - a) * exp(CPD_PT * lT - hz * w2) * mix(MAT_PLANET, vec3(1.0), clamp(CPD_W * lT, 0.0, 0.35));
+      tr *= a; tau += dt;
+    }
+  }
+  return vec4(col * (CPD_GV * uCpd[0].w), tau);
+}
+#endif
 vec4 planetLight(vec3 ro, vec3 rd, float aspect){
   vec3 q = ro - uPlV.xyz;
-  float R_CPD = rCPD(uPlVa);
-  float t1 = CPD_TAU.x * cloud(q, rd, 0.1 * R_CPD, uCpd.x * 0.1 * R_CPD), t2 = CPD_TAU.y * cloud(q, rd, 0.3 * R_CPD, uCpd.y * 0.3 * R_CPD), t3 = CPD_TAU.z * cloud(q, rd, 0.55 * R_CPD, uCpd.z * 0.55 * R_CPD);
+  float R_CPD = uCpd[1].x;
+  bool mat = uLook == 0, old = uCpd[2].w > 0.5;
+#ifndef CPD_VOL_OFF
+  if (mat && !old) return cpdVolume(q, rd, aspect) * uPlV.w;   // (round 19d: the model look's disk as a volume, see cpdVolume)
+#endif
+  // (round 13e: in the millimetre look the disk's own optical depth, the clouds' columns in proportion)
+  float k = uLook == 3 && !old ? uCpd[2].x : 1.0;
+  float t1 = k * CPD_TAU.x * cloud(q, rd, 0.1 * R_CPD, uCpd[0].x * 0.1 * R_CPD), t2 = k * CPD_TAU.y * cloud(q, rd, 0.3 * R_CPD, uCpd[0].y * 0.3 * R_CPD), t3 = k * CPD_TAU.z * cloud(q, rd, 0.55 * R_CPD, uCpd[0].z * 0.55 * R_CPD);
   float tt = t1 + t2 + t3;
-  // (round 8: in the model's look the planet's material colour, lighter toward the middle; in the observed looks the
-  // colours of the temperatures of a disk heated by accretion)
-  bool mat = uLook == 0;
-  vec3 c1 = mat ? mix(MAT_PLANET, vec3(1.0), 0.35) : tcolor(1200.0), c2 = mat ? MAT_PLANET : tcolor(530.0), c3 = mat ? 0.8 * MAT_PLANET : tcolor(330.0);
-  vec3 em = (t1 * CPD_G.x * c1 + t2 * CPD_G.y * c2 + t3 * CPD_G.z * c3) * transferWeight(tt);
+  // (round 8: in the model's look the planet's material colour, lighter toward the middle; round 13e: in the observed looks
+  // the light of the clouds' temperatures by each look's law (the colours of 1200, 530 and 330 K with the glow before))
+  vec3 em;
+  if (mat) em = (t1 * CPD_G.x * mix(MAT_PLANET, vec3(1.0), 0.35) + t2 * CPD_G.y * MAT_PLANET + t3 * CPD_G.z * 0.8 * MAT_PLANET) * uCpd[0].w;
+  else if (old) em = (t1 * CPD_G.x * tcolor(1200.0) + t2 * CPD_G.y * tcolor(530.0) + t3 * CPD_G.z * tcolor(330.0)) * uCpd[0].w;
+  else em = (t1 * cpdSrc(uCpd[1].y) + t2 * cpdSrc(uCpd[1].z) + t3 * cpdSrc(uCpd[1].w)) * (uLook == 3 ? 1.0 : uCpd[2].z);
+  em *= transferWeight(tt);
   // the planet, a point (its radius, 1.5 Jupiter radii, is below a pixel unless the camera is within about 0.3 au)
   vec3 pv = vec3(dot(-q, uBasis[0]), dot(-q, uBasis[1]), dot(-q, uBasis[2]));
   if (pv.z > 0.0) {
     vec2 ppx = (vec2(pv.x / (pv.z * uTanHalf * aspect), pv.y / (pv.z * uTanHalf)) * 0.5 + 0.5) * uRes;
     float d = length(gFc - ppx) / uPx, rp = 0.0007 / (pv.z * 2.0 * uTanHalf / uRes.y) / uPx;   // CSS px
-    em += (mat ? mix(MAT_PLANET, vec3(1.0), 0.5) : tcolor(1300.0)) * (4.0 * exp(-max(d - rp, 0.0) * max(d - rp, 0.0) / 0.8) + 0.1 * exp(-d / 2.5)) * exp(-0.25 * tt);
+    em += (mat ? mix(MAT_PLANET, vec3(1.0), 0.5) : tcolor(1300.0)) * (4.0 * exp(-max(d - rp, 0.0) * max(d - rp, 0.0) / 0.8) + 0.1 * exp(-d / 2.5)) * exp(-0.25 * tt) * uCpd[0].w;
   }
-  return vec4(em * uCpd.w, tt) * uPlV.w;
+  return vec4(em, tt) * uPlV.w;
 }
 
 // Quantities on the cut face at the point Rs (signed, along uSliceR) and z of the plane, with phi its azimuth:
@@ -2310,7 +3670,10 @@ vec4 planetLight(vec3 ro, vec3 rd, float aspect){
 // at 1 au, and ln tau* toward the star (the smooth disk, as for the irradiation). The same expressions as
 // the volume uses.
 const float LN10 = 2.302585;
-const float ENV_R = ${G(ENV.R)};
+// (round 15b) the wind and the envelope exclusive (EXCL in the script): x 1 (0 as before, data-excl="0"); y ln of the envelope's rho0
+// at the infall rate (the model's unit). envShare: the envelope's share of the place at (R, z) (the envelope map's b, a)
+uniform vec2 uExcl;
+float envShare(float R, float z){ vec4 e = texture(uEnvMap, vec2((log(max(length(vec2(R, z)), 0.5)) - LNE_MIN) / LNE_SPAN, abs(atan(z, R)) / (0.5 * PI))); return z >= 0.0 ? e.b : e.a; }
 vec3 sliceQuantities(float Rs, float z, float phi){
   float R = max(abs(Rs), 1e-3), lnR = log(R), H = H0 * exp(1.25 * lnR), zh = z / H;
   float x = clamp(xRim(R, abs(z), LNTAU1 - 1.25 * lnR - cutOut(R) + gapLn(R) - 0.5 * zh * zh), -30.0, 30.0);
@@ -2319,12 +3682,21 @@ vec3 sliceQuantities(float Rs, float z, float phi){
   float gasIn = uMag * max(smoothstep(MAG_RT * 0.95, MAG_RT * 1.08, R) - smoothstep(R_IN * 0.8, R_IN * 1.3, R), 0.0);
   // (Disk Lab v2, round 6: the wind map carries the volume's fade toward the top and the side of the marched cylinder,
   // a choice for the picture (see WINDMAP_FS); the face shows the solution, so the soft part of that fade, which took
-  // the wind's density down by up to 2.4 dex in the outer quarter of the cylinder, is taken back out here. The last 15 %
-  // of the fade remains, at the cylinder's edge, where the face ends.)
-  float wEdge = 5.0 * smoothstep(0.55 * ZB, ZB, abs(z)) + 5.0 * smoothstep(0.55 * RB, RB, R);
+  // the wind's density down by up to 3.9 dex in the outer quarter of the cylinder (round 19a continued: up from 2.4 dex,
+  // so the exposure's new rise for dim views does not bring the cylinder's edge back into view), is taken back out here.
+  // The last 15 % of the fade remains, at the cylinder's edge, where the face ends.)
+  float wEdge = 9.0 * smoothstep(0.55 * ZB, ZB, abs(z)) + 9.0 * smoothstep(0.55 * RB, RB, R);
   float rho = (Sigma(R, lnR) + gasIn * exp(-lnR - cutOut(R) + gapLn(R))) / (2.5066 * H) * exp(-0.5 * zh * zh) * diskMap(lnR, phi).r * eddies(lnR, phi, zh).x
+#ifndef TURB3D_OFF
+            * turbZ(lnR, phi, zh)   // (round 18m: the face's density as the volume's, see turbZ)
+#endif
             + exp(w.w + wEdge + gapLn(exp(w.x))) * (z > 0.0 ? 1.0 : uWindLow);
-  return vec3(uSliceQ == 1 ? tempAt(R, lnR, zh, x) : 0.0, log(max(rho, 1e-30) * ${G(Math.sqrt(2 * Math.PI) * MODEL.H0)}) / LN10, x);
+  // (round 15b) with the exclusion, the envelope's gas where it holds the place: Ulrich's density at the infall rate (uExcl.y), not
+  // the model look's picture (ENV_RHO); before, the face showed the disk and the wind alone
+  if (uExcl.x > 0.5) { float re = length(vec2(R, z)); rho += exp(uExcl.y + texture(uEnvMap, vec2((log(max(re, 0.5)) - LNE_MIN) / LNE_SPAN, abs(atan(z, R)) / (0.5 * PI))).r) * envShare(R, z); }
+  // (round 18b: the temperature in the crest's shadow, xCrest; the faces stay where the gas's own depth, x, puts them: in the
+  // shadow beyond the gas the starlight's depth stays high where there is nothing to paint)
+  return vec3(uSliceQ == 1 ? tempAt(R, lnR, zh, max(x, xCrest(R, abs(z)))) : 0.0, log(max(rho, 1e-30) * ${G(Math.sqrt(2 * Math.PI) * MODEL.H0)}) / LN10, x);
 }
 // The stretch (tIn, tOut) of the ray in the part cut away (empty when tIn >= tOut): the intersection of the two
 // half-spaces dot(p, n_i) > uSliceOff, so a single stretch, as the part is convex. (A camera within 1e-5 of its distance
@@ -2362,6 +3734,22 @@ vec3 cmap(float t, bool inferno){
   t = clamp(t, 0.0, 1.0) * 10.0; int i = min(int(t), 9);
   return inferno ? mix(INFERNO[i], INFERNO[i + 1], t - float(i)) : mix(VIRIDIS[i], VIRIDIS[i + 1], t - float(i));
 }
+// (Round 19e, the visual review: the cut faces' own colour maps, see CUT in the script) The temperature's and the density's
+// faces in the maps of CUT.T and CUT.RHO: straight lines between their stops in display values, as the key's bar draws them
+// (cutMapJS). cutT at the temperature T (the stops even in ln T over CUT.TR), cutRho at the bar's t (log10 of the density from
+// -10 to 2.5). Not with CUT_OLD (data-cutlook="old"): the faces of before (tcolor, viridis).
+#ifndef CUT_OLD
+const vec3 CUT_T[${CUT.T.length}] = vec3[${CUT.T.length}](${CUT.T.map(cutV3).join(', ')});
+const vec3 CUT_RHO[${CUT.RHO.length}] = vec3[${CUT.RHO.length}](${CUT.RHO.map(cutV3).join(', ')});
+vec3 cutT(float T){
+  float t = clamp(log(max(T, 1.0) / ${G(CUT.TR[0])}) / ${G(Math.log(CUT.TR[1] / CUT.TR[0]))}, 0.0, 1.0) * ${G(CUT.T.length - 1)}; int i = min(int(t), ${CUT.T.length - 2});
+  return mix(CUT_T[i], CUT_T[i + 1], t - float(i));
+}
+vec3 cutRho(float t){
+  t = clamp(t, 0.0, 1.0) * ${G(CUT.RHO.length - 1)}; int i = min(int(t), ${CUT.RHO.length - 2});
+  return mix(CUT_RHO[i], CUT_RHO[i + 1], t - float(i));
+}
+#endif
 // The regions of the coupling (quantity 4, 'layers'; see NONIDEAL and ACC), in flat colours: below the wind's base (the
 // irradiation surface, tau* = 1) the strongly turbulent, thermally ionized inner disk, the dead zone (below z_k), the
 // laminar gas above it (and beyond it, the whole column) and the accretion layer(s) in it (within 1.2 ACC_W of their
@@ -2373,22 +3761,36 @@ vec3 cmap(float t, bool inferno){
 // (round 8: no "laminar" region: the dead zone, the accretion layer and the wind are all laminar. Between the accretion
 // layer and the wind's base lies the wind-launching region, LAY_BASE (the field opens and the gas is lifted slowly); with the
 // asymmetry the lower side's layer rises, and under it the field is wound one way by the Hall effect, LAY_HALL; see ACC)
+// (Round 19e, the visual review: the regions' colours from the script's table CUT.LAY, and the opacities of the see-through
+// ones, CUT.A; with CUT_OLD, data-cutlook="old", the colours of before, which follow as they were)
+#ifdef CUT_OLD
 const vec3 LAY_MRI = vec3(0.88, 0.47, 0.27), LAY_DEAD = vec3(0.15, 0.19, 0.34), LAY_BASE = vec3(0.36, 0.62, 0.70), LAY_ACC = vec3(1.0, 0.71, 0.28), LAY_WIND = vec3(0.64, 0.85, 0.95);
 const vec3 LAY_HALL = vec3(0.54, 0.60, 0.36);
 const vec3 LAY_JET = vec3(1.0, 0.42, 0.36);   // (round 8: the jet, within its half width at half maximum)
 const vec3 LAY_WEAK = vec3(0.73, 0.56, 0.60);   // (Disk Lab v2: the weakly turbulent outer disk, outerAmp)
+const vec3 LAY_ENV = vec3(0.549, 0.451, 0.651);   // (round 15b: the envelope, where its infall holds the place, see EXCL)
+const float LAY_A_WIND = 0.5, LAY_A_JET = 0.8, LAY_A_ENV = 0.5, LAY_A_MAG = 0.6, LAY_A_STREAM = 0.9;
+#else
+const vec3 LAY_MRI = ${cutV3(CUT.LAY.MRI)}, LAY_DEAD = ${cutV3(CUT.LAY.DEAD)}, LAY_BASE = ${cutV3(CUT.LAY.BASE)}, LAY_ACC = ${cutV3(CUT.LAY.ACC)}, LAY_WIND = ${cutV3(CUT.LAY.WIND)};
+const vec3 LAY_HALL = ${cutV3(CUT.LAY.HALL)}, LAY_JET = ${cutV3(CUT.LAY.JET)}, LAY_WEAK = ${cutV3(CUT.LAY.WEAK)}, LAY_ENV = ${cutV3(CUT.LAY.ENV)};
+const float LAY_A_WIND = ${G(CUT.A.WIND)}, LAY_A_JET = ${G(CUT.A.JET)}, LAY_A_ENV = ${G(CUT.A.ENV)}, LAY_A_MAG = ${G(CUT.A.MAG)}, LAY_A_STREAM = ${G(CUT.A.STREAM)};
+#endif
 // Close to the star (uMag), the magnetosphere's regions (see MAG) at p3 (alpha 0 elsewhere): the region of the
 // closed lines inside the disk's inner edge (no disk there: the cavity), the curtains' cross-section (the lines L =
 // MAG_RT to MAG_RT (1 + MAG_DL) where the gas falls, where a curtain is denser than 0.3 of its middle, as in magColumn)
 // and (gas) the dust-free gas disk between the magnetosphere's edge and the dust's (within 2 H of the midplane); inside
 // the dust's edge nothing else (the face is open there, as from afar). On every quantity's face, so that the curtains
 // are not taken for the disk's own flows: labelled in the overlay.
+#ifdef CUT_OLD
 const vec3 LAY_MAG = vec3(0.60, 0.48, 0.86), LAY_STREAM = vec3(1.0, 0.36, 0.50);
+#else
+const vec3 LAY_MAG = ${cutV3(CUT.LAY.MAG)}, LAY_STREAM = ${cutV3(CUT.LAY.STREAM)};   // (round 19e, see CUT)
+#endif
 vec4 magFace(float R, float z, vec3 p3, bool gas){
   float r = length(p3), cz = dot(p3, uMagAxis) / max(r, 1e-6), L = r / max(1.0 - cz * cz, 1e-5), u = (L / MAG_RT - 1.0) / MAG_DL;
-  if (u < 0.0) return vec4(LAY_MAG, 0.6);
+  if (u < 0.0) return vec4(LAY_MAG, LAY_A_MAG);
   float phm = atan(dot(p3, cross(uMagAxis, uMagE1)), dot(p3, uMagE1)), dph = cz > 0.0 ? phm : PI - abs(phm);
-  if (u < 1.0 && magAz(dph) * smoothstep(0.08, 0.3, abs(cz)) > 0.3) return vec4(LAY_STREAM, 0.9);
+  if (u < 1.0 && magAz(dph) * smoothstep(0.08, 0.3, abs(cz)) > 0.3) return vec4(LAY_STREAM, LAY_A_STREAM);
   // (the dust-free gas disk on the regions' face: thermally ionized and turbulent, the inner disk's region, not one of its
   // own; round 6, as the legend's categories are by the coupling, not by the dust)
   if (gas && R > MAG_RT && R < R_IN * 1.05 && abs(z) < 2.0 * H0 * pow(R, 1.25)) return vec4(LAY_MRI, 1.0);
@@ -2398,8 +3800,9 @@ vec4 layersFace(float R, float z, vec3 q){
   float H = H0 * pow(R, 1.25), zh = abs(z) / H, zb = zBase(R) / H, zk = zKinkH(R), f = asymF();
   bool low = z < 0.0;
   float za = low ? zAccLow(R, f) : zAccH(R);
-  if (uJet > 0.0 && abs(z) > JET_Z0 && R < jetR(abs(z))) return vec4(LAY_JET, 0.8);   // (round 8: the jet along the axis)
-  if (zh > zb || q.z < -4.0) return vec4(LAY_WIND, 0.5 * smoothstep(-11.5, -10.5, q.y));
+  if (uJet > 0.0 && abs(z) > JET_Z0 && R < jetR(abs(z))) return vec4(LAY_JET, LAY_A_JET);   // (round 8: the jet along the axis)
+  // (round 19e: the opacities by name, LAY_A_*, 0.8 and 0.5 written here before)
+  if (zh > zb || q.z < -4.0) { bool env = uExcl.x > 0.5 && envShare(R, z) > 0.5; return vec4(env ? LAY_ENV : LAY_WIND, (env ? LAY_A_ENV : LAY_A_WIND) * smoothstep(-11.5, -10.5, q.y)); }   // (round 15b: the envelope where it holds the place, EXCL)
   // (round 8, from the midplane up: the dead zone, the accretion layer where the field bends, the wind-launching region, the
   // wind; the turbulent inner disk and the weakly turbulent outer disk, with the layer at the midplane there)
   vec3 c = LAY_BASE;
@@ -2425,8 +3828,14 @@ vec4 sliceFace(vec3 pc){
   // quantity, on the layers' face its colour)
   vec4 m = uSliceQ > 0 && uMag > 0.0 && R < R_IN * 1.05 ? magFace(R, z, vec3(pc.xy, z), uSliceQ == 4) * vec4(1.0, 1.0, 1.0, uMag) : vec4(0.0);
   if (m.a > 0.0) return m;
+#ifdef CUT_OLD
   if (uSliceQ == 1) return vec4(0.92 * pow(tcolor(q.x), vec3(1.0 / 2.2)), smoothstep(-6.0, -4.5, q.z) * holeG);
   if (uSliceQ == 2) return vec4(cmap((q.y + 10.0) / 12.5, false), smoothstep(-10.5, -9.5, q.y));
+#else
+  // (Round 19e, the visual review: the faces' own maps, cutT and cutRho, in place of the volume's tcolor and of viridis)
+  if (uSliceQ == 1) return vec4(cutT(q.x), smoothstep(-6.0, -4.5, q.z) * holeG);
+  if (uSliceQ == 2) return vec4(cutRho((q.y + 10.0) / 12.5), smoothstep(-10.5, -9.5, q.y));
+#endif
   if (uSliceQ == 4) return layersFace(R, z, q) * vec4(1.0, 1.0, 1.0, hole);
   return vec4(0.0);
 }
@@ -2436,10 +3845,11 @@ vec4 sliceFace(vec3 pc){
 // model's line is CO's): a rotational line of carbon monoxide at millimetre wavelengths, as a channel map or as
 // moment maps. The gas emits in local thermodynamic equilibrium at its temperature (the brightness temperature, in K,
 // in the Rayleigh-Jeans limit). The line is optically thick: what is seen at a velocity comes from where the line's
-// optical depth along the ray, at that velocity, reaches about one, high in the disk (with the line-centre opacity
-// K_CO, the line's tau = 1 seen face-on lies at 3.6 H at 1 au, a little below the irradiation surface, where the gas is
-// between the interior's temperature and the surface's). The local profile is a Gaussian of thermal and turbulent
-// width (0.27 km/s at 100 K, so the full width is about the sound speed). The velocity along the ray (km/s, positive
+// optical depth along the ray, at that velocity, reaches about one, high in the disk (with the line's opacity K_CO, the
+// line's tau = 1 seen face-on lies at 3.5 H at 1 au, a little below the irradiation surface, where the gas is between the
+// interior's temperature and the surface's). The local profile is a Gaussian of the molecules' thermal motion (sigma
+// 0.17 km/s at 100 K, a full width of 0.41 km/s, 0.7 of the sound speed) and the gas's turbulent motion where the model
+// has turbulence (round 10c, see CO_TH2), normalized by its area (CO_WREF). The velocity along the ray (km/s, positive
 // away from the observer) is the gas's: Keplerian rotation for a star of one solar mass, a little slower above the
 // midplane and with the pressure gradient (the planet's gap makes it wiggle), the radial push of the planet's wake, the
 // inflow of the accretion layer(s), and in the wind its flow along the field lines (from the wind's velocity map),
@@ -2465,9 +3875,35 @@ uniform float uCoV;          // the channel's velocity (km/s)
 uniform float uCoRange;      // the range of the moment-1 colours (km/s)
 uniform float uCoK;          // the channel map's and moment 0's range, relative to CO_TB and CO_M0 (see coAim in the script)
 uniform sampler2D uWindVel;  // the wind's velocity (see WINDMAP_FS)
-const float K_CO = 6000.0, CO_WIND = 0.3, CO_TB = 220.0, CO_M0 = 900.0, CO_MASK = 0.02;
+const float K_CO = 6000.0, CO_WIND = 0.3, CO_TB = 220.0, CO_M0 = ${G(CO_M0_JS)}, CO_MASK = 0.02;
 const vec2 CO_SH = vec2(-7.0, -10.0);   // the CO: shielded above e^-7 of the density, dissociated below e^-10
 const int CO_Q = ${CO_Q};
+// (round 10c) The line's width (ver2/docs/gas-line-r10.md, 1 and 2): sigma^2 = kT / m_CO + alpha_t c_s^2, the molecules'
+// thermal motion and the gas's turbulent motion, with c_s^2 = kT / mu m_H from the local temperature (not from the model's H,
+// drawn 1.8 times as thick as the temperature holds it: see MODEL). CO_TH2 = k / m_CO (m_CO = 28.0101 u) and CO_CS2 = k / mu m_H
+// (mu = 2.34), in (km/s)^2 per K. alpha_t from the model's own regions (coAlpha): CO_ALPHA, its value in the thermally ionized
+// inner disk (THERMO.ALPHA, the alpha of its viscous heating), in the dead zone and in the outer disk (that alpha times the
+// squares of DZ_TURB and OUTER_TURB, the model's density fluctuations there relative to the inner disk's: delta v / c_s ~
+// delta rho / rho for the waves and the weak turbulence that stir them); the accretion layers, the wind-launching region and the
+// wind are laminar. The outer disk's 0.03 c_s is within the upper limits measured in CO at 2 to 3 H in four disks, 0.05 to
+// 0.12 c_s (Flaherty et al. 2015 to 2020). Until round 10c the width was sqrt(0.000625 T + 0.011): a thermal width with 0.3 c_s
+// of turbulence and 0.011 (km/s)^2 more of it, the turbulence counted twice (alpha 0.1 to 0.25); the new width is 0.43 to 0.72
+// of it, mostly 0.6 to 0.66, and the turbulence widens it by 6 % in the inner disk, by under 1 % elsewhere
+const float CO_TH2 = 2.9684e-4, CO_CS2 = 3.5255e-3;
+#ifdef MP_CONST
+const vec3 CO_ALPHA = vec3(${G(THERMO.ALPHA)}, ${G(+(THERMO.ALPHA * NONIDEAL.DZ * NONIDEAL.DZ).toPrecision(4))}, ${G(+(THERMO.ALPHA * NONIDEAL.OUTER * NONIDEAL.OUTER).toPrecision(4))});
+#else
+// (round 14a: the inner disk's alpha a parameter, the others in their ratios to it; see mpValues)
+#define CO_ALPHA uMP[1].xyz
+#endif
+// (round 10c) The profile normalized by its area: K_CO is the line-centre opacity (per au, per unit of the relative density) of
+// a line CO_WREF wide, and a line w wide has K_CO CO_WREF / w at its centre: the same opacity in all whatever the width (the
+// number of molecules sets it; the level populations' change with temperature left out, as the model leaves it out). CO_WREF,
+// the thermal width at the line's face-on tau = 1 height at 1 au (212 K), keeps the line-centre opacity there as it was.
+// Until round 10c the profile's peak was K_CO whatever the width, so that a narrower line took less opacity in all
+// (gas-line-r10.md, 5): now the cold outer disk's narrow line is thicker at its centre (its tau = 1 about 0.1 H higher at 30
+// au) and the hot inner disk's broad line thinner
+const float CO_WREF = 0.251;
 // erf, to 1.5e-7 (Abramowitz & Stegun 7.1.26)
 vec4 erfA(vec4 x){
   vec4 a = abs(x), t = 1.0 / (1.0 + 0.3275911 * a);
@@ -2475,8 +3911,8 @@ vec4 erfA(vec4 x){
 }
 // the gap's slope d ln Σ / d ln R (for the pressure gradient)
 float gapSlope(float R){ return gapT(R).y; }
-// the gas at p for the CO line: CO density (relative), temperature (K), velocity along rd (km/s), line width (km/s:
-// thermal and turbulent, sigma^2 = (0.025 sqrt(T))^2 + 0.011)
+// the gas at p for the CO line: CO density (relative; since round 10c times CO_WREF over the line width, so that K_CO times it
+// is the line-centre opacity: see CO_WREF), temperature (K), velocity along rd (km/s), line width (sigma, km/s: see CO_TH2)
 // (round 9) a ray's counts for diskRayProbe: iterations, gas samples, groups' updates (see CO_MARCH_GLSL)
 float coNIt = 0.0, coNGas = 0.0, coNGrp = 0.0;
 #ifdef CO_STUDY
@@ -2492,25 +3928,63 @@ vec4 coBinProfile(vec4 vv, float uA, float uB, float w, float bw, bool wide, flo
 }
 #endif
 const float CO_SKIP = 6.0;   // (round 9, rec: a group of velocities this many widths outside a segment's sweep is skipped)
+// (round 10c) alpha_t at R and z/H zh (see CO_TH2), joined smoothly across the regions' edges (over 0.25 H, as the regions' face,
+// layersFace, has them, and the accretion layer's ACC_W): the inner disk's wherever the magnetorotational instability stirs the
+// whole column (mriAmp); elsewhere the dead zone's below its top z_k and the outer disk's weak turbulence (outerAmp) above it,
+// none in the accretion layers (zu, zl: the offsets from the upper and the lower one in ACC_W, as coGas has them) nor above the
+// irradiation surface (zBase; lnR, cut: coGas's ln R and cutOut(R))
+float coAlpha(float R, float lnR, float cut, float zh, float zu, float zl){
+  float az = abs(zh), m = mriAmp(R), zk = zKinkH(R), zb = sqrt(2.0 * max(LNTAU1 - 1.25 * lnR - cut, 1.0));   // (zb: zBase(R) / H)
+  float dead = smoothstep(0.0, 0.5, zk) * (1.0 - smoothstep(zk - 0.25, zk + 0.25, az));
+  float acc = accAmp(R) * exp(-0.5 * min(zu * zu, zl * zl));
+  float disk = 1.0 - smoothstep(zb - 0.25, zb + 0.25, az);
+  return disk * (m * CO_ALPHA.x + (1.0 - m) * (dead * CO_ALPHA.y + (1.0 - dead) * outerAmp(R) * CO_ALPHA.z) * (1.0 - acc));
+}
+// (Round 15b, the owner: "the gas line from the envelope too") The envelope's gas (uCoEnv: its button's fade, 0 with data-coenv="0",
+// the page's ?coenv=0): Ulrich's density at the infall rate (uExcl.y, as the cut's density face; not the model look's picture,
+// ENV_RHO) where the envelope holds the place (envShare, the exclusion; everywhere without it), the CO as the disk's (no
+// dissociation: its own column shields it from outside, and at T = tSurf(r), 93 K at 100 au, it stays above CO's 20 K
+// freeze-out), moving with the infall (ENV's parabolic streamlines: v_r, v_theta, v_phi from mu0, envMu0), at the temperature of
+// small grains in the star's light (tSurf, the model look's envelope), its line's width the thermal one with the place's alpha
+// (none above the disk). Mixed as the wind's gas is: its density always, its velocity and temperature where it is more than 1e-3
+// of the disk's. Taken only beyond 3 au and where the disk's gas is under 1e3 times the envelope's most there (rho0 20 (r /
+// r_c)^-3/2): inside, the cavity and the wind hold the place and the infall has landed on the disk; in the dense disk it adds
+// nothing. gCoEnvDom, the envelope's share of the gas at the last sample: the march does not halve its steps where it is most
+// (see CO_BODY: a thin gas, about 0.1 of opacity a step at most, whose velocity sweep the erf profile takes whole)
+uniform float uCoEnv;
+float gCoEnvDom = 0.0;
 vec4 coGas(vec3 p, vec3 rd){
   coNGas += 1.0;
   float R = max(length(p.xy), 1e-3), lnR = log(R), H = H0 * exp(1.25 * lnR), zh = p.z / H, az = abs(p.z);
   float cut = cutOut(R), gl = gapLn(R), phi = atan(p.y, p.x);
-  float x = clamp(LNTAU1 - 1.25 * lnR - cut + gl - 0.5 * zh * zh, -30.0, 30.0);
+  float x = clamp(max(LNTAU1 - 1.25 * lnR - cut + gl - 0.5 * zh * zh, xCrest(R, az)), -30.0, 30.0);   // (round 18b: the crest's shadow, xCrest)
   vec4 dm = diskMap(lnR, phi);
   // (the gas disk reaches the magnetosphere's edge MAG_RT, inside the dust's)
   float rhoD = exp(-lnR - cut + gl - 0.5 * zh * zh) * smoothstep(MAG_RT * 0.95, MAG_RT * 1.08, R) / (2.5066 * H) * dm.r * eddies(lnR, phi, zh).x;
+#ifndef TURB3D_OFF
+  rhoD *= turbZ(lnR, phi, zh);   // (round 18m: the gas's density as the volume's, see turbZ)
+#endif
   vec4 w = windMap(R, p.z);
   float r0w = exp(w.x), rhoW = exp(w.w) * gapFactor(r0w) * (p.z > 0.0 ? 1.0 : uWindLow) * smoothstep(R_IN, 2.5 * R_IN, r0w);
   float Td = tempAt(R, lnR, zh, x);   // (round 7: the model's temperature, see tempAt)
   vec2 er = vec2(cos(phi), sin(phi)), ep = vec2(-er.y, er.x);
   float vk = 29.78 * inversesqrt(R), h = H / R, cs = h * vk;
   // the disk: Keplerian at height z, (R/r)^3/2, with the pressure gradient (d ln P / d ln R = d ln Σ / d ln R - 7/4)
-  float vphi = vk * pow(1.0 + zh * zh * h * h, -0.75) * (1.0 + 0.5 * h * h * (-1.0 - P_OUT * cut + gapSlope(R) - 1.75));
+  float vphi = vk * pow(1.0 + zh * zh * h * h, -0.75) * (1.0 + 0.5 * h * h * (-1.0 - cutSlope(R) + gapSlope(R) - 1.75));
   // the planet's wake pushes the gas outward with its density excess (beyond the turbulent inner disk, where the disk
   // map's gas factor is the wake's); the accretion layer(s) flow inward
   float vR = R > 0.6 ? 0.5 * cs * (dm.r - 1.0) : 0.0;
   float zu = (zh - zAccH(R)) / ACC_W, zl = (zh + zAccLow(R, asymF())) / ACC_W;
+  // (round 13c, P-B': see MFLUX in the script) with the mass budget only its column moves at the layers' speed, a thin sheet
+  // on each layer, Sigma_s = Mdot_acc / 2 pi R sum_s w_s K_s c_s (c_s in au a year, (H/R) 2 pi R^-1/2), of density Sigma_s
+  // e^(-u^2/2) / (sqrt(2 pi) ACC_W H) within the gas there: the gas's mean inflow is K c_s times the sheet's share of its density
+  // (10^-3 to 10^-2 of K c_s at the layers' centres: the inflow all but leaves the gas line). Without it, round 8's inflow of
+  // the layers' whole gas
+  if (uMflux.x > 0.5) {
+    float ks = uAcc.x * uAccV.x + uAcc.y * uAccV.y;
+    float sh = ${G(+MFLUX.K.toPrecision(7))} * uMflux.z * exp(mfIV(R)) / (39.478418 * max(ks, 1e-3) * h * sqrt(R)) / (2.5066 * ACC_W * H * max(rhoD, 1e-30));
+    vR -= accAmp(R) * cs * (uAcc.x * uAccV.x * min(sh * exp(-0.5 * zu * zu), 1.0) + uAcc.y * uAccV.y * min(sh * exp(-0.5 * zl * zl), 1.0));
+  } else
   vR -= accAmp(R) * cs * (uAcc.x * uAccV.x * exp(-0.5 * zu * zu) + uAcc.y * uAccV.y * exp(-0.5 * zl * zl));
   vec3 v = vec3(vR * er + vphi * ep, 0.0);
   // (the components: the disk's gas and the wind's, each with its button; the velocity and the temperature are their
@@ -2524,16 +3998,40 @@ vec4 coGas(vec3 p, vec3 rd){
   float qE = length(vec2(R / RB_OBS, p.z / ZB_OBS));
   float rD = rhoD * uComp.x * smoothstep(CO_SH.y, CO_SH.x, log(max(rhoD, 1e-30)));
   float rW = CO_WIND * rhoW * uComp.w * smoothstep(CO_SH.y, CO_SH.x, log(max(rhoW, 1e-30)));
-  float rhoCO = (rD + rW) * (1.0 - smoothstep(0.75, 0.98, qE)), T = Td;
+  float rE = 0.0, rEv = 0.0, TE = 0.0;
+  vec3 vE = vec3(0.0);
+  gCoEnvDom = 0.0;
+  if (uCoEnv > 0.0) {
+    float r = length(p);
+    if (r > 3.0 && log(max(rhoD, 1e-30)) < uExcl.y + ${G(+Math.log(20).toFixed(6))} - 1.5 * log(r / R_C) + 6.9) {
+      vec4 e4 = texture(uEnvMap, vec2((log(r) - LNE_MIN) / LNE_SPAN, abs(atan(p.z, R)) / (0.5 * PI)));
+      rE = uCoEnv * exp(uExcl.y + e4.r) * (uExcl.x > 0.5 ? (p.z >= 0.0 ? e4.b : e4.a) : 1.0);
+      if (rE > 1e-3 * rD) {
+        float mu = az / r, sn = max(R / r, 1e-3), m0 = envMu0(r, mu), vkE = 29.78 * inversesqrt(r), c = clamp(mu / m0, 0.0, 1.0);
+        float vr = -vkE * sqrt(1.0 + c), vt = vkE * (m0 - mu) * sqrt((m0 + mu) / (m0 * sn * sn)), vp = vkE * sqrt(max(1.0 - m0 * m0, 0.0)) / sn * sqrt(1.0 - c);
+        vE = vec3((vr * sn + vt * mu) * er + vp * ep, sign(p.z) * (vr * mu - vt * sn));
+        rEv = rE; TE = tSurf(r);
+      }
+      gCoEnvDom = rE / max(rD + rW + rE, 1e-30);
+    }
+  }
+  float rhoCO = (rD + rW + rE) * (1.0 - smoothstep(0.75, 0.98, qE)), T = Td;
   if (rW > 1e-3 * rD) {
     vec4 wv = texture(uWindVel, vec2((0.5 * log(R * R + az * az) - LNW_MIN) / LNW_SPAN, 0.5 + atan(p.z, R) / PI));
     float vk0 = 29.78 * inversesqrt(r0w);
     vec3 vw = vec3((wv.x * er + wv.y * ep) * vk0, sign(p.z) * wv.z * vk0);
-    float rS = max(rD + rW, 1e-30);
-    v = (rD * v + rW * vw) / rS;
-    T = (rD * Td + rW * tSurf(sqrt(R * R + az * az))) / rS;   // (the wind's gas at the superheated grains' temperature in full starlight)
+    float rS = max(rD + rW + rEv, 1e-30);
+    v = (rD * v + rW * vw + rEv * vE) / rS;
+    T = (rD * Td + rW * tSurf(sqrt(R * R + az * az)) + rEv * TE) / rS;   // (the wind's gas at the superheated grains' temperature in full starlight)
+  } else if (rEv > 0.0) {
+    float rS = max(rD + rEv, 1e-30);
+    v = (rD * v + rEv * vE) / rS;
+    T = (rD * Td + rEv * TE) / rS;
   }
-  return vec4(rhoCO, T, dot(v, rd), sqrt(0.000625 * T + 0.011));
+  // (round 10c) the line's width from the temperature (the mixture's, where the wind's gas is mixed in) and the turbulence of
+  // the place (see CO_TH2), and the density scaled to the line-centre opacity of a line that wide (see CO_WREF)
+  float lw = sqrt((CO_TH2 + CO_CS2 * coAlpha(R, lnR, cut, zh, zu, zl)) * T);
+  return vec4(rhoCO * (CO_WREF / lw), T, dot(v, rd), lw);
 }
 // (round 9, at its end) The moments are drawn in passes (CO_PASSES in the script): each marches CO_P adjacent groups of
 // four of the CO_N velocities spread evenly over the ray's window (coGrid), and adds its sums (the intensities, and the
@@ -2664,6 +4162,17 @@ const vec3 MAG_COL = vec3(1.0, 0.36, 0.50);    // the curtains' glow
 const vec3 HOT_COL = vec3(0.76, 0.66, 1.0);    // the shocks where they land
 const vec3 CAV_COL = vec3(0.55, 0.45, 1.0);    // the closed magnetosphere's edge, faintly
 const float MAG_COLB = 9000.0, MAG_SURF = 3.0, MAG_GASB = 1.2, MAG_CAVB = 6.0;   // brightness: the curtains, the star's surface, the gas disk, the closed region's edge
+float dbg(int i, float d){ float v = i < 4 ? uDbg[i] : i < 8 ? uDbg2[i - 4] : uDbg3[i - 8]; return v == 0.0 ? d : v; }   // R19DBG
+// (Round 19b, the visual review: "the star is a flat cream ball, the curtains a flat, blown-out magenta") The stretch at main's end
+// is a logarithm of the luminance (asinh(L / 0.012) / 7.2): a factor of ten in the light is a third of the display's range, so a
+// sphere's shading, a factor of three from its centre to its limb, came out as a tenth of the range, and the star was flat.
+// unstretch: the light that the stretch shows as the linear colour c (its luminance's asinh undone, the hue kept), so that what
+// is shaded in the display's own (linear) values, as a photograph of the star would be, is shown so. For the star's surface and
+// its halo (magSurface, magLight).
+vec3 unstretch(vec3 c){
+  float Ld = clamp(dot(c, LUMW), 1e-5, 2.0);
+  return c * (0.012 * sinh(7.2 * pow(Ld, 0.4545)) / Ld);
+}
 // The accretion curtains' light at p, per unit length (the funnel flow of Hartmann, Hewett & Calvet 1994): the gas
 // leaving the ring at the disk's inner edge along the closed lines L = MAG_RT to MAG_RT (1 + MAG_DL) and falling freely
 // onto the star, toward the north magnetic pole where the magnetic azimuth is near 0 (the side the dipole tilts to) and
@@ -2681,7 +4190,10 @@ vec3 magColumn(vec3 p){
   if (r < MAG_RS || r > MAG_R) return vec3(0.0);
   float cz = dot(p, uMagAxis) / r, s2 = max(1.0 - cz * cz, 1e-5), L = r / s2, u = (L / MAG_RT - 1.0) / MAG_DL;
   if (u >= 1.0) return vec3(0.0);
-  if (u <= 0.0) return u < -0.8 ? vec3(0.0) : (uLook == 0 ? MAT_MAG : CAV_COL) * (MAG_CAVB * exp(u * MAG_DL / 0.06) * smoothstep(0.0, 0.15, abs(cz)) * smoothstep(MAG_RS, 1.5 * MAG_RS, r));   // (the closed region's edge)
+  if (u <= 0.0) {
+    float q = MAG_RS / r, edge = u < -0.8 ? 0.0 : dbg(9, 4.0) * exp(u * MAG_DL / 0.06) * smoothstep(0.0, 0.15, abs(cz));
+    return (uLook == 0 ? MAT_MAG : CAV_COL) * ((edge + dbg(5, 60.0) * pow(q, dbg(8, 4.0)) * (0.5 + 0.5 * cz * cz)) * smoothstep(MAG_RS, 1.5 * MAG_RS, r));   // (the closed region's edge)
+  }
   float phm = atan(dot(p, cross(uMagAxis, uMagE1)), dot(p, uMagE1)), dph = cz > 0.0 ? phm : PI - abs(phm);   // (from the curtain's middle)
   float w = magAz(dph) * sin(PI * u) * smoothstep(0.08, 0.3, abs(cz));   // (lifting off the disk near the magnetic equator)
   if (w < 1e-3) return vec3(0.0);
@@ -2689,7 +4201,8 @@ vec3 magColumn(vec3 p){
   float rho = sqrt(1.0 + 3.0 * cz * cz) / (x * x * x) * vs / max(v, 0.1 * vs);
   float tff = sqrt(L * L * L / (2.0 * GM_V)) * (sqrt(x * (1.0 - x)) + acos(sqrt(x)));
   float n = vnoise3(vec3(phm / TAU * MAG_CELLS.x, u * MAG_CELLS.y, (uMagT - tff) / MAG_PULSE), MAG_CELLS.x);
-  return (uLook == 0 ? MAT_CURT : MAG_COL) * (MAG_COLB * w * pow(rho / 500.0, 1.2) * exp(MAG_FL * n - 0.0171 * MAG_FL * MAG_FL));
+  float fl2 = dbg(4, 1.4), n2 = vnoise3(vec3(phm / TAU * 48.0, u * 3.0, (uMagT - tff) / (2.5 * MAG_PULSE)), 48.0), e = w * rho / 500.0;
+  return (uLook == 0 ? MAT_CURT : MAG_COL) * (dbg(3, 10000.0) * e * sqrt(e) * exp(MAG_FL * n + fl2 * n2 - 0.0171 * (MAG_FL * MAG_FL + fl2 * fl2)));
 }
 // the star's surface at the unit normal nrm: the photosphere (limb darkened) and the hot spots where the curtains land:
 // arcs (parts of rings) at the colatitudes where the lines L meet the surface (sin^2 theta = MAG_RS / L), as wide in
@@ -2698,17 +4211,26 @@ vec3 magSurface(vec3 nrm, vec3 rd){
   float mu = max(dot(nrm, -rd), 0.0), cz = dot(nrm, uMagAxis), s2 = max(1.0 - cz * cz, 1e-5), u = (MAG_RS / s2 / MAG_RT - 1.0) / MAG_DL;
   float phm = atan(dot(nrm, cross(uMagAxis, uMagE1)), dot(nrm, uMagE1)), dph = cz > 0.0 ? phm : PI - abs(phm);
   float spot = smoothstep(0.05, 0.4, magAz(dph)) * smoothstep(-0.25, 0.15, u) * (1.0 - smoothstep(0.85, 1.25, u));
-  return mix(STARCOL, HOT_COL * 2.8, spot) * MAG_SURF * (0.4 + 0.6 * mu);
+  vec3 ns = vec3(dot(nrm, uMagE1), dot(nrm, cross(uMagAxis, uMagE1)), cz);
+  float nz = vnoise3(ns * 1.7 + 16.5, 64.0);
+  float cool = smoothstep(0.55, 1.0, abs(cz) + 0.2 * nz);
+  vec3 phot = STARCOL * (dbg(0, 0.95) * (1.0 - dbg(1, 1.2) * vec3(0.60, 0.68, 0.76) * (1.0 - mu))) * mix(vec3(1.0), vec3(0.50, 0.40, 0.33), cool * dbg(7, 0.5));
+  vec3 hot = HOT_COL * (dbg(10, 3.0) * (0.7 + 0.3 * mu) * (0.5 + 0.5 * magAz(dph)));
+  return unstretch(mix(phot, hot, spot));
 }
 // the dust-free gas disk between the magnetosphere's edge MAG_RT and the dust's sublimation radius R_IN, where the ray
 // crosses the midplane (cosi: |rd.z|): hot gas, about 1500 K, glowing faintly (its emission per unit area over the
 // cosine of the crossing, at most 20 times)
 // (its inner edge at the truncation, the wall the curtains rise from, brighter: where the disk ends shows)
-vec3 magGasDisk(float R, float cosi){
+vec3 magGasDisk(vec2 pm, float cosi){
+  float R = length(pm);
   // (round 7: lowered by the planets' gaps, which reach it from planets close to the star)
   float a = smoothstep(MAG_RT * 0.97, MAG_RT * 1.05, R) * (1.0 - smoothstep(R_IN * 0.85, R_IN * 1.25, R)) * gapFactor(R);
-  float wall = 1.0 + 2.5 * exp(-pow((R - MAG_RT * 1.04) / (0.05 * MAG_RT), 2.0));
-  return a > 0.0 ? MAG_GASB * (uLook == 0 ? MAT_DISK : tcolor(1500.0)) * a * wall / max(cosi, 0.05) : vec3(0.0);   // (round 8: the disk's material in the model's look)
+  if (a <= 0.0) return vec3(0.0);
+  float xw = (R - MAG_RT * 1.04) / (0.05 * MAG_RT), wall = 1.0 + dbg(11, 0.7) * exp(-xw * xw);
+  float x = MAG_RT / max(R, MAG_RT), lnR = log(R), phi = atan(pm.y, pm.x), tex = diskMap(lnR, phi).r * eddies(lnR, phi, 0.0).x;
+  float S = dbg(2, 2.6) * x * x * x * wall * tex * (1.0 - exp(-0.5 * a / max(cosi, 0.05)));
+  return (uLook == 0 ? MAT_DISK : tcolor(1500.0)) * S;   // (round 8: the disk's material in the model's look)
 }
 // The magnetosphere laid in at the star's distance, as the star's light is (the disk in front dims it): the columns
 // (optically thin; not in the part cut away) and the star's surface (whole, also with the cutaway), which hides what lies
@@ -2743,6 +4265,10 @@ vec3 magLight(vec3 ro, vec3 rd, float jitter, vec3 starGlow, float tCut, vec2 tS
   }
   float tz = abs(rd.z) > 1e-6 ? -ro.z / rd.z : -1.0;
   vec3 surf = hit ? magSurface(normalize(ro + rd * bs.x), rd) * uStarK : vec3(0.0);
+  if (!hit) {
+    float tcs = -dot(ro, rd), q = MAG_RS * MAG_RS / max(dot(ro, ro) - tcs * tcs, MAG_RS * MAG_RS);
+    if (uLook <= 1 && tcs > 0.0 && q > 0.04) surf = unstretch(STARCOL * (dbg(6, 0.25) * q * q * smoothstep(0.04, 0.08, q))) * uStarK;
+  }
   if (uLook > 1) em = vec3(0.0);   // (the columns and the gas disk glow in the model's look and in scattered light only)
   em *= gasL();                    // (round 7: they are gas)
   return uMag * (em * uStarK + surf) + (hit ? 1.0 - uMag : 1.0) * starGlow;   // (uStarK: the magnetosphere keeps its own light through the automatic exposure)
@@ -2765,7 +4291,7 @@ void starAt(vec3 ro, vec3 rd, float jitter, vec3 starGlow, float tCut, vec2 tSki
 // march in kicks has no room to carry)
 void midplaneAt(vec3 ro, vec3 rd, float tz, inout vec3 col, inout vec3 tr, inout float cL){
 #ifdef FULL
-  if (uMag > 0.0 && uLook <= 1) { vec3 e = tr * (uMag * uStarK * gasL()) * magGasDisk(length((ro + rd * tz).xy), abs(rd.z)); col += e; cL += dot(e, LUMW); }
+  if (uMag > 0.0 && uLook <= 1) { vec3 e = tr * (uMag * uStarK * gasL()) * magGasDisk((ro + rd * tz).xy, abs(rd.z)); col += e; cL += dot(e, LUMW); }
 #endif
   sheet(ro + rd * tz, rd, col, tr);
 }
@@ -2898,6 +4424,18 @@ bool coRun(vec3 ro, vec3 rd, vec2 bc, float tCross, float jitter, bool hit, vec3
   return false;
 }
 #endif
+#ifdef FAST_SKIP
+#ifndef FULL
+uniform sampler2D uFaceA;   // (round 16a: in this program the empty blocks' mask only, see uFast; in FULL also the cut face)
+#endif
+// (round 16a) whether the mask holds nothing at the block of fc (in pixels of uRes) nor at the eight blocks around it: one
+// block of margin, so that an edge between two of the coarse pass's rays is kept
+bool fastEmpty(vec2 fc){
+  ivec2 n = ivec2(uFast.zw), c = ivec2(fc * uFast.zw / uRes);
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) if (texelFetch(uFaceA, clamp(c + ivec2(i, j), ivec2(0), n - 1), 0).r > 0.5) return false;
+  return true;
+}
+#endif
 void main(){
   gFc = gl_FragCoord.xy;
 #ifdef FULL
@@ -2945,7 +4483,7 @@ void main(){
   vec3 sv = vec3(dot(-ro, uBasis[0]), dot(-ro, uBasis[1]), dot(-ro, uBasis[2]));
   vec2 spx = (vec2(sv.x / (sv.z * uTanHalf * aspect), sv.y / (sv.z * uTanHalf)) * 0.5 + 0.5) * uRes;
   float dpx = length(gFc - spx) / uPx;
-  vec3 starGlow = STARCOL * (40.0 * exp(-dpx * dpx / 1.2) + 0.4 * exp(-dpx / 2.0) + 0.02 / (1.0 + dpx * dpx / 50.0)) * uStar;
+  vec3 starGlow = STARCOL * (40.0 * exp(-dpx * dpx / 1.2) + 0.4 * exp(-dpx / 2.0) + 0.02 / (1.0 + dpx * dpx / 50.0) + STAR_HALO / (1.0 + dpx * dpx / 80.0) / (1.0 + roLen * roLen / 22500.0)) * uStar;
   float tStar = max(-dot(ro, rd), 0.0);
 
   // the cutaway: from a camera in the part cut away the ray enters the kept part at tCut, where it meets a cut face
@@ -2985,7 +4523,8 @@ void main(){
 #endif
 
   // (b0: the cylinder, the observed looks' smaller one (round 8, see RB_OBS); b: its part kept)
-  vec2 b0 = uLook == 0 ? boundsCyl(ro, rd) : boundsCylRZ(ro, rd, RB_OBS, ZB_OBS), b = b0;
+  // (round 18f: the continuum looks' own, OBS_CT; the millimetre's and the gas line's that of round 8)
+  vec2 b0 = uLook == 0 ? boundsCyl(ro, rd) : uLook <= 2 ? boundsCylRZ(ro, rd, OBS_CT_V.x, OBS_CT_V.y) : boundsCylRZ(ro, rd, RB_OBS, ZB_OBS), b = b0;
   b.x = max(b.x, tCut); b.y = min(b.y, tEnd);
   vec2 tSkip0 = tSkip;   // (the march clears tSkip once across)
 #ifdef FULL
@@ -3087,7 +4626,11 @@ void main(){
   // the midplane crossing may lie in the unlit outer disk, in front of or behind the marched part (or in the half cut away)
   bool sheetDone = tCross <= tCut || tCross >= tEnd || (tCross > tSkip.x && tCross < tSkip.y) || faceOpaque;
   bool starDone = false;
+  bool pebV = uPebH > 0.0 && (uLook == 0 || uLook == 3);   // (round 15b: the pebble layer as a volume in this look's march, see uPebH)
   float budget = 1e30;
+#ifdef FAST_SKIP
+  if (uFast.x == 1.0) budget = uFast.y;   // (round 16a: the coarse pass's ray, see uFast)
+#endif
   // (the wind's march in the part cut away, cutWind, while the ray is in it: its t, the place of its last sample, xPrev, wq,
   // wl and step)
   bool inCut = false;
@@ -3118,6 +4661,18 @@ void main(){
 #endif
   int nIt = 0, nLate = 0;   // (round 9, for diskRayProbe: the march's iterations, and those after the transmission fell under 1e-9)
 
+#ifdef FAST_SKIP
+  // (round 16a, see uFast) The coarse pass measures the volume alone: the parts the march adds analytically (the midplane's
+  // sheet, the planets' points of light, the jet's lobes, the star; the planet close up, whose frames never use the mask) are
+  // left out of its ray; a ray of an empty block in the volume pass goes at once to where the march adds them when it ends
+  // early (4), past the envelope in front and the cylinder
+  if (uFast.x == 1.0) {
+    sheetDone = true; starDone = true; tPGn = 1e9; jU.y = 1e9; jL.y = 1e9;
+#ifdef FULL
+    tPl = 1e9;
+#endif
+  } else if (uFast.x == 2.0 && ph == PH_ENV0 && fastEmpty(gFc)) ph = PH_BACK;
+#endif
   // (1) the envelope in front of the cylinder
   if (ph == PH_ENV0) {
     if (!envOn || envMarch(ro, rd, be.x, cyl ? min(b0.x, be.y) : be.y, jitter, i, col, tr, budget)) { ph = PH_CUT0; i = 0; }
@@ -3223,7 +4778,7 @@ void main(){
           if (t >= jL.y) { col += tr * jetLobe(ro, rd, -1.0, jj, true).x * jetCol(); jL.y = 1e9; budget -= KW_JET; }
 #ifdef FULL
           if (!starDone && t >= tStar) { starAt(ro, rd, jitter, starGlow, tCut, tSkip0, col, tr, cL); starDone = true; budget -= KW_STAR; }
-          if (t >= tPl) { vec4 pl = planetLight(ro, rd, aspect); col += tr * pl.rgb; tr *= exp(-pl.a); tPl = 1e9; budget -= KW_PL; }
+          if (t >= tPl) { vec4 pl = planetLight(ro, rd, aspect); col += tr * pl.rgb; tr *= exp(-pl.a * uOpac.x); tPl = 1e9; budget -= KW_PL; }
 #endif
           continue;
         }
@@ -3232,7 +4787,9 @@ void main(){
         // across the part cut away (see above)
         if (t1 > tSkip.x) { cutStart(ro, rd, tSkip.x, tc, tsc, xc, wqc, wlc, jc); inCut = true; break; }
 #endif
-        if (!sheetDone && t1 >= tCross) { midplaneAt(ro, rd, tCross, col, tr, cL); sheetDone = true; }
+        // (round 15b: with the layer as a volume, uPebH, the sheet stands aside at the crossing and the step takes its part of it)
+        if (!sheetDone && t1 >= tCross) { gPebVol = pebV; midplaneAt(ro, rd, tCross, col, tr, cL); gPebVol = false; sheetDone = true; }
+        if (pebV) pebSlab(ro, rd, t, t1, tCross, col, tr);
         if (t1 >= tPGn) { col += tr * cPG; tPGn = 1e9; }
         if (t1 >= jU.y) { col += tr * jetLobe(ro, rd, 1.0, jj, true).x * jetCol(); jU.y = 1e9; budget -= KW_JET; }
         if (t1 >= jL.y) { col += tr * jetLobe(ro, rd, -1.0, jj, true).x * jetCol(); jL.y = 1e9; budget -= KW_JET; }
@@ -3242,7 +4799,7 @@ void main(){
         if (!starDone && t1 >= tStar) { vec3 sg = tr * starGlow; col += sg; cL += dot(sg, LUMW); starDone = true; }
 #endif
 #ifdef FULL
-        if (t1 >= tPl) { vec4 pl = planetLight(ro, rd, aspect); col += tr * pl.rgb; tr *= exp(-pl.a); tPl = 1e9; budget -= KW_PL; }
+        if (t1 >= tPl) { vec4 pl = planetLight(ro, rd, aspect); col += tr * pl.rgb; tr *= exp(-pl.a * uOpac.x); tPl = 1e9; budget -= KW_PL; }
         // (the millimetre look: the volume neither emits nor absorbs there, only the pebble sheet and the star; skip its
         // samples. From origin/main's dc55d44)
         if (uLook == 3) { t = t1; continue; }
@@ -3254,7 +4811,11 @@ void main(){
         float ak = airK(t1);   // (round 8: the depth's haze, see AIR)
         col += tr * sk * ak;
         col += tr * em * ds * transferWeight(ex * ds) * ak;
+#ifndef SELF_OLD
+        if (gSelfJ > 0.0) gTb += gSelfJ * ds * dot(tr * transferWeight(ex * ds), LUMW);   // (round 18k: the own light's T_b, see gTb)
+#endif
         tr *= a;
+        gTauG += gExG * ds;   // (round 18f: the gas's column so far, for the skin's dimming, SKIN_LOS)
         xPrev = x; t = t1;
       }
       if (!inCut && i >= 32768) marchDone = true;   // (its last step taken as the loop ended: see cutWind's end)
@@ -3292,6 +4853,17 @@ void main(){
   if (ph == PH_ENV1) {
     if (!(cyl && be.y > b0.y) || envMarch(ro, rd, b0.y, be.y, jitter, i, col, tr, budget)) ph = PH_FINAL;
   }
+#ifndef SELF_OLD
+  // (round 18k) the own light, its brightness temperature shown (see selfLight; uSelf.y over G takes the outburst's brightening off,
+  // as uSelf.y did for the light of before). The model look's ray is drawn whole (not in kicks), so gTb is all of it here
+  if (uSelf.x > 0.0 && ph == PH_FINAL) col += selfLight(gTb) * selfTint(gTb) * (uSelf.y * ${G(1 / SELF_LOOK.G)});   // (round 18m: selfTint)
+#endif
+#ifdef FAST_SKIP
+  // (round 16a) the coarse pass's verdict, 1 for not empty: its ray not marched to the end within its budget, or its volume's
+  // light above a tenth of an 8-bit step at the dark end of the stretch (CONT_EPS, as the continuum's end), or its volume
+  // taking more than FAST_T of the light behind it
+  if (uFast.x == 1.0) { fragColor = vec4(ph == PH_FINAL && budget > 0.0 && maxChannel(col) * uExposure < CONT_EPS && min(tr.r, min(tr.g, tr.b)) > 1.0 - FAST_T ? 0.0 : 1.0); return; }
+#endif
   // (7) the display value: the sky behind, the exposure, the stretch
   if (ph == PH_FINAL && budget > 0.0) {
     // background: deep gradient with sparse faint stars (kept at the pixels' centres, so they stay crisp in a refined still)
@@ -3299,6 +4871,10 @@ void main(){
     // the others)
     vec3 sky = mix(vec3(0.0020, 0.0026, 0.0050), vec3(0.0040, 0.0056, 0.0130), smoothstep(-1.0, 1.0, uv0.y));
     vec3 dSky = normalize(uBasis[2] + uTanHalf * (uv0.x * aspect * uBasis[0] + uv0.y * uBasis[1])), bg = vec3(0.0);
+    // (round 13b, the owner: "the background need not move; over years the stars behind hardly move") turned back about
+    // the axis by the view's own turn with the clock (uBgTurn), the sky holds still in the picture while the clock turns
+    // the view, and turns as the view is turned (with no turn, (1, 0), the direction is the same to the bit)
+    dSky.xy = vec2(uBgTurn.x * dSky.x + uBgTurn.y * dSky.y, uBgTurn.x * dSky.y - uBgTurn.y * dSky.x);
     if (uBg == 1 || (uBg == 2 && uLook > 1)) bg = stars(dSky, pixA);
     else if (uBg == 2) {
       vec4 sk = texture(uSky, vec2(atan(dSky.y, dSky.x) / (2.0 * PI) + 0.5, asin(clamp(dSky.z, -1.0, 1.0)) / PI + 0.5));
@@ -3477,8 +5053,41 @@ void main(){
   // The field model again in JS, for the field lines and wind parcels drawn as vector strokes in the SVG
   // overlay (kept in step with FIELD_GLSL above).
   const ss = (a, b, x) => { const t = Math.min(Math.max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t); };
-  const cutOut = (R) => Math.pow(R / MODEL.R_OUT, MODEL.P_OUT);
-  const zBase = (Rf) => MODEL.H0 * Math.pow(Rf, 1.25) * Math.sqrt(2 * Math.max(MODEL.LNTAU1 - 1.25 * Math.log(Rf) - cutOut(Rf), 1));
+  // (round 18a: the taper of the gas's surface density and its slope d / d ln R, as cutOut and cutSlope in the GLSL; MODEL.TAIL.
+  // Round 18b: the Gaussian tail, (R / R_c)^2 and twice that; 18a's (R - 1 au) / R_c and R / R_c gave way to it)
+  const cutOut = (R) => (MODEL.TAIL ? (MODEL.PT === 2 ? (R / MODEL.RC) * (R / MODEL.RC) : Math.pow(R / MODEL.RC, MODEL.PT)) : Math.pow(R / MODEL.R_OUT, MODEL.P_OUT));   // (round 19a: MODEL.PT, the taper's exponent)
+  const cutSlope = (R) => (MODEL.TAIL ? MODEL.PT * cutOut(R) : MODEL.P_OUT * cutOut(R));
+  // (Round 18b, the owner: "the surface's rendering is off the gas's tail") The crest of the irradiated surface. The local surface
+  // z_s = H sqrt(2a), a = ln tau*_mid (the starlight's depth at the midplane), rises as z_s / R = h sqrt(2a) (h = H / R) while the
+  // disk flares, and turns over where the taper thins the disk: at the radius where a = 2.5 + 2 cutSlope (beta's first term is 0
+  // there; 18.7 au with the Gaussian tail). Beyond it the local estimate put the tail in the crest's shadow (beta 0.004 / R, the
+  // midplane at 16 K at 20 au) and yet drew its gas as lit above z_s, which falls to the midplane at 53 au: the lit surface ended
+  // at 19 au while the gas went on to 60 au. Read along rays from the star, the local tau* gathered e-fold by e-fold of R (DESIGN.md
+  // section 43.2), the starlight's depth at an angle th = |z| / R beyond the crest is at least the crest's at that angle (its
+  // shadow, as behind a gap's inner rim: xRim), and the tail goes on taking the starlight that passes over the crest. crestJS:
+  // the crest's radius R, its a and h, and its angle th = h sqrt(2a), to 6 digits as the shaders have them (CREST, see
+  // CONST_GLSL); null with the cut of before (MODEL.TAIL false), which keeps its picture. Memoised on R_c.
+  let crestMemo = null;
+  const crestJS = () => {
+    if (!MODEL.TAIL) return null;
+    if (crestMemo && crestMemo.rc === MODEL.RC && crestMemo.pt === MODEL.PT) return crestMemo;
+    const a = (R) => MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R);
+    let lo = 0.1, hi = 50 * MODEL.RC;
+    for (let i = 0; i < 100; i++) { const m = Math.sqrt(lo * hi); if (a(m) - 2.5 - 2 * cutSlope(m) > 0) lo = m; else hi = m; }
+    const R = Math.sqrt(lo * hi), h = MODEL.H0 * Math.pow(R, 0.25), r6 = (v) => +v.toPrecision(6);
+    crestMemo = { rc: MODEL.RC, pt: MODEL.PT, R: r6(R), a: r6(a(R)), h: r6(h), th: r6(h * Math.sqrt(2 * a(R))) };
+    return crestMemo;
+  };
+  // the crest's shadow (xCrest in the GLSL): ln tau* at least the crest's at the angle az / R beyond the crest, -Infinity inside it
+  const xCrestJS = (R, az) => { const c = crestJS(); if (!c || R <= c.R) return -Infinity; const th = az / R; return c.a - 0.5 * th * th / (c.h * c.h); };
+  // the starlight over the crest that the gas at R takes, per unit area (betaOver in the GLSL): its depth toward the star per
+  // e-fold of R at the crest's angle, tau*(R, th_c) = e^(a(R) - th_c^2 / 2 h^2), over the band of angles h^2 / th_c across which
+  // that depth falls by e, times MODEL.C_OVER. The ray-by-ray integration gives 0.6 of that from 30 to 70 au and 0.7 to 0.9
+  // nearer the crest; C_OVER 0.5, rounded down so that it overtakes the local beta only beyond 15 au (15.1 au; the disk inside
+  // keeps its temperature and its picture to the bit). 0 inside half the crest's radius, where it stays under the local beta for
+  // R_c from 5 to 200 au (at most 0.62 of it), and with the cut
+  const betaOverJS = (R) => { const c = crestJS(); if (!c || R <= 0.5 * c.R) return 0; const h = MODEL.H0 * Math.pow(R, 0.25); return MODEL.C_OVER / c.th * h * h * Math.exp(MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) - 0.5 * c.th * c.th / (h * h)); };
+  const zBase =(Rf) => MODEL.H0 * Math.pow(Rf, 1.25) * Math.sqrt(2 * Math.max(MODEL.LNTAU1 - 1.25 * Math.log(Rf) - cutOut(Rf), 1));
   const SigmaJS = (R) => Math.exp(-Math.log(R) - cutOut(R)) * ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, R);
   // (round 8) the pebbles' outer edge relative to the gas's (see MODEL.R_PEB)
   const pebEdge = (R) => Math.exp(cutOut(R) - Math.pow(R / MODEL.R_PEB, MODEL.P_OUT));
@@ -3492,7 +5101,8 @@ void main(){
   // (round 7) the temperature, as tempAt in the GLSL (see THERMO), at R, z/H and ln tau* x, for the star's luminosity lum
   // relative to its own; the midplane's; and the snow line, where the midplane is at TICE (bisection: it falls with R)
   const erfJS = (x) => { const x2 = x * x, a = 0.147; return Math.sign(x) * Math.sqrt(1 - Math.exp(-x2 * (1.2732395 + a * x2) / (1 + a * x2))); };
-  const betaIrrJS = (R) => { const c = cutOut(R), a = Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - c, 1); return Math.max(MODEL.H0 * Math.pow(R, 0.25) * Math.sqrt(2 * a) * (0.25 - (0.625 + 0.5 * MODEL.P_OUT * c) / a), 0) + 0.004 / R; };
+  // (round 18b: or the starlight over the crest where that is more, betaOverJS, as Eabs)
+  const betaIrrJS = (R) => { const c = cutOut(R), a = Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - c, 1); return Math.max(Math.max(MODEL.H0 * Math.pow(R, 0.25) * Math.sqrt(2 * a) * (0.25 - (0.625 + 0.5 * cutSlope(R)) / a), 0), betaOverJS(R)) + 0.004 / R; };
   const tInt4JS = (R, zh, lum = 1) => {
     const m = mriAmpJS(R), az = Math.abs(zh), u = 1 - erfJS(az * Math.SQRT1_2), za = zAccHJS(R), ua = Math.max(1 - erfJS(za * Math.SQRT1_2), 1e-6);
     const tm4 = THERMO.KM / (R * R * R) * (az < za ? 1 : (THERMO.TAU_HEAT * u / ua + 0.57735) / (THERMO.TAU_HEAT + 0.57735));
@@ -3503,6 +5113,59 @@ void main(){
   const tempJS = (R, zh, x, lum = 1) => { const t4 = tInt4JS(R, zh, lum); return subCapJS(Math.pow(t4 * Math.pow(t4, 0.25) + THERMO.KDS5 * lum / (R * R) * Math.exp(-Math.exp(Math.min(x, 20))), 0.2)); };
   const tMidJS = (R, lum = 1) => subCapJS(Math.pow(tInt4JS(R, 0, lum), 0.25));
   const snowR = (lum = 1) => { let lo = 0.05, hi = 30; for (let i = 0; i < 40; i++) { const m = Math.sqrt(lo * hi); if (tMidJS(m, lum) > MODEL.TICE) lo = m; else hi = m; } return Math.sqrt(lo * hi); };
+  // (round 12a) The probe (box.diskProbe): what the model has at a point, R (au, from the axis) and z (au, above the
+  // midplane) where ln tau* = x, in its own units and definitions, from the mirrors above (the same expressions as the
+  // shaders), for the gaps' ln gl at R, the star's luminosity lum, the asymmetry's share f (asymF in the GLSL), the sides
+  // that accrete w (uAcc: upper, lower) and the jet's presence jet (uJet):
+  //   T, Tmid (K): the temperature there and at the midplane (tempAt and tMid in the GLSL, see THERMO);
+  //   H (au): the scale height as drawn, H0 R^1.25; Hgas (au): the one the midplane's own temperature would hold up,
+  //     c_s / Omega (the disk is drawn about 1.8 times thicker, see MODEL); cs (km/s): the sound speed at T (mu = 2.34);
+  //   vK (km/s), P (yr): the Keplerian speed and the orbital period about one solar mass (on the model's clock 12 s a year);
+  //   sigmaRel, rhoRel: the gas's surface density relative to the model's at 1 au (Sigma with the gaps) and its density
+  //     relative to the midplane at 1 au, Sigma H0 / H e^(-z^2 / 2 H^2): the smooth disk of the cut's density face
+  //     (sliceQuantities), without the planets' wakes and the turbulence's fluctuations (diskMap.r and eddies: a few per cent,
+  //     about 10 per cent in the inner disk) and without the wind's gas (windMap: it dominates only above the irradiation
+  //     surface); sigma (g cm^-2), rho (g cm^-3), n (cm^-3): the same scaled to SIG1 = 1700 g cm^-2 at 1 au, the minimum-mass
+  //     nebula's value there, with which the model reckons its dead zone (see NONIDEAL; the model's own profile is R^-1);
+  //   zk (au): the dead zone's top (0 where there is none);
+  //   region: the one the regions' face paints there (layersFace, magFace, in their order; the envelope outside the marched
+  //     cylinder), with the rule that decides it; alpha: the turbulence's alpha_t the model uses there (coAlpha, round 10c:
+  //     the inner disk's THERMO.ALPHA, the dead zone's and the outer disk's scaled by the squares of their density
+  //     fluctuations, NONIDEAL.DZ and OUTER; none in the accretion layers, the wind-launching region and the wind);
+  //   vapour: whether water is vapour there (T above TICE) or ice on the grains.
+  const PROBE = { SIG1: 1700, au: 1.496e13, k: 1.3807e-16, mH: 1.6726e-24, mu: 2.34, vK1: Math.sqrt(6.674e-8 * 1.989e33 / 1.496e13) / 1e5 };
+  const coAlphaJS = (R, zh, f = 0) => {
+    const az = Math.abs(zh), m = mriAmpJS(R), zk = zKinkHJS(R), zb = zBase(R) / Hof(R);
+    const zu = (zh - zAccHJS(R)) / ACC.W, zl = (zh + zAccLowJS(R, f)) / ACC.W;
+    const dead = ss(0, 0.5, zk) * (1 - ss(zk - 0.25, zk + 0.25, az)), acc = accAmpJS(R) * Math.exp(-0.5 * Math.min(zu * zu, zl * zl));
+    const disk = 1 - ss(zb - 0.25, zb + 0.25, az), A = THERMO.ALPHA, D = NONIDEAL.DZ, O = NONIDEAL.OUTER;
+    return disk * (m * A + (1 - m) * (dead * A * D * D + (1 - dead) * ss(NONIDEAL.R_OT[0], NONIDEAL.R_OT[1], R) * A * O * O) * (1 - acc));
+  };
+  // (round 15b: env, the envelope holds the place there, see EXCL: above the disk's base, the envelope rather than the wind)
+  const regionJS = (R, z, x, f = 0, w = [1, 1], jet = 0, env = false) => {
+    const H = Hof(R), zh = Math.abs(z) / H, zb = zBase(R) / H, zk = zKinkHJS(R), low = z < 0, az = Math.abs(z), za = low ? zAccLowJS(R, f) : zAccHJS(R);
+    if (R > RB_JS || az > ZB_JS) return ['envelope', 'R > ' + RB_JS + ' au or |z| > ' + ZB_JS + ' au (outside the wind’s cylinder)'];
+    if (jet > 0 && az > JET.Z0 && R < Math.min(JET.RL + JET.BASE * az, JET.RC + Math.tan(JET.CONE) * az)) return ['jet', 'R < the jet’s radius at |z|'];
+    if (R < MAG.RT) return ['cavity', 'R < r_T = ' + MAG.RT + ' au (inside the magnetosphere)'];
+    if (zh > zb || x < -4) return env ? ['envelope', 'P_env > P_wind: the infall’s ram pressure over the wind’s (round 15b)'] : ['wind', '|z| > z_base = ' + zb.toFixed(2) + ' H, or ln tau* < -4'];
+    if (R < MODEL.R_IN) return ['inner', 'r_T < R < R_IN = ' + MODEL.R_IN + ' au (the dust-free gas disk)'];
+    if (mriAmpJS(R) > 0.5) return ['inner', 'R < ' + (0.95 * NONIDEAL.R_TI).toFixed(2) + ' au (mriAmp > 0.5: T_vis > ' + THERMO.T_TI + ' K)'];
+    if (Math.abs(zh - za) < 1.2 * ACC.W && (low ? w[1] : w[0]) * accAmpJS(R) > 0.5) return ['acc', '|z / H - ' + za.toFixed(2) + '| < ' + (1.2 * ACC.W).toFixed(2)];
+    if (zh < zk) return ['dead', '|z| < z_k = ' + zk.toFixed(2) + ' H (the Ohmic Elsasser number below 1)'];
+    if (low && f > 0.5 && zh < za) return ['hall', '|z| < ' + za.toFixed(2) + ' H on the lower side, with the asymmetry'];
+    if (ss(NONIDEAL.R_OT[0], NONIDEAL.R_OT[1], R) > 0.5) return ['outer', 'R > ' + (0.5 * (NONIDEAL.R_OT[0] + NONIDEAL.R_OT[1])).toFixed(2) + ' au (outerAmp > 0.5)'];
+    return ['base', 'z_acc < |z| < z_base = ' + zb.toFixed(2) + ' H'];
+  };
+  const probeJS = (R, z, x, gl = 0, lum = 1, f = 0, w = [1, 1], jet = 0, env = false) => {
+    const P_ = PROBE, H = Hof(R), zh = z / H, T = tempJS(R, zh, x, lum), Tmid = tMidJS(R, lum);
+    // (the gas disk reaches the magnetosphere's edge MAG.RT, inside the dust's R_IN: Sigma plus gasIn of sliceQuantities with
+    // uMag = 1, as the face shows it close up; from afar the face leaves out the gas inside R_IN, the probe does not)
+    const sigmaRel = Math.exp(-Math.log(R) - cutOut(R) + gl) * ss(MAG.RT * 0.95, MAG.RT * 1.08, R), rhoRel = sigmaRel * MODEL.H0 / H * Math.exp(-0.5 * zh * zh);
+    const cs = Math.sqrt(P_.k * T / (P_.mu * P_.mH)) / 1e5, vK = P_.vK1 / Math.sqrt(R);
+    const rho = P_.SIG1 * rhoRel / (Math.sqrt(2 * Math.PI) * MODEL.H0 * P_.au), [region, rule] = regionJS(R, z, x, f, w, jet, env);
+    return { R, z, zH: zh, T, Tmid, x, H, Hgas: Math.sqrt(P_.k * Tmid / (P_.mu * P_.mH)) / 1e5 / vK * R, zk: zKinkHJS(R) * H, cs, vK, P: Math.pow(R, 1.5),
+      sigmaRel, rhoRel, sigma: P_.SIG1 * sigmaRel, rho, n: rho / (P_.mu * P_.mH), region, rule, alpha: coAlphaJS(R, zh, f), vapour: T > MODEL.TICE };
+  };
   // (Disk Lab v2, round 6) A planet's gap: the profile of Kanagawa et al. (2017, eqs. 10-14), from the fits to
   // two-dimensional simulations of Kanagawa et al. (2015, 2016): with K' = q^2 h^-3 / alpha and K = K' / h^2 (h = H/R at the
   // planet), Sigma / Sigma_0 is Sigma_min / Sigma_0 = 1 / (1 + 0.04 K) within dR1 = (Sigma_min / 4 Sigma_0 + 0.08) K'^1/4 a
@@ -3584,7 +5247,7 @@ void main(){
     const Rg = new Float64Array(n), lnS = new Float64Array(n), ih2 = new Float64Array(n);
     for (let i = 0; i < n; i++) { const R = R0 + i * dR; Rg[i] = R; lnS[i] = -Math.log(R) - cutOut(R) - Math.log(Hof(R)); ih2[i] = 0.5 / (Hof(R) * Hof(R)); }
     const R2 = 2, H2 = Hof(R2), a2 = MODEL.LNTAU1 - 1.25 * Math.log(R2) - cutOut(R2), th2 = H2 * Math.sqrt(2 * a2) / R2;
-    const k = (-1.25 / R2 - MODEL.P_OUT * cutOut(R2) / R2 + 0.25 * th2 * th2 * R2 / (H2 * H2)) / Math.exp(-Math.log(R2) - cutOut(R2) - Math.log(H2) - a2);
+    const k = (-1.25 / R2 - cutSlope(R2) / R2 + 0.25 * th2 * th2 * R2 / (H2 * H2)) / Math.exp(-Math.log(R2) - cutOut(R2) - Math.log(H2) - a2);
     const a0 = MODEL.LNTAU1 - 1.25 * Math.log(R0) - cutOut(R0), H0s = Hof(R0);
     const deposit = (d) => {
       const lg = Rg.map((R) => gapLnJS(R, d, a, q)), out = new Float64Array(n);
@@ -3648,13 +5311,59 @@ void main(){
     let j = 0;
     for (let k = 1; k < NBP - 1; k++) if (l >= BPL[k].LAM) j = k;
     const a = BPL[j], b = BPL[j + 1], u = Math.min(1, Math.max(0, (l - a.LAM) / (b.LAM - a.LAM))), mx = (x, y) => x + (y - x) * u;
-    T = { LAM: l, A0: mx(a.A0, b.A0), B0: mx(a.B0, b.B0) };
+    T = { LAM: l, A0: mx(a.A0, b.A0), B0: mx(a.B0, b.B0), CHIA: mx(a.CHIA, b.CHIA) };
     for (const k of ['XI', 'PHI', 'TAU', 'LNEK', 'F', 'G', 'XIP']) T[k] = a[k].map((v, i) => mx(v, b[k][i]));
     if (bpMemo.size > 2000) bpMemo.clear();
     bpMemo.set(key, T);
     return T;
   }
   const r0Of = (Rf, s = 0) => { const zb = zBase(Rf); return Rf + bpOf(Rf).A0 * bendQ(Rf, zb, zb, s); };
+  // (round 13c) the wind's density (ln, the model's unit) as WINDMAP_FS draws it, on the line with foot Rf on the side of s for
+  // the asymmetry's share a (0 to 1; the lower side's WIND_LOW is the caller's), without the fades at the marched cylinder's top
+  // and side (the cut's face takes them out): the mass budget's (MF.on, see MFLUX) or round 8's. windLine: what does not
+  // change along the line (rb: where it leaves the disk); windLnRho: at chi r0 above the base
+  function windLine(Rf, s = 0, a = 0) {
+    const T = bpOf(Rf), r0 = r0Of(Rf, s), inner = Math.log(Math.max(ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, r0), 1e-30));
+    if (!MF.on) return { T, r0, cc: 0.03, rb: r0 * tabF(T.XI, tabS(0.03)), base: Math.log(RHO_B_JS) - 1.5 * Math.log(r0) - LNREF - cutOut(r0) + inner };
+    const cc = MF.chic, fc = tabS(cc), xc = tabF(T.XI, fc), jc = xc - cc * tabF(T.XIP, fc), rb = r0 * xc, share = 1 / (2 - (1 - WIND_LOW_JS) * a);
+    return { T, r0, cc, rb, base: Math.log(MFLUX.K * MF.mdot * share * xc * jc / (4 * Math.PI * Math.PI * (2 * lamBud(rb) - 2) * rb * rb)) + mfI(rb) - cutOut(rb) + 0.5 * Math.log(r0) + inner };
+  }
+  function windLnRho(L, chi) {
+    const ch = Math.max(chi, L.cc), f = tabS(ch), T = L.T, xi = tabF(T.XI, f);
+    return L.base + (MF.on ? -Math.log(tabF(T.F, f) * xi * (xi - ch * tabF(T.XIP, f))) : tabF(T.LNEK, f)) + Math.min(chi, 0) / 0.03;
+  }
+  // (round 15b) The exclusion (EXCL), as WINDMAP_FS draws it, in the model's unit of density times v_K(1 au)^2: windLnP, ln of the
+  // wind's pressure on the line L at chi, max(rho v_p^2, rho^2 |v - Omega0 R phi|^2 / 2 rho_A) (the velocities held at chi_c as the
+  // density is); envLnP, ln of the envelope's at r, mu = cos of the polar angle, for ln rho0 (envMu0JS, envLnRhoJS: ENV_GLSL's
+  // envMu0 and envLnRho); windShareJS, the wind's share of the place at (R, z) for the asymmetry's share f (rounded, and the lower
+  // side's density WIND_LOW of the upper's with it, as the wind map has them)
+  function windLnP(L, chi) {
+    const ch = Math.max(chi, L.cc), f = tabS(ch), T = L.T, F = tabF(T.F, f), xi = tabF(T.XI, f), xp = tabF(T.XIP, f), vr = tabF(T.G, f) - xi;
+    const lr = windLnRho(L, chi), lA = windLnRho(L, T.CHIA), vp2 = F * F * (1 + xp * xp);
+    return Math.max(lr + Math.log(vp2 / L.r0), 2 * lr - lA - Math.LN2 + Math.log((vp2 + vr * vr) / L.r0));
+  }
+  function envMu0JS(r, mu) {
+    const x = r / ENV.RC, pp = x - 1, q = -x * mu, D = 0.25 * q * q + pp * pp * pp / 27;
+    let m;
+    if (D > 0) { const sD = Math.sqrt(D); m = Math.cbrt(-0.5 * q + sD) + Math.cbrt(-0.5 * q - sD); }
+    else { const pn = Math.min(pp, -1e-6); m = 2 * Math.sqrt(-pn / 3) * Math.cos(Math.acos(Math.min(1, Math.max(-1, 1.5 * q / pn * Math.sqrt(-3 / pn)))) / 3); }
+    for (let i = 0; i < 2; i++) m -= (m * m * m + pp * m + q) / Math.max(3 * m * m + pp, 1e-4);
+    return Math.min(1, Math.max(m, Math.max(mu, 1e-4)));
+  }
+  function envLnRhoJS(r, mu) {
+    const x = r / ENV.RC, mu0 = envMu0JS(r, mu), open = 1 - ss(Math.cos(ENV.TH_CAV + 0.08), Math.cos(ENV.TH_CAV - 0.08), mu0);
+    return -1.5 * Math.log(x) - 0.5 * Math.log(1 + mu / mu0) - Math.log(Math.max(mu / mu0 + 2 * mu0 * mu0 / x, 0.05))
+      + Math.log(Math.max((0.015 + 0.985 * open) * (1 - ss(0.65 * ENV.R, ENV.R, r)), 1e-30));
+  }
+  const envLnP = (r, mu, lnRho0) => lnRho0 + envLnRhoJS(r, mu) + Math.log(2 / r);
+  function windShareJS(R, z, f, lnRho0) {
+    const h = Math.abs(z), sA = Math.round(ASYM_F_JS * f * 100) / 100, s = z < 0 ? -sA : sA, a = sA / ASYM_F_JS;
+    let lo = 0.05, hi = Math.max(R, 0.05) + 2 * 2.1 * ASYM_F_JS * MODEL.H0 * Math.pow(Math.max(R, 0.05), 1.25) * 4;
+    for (let i = 0; i < 28; i++) { const m = 0.5 * (lo + hi); if (fieldRP(m, h, s)[0] > R) hi = m; else lo = m; }
+    const Rf = 0.5 * (lo + hi), L = windLine(Rf, s, a), r = Math.max(Math.hypot(R, z), 1e-6);
+    const lnPw = windLnP(L, (h - zBase(Rf)) / L.r0) + (z < 0 ? Math.log(Math.max(1 - (1 - WIND_LOW_JS) * a, 1e-6)) : 0);
+    return ss(-EXCL.W, EXCL.W, lnPw - envLnP(r, h / r, lnRho0));
+  }
   // (the lower side's lowest point of the bend, with the asymmetry's share s < 0: round 8)
   function diskHeights(Rf, s = 0) {
     const zb = zBase(Rf), H = Hof(Rf), d = Math.min(NONIDEAL.BEND * H, 0.5 * zb);
@@ -3718,16 +5427,495 @@ void main(){
   // disk stays dark whatever the gain (its 10 micron light falls by many orders of magnitude outward): a moderate gain
   // shows its rings to about 6 au.
   const LOOK_GAIN = { optical: 4, mir: 32, mm: 12 };
+  // (Round 18i, the owner: "in the model look, the pattern of its own emission alone, with no surface lit; an opacity of about 2
+  // instead") The model look's light, the state's glow: 'star', the starlight as until now, or 'self', the gas's own thermal light
+  // (uSelf in the GLSL; DESIGN.md section 50) through the grey opacity selfk, in cm^2 per gram of gas, K_MIN to K_MAX (the page's
+  // slider, on a log scale), DEF by default (the owner's "2", read in the cm^2/g in which the opacity of the starlight, 0.22, was told
+  // to him); in the model's units kappa SIGMA1, Sigma(1 au) in g cm^-2 as the probe has it. G: the display's light per kelvin of the
+  // brightness temperature (1000 K the stretch's 1; on the display the dust's sublimation, 1500 K, 0.75, 100 K 0.32, 10 K 0.06, the
+  // sky behind 0.02 to 0.04). The automatic exposure rests meanwhile (aeOn): the brightness is the temperature, the same in every
+  // view, and cannot blow out. (Round 18k: G is uSelf.y's, the light of rounds 18i and 18j, ?selflook=old; the look of round 18k
+  // shows the brightness temperature through its own curve and colours, SELF_LOOK)
+  // (Round 18l, the owner: "rather than colouring by the optical depth from the centre, give the surface its temperature, as a mock,
+  // by the vertical column depth") NC_: the surface's column Sigma_s in g cm^-2, the state's selfnc (the page's slider, on a log
+  // scale), NC_DEF by default: the column above round 18k's surface tau* = 1 is 0.05 g cm^-2 at 1 au, 0.11 at 10 au, 0.12 at 30
+  // au, and with 0.1 the hot layer's lower edge is within 0.2 H of that surface from 1 to 40 au, 0.3 H under it at 0.1 au (DESIGN.md
+  // section 53)
+  const SELF = { K_MIN: 0.001, K_MAX: 100, DEF: 2, SIGMA1: 1700, G: SELF_LOOK.G, NC_MIN: 0.001, NC_MAX: 10, NC_DEF: 0.1 };
+  // (round 18l) the own light's temperature, the state's selft (uSelfT.x in the GLSL, see selfX): 'col' the column depth's (the
+  // default; round 18n: with the surface only where it rises outward, selfW), 'colstar' round 18m's (the column's depth with the
+  // starlight's shadow), 'star' round 18k's (the depth toward the star, P), 'int' round 18j's (the interior's)
+  const SELF_T = { col: 1, colstar: 2, star: 0, int: -1 };
+  // (round 18k) the own light's colour and display as selfHue and selfLight in the GLSL and the volume's last stage (the stretch, the
+  // roll-off past white, the gamma) with the finish's tone at its full share: a thick gas at T_b on the display, for the page's key
+  // (box.diskSelfKey) from SELF_KEY.MIN to MAX in K (a log scale) with its ticks
+  const selfHueJS = (T) => {
+    const H = SELF_LOOK.HUE, l = Math.log(Math.max(T, 1e-3)), lin = (c) => c.map((v) => Math.pow(v, 2.2));
+    let c = lin(H[0][1]);
+    for (let i = 0; i + 1 < H.length; i++) {
+      const a = Math.log(H[i][0]), f = Math.min(1, Math.max(0, (l - a) / (Math.log(H[i + 1][0]) - a))), n = lin(H[i + 1][1]);
+      c = c.map((v, k) => v + (n[k] - v) * f);
+    }
+    const y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    return c.map((v) => v / Math.max(y, 1e-4));
+  };
+  // (round 18m: hue(T), the colour at the luminance 1: by default the gas's material colour, selfTint in the GLSL; selfHueJS with
+  // ?selfhue=1)
+  const selfGasJS = () => { const c = linHex(MAT[0][1]), y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; return c.map((v) => v / Math.max(y, 1e-4)); };
+  const selfShowJS = (T, hue) => {
+    const s = SELF_LOOK.A * Math.log1p(Math.max(T, 0) / SELF_LOOK.TK);
+    let c = hue(T).map((v) => v * Math.pow(s, 2.2));
+    const m = Math.max(...c);
+    if (m > 1) c = c.map((v) => v / m + (1 - v / m) * (1 - 1 / m));
+    return c.map((v) => { const g = Math.pow(v, 1 / 2.2), k = Math.min(1, Math.max(0, g)); return g - TONE * k * (1 - k) * (1 - k); });
+  };
+  const SELF_KEY = { MIN: 10, MAX: 1500, TICKS: [10, 30, 100, 300, 1000] };
   // the CO line's displays (see uCoMode): a channel map at a velocity, the mean velocity (moment 1), the integrated
   // intensity (moment 0)
   const CO_MODES = { chan: 0, m1: 1, m0: 2 };
   const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);   // (a name from outside: not one of Object's own)
   const ja = () => (document.documentElement.lang || '').toLowerCase().startsWith('ja');   // (ja, ja-JP, ...)
 
+  // --- (Round 11a) Flights along a smooth path, for talks (box.diskPath; ver2/docs/disk-lab-r11-camera.md, sections 3.2-3.5).
+  // The pure part: a plan from two poses, and the pose and the progress along it. ver2/tools/disk-lab-v2/path-check.mjs reads
+  // the lines between PATH-MATH and /PATH-MATH and checks them in Node, with no browser. A pose is { el, az, lnd, T }: the
+  // elevation and the azimuth (radians), ln of the distance (au) and the point looked at (au, [x, y, z]), in the frame of the
+  // destination (the one that turns with the view's slow spin, or with the planet's orbit when the destination follows it), in
+  // which the destination holds still while it is flown to, and is arrived at exactly.
+  // PATH-MATH
+  // RHO: van Wijk and Nuij's curvature (d3's interpolateZoom takes sqrt(2); lower is a flatter arc, the disk kept larger in the
+  // picture); KAPPA: the e-folds of zoom a radian of turn counts as; V: the cruise speed in that measure, a second (0.9: a
+  // decade of zoom in 2.56 s), times the page's pace; RAMP: the seconds a ramp from rest to V takes (the acceleration V / RAMP);
+  // DMIN, DMAX: a path's shortest and longest time from rest (s); MID_R, MID_H, MID_MAX: the midplane's rule (see pathMidplane),
+  // the camera kept outside 1.2 times the disk's radius (30 au) while within MID_H scale heights of the midplane, by a lift of at
+  // most MID_MAX e-folds. All to be tuned by eye with the owner (the design's section 8, risks)
+  const PATH = { RHO: 1.2, KAPPA: 2, V: 0.9, RAMP: 1.2, DMIN: 0.8, DMAX: 30, MID_R: 36, MID_H: 1.5, MID_MAX: 3 };
+  const pathWrap = (a) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+  const pathG = (x) => x * x * (3 - 2 * x), pathGI = (x) => x * x * x * (1 - 0.5 * x);   // a smooth ramp from 0 to 1, and its integral
+  // The zoom and the pan together (van Wijk & Nuij 2003, as d3-interpolate's zoom): the view's width w = 2 d tan(fov / 2), and
+  // the point looked at moved along the straight segment between the two, u of its length u1, at the path's parameter s:
+  //   b_i = (w1^2 - w0^2 +/- rho^4 u1^2) / (2 w_i rho^2 u1)  (+ for i = 0),  r_i = -asinh(b_i),  S = (r1 - r0) / rho,
+  //   w(s) = w0 cosh(r0) / cosh(rho s + r0),   u(s) = w0 sinh(rho s) / (rho^2 cosh(rho s + r0))
+  // (u in this form has no difference of large numbers; d3's w0 / rho^2 (cosh r0 tanh(rho s + r0) - sinh r0) is the same).
+  // The width has its one maximum inside and its minima at the ends: the camera never comes nearer than at the nearer end, and a
+  // far move of the point looked at from close by rises first (the star's view to the planet's: up to about 4 au and down to
+  // 1.6). With the point looked at kept (u1 under a millionth of the width), a pure log zoom: S = |ln(w1 / w0)| / rho.
+  function pathVW(w0, w1, u1, rho) {
+    if (!(u1 > 1e-6 * Math.max(w0, w1))) return { zoom: true, k: Math.log(w1 / w0), S: Math.abs(Math.log(w1 / w0)) / rho, rho };
+    const r2 = rho * rho, b0 = (w1 * w1 - w0 * w0 + r2 * r2 * u1 * u1) / (2 * w0 * r2 * u1), b1 = (w1 * w1 - w0 * w0 - r2 * r2 * u1 * u1) / (2 * w1 * r2 * u1);
+    const r0 = -Math.asinh(b0), r1 = -Math.asinh(b1);
+    return { zoom: false, w0, u1, r0, r1, S: (r1 - r0) / rho, rho };
+  }
+  // The progress in time along a path of length L (in the shared measure: e-folds of zoom, and KAPPA a radian of turn): the speed
+  // ramps from v0 (a path that takes over from a moving camera) to the cruise speed V at the acceleration A = V / RAMP, along the
+  // smooth ramp pathG (no jolt at either end), cruises, and ramps down to rest at the same rate; a short path ramps to a lower
+  // peak, sqrt(A L + v0^2 / 2); with no room to come to rest from v0 at that rate, it brakes harder. With dur (from rest), the
+  // cruise speed that fits it: dur = L / vc + vc / A. o: { V, ramp, v0, dur, dmin, dmax }; returns the profile { v0, vc, r1, c,
+  // r2, D, L }: the ramp up (s), the cruise (s), the ramp down (s), the whole time
+  function pathEase(L, o) {
+    if (!(L > 1e-9)) return { v0: 0, vc: 0, r1: 0, c: 0, r2: 0, D: 0, L: 0 };
+    const V = o.V, A = V / o.ramp, v0 = Math.max(0, o.v0 || 0);
+    const fit = (D) => {
+      const q = A * A * D * D - 4 * A * L;
+      if (q >= 0) { const vc = (A * D - Math.sqrt(q)) / 2; return { v0: 0, vc, r1: vc / A, c: D - 2 * vc / A, r2: vc / A }; }
+      return { v0: 0, vc: 2 * L / D, r1: D / 2, c: 0, r2: D / 2 };   // (a faster ramp: what has to fit in D)
+    };
+    let e;
+    if (o.dur > 0) e = fit(o.dur);
+    else if (v0 > 0 && L < v0 * v0 / (2 * A)) e = { v0, vc: v0, r1: 0, c: 0, r2: 2 * L / v0 };
+    else if (v0 >= V) e = { v0, vc: V, r1: (v0 - V) / A, c: (L - v0 * v0 / (2 * A)) / V, r2: V / A };
+    else {
+      const top = (2 * V * V - v0 * v0) / (2 * A);   // (the length the ramps to V and back take)
+      if (L >= top) e = { v0, vc: V, r1: (V - v0) / A, c: (L - top) / V, r2: V / A };
+      else { const vc = Math.sqrt(A * L + 0.5 * v0 * v0); e = { v0, vc, r1: (vc - v0) / A, c: 0, r2: vc / A }; }
+    }
+    e.D = e.r1 + e.c + e.r2;
+    if (!(o.dur > 0) && !v0 && (e.D < o.dmin || e.D > o.dmax)) { e = fit(Math.min(o.dmax, Math.max(o.dmin, e.D))); e.D = e.r1 + e.c + e.r2; }
+    e.L = L;
+    return e;
+  }
+  // the progress s (0 to 1) and the speed v (L a second) at t seconds into the profile e
+  function pathEaseAt(e, t) {
+    if (!(t < e.D)) return { s: 1, v: 0 };
+    if (!(t > 0)) return { s: 0, v: e.v0 };
+    let x, v;
+    if (t < e.r1) { const u = t / e.r1; x = e.r1 * (e.v0 * u + (e.vc - e.v0) * pathGI(u)); v = e.v0 + (e.vc - e.v0) * pathG(u); }
+    else if (t < e.r1 + e.c) { x = 0.5 * e.r1 * (e.v0 + e.vc) + e.vc * (t - e.r1); v = e.vc; }
+    else { const u = (e.D - t) / e.r2; x = e.L - e.vc * e.r2 * pathGI(u); v = e.vc * pathG(u); }
+    return { s: Math.min(1, Math.max(0, x / e.L)), v };
+  }
+  // The plan from pose a to pose b. o: { fov (radians), rho, kappa, V, ramp, dmin, dmax, v0, dur, turns (whole turns added to the
+  // azimuth's change: an orbit; else the shorter way round), star (the star in the frame), midR, midH, midMax, hOf (the disk's
+  // scale height at R) }. The elevation and the azimuth go linearly with the progress s, as van Wijk's parameter does, so that the
+  // motion is even in the shared measure; the elevation, linear, never overshoots through the midplane. The path's length,
+  //   L = sqrt((rho S + 2 b)^2 + (kappa dth)^2),
+  // with dth the turn about the point looked at (the azimuth's counted at the mean elevation) and b the midplane rule's lift (a
+  // zoom out and back of b e-folds), sets its time (pathEase)
+  function pathPlan(a, b, o) {
+    const th = Math.tan(o.fov / 2), dT = [b.T[0] - a.T[0], b.T[1] - a.T[1], b.T[2] - a.T[2]];
+    const p = { a, b, dT, del: b.el - a.el, daz: pathWrap(b.az - a.az) + 2 * Math.PI * Math.round(o.turns || 0), lift: null,
+      vw: pathVW(2 * th * Math.exp(a.lnd), 2 * th * Math.exp(b.lnd), Math.hypot(dT[0], dT[1], dT[2]), o.rho) };
+    pathMidplane(p, o);
+    const dth = Math.hypot(p.del, Math.cos(0.5 * (a.el + b.el)) * p.daz);
+    p.L = Math.hypot(o.rho * p.vw.S + 2 * (p.lift ? p.lift.b : 0), o.kappa * dth);
+    p.ease = pathEase(p.L, o);
+    return p;
+  }
+  // the pose at the progress s (0 to 1); lift: the midplane rule's (the plan's own unless given)
+  function pathAt(p, s, lift = p.lift) {
+    const vw = p.vw;
+    let lnd, u;
+    if (vw.zoom) { lnd = p.a.lnd + vw.k * s; u = s; }
+    else {
+      const x = s * (vw.r1 - vw.r0);
+      lnd = p.a.lnd + Math.log(Math.cosh(vw.r0) / Math.cosh(x + vw.r0));
+      u = vw.w0 * Math.sinh(x) / (vw.rho * vw.rho * Math.cosh(x + vw.r0) * vw.u1);
+    }
+    if (lift) lnd += lift.b * (s < lift.lo ? pathG(s / lift.lo) : s > lift.hi ? pathG((1 - s) / (1 - lift.hi)) : 1);
+    return { el: p.a.el + s * p.del, az: p.a.az + s * p.daz, lnd, T: [p.a.T[0] + u * p.dT[0], p.a.T[1] + u * p.dT[1], p.a.T[2] + u * p.dT[2]] };
+  }
+  // (The design's rule 2 of section 3.4) A path whose camera passes from one side of the disk to the other (its height above the
+  // midplane changes sign between the ends) through the disk's layers (within midH scale heights of the midplane, inside midR of
+  // the star's axis) is lifted there: ln d raised by b over a plateau [lo, hi] of the progress, on smooth ramps from the ends, so
+  // that the camera goes round the disk's edge rather than through its dust (an opaque picture, and the dearest rays in every
+  // look). The plateau covers where the camera would be inside; b, what takes it out to midR there; checked again with the lift
+  // (a few times: a panned point looked at does not scale with d; still inside on the plateau, b raised by what is left there;
+  // inside off it, on a ramp, the plateau widened). Within MID_H = 1.5 scale heights: the dense gas and the
+  // settled dust (a camera at 2 to 3 scale heights, as a low view of the disk's surface has it, is not passing through). No
+  // lift of more than midMax e-folds (20 times out): a crossing next to the star (0.15 au away: 5.5 e-folds to 36 au and back)
+  // goes through, as the flights do; the guard bounds its frames' pieces
+  function pathMidplane(p, o) {
+    if (!(o.midR > 0) || !o.star || !o.hOf) return;
+    const cam = (q) => { const d = Math.exp(q.lnd), c = Math.cos(q.el); return [q.T[0] + d * c * Math.cos(q.az) - o.star[0], q.T[1] + d * c * Math.sin(q.az) - o.star[1], q.T[2] + d * Math.sin(q.el) - o.star[2]]; };
+    if (!(cam(p.a)[2] * cam(p.b)[2] < 0)) return;
+    const N = 96, scan = (lift) => {
+      let lo = 1, hi = -1, need = 0;
+      for (let i = 0; i <= N; i++) {
+        const s = i / N, c = cam(pathAt(p, s, lift)), R = Math.hypot(c[0], c[1]);
+        if (R < o.midR && Math.abs(c[2]) < o.midH * o.hOf(Math.max(R, 0.05))) {
+          lo = Math.min(lo, s); hi = Math.max(hi, s);
+          if (!lift || (s >= lift.lo && s <= lift.hi)) need = Math.max(need, Math.log(o.midR / Math.max(R, 1e-3)));
+        }
+      }
+      return hi < 0 ? null : { lo, hi, need };
+    };
+    let lift = null, r = scan(null);
+    if (r && r.need > o.midMax) return;
+    for (let k = 0; r && k < 4; k++, r = scan(lift)) {
+      const lo = Math.max(0.1, Math.min(lift ? lift.lo : 1, r.lo)), hi = Math.min(0.9, Math.max(lift ? lift.hi : 0, r.hi));
+      lift = { lo, hi: Math.max(lo, hi), b: Math.min(1.5 * o.midMax, (lift ? lift.b : 0) + r.need) };
+    }
+    p.lift = lift;
+  }
+  // /PATH-MATH
+
+  // --- (Round 12b) Looking in by tilting the phone (box.diskTilt; DESIGN.md section 30). The page turns the phone's tilt into a
+  // small offset of the view (its setting, off by default: the sensor, the filter, the dead zone and the ease are the page's); the
+  // rule here decides when the offset asked for is drawn, and when it counts as a moving view. ver2/tools/disk-lab-v2/tilt-check.mjs
+  // reads the lines between TILT-RULE and /TILT-RULE and runs them in Node, as path-check.mjs does the paths.
+  // TILT-RULE
+  // MAX: the largest offset, in elevation and in azimuth (rad, 6 degrees). MOVE: the rate (pixels a second) above which the
+  // offset's steps count as a moving view.
+  const TILT = { MAX: 6 * Math.PI / 180, MOVE: 10 };
+  // The offset drawn ({ el, az, t }: rad, and the time of its last step, ms), from the one asked for (want, rad) at t (ms), px the
+  // angle one pixel of the screen spans (rad). A step is taken only when it moves the picture by a pixel's worth or more: a hand
+  // at rest, or the sensor's last flicker, draws nothing, and a still keeps refining (the owner's rule: a still at rest is
+  // finished to the quality chosen). The way back to no offset is always taken: at rest the picture is the state's own, bit for
+  // bit. A step counts as a moving view (moving: the page's lighter picture, as a drag's) when its rate is above TILT.MOVE
+  // pixels a second, that is steps of a pixel less than 0.1 s apart; slower (a gentle lean, the offset easing back), it is drawn
+  // as a still is, at the scale the still has (the owner's rule: the automatic adjustment only while the view moves).
+  function tiltRule(was, want, t, px) {
+    const cl = (x) => (x > TILT.MAX ? TILT.MAX : x < -TILT.MAX ? -TILT.MAX : x || 0);
+    const el = cl(want.el), az = cl(want.az), step = Math.hypot(el - was.el, az - was.az);
+    if (step === 0 || (step < px && (el || az))) return { el: was.el, az: was.az, t: was.t, moved: false, moving: false };
+    const dt = Math.max(1000 / 60, t - was.t) / 1000;
+    return { el, az, t, moved: true, moving: step / px / dt > TILT.MOVE };
+  }
+  // /TILT-RULE
+
+  // ---- (Round 14a) The model's parameters as settings (box.diskParams; DESIGN.md section 34) ----
+  // PARAMS
+  // The owner: "let the model's parameters be changed". The ones the page may change: their defaults (the model's values above:
+  // THERMO_DEF, MFLUX, GAP_ALPHA's first value), ranges and scales (PAR_SPEC, from which the page builds its sliders: one source),
+  // and their values now (PAR), at the module's level, so that an engine built again after a lost context keeps them (as MAT keeps
+  // the colours). parApply() sets in the script everything that follows from them: THERMO's laws (the same function as at the
+  // start; its L stays the table's own), NONIDEAL.R_TI (rounded as at the start), ACC.R_END, the eddies' span (ln3Span), GAP_ALPHA,
+  // the star's luminosity over THERMO's (lumBase: it scales the reprocessed starlight and the superheated grains as the outburst
+  // does, in uLum and the mirrors' lum), and the mass budget (mfluxSet; the page's data-mflux and data-lam="old" stay switches).
+  // The mirrors (tempJS, probeJS, regionJS, windLine and the rest) read the same objects, so they follow by construction; the
+  // shaders take R_TI, the span, T* over its default and the alphas in uMP (mpValues), and the temperature's table is made again
+  // from the same laws (thermoTableData). parDerived(): the numbers the page shows with them.
+  // (Round 15b, the owner: "the model's parameters: lambda in two places; T* is of unclear need, remove it for now") T* and the
+  // lever arm at the dust's inner edge are no longer parameters: T* is THERMO_DEF.T_STAR (uMP's slot for it stays, at 1), and
+  // lambda at R_IN is MFLUX.LAM_IN (4), the page's data-lamin (?lamin=) still a development switch (parLamIn, bounded by
+  // mfluxSet), no longer an alias of a parameter. The Model section shows lambda at R_TI and at the disk's edge.
+  const PAR_SPEC = {
+    mdot: { def: THERMO_DEF.MDOT, min: 1e-9, max: 3e-7, log: true },       // M_sun/yr: the heating and the wind's budget alike
+    lum: { def: THERMO_DEF.L, min: 0.2, max: 20, log: true },              // L_sun
+    alphaIn: { def: THERMO_DEF.ALPHA, min: 1e-3, max: 0.1, log: true },    // the thermally ionized disk's (the dead zone's and the outer disk's in their ratios to it)
+    tTI: { def: THERMO_DEF.T_TI, min: 800, max: 1300, log: false },        // K: where the alkali metals ionize (below the dust's 1500 K cap)
+    lamTI: { def: MFLUX.LAM_LO, min: 1.05, max: 3, log: false },           // at R_TI
+    lamOut: { def: MFLUX.LAM_HI, min: 1.5, max: 10, log: false },          // at the disk's edge R_OUT
+    chic: { def: MFLUX.CHI_C, min: 1e-4, max: 0.05, log: true },           // where the wind's base is held (units of its base radius)
+    alphaGap: { def: GAP_ALPHA, min: 1e-4, max: 1e-2, log: true }          // the viscosity the planets' gaps assume
+  };
+  const PAR_DEF = Object.fromEntries(Object.keys(PAR_SPEC).map((k) => [k, PAR_SPEC[k].def]));
+  const PAR = { ...PAR_DEF };
+  // parGen: one more each time the parameters change (the still picture's signature and the cut's lines key on it); lumBase: the
+  // star's luminosity over THERMO's; parFolded: the page's switches taken in (parFold); parLamIn: the page's data-lamin (round 15b:
+  // a development switch, lambda at R_IN, '' for MFLUX.LAM_IN)
+  let parGen = 0, lumBase = 1, parFolded = false, parLamIn = '';
+  // a value of the parameter k: a finite number within its range (the nearest end outside it), else the default
+  const parClamp = (k, v) => { const s = PAR_SPEC[k], x = v == null || v === '' || typeof v === 'boolean' ? NaN : Number(v); return Number.isFinite(x) ? Math.min(s.max, Math.max(s.min, x)) : s.def; };
+  // the page's development switches before round 14a, aliases of the parameters now (data-mdot, data-lam with two numbers,
+  // data-chic): taken into PAR when the engine is first built, unless box.diskParams has set it already. (The page
+  // folds them itself, with its mp=, and calls box.diskParams before the first picture; this is for a page or a check that does not.)
+  // (round 15b: data-lamin a switch again, kept in parLamIn, see PAR_SPEC)
+  function parFold(d) {
+    if (parFolded) return;
+    parFolded = true;
+    const m = /^\s*([0-9.]+)\s*,\s*([0-9.]+)\s*$/.exec(d.lam || '');
+    for (const [k, v] of [['mdot', d.mdot], ['chic', d.chic], ['lamTI', m && m[1]], ['lamOut', m && m[2]]]) if (v != null && v !== '') PAR[k] = parClamp(k, v);
+    parLamIn = d.lamin != null ? String(d.lamin) : '';
+  }
+  // the page's switches that stay switches (for mfluxSet): data-mflux="0" and data-lam="old", the prescriptions of round 8
+  const parSw = (d) => ({ mflux: d.mflux, lam: d.lam === 'old' ? 'old' : '' });
+  // everything in the script that follows from PAR (sw: parSw)
+  function parApply(sw = {}) {
+    Object.assign(THERMO, thermoLaws({ ...THERMO_DEF, MDOT: PAR.mdot, ALPHA: PAR.alphaIn, T_TI: PAR.tTI }));
+    NONIDEAL.R_TI = +THERMO.R_TI.toFixed(3);
+    ACC.R_END = Math.max(0.4, 1.2 * NONIDEAL.R_TI);
+    lumBase = PAR.lum / THERMO_DEF.L;
+    if (GAP_ALPHA !== PAR.alphaGap) { GAP_ALPHA = PAR.alphaGap; gapKMemo.clear(); trapMemo.clear(); gapLightMemo.clear(); }
+    mfluxSet({ mflux: sw.mflux, lam: sw.lam === 'old' ? 'old' : PAR.lamTI + ',' + PAR.lamOut, lamin: parLamIn, chic: PAR.chic, mdot: PAR.mdot });
+    parGen++;
+  }
+  // the shaders' uMP (see CONST_GLSL): R_TI, the eddies' span, T* over its default; the alphas of coAlpha, rounded as CO_ALPHA was
+  // written into the GLSL until round 14 (so that the defaults are the same numbers)
+  const mpValues = () => new Float32Array([NONIDEAL.R_TI, ln3Span(), 1, 0,   // (round 15b: T* at its default, see PAR_SPEC)
+    THERMO.ALPHA, +(THERMO.ALPHA * NONIDEAL.DZ * NONIDEAL.DZ).toPrecision(4), +(THERMO.ALPHA * NONIDEAL.OUTER * NONIDEAL.OUTER).toPrecision(4), 0]);
+  // (round 7) the temperature's table (tInt4 in the GLSL, uThermo on unit 15), from the script's own laws (tInt4JS): T_acc with the
+  // floor, and T_i for THERMO's luminosity, in K (half floats, linearly filtered): ttNR() radii uniform in ln R from 0.02 to 40 au by
+  // TT_NZ heights from 0 to 8 H. (Round 14a: a function, made again when the parameters change; it was a block of init.)
+  // (Round 18a: ttNR radii to ttSpan times 0.02 au: 605 to 160 au with the disk's tail, MODEL.TAIL (round 18b's Gaussian), in the
+  // steps of ln R of before (604 = 511 ln 8000 / ln 2000, rounded); 512 to 40 au with the cut of before; as the GLSL's TT_NR and TT_DLN)
+  const TT_NZ = 128, ttNR = () => (MODEL.TAIL ? 605 : 512), ttSpan = () => (MODEL.TAIL ? 8000 : 2000);
+  function thermoTableData() {
+    const NR = ttNR(), NZ = TT_NZ, ln0 = Math.log(0.02), dln = Math.log(ttSpan()) / (NR - 1), d = new Float32Array(NR * NZ * 2);
+    for (let j = 0; j < NR; j++) {
+      // (as tInt4JS, with what depends on R alone taken out of the loop over the heights)
+      const R = Math.exp(ln0 + j * dln), ti = Math.pow(THERMO.KI * betaIrrJS(R) / (R * R), 0.25), m = mriAmpJS(R), za = zAccHJS(R);
+      const ua = Math.max(1 - erfJS(za * Math.SQRT1_2), 1e-6), tm4 = THERMO.KM / (R * R * R), tv = THERMO.KV * Math.pow(R, -0.9), tv4 = tv * tv * tv * tv, f4 = Math.pow(THERMO.T_FLOOR, 4);
+      for (let k = 0; k < NZ; k++) {
+        const az = k * 8 / (NZ - 1), u = 1 - erfJS(az * Math.SQRT1_2);
+        const acc = (1 - m) * tm4 * (az < za ? 1 : (THERMO.TAU_HEAT * u / ua + 0.57735) / (THERMO.TAU_HEAT + 0.57735)) + m * tv4 * (2 * u - u * u + 0.003) / 1.003 + f4;
+        d[2 * (k * NR + j)] = Math.pow(acc, 0.25);
+        d[2 * (k * NR + j) + 1] = ti;
+      }
+    }
+    return d;
+  }
+  // (Round 18f, the owner: "model the gas alone first, and make the edge-on and nearly edge-on views look natural") The starlight's
+  // depth along the rays from the star (starT in the GLSL, uStarT on unit 21; DESIGN.md section 47). The model's local depth tau*_l
+  // = exp(LNTAU1 - 1.25 ln R - cutOut(R) - z^2 / 2H^2) is what a ray from the star gathers per e-fold of R (K_OCC rho R, DESIGN.md
+  // 43.2 and 43.4): summed along the ray at the angle th from the midplane, tau(R, th) = (1 / cos th) int tau*_l(R', R' tan th)
+  // d ln R' from the gas's inner edge (the density's smoothstep at R_IN) out to R. Until now the shaders took the local tau*_l, and
+  // beyond the crest of its surface (18.7 au) the crest's at the same angle (xCrest, round 18b); the sum gives the surface that
+  // the gas itself casts: z_s / R 0.167 at 1 au, 0.239 at 10 au, 0.259 at 20 au, 0.268 at 30 au and 0.272 rad from 40 au on (the
+  // local estimate 0.179, 0.250, 0.260, then the crest's cone, 0.266). The smooth gas alone (no planets: their gaps keep their own
+  // ln, gapLn, and their tables, gapLight; no pebbles). Made once a build (the gas's density does not depend on the model's
+  // parameters, PAR; ?rc= and ?sigtail=0 build the engine anew), memoised on the tail and R_c; none with the cut of before.
+  // The grid: ST.NR radii uniform in ln R from ST.R0 to ST.R1 by ST.NU values of u = sqrt(|z| / (R + |z|)) from 0 to 1 (u^2 =
+  // tan th / (1 + tan th): finer at the low angles, about 0.006 rad at the inner disk's surface, 0.011 at the outer's); the rays
+  // share their steps in ln R, ST.SUB a cell of the table (its x within 0.02 of a fine integral where -14 < x < 14, 0.07 at the
+  // gas's inner edge). Four numbers a texel (half floats, linearly filtered, as the temperature's table):
+  //   r: x = ln tau along the ray (to +-30);
+  //   g: ln of the model look's starlight on its skin per unit of e^x_l, Es(R) / (R beta_t(R)), where beta_t(R) = int (e^x_l / R)
+  //      e^-tau dz (one side; e^x_l / R is kappa rho, the gas's opacity to the starlight) is the share of the star's flux that
+  //      the gas takes per unit area at R with this depth, and Es(R) the starlight on the skin per unit area of before (round 18c,
+  //      litModel's law: round 8's eased to R^-1/2 inside 6 au, the absorbed starlight beta / R^2 to the power 0.6 beyond, matched
+  //      at 6 au and reached by 12 au; beta Eabs's, betaIrrJS; with ?litflat=1 round 8's at every radius): the skin then takes, at
+  //      each point, its share kappa rho e^-tau of that light, so that its total over the column is Es as before, laid where the
+  //      gas absorbs the light;
+  //   b: ln (1 / (R beta_t(R))), the same for the observed looks, whose E (Eabs, with its own fall with the distance) the shaders
+  //      keep;
+  //   a: ln (beta_t / beta_d), beta_d = MS_C int (e^x_l / R) e^(-MS_C tau) dz: the diffuse light (MS_A of the skin's, absorbed
+  //      MS_C as strongly, see MS_C in the GLSL) laid where the gas takes it, with its total MS_A of the skin's as before.
+  // ug: the u above which x is under -16 at every radius (ST_UG in the GLSL: nothing is fetched there, no light can be taken).
+  // (ST, the grid, is defined with the cylinder, before the shaders' text that reads it)
+  const LIT_JS = { F1: 2.7994, RN: 6, RB: 12, P: 0.6 };   // (litFall(1 au), as LIT_F1 in the GLSL; round 18c's knee, its end, the power)
+  let starMemo = null;
+  function starTableData(litFlat = false) {
+    const key = MODEL.TAIL + ':' + MODEL.RC + ':' + MODEL.PT + ':' + litFlat;
+    if (starMemo && starMemo.key === key) return starMemo;
+    const { NR, NU, R0, R1, SUB, NS } = ST, l0 = Math.log(R0), dl = Math.log(R1 / R0) / (NR - 1), d = new Float32Array(NR * NU * 4);
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    // the rays' common steps in ln R: from 0.6 R_IN (no gas inside) to R0, then SUB a cell of the table; the depth's part a(R)
+    // (with the gas's inner edge) and 1 / 2h^2 at each
+    const lnA = Math.log(0.6 * MODEL.R_IN), nPre = Math.max(1, Math.ceil((l0 - lnA) / dl * SUB)), dPre = (l0 - lnA) / nPre, nS = nPre + (NR - 1) * SUB;
+    const sa = new Float64Array(nS + 1), sih = new Float64Array(nS + 1), sw = new Float64Array(nS + 1);
+    for (let k = 0; k <= nS; k++) {
+      const lnR = k <= nPre ? lnA + k * dPre : l0 + (k - nPre) * dl / SUB, R = Math.exp(lnR), h = MODEL.H0 * Math.pow(R, 0.25);
+      sa[k] = MODEL.LNTAU1 - 1.25 * lnR - cutOut(R) + Math.log(Math.max(ss(0.8 * MODEL.R_IN, 1.3 * MODEL.R_IN, R), 1e-300));
+      sih[k] = 0.5 / (h * h); sw[k] = k === 0 ? 0 : k <= nPre ? dPre : dl / SUB;
+    }
+    // r: each value of u a ray (u = 1, the axis: no gas), the trapezoid in ln R
+    for (let j = 0; j < NU; j++) {
+      if (j === NU - 1) { for (let i = 0; i < NR; i++) d[4 * (j * NR + i)] = -30; continue; }
+      const u = j / (NU - 1), s = u * u, t = s / (1 - s), t2 = t * t, ic = Math.sqrt(1 + t2);   // (tan th, 1 / cos th)
+      let tau = 0, fPrev = Math.exp(sa[0] - t2 * sih[0]);
+      for (let k = 1; k <= nS; k++) {
+        const f = Math.exp(sa[k] - t2 * sih[k]);
+        tau += 0.5 * (fPrev + f) * sw[k]; fPrev = f;
+        if (k >= nPre && (k - nPre) % SUB === 0) d[4 * (j * NR + (k - nPre) / SUB)] = Math.max(-30, Math.min(30, Math.log(Math.max(tau * ic, 1e-30))));
+      }
+    }
+    // g, b, a: beta_t and beta_d over each radius's column (NS points a cell of u, x linear in u within it; z = R t, dz = R dt;
+    // e^x_l as the shaders have it, without the inner edge's smoothstep, so that their skin's total is Es exactly: a factor of
+    // the radius alone, which this normalization cancels). (Round 18h) Inside 0.8 R_IN, where there is no gas, no light is taken
+    // (beta_t = 0: the cells below skipped, x at -30): lnN is the floor there, so that g and b hold no light. Before, the floors
+    // of Es and of R beta_t cancelled there to g 3.5 and b 69, which the shaders' skin took with the local depth of gas that is
+    // not there (white specks at the gas's inner edge, DESIGN.md section 49)
+    const bn = +betaIrrJS(LIT_JS.RN).toPrecision(6);
+    let jTop = 0;   // (the highest row of u with x >= -16 at some radius)
+    for (let i = 0; i < NR; i++) {
+      const lnR = l0 + i * dl, R = Math.exp(lnR), h = MODEL.H0 * Math.pow(R, 0.25), a = MODEL.LNTAU1 - 1.25 * lnR - cutOut(R);
+      let bt = 0, bd = 0;
+      for (let j = 0; j < NU - 2; j++) {
+        const x0 = d[4 * (j * NR + i)], x1 = d[4 * ((j + 1) * NR + i)];
+        // (nothing taken where the light is under e^-16 of the flux, nor where it is gone, tau over 1100: e^(-MS_C tau) under e^-44)
+        if (Math.max(x0, x1) < -16 || Math.min(x0, x1) > 7) continue;
+        for (let q = 0; q < NS; q++) {
+          const w = (q + 0.5) / NS, u = (j + w) / (NU - 1), s = u * u, t = s / (1 - s), dt = 2 * u / ((1 - s) * (1 - s)) / (NU - 1) / NS;
+          const tau = Math.exp(Math.min(x0 + (x1 - x0) * w, 30)), el = Math.exp(a - 0.5 * t * t / (h * h));
+          bt += el * Math.exp(-tau) * dt; bd += el * Math.exp(-ST.MS_C * tau) * dt;
+        }
+      }
+      bd *= ST.MS_C;
+      // round 18c's law (litModel): Es = Ea LIT_F1 / litFall R^-1/2 = (LIT_F1 / 0.022) beta s R^-1/2 (s, Eabs's inner edge), and
+      // beyond R_n times ((beta / beta_n)^(p - 1) (R / R_n)^(1/2 - 2p)) reached in ln R from R_n to R_b
+      const beta = betaIrrJS(R), sR = ss(MODEL.R_IN * 0.85, MODEL.R_IN * 1.5, R);
+      let lnEs = Math.log(LIT_JS.F1 / 0.022 * beta * Math.max(sR, 1e-30)) - 0.5 * Math.log(Math.max(R, 0.1));
+      if (!litFlat && R > LIT_JS.RN) lnEs += ss(Math.log(LIT_JS.RN), Math.log(LIT_JS.RB), lnR) * ((LIT_JS.P - 1) * Math.log(beta * sR / bn) + (0.5 - 2 * LIT_JS.P) * Math.log(R / LIT_JS.RN));
+      const lnN = bt > 0 ? -Math.log(R * bt) : Math.log(1e-30);
+      for (let j = 0; j < NU; j++) { const k = 4 * (j * NR + i); d[k + 1] = lnEs + lnN; d[k + 2] = lnN; d[k + 3] = Math.log(Math.max(bt, 1e-30) / Math.max(bd, 1e-30)); }
+      for (let j = NU - 2; j > jTop; j--) if (d[4 * (j * NR + i)] >= -16) { jTop = j; break; }
+    }
+    // (beyond the row above jTop every texel, and so every value the filter makes, is under -16)
+    starMemo = { key, data: d, ug: +Math.min(1, (jTop + 1) / (NU - 1)).toPrecision(6), ms: typeof performance !== 'undefined' ? performance.now() - t0 : 0 };
+    return starMemo;
+  }
+  // the numbers that follow from the parameters, for the page: R_TI (au); the snow line at the star's luminosity and in an outburst
+  // (30 times it; au); the midplane at 1 au (K) and how much thicker the disk is drawn than that temperature holds up (H0 over
+  // c_s / v_K at 1 au); and from the mass budget (none with data-mflux="0"): the accretion rate that reaches the star (where the gas
+  // disk ends, at the magnetosphere's r_T; M_sun/yr) and its share of Mdot (at R_TI), the rate at the disk's edge R_OUT, and the
+  // share of what comes in there that the wind takes away before the star
+  function parDerived() {
+    const tMid1 = tMidJS(1, lumBase), hGas = Math.sqrt(PROBE.k * tMid1 / (PROBE.mu * PROBE.mH)) / 1e5 / PROBE.vK1;
+    const out = { rTI: NONIDEAL.R_TI, snow: snowR(lumBase), snowBurst: snowR(30 * lumBase), tMid1, hFactor: MODEL.H0 / hGas,
+      alphaDead: THERMO.ALPHA * NONIDEAL.DZ * NONIDEAL.DZ, alphaOut: THERMO.ALPHA * NONIDEAL.OUTER * NONIDEAL.OUTER };   // (the dead zone's and the outer disk's alphas, in their ratios to the inner disk's, as coAlpha)
+    if (MF && MF.on) { const s = mdotAccJS(MAG.RT), o = mdotAccJS(MODEL.R_OUT); Object.assign(out, { mdotStar: s, fStar: s / MF.mdot, mdotOut: o, windShare: 1 - s / o }); }
+    return out;
+  }
+  // (round 14a) The wind's brightness as the viewer chose it in the model look (box.diskWindGain): a factor on G_WIND, a display
+  // choice (the owner tunes the wind's look), kept here so that an engine built again keeps it
+  const WIND_GAIN = { k: 1, MIN: 0.3, MAX: 10 };
+  // (round 18a) the see-through's range: a factor on a component's extinction (the state's op, opt.opac; see uOpac)
+  const OPAC = [0.05, 1];
+  // (round 18a) the background's stars: the number of them, times the default's (the state's stars, opt.stars; see uStars)
+  const STARS = [0.3, 5];
+  // (round 15b) the gas body's glow in the model look by default (uGGas in the GLSL; data-ggas, the page's ?ggas=, to compare)
+  const G_GAS = 0.5;
+  // (round 15b) the pebble layer's thickness in units of the drawn H by default (uPebH in the GLSL; data-pebh, 0 for the plane)
+  const PEB_H = 0.1;
+  // /PARAMS
+
   // reuse: the canvas, when the model is built anew on it after its WebGL context was lost and restored
   function init(box, reuse, restoredTime = 0) {
     // data-static renders one frame (used for the fallback image and screenshots)
     const reduce = reduceOS || 'static' in box.dataset;
+    // (round 18a) the gas's surface density (see MODEL.TAIL), before anything reads it (the budget just below, the tables, the
+    // shaders): data-sigtail="0" (the page's ?sigtail=0) the cut of before; data-rc (?rc=) R_c in au, 5 to 200 (30 unless given)
+    const rcV = Number(box.dataset.rc);
+    MODEL.TAIL = box.dataset.sigtail !== '0';
+    MODEL.RC = box.dataset.rc != null && box.dataset.rc !== '' && Number.isFinite(rcV) ? Math.round(10 * Math.min(200, Math.max(5, rcV))) / 10 : MODEL.R_OUT;
+    { const pv = Number(box.dataset.sigp); MODEL.PT = box.dataset.sigp != null && box.dataset.sigp !== '' && Number.isFinite(pv) ? Math.round(10 * Math.min(8, Math.max(1, pv))) / 10 : MODEL.PT_DEF; }   // (round 19a: data-sigp, the taper's exponent, 1 to 8; 3 unless given)
+    // (round 13c) the mass budget's settings, before anything asks for a line's solution or draws the wind map. (Round 14a: from the
+    // model's parameters, PAR, which an engine built again after a lost context keeps; the page's development switches data-mdot,
+    // -lam (two numbers), -lamin and -chic taken in once, as aliases of the parameters; data-mflux and data-lam="old" switches still)
+    parFold(box.dataset);
+    parApply(parSw(box.dataset));
+    // (round 14a) data-mpconst="1" (the page's ?mpconst=1): the shaders built with the parameters' defaults as constants, as until
+    // round 14 (see CONST_GLSL), to compare the default picture with that of the uniforms; the parameters then do not reach them.
+    // MPV: uMP's values now; mpTo(p): into the program p (the programs without it, or with MP_CONST, have no location)
+    // (round 15b) data-wext="1" (the page's ?wext=1): the wind's extent of before (see WIND_EXT), in the script (RB_JS, ZB_JS, set
+    // here, before anything of this build reads them) and in the shaders (WEXT_OLD, defined with MP_CONST by mpHdr)
+    const mpConst = box.dataset.mpconst === '1', wextOld = box.dataset.wext === '1';
+    // (round 15b) the wind and the envelope exclusive (EXCL): off with data-excl="0"; data-excl another infall rate (1e-10 to 1e-3
+    // M_sun/yr); envLnRho0, ln of the envelope's rho0 at it (the model's unit), for the exclusion, the cut's density and the gas line
+    const exclV = Number(box.dataset.excl), exclOn = box.dataset.excl !== '0', envLnRho0 = Math.log(envRho0(exclV >= 1e-10 && exclV <= 1e-3 ? exclV : EXCL.MDOT));
+    [RB_JS, ZB_JS] = wextOld ? WIND_EXT.OLD : WIND_EXT.NEW;
+    // (round 16a) Shortcuts on the frames of a moving picture (the view moved by a drag, a touch, a flight or a path, or the clock
+    // running), for the owner to try; all off by default (DESIGN.md section 39). data-fast (the page's ?fast=): 1, fewer steps
+    // (FAST.K of the step cap uSteps in the model and millimetre looks, of the continuum's substeps, of the gas line's first steps'
+    // count); 2, and the rays of an empty block left out (a coarse pass at 1 / FAST.B of the size, the march itself within FAST.N
+    // of its iterations, marks the blocks whose volume gathers nothing above the exposure's floor; FAST_SKIP), not in a frame
+    // drawn in kicks. data-fastk: FAST.K (0.6; 0.2 to 1). The still pictures are not touched: every frame of the motion takes the
+    // shortcuts and the first one after it is drawn in full and starts the still over (see drawOnce). (Round 16b, the owner: the
+    // checkerboard of ?fast=3 dropped; 3 is taken as 2)
+    const FAST = (() => {
+      const lv = Math.round(Number(box.dataset.fast)), k = Number(box.dataset.fastk);
+      return { lvl: lv >= 1 ? Math.min(2, lv) : 0, K: k >= 0.2 && k <= 1 ? k : 0.6, B: 8, N: 128, AGE: 10 };
+    })();
+    // (round 18a: SIG_CUT, the gas's cut of before; SIG_RC, another R_c for its taper; see MODEL.TAIL. Round 18b: CREST, the crest of
+    // the irradiated surface for this taper, crestJS, with the tail)
+    const crest = crestJS();
+    // (round 18c) the model look's starlight on the skin: LIT_FLAT, the law of before (data-litflat="1", the page's ?litflat=1, to
+    // compare; and with the cut of before, which keeps its picture). (Round 18f: the law itself, round 18c's knee at 6 au or with
+    // LIT_FLAT round 8's, is the table's, starTableData; ST_UG, the table's highest u with any depth; none with the cut of before)
+    const litFlat = box.dataset.litflat === '1' || !MODEL.TAIL;
+    const starTab = MODEL.TAIL ? starTableData(box.dataset.litflat === '1') : null;
+    // (round 18f) the continuum looks' cylinder (OBS_CT in the GLSL): data-obscyl="R,Z" (the page's ?obscyl=), au, each within
+    // OBS_CT_DEF.MIN to MAX; else the default, fitted to the lit tail (with the cut of before, the cylinder of before)
+    const obsCyl = (() => {
+      const m = /^\s*([0-9.]+)\s*,\s*([0-9.]+)\s*$/.exec(box.dataset.obscyl || ''), d = MODEL.TAIL ? OBS_CT_DEF.TAIL : OBS_CT_DEF.CUT;
+      if (!m) return d;
+      return [0, 1].map((k) => { const v = Number(m[k + 1]); return Number.isFinite(v) ? Math.round(10 * Math.min(OBS_CT_DEF.MAX[k], Math.max(OBS_CT_DEF.MIN[k], v))) / 10 : d[k]; });
+    })();
+    // (round 18k) the own light's look (see SELF_LOOK): ?selflook=old (data-selflook="old"), the look of round 18j (1.9-dev.32: linear in
+    // T_b in the gas's colour, at the interior's temperature). (Round 18l: the temperature is the state's selft, see SELF_T; the page reads
+    // round 18k's ?selfint=1 as selft 'int'. SELF_INT, which took it at the build, is gone: SELF_OLD alone takes the interior's)
+    const selfOld = box.dataset.selflook === 'old';
+    // (round 18m) the own light in the gas's colour, its shades the brightness temperature (selfTint in the GLSL); ?selfhue=1
+    // (data-selfhue="1", SELF_TCOL) in round 18k's colours of the brightness temperature, to compare
+    const selfTcol = box.dataset.selfhue === '1';
+    // (round 18m) the turbulence of before, uniform in height beyond the inner disk (the disk map's r alone, a 2D texture): ?turb3d=0
+    // (data-turb3d="0", TURB3D_OFF), to compare; by default the disk map is a 2D array with the turbulence's planes (see TURBZ)
+    const turbFlat = box.dataset.turb3d === '0';
+    // (round 19d, the visual review) the model look's planet's disk as the three clouds of before: ?cpdvol=0 (data-cpdvol="0",
+    // CPD_VOL_OFF), to compare; by default a volume (cpdVolume in the GLSL)
+    const cpdVolOff = box.dataset.cpdvol === '0';
+    // (round 19e, the visual review) the cut faces' colours of before (the temperature in the volume's tcolor, the density in viridis,
+    // the regions' flat colours of rounds 6 to 15b) and their keys: ?cutlook=old (data-cutlook="old", CUT_OLD), to compare; by
+    // default the script's table CUT
+    const cutOld = box.dataset.cutlook === 'old';
+    // (round 19c, the visual review) the jet's drawing of before (one Gaussian across it, knots as long at every height, the lobe's
+    // stretch by its width at one place): ?jetlook=old (data-jetlook="old", JET_OLD), to compare; see jetEm and jetLobe in the GLSL
+    const jetOld = box.dataset.jetlook === 'old';
+    const envOld = box.dataset.envlook === 'old';
+    const envTry = /^[0-9.]+(\/[0-9.]+){3}$/.test(box.dataset.envtry || '') ? box.dataset.envtry.split('/').map(Number) : null;   // (TEMPORARY)
+    const jetTry = /^[0-9.]+(\/[0-9.]+){3}$/.test(box.dataset.jettry || '') ? box.dataset.jettry.split('/').map(Number) : null;   // (TEMPORARY)
+    const hdrDefs = [mpConst && 'MP_CONST', wextOld && 'WEXT_OLD', !MODEL.TAIL && 'SIG_CUT', MODEL.TAIL && MODEL.RC !== MODEL.R_OUT && 'SIG_RC ' + G(MODEL.RC), MODEL.TAIL && MODEL.PT !== MODEL.PT_DEF && 'SIG_P ' + G(MODEL.PT),
+      crest && 'CREST vec4(' + [crest.R, crest.a, crest.h, crest.th].map(G).join(', ') + ')',
+      litFlat && 'LIT_FLAT', starTab && 'ST_UG ' + G(starTab.ug), 'OBS_CT vec2(' + obsCyl.map(G).join(', ') + ')',
+      (box.dataset.skinlos === '0' || !MODEL.TAIL) && 'SKIN_THRU',   // (round 18f: ?skinlos=0 and the cut of before, see SKIN_LOS in the GLSL)
+      (box.dataset.opq === '0' || !MODEL.TAIL) && 'OPQ_OLD',
+      selfOld && 'SELF_OLD', selfTcol && 'SELF_TCOL', turbFlat && 'TURB3D_OFF', cpdVolOff && 'CPD_VOL_OFF', cutOld && 'CUT_OLD',
+      jetOld && 'JET_OLD', envOld && 'ENV_OLD', envTry && 'ENV_TRY vec4(' + envTry.map(G).join(', ') + ')', jetTry && 'JET_TRY vec4(' + jetTry.map(G).join(', ') + ')'].filter(Boolean);   // (round 18k: ?selflook=old, see SELF_LOOK; round 18j's ?selfsurf=1 is the default now and passed over; round 18l: ?selfint=1 the state's selft)   // (round 18g: ?opq=0 and the cut of before, the opacities of before, see K_G in the GLSL)
+    const mpHdr = (src) => hdrDefs.reduce((s, d) => (s.includes('#define ' + d + '\n') ? s : s.replace('#version 300 es\n', '#version 300 es\n#define ' + d + '\n')), src);
+    let MPV = mpValues();
+    const mpLoc = new Map();
+    const mpTo = (p) => { if (!mpLoc.has(p)) mpLoc.set(p, gl.getUniformLocation(p, 'uMP')); const l = mpLoc.get(p); if (l) { gl.useProgram(p); gl.uniform4fv(l, MPV); } };
     const canvas = reuse || document.createElement('canvas');
     // an application (its keys reach it under a screen reader), named shortly and described by two hidden texts: the
     // picture (see the end of draw; written only when it changes) and the keys
@@ -3753,9 +5941,12 @@ void main(){
     // (every text, and the scale bar, with a dark outline, so that they read over the bright inner disk, in an outburst, on
     // the CO line's bright maps and on the cut faces; the style goes with the overlay into the saved image)
     overlay.innerHTML = '<style>text{paint-order:stroke;stroke:rgba(6,9,18,.82);stroke-width:3.5px;stroke-linejoin:round}.disk-scale line.disk-halo{stroke:rgba(6,9,18,.6);stroke-width:3.5px}</style>'
-      + '<g class="disk-field"></g><g class="disk-slice"></g><path class="disk-snowline" fill="none"/><text class="disk-label"></text><text class="disk-label disk-plabel"></text><g class="disk-scale"><line class="disk-halo"/><line/><text/></g><g class="disk-scale"><line class="disk-halo"/><line/><text/></g>';
+      + '<g class="disk-field"></g><g class="disk-slice-field"></g><g class="disk-slice"></g><path class="disk-snowline" fill="none"/><text class="disk-label"></text><text class="disk-label disk-plabel"></text><g class="disk-scale"><line class="disk-halo"/><line/><text/></g><g class="disk-scale"><line class="disk-halo"/><line/><text/></g>';
     box.appendChild(overlay);
     const ring = overlay.querySelector('.disk-snowline'), label = overlay.querySelector('.disk-label'), fieldG = overlay.querySelector('.disk-field');
+    // (round 13a, the owner: "in the annotations, don't show the snow line's ring") The dashed ring is not drawn; its name is,
+    // where it was (placed by the ring's points, from 110 to 160 px across, as before). The cut's snow line stays on its faces.
+    const SNOW_RING = false;
     const plabel = overlay.querySelector('.disk-plabel');
     // (the small rings that marked the planets from round 3 are gone in round 7: the planets glow instead, see uPlG)
     const [sgroup, sgroup2] = overlay.querySelectorAll('.disk-scale');   // the bar, and the one it replaces as it fades out
@@ -3796,9 +5987,10 @@ void main(){
       rec({ k: 'link', ph: 0, id, w: name });
       try {
         const p = gl.createProgram();
-        gl.attachShader(p, compile(gl.VERTEX_SHADER, VS)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+        gl.attachShader(p, compile(gl.VERTEX_SHADER, VS)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, mpHdr(fs))); gl.linkProgram(p);
         if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(p));
         rec({ k: 'link', ph: 1, id, w: name, ms: performance.now() - t0, ok: 1 });
+        mpTo(p);   // (round 14a: the parameters, see CONST_GLSL)
         return p;
       } catch (e) { rec({ k: 'link', ph: 1, id, w: name, ms: performance.now() - t0, ok: 0, log: String(e && e.message || e).slice(0, 300) }); throw e; }
     };
@@ -3832,7 +6024,8 @@ void main(){
     }
     const uniforms = (p, names) => Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)]));
     // (round 10a: with data-math="safe", the main programs with SAFE_MATH, see the end of FS)
-    const FSM = box.dataset.math === 'safe' ? FS.replace('#version 300 es\n', '#version 300 es\n#define SAFE_MATH\n') : FS;
+    const FSM = mpHdr(box.dataset.math === 'safe' ? FS.replace('#version 300 es\n', '#version 300 es\n#define SAFE_MATH\n') : FS)   // (round 14a: and MP_CONST, see mpHdr)
+      .replace('#version 300 es\n', '#version 300 es\n' + (FAST.lvl >= 2 ? '#define FAST_SKIP\n' : ''));   // (round 16a: see FAST)
     const prog = link(FSM, 'FS'), progDisk = link(DISKMAP_FS, 'disk'), progWind = link(WINDMAP_FS, 'wind'), progEnv = link(ENVMAP_FS, 'env');
     // the eddies' volume texture (TURB3_FS, then SHADE3_FS), NB3 layers per draw: 8 where the driver allows, else 4
     const NB3 = gl.getParameter(gl.MAX_DRAW_BUFFERS) >= 8 && gl.getParameter(gl.MAX_COLOR_ATTACHMENTS) >= 8 ? 8 : 4;
@@ -3841,7 +6034,7 @@ void main(){
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
     const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
-      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW'];
+      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV', 'uMP', 'uWindK', 'uGGas', 'uJetOcc', 'uLstar', 'uExcl', 'uCoEnv', 'uPebH', 'uFast', 'uOpac', 'uStars', 'uSelf', 'uSelfT', 'uDbg', 'uDbg2', 'uDbg3'];   // R19DBG
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS, 'show'), progBloom = link(BLOOM_FS, 'bloom');
     // (round 8) the bloom's targets, a quarter of accT's size (made with it): A on unit 18 (for SHOW_FS), B on unit 19
@@ -3935,6 +6128,7 @@ void main(){
       gl.linkProgram(p);
       if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { console.error('disk3d study:', gl.getProgramInfoLog(p)); return null; }
       fullStudy = { prog: p, U: uniforms(p, UNAMES) };
+      gl.useProgram(p); gl.uniform4fv(fullStudy.U.uMP, MPV);   // (round 14a: the parameters)
       return fullStudy;
     }
     const startFull = () => {
@@ -3947,7 +6141,7 @@ void main(){
     };
     // (its samplers' units, as FULL's: see fullProgram)
     function fullUnits(P) {
-      gl.useProgram(P.prog); gl.uniform1i(gl.getUniformLocation(P.prog, 'uFaceA'), 12); gl.uniform1i(P.U.uDiskMap, 0); gl.uniform1i(P.U.uGapT, 14); gl.uniform1i(P.U.uThermo, 15); gl.uniform1i(P.U.uWindMap, 1); gl.uniform1i(P.U.uEnvMap, 3); gl.uniform1i(P.U.uTurb3, 4); gl.uniform1i(P.U.uEnv3, 7); gl.uniform1i(P.U.uWStr, 8); gl.uniform1i(P.U.uAccMap, 9); gl.uniform1i(P.U.uWindVel, 10);
+      gl.useProgram(P.prog); gl.uniform1i(gl.getUniformLocation(P.prog, 'uFaceA'), 12); gl.uniform1i(P.U.uDiskMap, 0); gl.uniform1i(P.U.uGapT, 14); gl.uniform1i(P.U.uThermo, 15); gl.uniform1i(gl.getUniformLocation(P.prog, 'uStarT'), 21); gl.uniform1i(P.U.uWindMap, 1); gl.uniform1i(P.U.uEnvMap, 3); gl.uniform1i(P.U.uTurb3, 4); gl.uniform1i(P.U.uEnv3, 7); gl.uniform1i(P.U.uWStr, 8); gl.uniform1i(P.U.uAccMap, 9); gl.uniform1i(P.U.uWindVel, 10);
       gl.uniform1i(P.U.uSky, 16); gl.uniform1i(gl.getUniformLocation(P.prog, 'uCoAcc'), CO_UNIT); gl.uniform1i(gl.getUniformLocation(P.prog, 'uState'), SPLIT.UNIT);
     }
     function fullProgram() {
@@ -3958,12 +6152,13 @@ void main(){
       if (pcomp && !fullWait) { const ts = performance.now(), done = gl.getProgramParameter(fullP, pcomp.COMPLETION_STATUS_KHR); slowSync('COMPLETION_STATUS', ts); if (!done) return null; }
       const okF = gl.getProgramParameter(fullP, gl.LINK_STATUS);
       if (fullRec) { rec({ k: 'link', ph: 1, id: fullRec.id, w: 'FULL', ms: performance.now() - fullRec.t0, ok: okF ? 1 : 0, ...(okF ? {} : { log: String(gl.getProgramInfoLog(fullP)).slice(0, 300) }) }); fullRec = null; }
-      if (!okF) { console.error('disk3d:', gl.getProgramInfoLog(fullP)); full = false; return full; }
+      if (!okF) { console.error('disk3d:', gl.getProgramInfoLog(fullP), (gl.getAttachedShaders(fullP) || []).map((sh) => gl.getShaderInfoLog(sh)).join(' | ')); full = false; return full; }   // R19DBG (the shaders' logs)
       full = { prog: fullP, U: uniforms(fullP, UNAMES) };
-      gl.useProgram(fullP); gl.uniform1i(gl.getUniformLocation(fullP, 'uFaceA'), 12); gl.uniform1i(full.U.uDiskMap, 0); gl.uniform1i(full.U.uGapT, 14); gl.uniform1i(full.U.uThermo, 15); gl.uniform1i(full.U.uWindMap, 1); gl.uniform1i(full.U.uEnvMap, 3); gl.uniform1i(full.U.uTurb3, 4); gl.uniform1i(full.U.uEnv3, 7); gl.uniform1i(full.U.uWStr, 8); gl.uniform1i(full.U.uAccMap, 9); gl.uniform1i(full.U.uWindVel, 10);
+      gl.useProgram(fullP); gl.uniform1i(gl.getUniformLocation(fullP, 'uFaceA'), 12); gl.uniform1i(full.U.uDiskMap, 0); gl.uniform1i(full.U.uGapT, 14); gl.uniform1i(full.U.uThermo, 15); gl.uniform1i(gl.getUniformLocation(fullP, 'uStarT'), 21); gl.uniform1i(full.U.uWindMap, 1); gl.uniform1i(full.U.uEnvMap, 3); gl.uniform1i(full.U.uTurb3, 4); gl.uniform1i(full.U.uEnv3, 7); gl.uniform1i(full.U.uWStr, 8); gl.uniform1i(full.U.uAccMap, 9); gl.uniform1i(full.U.uWindVel, 10);
       gl.uniform1i(full.U.uSky, 16);   // (round 8: the sky's map, see BG)
       gl.uniform1i(gl.getUniformLocation(fullP, 'uCoAcc'), CO_UNIT);   // (round 9: the moments' sums, see coAccOf)
       gl.uniform1i(gl.getUniformLocation(fullP, 'uState'), SPLIT.UNIT);   // (round 10a: the march's state in kicks, see SPLIT)
+      gl.uniform4fv(full.U.uMP, MPV);   // (round 14a: the parameters; the frames send them too)
       return full;
     }
     // (round 9) The FULL program's first use. Linking it is not all: ANGLE's Metal backend builds a pipeline state for each
@@ -3992,27 +6187,28 @@ void main(){
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 128, PLANETS.MAX, 0, gl.RED, gl.FLOAT, new Float32Array(128 * PLANETS.MAX).fill(1));
     gl.useProgram(progDisk); gl.uniform1i(UD.uPlLight, 13); gl.uniform1i(UD.uGapT, 14);
-    // (round 7) the temperature's table (see tInt4 in the GLSL), on unit 15, from the script's own laws (tInt4JS): T_acc with
-    // the floor, and T_i for the star's own luminosity, in K (half floats, linearly filtered)
-    {
-      const NR = 512, NZ = 128, ln0 = Math.log(0.02), dln = Math.log(2000) / (NR - 1), d = new Float32Array(NR * NZ * 2);
-      for (let j = 0; j < NR; j++) {
-        // (as tInt4JS, with what depends on R alone taken out of the loop over the heights)
-        const R = Math.exp(ln0 + j * dln), ti = Math.pow(THERMO.KI * betaIrrJS(R) / (R * R), 0.25), m = mriAmpJS(R), za = zAccHJS(R);
-        const ua = Math.max(1 - erfJS(za * Math.SQRT1_2), 1e-6), tm4 = THERMO.KM / (R * R * R), tv = THERMO.KV * Math.pow(R, -0.9), tv4 = tv * tv * tv * tv, f4 = Math.pow(THERMO.T_FLOOR, 4);
-        for (let k = 0; k < NZ; k++) {
-          const az = k * 8 / (NZ - 1), u = 1 - erfJS(az * Math.SQRT1_2);
-          const acc = (1 - m) * tm4 * (az < za ? 1 : (THERMO.TAU_HEAT * u / ua + 0.57735) / (THERMO.TAU_HEAT + 0.57735)) + m * tv4 * (2 * u - u * u + 0.003) / 1.003 + f4;
-          d[2 * (k * NR + j)] = Math.pow(acc, 0.25);
-          d[2 * (k * NR + j) + 1] = ti;
-        }
-      }
-      const t = gl.createTexture();
-      gl.activeTexture(gl.TEXTURE15); gl.bindTexture(gl.TEXTURE_2D, t);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, NR, NZ, 0, gl.RG, gl.FLOAT, d);
-    }
+    // (round 7) the temperature's table (see tInt4 in the GLSL and thermoTableData), on unit 15. (Round 14a: sent again when the
+    // parameters change, thermoUpload, the texture kept on its unit)
+    const thermoT = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE15); gl.bindTexture(gl.TEXTURE_2D, thermoT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, ttNR(), TT_NZ, 0, gl.RG, gl.FLOAT, thermoTableData());
+    const thermoUpload = () => {
+      gl.activeTexture(gl.TEXTURE15); gl.bindTexture(gl.TEXTURE_2D, thermoT);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, ttNR(), TT_NZ, gl.RG, gl.FLOAT, thermoTableData());
+      gl.activeTexture(gl.TEXTURE2);
+    };
+    // (round 18f) the table of the starlight's depth along the rays from the star (see starTableData and starT in the GLSL), on unit
+    // 21, half floats linearly filtered as the temperature's (a 32-bit float texture cannot be filtered on the iPhones, see
+    // target): made once a build, with the tail (the cut of before has none, and an empty texel stands in)
+    const starT = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE21); gl.bindTexture(gl.TEXTURE_2D, starT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    if (starTab) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, ST.NR, ST.NU, 0, gl.RGBA, gl.FLOAT, starTab.data);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1, 1, 0, gl.RGBA, gl.FLOAT, new Float32Array([-30, 0, 0, 0]));
+    gl.activeTexture(gl.TEXTURE2);
     // the gaps' table (see gapT): ln of the factor and the slope, on unit 14
     const gapTT = gl.createTexture(), gapTD = new Float32Array(2 * GT_N);
     gl.activeTexture(gl.TEXTURE14); gl.bindTexture(gl.TEXTURE_2D, gapTT);
@@ -4036,6 +6232,19 @@ void main(){
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrapT);
       const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('disk3d: map target incomplete');
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return { tex, fb, w, h };
+    }
+    // (round 18m) a target of n layers (a 2D array, as target: layer 0 drawn by its framebuffer; the others attached by the caller)
+    function targetArr(w, h, n, fmt, wrapT) {
+      gl.activeTexture(gl.TEXTURE2);
+      const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
+      gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, fmt, w, h, n);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, wrapT);
+      const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex, 0, 0);
       if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('disk3d: map target incomplete');
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       return { tex, fb, w, h };
@@ -4106,11 +6315,21 @@ void main(){
       ...BPL.flatMap((T) => T.F.flatMap((F, i) => [F, T.G[i], T.XIP[i], 0]))]));
     gl.useProgram(progWind);
     gl.uniform1i(gl.getUniformLocation(progWind, 'uBPT'), 2);
-    gl.uniform4fv(gl.getUniformLocation(progWind, 'uBPL'), new Float32Array(BPL.flatMap((T) => [T.LAM, T.A0, T.B0, 0])));
+    gl.uniform4fv(gl.getUniformLocation(progWind, 'uBPL'), new Float32Array(BPL.flatMap((T) => [T.LAM, T.A0, T.B0, T.CHIA])));   // (round 15b: w, the Alfvén point, see EXCL)
+    // (round 13c) the mass budget's settings and table (see MFLUX). (Round 14a: sent again when the parameters change, mpUpload)
+    const UWB = uniforms(progWind, ['uLamP', 'uMflux', 'uMdotT', 'uExcl']);
+    const windBudget = () => {
+      gl.useProgram(progWind);
+      gl.uniform4f(UWB.uLamP, MF.rise ? 1 : 0, MF.lo, MF.hi, MF.lin);
+      gl.uniform4f(UWB.uMflux, MF.on ? 1 : 0, MF.chic, MF.mdot, 0);
+      gl.uniform2f(UWB.uExcl, exclOn ? 1 : 0, envLnRho0);   // (round 15b: see EXCL)
+      gl.uniform4fv(UWB.uMdotT, MF.tab);
+    };
+    windBudget();
     gl.uniform2f(gl.getUniformLocation(progWind, 'uMapRes'), windMapT.w, windMapT.h);
     // the wind map (and its velocities) for the asymmetry's share now; drawn again when it changes (during its fade)
     const uAsymSW = gl.getUniformLocation(progWind, 'uAsymS');
-    let windMapS = null;
+    let windMapS = null, envX = null;   // (round 15b: envX, the envelope's share into its map after each wind map, once it is made)
     function drawWindMap(s) {
       if (s === windMapS) return;
       windMapS = s;
@@ -4118,8 +6337,21 @@ void main(){
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, bpT);
       gl.bindFramebuffer(gl.FRAMEBUFFER, windMapT.fb); gl.viewport(0, 0, windMapT.w, windMapT.h); gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      if (envX) envX();
     }
     drawWindMap(0);   // (the first frame draws it for the state's asymmetry)
+    // (round 14a) after the parameters change (box.diskParams), at the next frame that draws the maps and before them: uMP into the
+    // programs that keep it (the main programs take it with each frame's uniforms), the temperature's table, the wind map's budget,
+    // and the wind map drawn again
+    let mpDirty = false;
+    function mpUpload() {
+      mpDirty = false;
+      MPV = mpValues();
+      for (const p of [progDisk, progWind, progEnv, progEnvX, progT3, progS3, progWS]) mpTo(p);   // (round 15b: and the envelope's share, ENVX_FS)
+      thermoUpload();
+      windBudget();
+      windMapS = null;
+    }
     // (round 8) the sky of a star-forming region (see BG, SKY_FS): drawn once, the first time it is asked for, on unit 16
     // (an empty texture there until then)
     let skyT = null;
@@ -4144,15 +6376,26 @@ void main(){
     gl.uniform2f(gl.getUniformLocation(progEnv, 'uMapRes'), envMapT.w, envMapT.h);
     gl.bindFramebuffer(gl.FRAMEBUFFER, envMapT.fb); gl.viewport(0, 0, envMapT.w, envMapT.h); gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    // (round 15b) the envelope's share of the place (ENVX_FS, see EXCL) into the map's b and a alone, now and after each wind map
+    const progEnvX = link(ENVX_FS, 'envx');
+    gl.useProgram(progEnvX); gl.uniform2f(gl.getUniformLocation(progEnvX, 'uMapRes'), envMapT.w, envMapT.h); gl.uniform1i(gl.getUniformLocation(progEnvX, 'uWindVel'), 10);
+    envX = () => {
+      gl.useProgram(progEnvX); gl.bindFramebuffer(gl.FRAMEBUFFER, envMapT.fb); gl.viewport(0, 0, envMapT.w, envMapT.h);
+      gl.colorMask(false, true, true, true); gl.drawArrays(gl.TRIANGLES, 0, 3); gl.colorMask(true, true, true, true);   // (round 19c: and g, see ENVX_FS)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    };
+    envX();
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, envMapT.tex);
     gl.useProgram(prog);
-    gl.uniform1i(U0.uDiskMap, 0); gl.uniform1i(U0.uGapT, 14); gl.uniform1i(U0.uThermo, 15); gl.uniform1i(U0.uWindMap, 1); gl.uniform1i(U0.uTurb3, 4); gl.uniform1i(U0.uWStr, 8); gl.uniform1i(U0.uAccMap, 9);
+    gl.uniform1i(U0.uDiskMap, 0); gl.uniform1i(U0.uGapT, 14); gl.uniform1i(U0.uThermo, 15); gl.uniform1i(gl.getUniformLocation(prog, 'uStarT'), 21); gl.uniform1i(U0.uWindMap, 1); gl.uniform1i(U0.uTurb3, 4); gl.uniform1i(U0.uWStr, 8); gl.uniform1i(U0.uAccMap, 9);
     gl.uniform1i(U0.uSky, 16); gl.uniform1i(U0.uEnvMap, 3); gl.uniform1i(U0.uEnv3, 7);   // (round 8: the envelope in both programs)
+    if (FAST.lvl >= 2) gl.uniform1i(gl.getUniformLocation(prog, 'uFaceA'), 12);   // (round 16a: the empty blocks' mask, see FAST)
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, windMapT.tex);
     // disk map: 2048 texels in ln R (0.0027 per texel) resolve the sheared structure down to the footprint
     // of a pixel at the usual distances on a desktop panel; a narrower canvas (a phone) has larger pixels
     // and gets 1024 or 512, since the map costs the same whatever the size of the picture. 256 around
-    // (4 per cell of the finer octave).
+    // (4 per cell of the finer octave). (Round 18m: three layers of it, the map and the turbulence's planes above and below the
+    // midplane, see TURBZ: 12.6 MB at 2048, 8.4 MB more than the map alone; one draw writes the three and the accretion's streaks)
     // The eddies' volume (texture units 5 and 4), over the turbulent inner disk (R from 0.05 to 0.6 au): 352 x 160 x 40
     // texels on a desktop panel (about 7 texels per radial cell, 4 around, 6 per cell in height), fewer with a smaller
     // disk map; 11 MB.
@@ -4164,7 +6407,8 @@ void main(){
       const nx = Math.min(2048, Math.max(512, 2 ** Math.ceil(Math.log2(canvas.width * 0.5 * 1.6))));
       if (diskMapT && diskMapT.w === nx) return;
       if (diskMapT) { gl.deleteFramebuffer(diskMapT.fb); gl.deleteTexture(diskMapT.tex); gl.deleteTexture(accMapTex); }
-      diskMapT = target(nx, 256, gl.RGBA16F, gl.REPEAT);
+      // (round 18m: by default a 2D array, its layers 1 and 2 the turbulence's planes, see TURBZ; with ?turb3d=0 the map of before)
+      diskMapT = turbFlat ? target(nx, 256, gl.RGBA16F, gl.REPEAT) : targetArr(nx, 256, 3, gl.RGBA16F, gl.REPEAT);
       // the accretion layers' streaks (unit 9), drawn with the disk map into its second attachment
       gl.activeTexture(gl.TEXTURE9);
       accMapTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, accMapTex);
@@ -4173,11 +6417,12 @@ void main(){
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
       gl.bindFramebuffer(gl.FRAMEBUFFER, diskMapT.fb);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, accMapTex, 0);
-      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+      if (!turbFlat) { gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, diskMapT.tex, 0, 1); gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT3, diskMapT.tex, 0, 2); }
+      gl.drawBuffers(turbFlat ? [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1] : [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3]);
       if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('disk3d: map target incomplete');
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.useProgram(progDisk); gl.uniform2f(UD.uMapRes, diskMapT.w, diskMapT.h);
-      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, diskMapT.tex);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(turbFlat ? gl.TEXTURE_2D : gl.TEXTURE_2D_ARRAY, diskMapT.tex);
       drop3(t3a); drop3(t3b);
       const [w3, h3] = [nx >= 2048 ? 352 : nx >= 1024 ? 176 : 120, nx >= 2048 ? 160 : 120].map((v) => Math.min(v, MAX3));
       t3a = target3(w3, h3, 40, gl.R16F); t3b = target3(w3, h3, 40, gl.RG16F); glErr('maps');
@@ -4220,6 +6465,7 @@ void main(){
     // across the joints). The parcels of the wind (and of the envelope) are marks of the flow, not clumps of gas (round 8:
     // small arrows, see ARROW; short dashes with tails before).
     let showField = !('nofield' in box.dataset);
+    const FIELD_LOD = [0.004, 0.03], FIELD_WIN = [5, 24], FIELD_LOD_ON = box.dataset.fieldlod !== '0';   // (round 19a: see drawLines' lodK)
     // geometry: NL field lines whose feet come from a 2D Sobol sequence, quasi-uniform in ln R (0.2 to 25 au)
     // and azimuth; each line is drawn up to ZTOP, with points through the disk (diskHeights) and the heights CHI_S
     // above it; wind parcels carry a release phase in [0, 1). Below, two sets that fade into each other with the wind's
@@ -4251,10 +6497,10 @@ void main(){
       accMarks.push({ R0, phi0: phi0 + 2.4, side: -1, u: (0.618034 * i + 0.5) % 1 });
     }
     // starlight reaching a point at radius R and height h: softened falloff with the distance from the star,
-    // shadowed inside the disk (optical depth toward the star)
+    // shadowed inside the disk (optical depth toward the star; round 18b: and in the crest's shadow, xCrestJS)
     const starlight = (R, h) => {
       const Hs = MODEL.H0 * Math.pow(R, 1.25);
-      const tau = Math.exp(Math.min(Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) - 0.5 * h * h / (Hs * Hs), -30), 30));
+      const tau = Math.exp(Math.min(Math.max(Math.max(MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) - 0.5 * h * h / (Hs * Hs), xCrestJS(R, Math.abs(h))), -30), 30));
       return (0.2 + 0.8 * Math.exp(-tau)) / (1 + Math.pow((R * R + h * h) / 225, WIND_SOFT / 2));
     };
     // A line keeps its shape in the frame rotating with its foot, so its samples are computed once: radius,
@@ -4292,8 +6538,9 @@ void main(){
     const U_MAX = 1 + 0.36 * 1.4, uOf = (a) => (a <= 1 ? a : 1 + 0.36 * (a - 1)), aOf = (u) => (u <= 1 ? u : 1 + (u - 1) / 0.36);
     const level = (b, n = NB) => aOf((b + 0.5) * U_MAX / n);
     const halo = [], core = [];
-    for (let b = 0; b < NB; b++) halo.push(mkPath({ fill: 'none', stroke: '#8cb8ff', 'stroke-width': 30, 'stroke-opacity': Math.min(0.6, 0.18 * level(b)).toFixed(3), 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }));
-    for (let b = 0; b < NB; b++) core.push(mkPath({ fill: 'none', stroke: '#bed7ff', 'stroke-width': 10, 'stroke-opacity': Math.min(1, level(b)).toFixed(3), 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }));
+    // (round 18d: in the field lines' colour, FIELD; #8cb8ff and #bed7ff by default)
+    for (let b = 0; b < NB; b++) halo.push(mkPath({ fill: 'none', stroke: fieldTint('halo'), 'stroke-width': 30, 'stroke-opacity': Math.min(0.6, 0.18 * level(b)).toFixed(3), 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }));
+    for (let b = 0; b < NB; b++) core.push(mkPath({ fill: 'none', stroke: fieldTint('core'), 'stroke-width': 10, 'stroke-opacity': Math.min(1, level(b)).toFixed(3), 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }));
     const elines = mkPath({ fill: 'none', stroke: '#c9d8f5', 'stroke-width': 8, 'stroke-linecap': 'round' });
     // (round 8) the flows' arrows (see ARROW), in a group of their own over the field lines (they are the gas's option, not
     // the lines'), each flow in a light tint of its material's colour: the wind's, the accretion's, the envelope's, the
@@ -4327,14 +6574,32 @@ void main(){
     const magG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     fieldG.after(magG);
     magG.setAttribute('transform', 'scale(0.1)');
-    const magPath = (w, op) => {
+    const magPath = (w, op, cap = 'round') => {
       const e = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      for (const [k, v] of [['fill', 'none'], ['stroke', 'rgb(225,235,255)'], ['stroke-width', 10 * w], ['stroke-opacity', op], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round']]) e.setAttribute(k, v);
+      for (const [k, v] of [['fill', 'none'], ['stroke', fieldTint('mag')], ['stroke-width', 10 * w], ['stroke-opacity', op], ['stroke-linecap', cap], ['stroke-linejoin', 'round']]) e.setAttribute(k, v);   // (round 18d: the field lines' colour, FIELD; rgb(225,235,255) by default)
       magG.appendChild(e); return e;
     };
-    const magClosed = magPath(1, 0.5), magEdge = magPath(1.3, 0.8), magOpen = magPath(1, 0.45), magCurt = magPath(1.2, 0.85), magX = magPath(1.6, 0.95);
-    magCurt.setAttribute('stroke', 'rgb(255,120,150)');
+    // (Round 19b, the visual review: "the field lines have visible corners toward the outside and an uneven weight") Each of the
+    // magnetosphere's lines is a smooth curve (magLine in drawMag: cubic Bezier curves through its points, as the field lines'),
+    // ended where it passes behind the star or the dust (found between two of its points, not at the last point seen), and its
+    // weight follows where it runs: lighter behind the star than before it, lighter where the lines converge on the star's surface,
+    // and the disk's open lines lighter away from the star. A kind of line is NBG paths, one a level of that weight (their
+    // segments end flat, as the field lines' levels, so that two levels meet without overlapping); the highest level has the
+    // opacity the kind had.
+    const NBG = 6;
+    const magLevels = (w, op) => Array.from({ length: NBG }, (_, b) => magPath(w, (op * (b + 1) / NBG).toFixed(3), 'butt'));
+    const magClosed = magLevels(1, 0.5), magEdge = magLevels(1.3, 0.8), magOpen = magLevels(1, 0.45), magCurt = magLevels(1.2, 0.85), magX = magPath(1.6, 0.95);
+    const magAll = [...magClosed, ...magEdge, ...magOpen, ...magCurt];
+    for (const e of magCurt) e.setAttribute('stroke', 'rgb(255,120,150)');
     magX.setAttribute('stroke', 'rgb(255,236,170)');
+    // (round 18d) the field lines' colour (FIELD, box.diskColours' 'field') put on their lines again: the cores, the glows, the
+    // magnetosphere's lines (not its curtains, the gas falling along them, nor the X-point)
+    const fieldPaint = () => {
+      const c = fieldTint('core'), h = fieldTint('halo'), m = fieldTint('mag');
+      for (const e of core) e.setAttribute('stroke', c);
+      for (const e of halo) e.setAttribute('stroke', h);
+      for (const e of [...magClosed, ...magEdge, ...magOpen]) e.setAttribute('stroke', m);
+    };
     const magXL = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     const XPOINT_LABEL = false;   // (Disk Lab v2: the X-point is marked but not named, in the view and on the cut face)
     // (Disk Lab v2, round 7: nor marked: the small cross at the X-point goes too, in the view and on the cut face, as the
@@ -4361,6 +6626,8 @@ void main(){
     // the points of a line in a buffer used again for every line (x, y, z), and a point for the tests of visibility, so
     // that drawing allocates nothing per point
     const magBuf = new Float64Array(3 * 128), magP = [0, 0, 0];
+    // (round 19b) a line's run of points seen, on the screen: x, y, the weight, the spline's knot
+    const magSX = new Float64Array(160), magSY = new Float64Array(160), magSA = new Float64Array(160), magST = new Float64Array(160);
     // behind the star: the segment from the camera to P passes within MAG.RS of its centre
     const behindStar = (P) => {
       const dx = P[0] - cam[0], dy = P[1] - cam[1], dz = P[2] - cam[2], dd = dx * dx + dy * dy + dz * dz;
@@ -4373,34 +6640,78 @@ void main(){
       const a = magFrame.vis * fieldAmp * modelAmp;
       const vis = (P) => kept(P) && !behindStar(P) && sheetT(P) > 0.5;
       const dX = drawMagX(magFrame.vis * modelAmp, vis);   // the name follows annotations, also with the field off
-      if (a <= 0.01) { for (const e of [magClosed, magEdge, magOpen, magCurt, magX]) if (e.getAttribute('d')) e.setAttribute('d', ''); return; }
+      if (a <= 0.01) { for (const e of magAll) setD(e, ''); if (magX.getAttribute('d')) magX.setAttribute('d', ''); return; }
       const { ax: m, e1 } = magFrame, e2 = [m[1] * e1[2] - m[2] * e1[1], m[2] * e1[0] - m[0] * e1[2], m[0] * e1[1] - m[1] * e1[0]];
-      // a polyline through the n points in magBuf (projected as project does), broken where hidden, behind the camera or
-      // far off the picture (beyond twice its size on any side: close up, points beside the camera are thrown far off)
       const br = basis.r, bu = basis.u, bf = basis.f, kx = 1 / (basis.th * (W / Hh)), ky = 1 / basis.th;
-      const poly = (n) => {
-        let d = '', pen = false;
-        for (let i = 0; i < 3 * n; i += 3) {
-          const vx = magBuf[i] - cam[0], vy = magBuf[i + 1] - cam[1], vz = magBuf[i + 2] - cam[2], qz = vx * bf[0] + vy * bf[1] + vz * bf[2];
-          if (qz <= zN) { pen = false; continue; }
-          const qx = ((vx * br[0] + vy * br[1] + vz * br[2]) * kx / qz + 1) / 2 * W, qy = (1 - (vx * bu[0] + vy * bu[1] + vz * bu[2]) * ky / qz) / 2 * Hh;
-          if (qx < -2 * W || qx > 3 * W || qy < -2 * Hh || qy > 3 * Hh) { pen = false; continue; }
-          magP[0] = magBuf[i]; magP[1] = magBuf[i + 1]; magP[2] = magBuf[i + 2];
-          if (!vis(magP)) { pen = false; continue; }
-          d += (pen ? 'L' : 'M') + Math.round(qx * 10) + ' ' + Math.round(qy * 10); pen = true;
-        }
-        return d;
+      // (round 19b) a point seen: on the screen at (sx, sy) and not hidden; not behind the camera or far off the picture (beyond
+      // twice its size on any side: close up, points beside the camera are thrown far off)
+      let sx = 0, sy = 0;
+      const see = (x, y, z) => {
+        const vx = x - cam[0], vy = y - cam[1], vz = z - cam[2], qz = vx * bf[0] + vy * bf[1] + vz * bf[2];
+        if (qz <= zN) return false;
+        sx = ((vx * br[0] + vy * br[1] + vz * br[2]) * kx / qz + 1) / 2 * W; sy = (1 - (vx * bu[0] + vy * bu[1] + vz * bu[2]) * ky / qz) / 2 * Hh;
+        if (sx < -2 * W || sx > 3 * W || sy < -2 * Hh || sy > 3 * Hh) return false;
+        magP[0] = x; magP[1] = y; magP[2] = z;
+        return vis(magP);
       };
-      let dC = '', dE = '';
+      // its weight there (0 to 1): 1 - MAGW.FAR behind the star (its depth past the star along the view, over MAG.RT), MAGW.STAR
+      // at the star's surface, and for an open line MAGW.OUT beyond 0.22 au from the star
+      const kFar = dbgV[13] || 0.65, kW = [dbgV[12] || 0.75, dbgV[15] || 0.7, dbgV[14] || 0.6];   // R19DBG
+      const wOf = (x, y, z, kind) => {
+        const r = Math.sqrt(x * x + y * y + z * z), dep = (x * bf[0] + y * bf[1] + z * bf[2]) / MAG.RT;
+        return Math.min(1, kW[kind] * (1 - kFar * ss(-0.2, 0.6, dep)) * (0.3 + 0.7 * ss(1.1 * MAG.RS, 2.4 * MAG.RS, r)) * (kind === 1 ? 1 - 0.75 * ss(0.07, 0.22, r) : 1));
+      };
+      // the run of mr points in magSX, magSY (their weights magSA) as cubic Bezier curves with centripetal Catmull-Rom tangents
+      // (knots spaced by the square root of the chord), as the field lines (drawField), each segment into the level of its weight
+      let mr = 0;
+      const X = magSX, Y = magSY, A = magSA, T = magST;
+      const put = (wt) => {   // (sx, sy) joins the run; a point within a pixel of the last one takes its place
+        if (mr > 0 && (sx - X[mr - 1]) * (sx - X[mr - 1]) + (sy - Y[mr - 1]) * (sy - Y[mr - 1]) < 1) { if (mr > 1) mr--; else return; }
+        X[mr] = sx; Y[mr] = sy; A[mr] = wt; mr++;
+      };
+      const flush = (d) => {
+        const n = mr; mr = 0;
+        if (n < 2) return;
+        T[0] = 0;
+        for (let i = 1; i < n; i++) { const dx = X[i] - X[i - 1], dy = Y[i] - Y[i - 1]; T[i] = T[i - 1] + Math.sqrt(Math.sqrt(dx * dx + dy * dy)) + 1e-6; }
+        let lastB = -1;
+        for (let i = 0; i + 1 < n; i++) {
+          const am = 0.5 * (A[i] + A[i + 1]);
+          if (am <= 0.5 / NBG) { lastB = -1; continue; }
+          const b = Math.min(NBG - 1, Math.round(am * NBG) - 1), ia = i > 0 ? i - 1 : i, ic = i + 2 < n ? i + 2 : i + 1;
+          const d0 = T[i + 1] - T[ia], d1 = T[ic] - T[i], dt = (T[i + 1] - T[i]) / 3;
+          d[b] += (b === lastB ? '' : 'M' + fx(X[i]) + ' ' + fx(Y[i])) + 'C' + fx(X[i] + (X[i + 1] - X[ia]) / d0 * dt) + ' ' + fx(Y[i] + (Y[i + 1] - Y[ia]) / d0 * dt)
+            + ' ' + fx(X[i + 1] - (X[ic] - X[i]) / d1 * dt) + ' ' + fx(Y[i + 1] - (Y[ic] - Y[i]) / d1 * dt) + ' ' + fx(X[i + 1]) + ' ' + fx(Y[i + 1]);
+          lastB = b;
+        }
+      };
+      // the line through the n points in magBuf, into the levels d: its runs of points seen, each ended where the line goes out of
+      // sight between two points (by bisection on their chord), so that it reaches the star's limb and the dust's edge
+      const magLine = (n, d, kind) => {
+        let was = false, px = 0, py = 0, pz = 0;
+        for (let i = 0; i < n; i++) {
+          const x = magBuf[3 * i], y = magBuf[3 * i + 1], z = magBuf[3 * i + 2], now = see(x, y, z), cx = sx, cy = sy;
+          if (i > 0 && now !== was) {
+            let ta = 0, tb = 1;   // (ta: on the side of the point before, tb: of this one)
+            for (let k = 0; k < 7; k++) { const t = 0.5 * (ta + tb); if (see(px + (x - px) * t, py + (y - py) * t, pz + (z - pz) * t) === was) ta = t; else tb = t; }
+            const t = was ? ta : tb, ex = px + (x - px) * t, ey = py + (y - py) * t, ez = pz + (z - pz) * t;
+            if (see(ex, ey, ez)) put(wOf(ex, ey, ez, kind));
+            if (was) flush(d);
+          }
+          if (now) { sx = cx; sy = cy; put(wOf(x, y, z, kind)); }
+          was = now; px = x; py = y; pz = z;
+        }
+        flush(d);
+      };
+      const dC = new Array(NBG).fill(''), dE = new Array(NBG).fill(''), dO = new Array(NBG).fill(''), dK = new Array(NBG).fill('');
       for (const { L, st, ct } of magLoops) {
         for (let k = 0; k < 8; k++) {
           const ph = (k + 0.5) * Math.PI / 4, cp = Math.cos(ph), sp = Math.sin(ph);
           const u0 = cp * e1[0] + sp * e2[0], u1 = cp * e1[1] + sp * e2[1], u2 = cp * e1[2] + sp * e2[2];
           for (let j = 0; j < MAG_NP; j++) { magBuf[3 * j] = st[j] * u0 + ct[j] * m[0]; magBuf[3 * j + 1] = st[j] * u1 + ct[j] * m[1]; magBuf[3 * j + 2] = st[j] * u2 + ct[j] * m[2]; }
-          if (L === MAG.RT) dE += poly(MAG_NP); else dC += poly(MAG_NP);
+          magLine(MAG_NP, L === MAG.RT ? dE : dC, 0);
         }
       }
-      let dO = '';
       const sNow = linesS || 0;
       // (the open lines' shape, the solution's R and turning at each height, depends on the asymmetry only: made once for it)
       if (magOpenS !== sNow) {
@@ -4422,12 +6733,11 @@ void main(){
         for (let k = 0; k < 6; k++) {
           const c = Math.cos(rot + k * Math.PI / 3), sn = Math.sin(rot + k * Math.PI / 3);
           for (let j = 0; j < n; j++) { const q = o.shape[j]; magBuf[3 * j] = c * q[0] - sn * q[1]; magBuf[3 * j + 1] = sn * q[0] + c * q[1]; magBuf[3 * j + 2] = q[2]; }
-          dO += poly(n);
+          magLine(n, dO, 1);
         }
       }
       // the curtains: the middle line of their bundle, L = MAG.RT (1 + MAG.DL / 2), at the azimuths where they are dense
       // (as magAz on the GPU), from the disk to the star, north on the side the dipole tilts to and south on the other
-      let dK = '';
       for (const north of [1, -1]) for (let k = -4; k <= 4; k++) {
         const dph = k * Math.PI / 9, ph = (north > 0 ? 0 : Math.PI) + dph, cp = Math.cos(ph), sp = Math.sin(ph);
         if (Math.pow(0.5 + 0.5 * Math.cos(dph), 3) < 0.15) continue;
@@ -4436,10 +6746,11 @@ void main(){
           const st = magCurtSt[j], ct = north * magCurtCt[j];
           magBuf[3 * j] = st * u0 + ct * m[0]; magBuf[3 * j + 1] = st * u1 + ct * m[1]; magBuf[3 * j + 2] = st * u2 + ct * m[2];
         }
-        dK += poly(25);
+        magLine(25, dK, 2);
       }
-      magClosed.setAttribute('d', dC); magEdge.setAttribute('d', dE); magOpen.setAttribute('d', dO); magCurt.setAttribute('d', dK); magX.setAttribute('d', dX);
-      magG.setAttribute('opacity', a.toFixed(3));
+      for (let b = 0; b < NBG; b++) { setD(magClosed[b], dC[b]); setD(magEdge[b], dE[b]); setD(magOpen[b], dO[b]); setD(magCurt[b], dK[b]); }
+      magX.setAttribute('d', dX);
+      magG.setAttribute('opacity', (a * opt.opac[5]).toFixed(3));   // (round 18d: with the field lines' see-through, see opt.opac)
     }
     function drawMagX(a, vis) {
       if (a <= 0.01 || !XPOINT_MARK) { magXL.textContent = ''; return ''; }
@@ -4472,7 +6783,7 @@ void main(){
       const dx = P[0] - cam[0], dy = P[1] - cam[1], dz = P[2] - cam[2], mu = Math.abs(dz) / Math.sqrt(dx * dx + dy * dy + dz * dz);
       const ice = 1 - ss(MODEL.TICE - 6, MODEL.TICE + 6, tMidJS(Rc, lumNow));
       const kp = compAmp[2] * compAmp[2] * (3 - 2 * compAmp[2]);   // (round 7: with the pebbles off, they hide nothing)
-      return Math.exp(-kp * MODEL.K_D * MODEL.SD0 * SigmaJS(Rc) * pebEdge(Rc) * pebbleAll(Rc) * (0.5 + 0.5 * ice) / Math.max(mu, 0.03));
+      return Math.exp(-kp * MODEL.K_D * MODEL.SD0 * SigmaJS(Rc) * pebEdge(Rc) * pebbleAll(Rc) * (0.5 + 0.5 * ice) / Math.max(mu, 0.03) * opt.opac[1]);   // (round 18a: their see-through)
     }
     // the starlight scattered toward the observer at P (relative to 90 degrees), behind the sheet or not (written
     // without Math.hypot, which is slow, as these run for every sample of every line in every frame)
@@ -4511,15 +6822,26 @@ void main(){
     function drawField() {
       fieldPts = [];
       if (fieldAmp <= 0) { for (const e of [...halo, ...core]) setD(e, ''); return; }
-      const gain = Number(box.dataset.field || 0.5) * (opt.slice ? 0.6 : 1);   // quieter behind a slice
+      // (round 19a: 0.4, a fifth lighter than the 0.5 of before, so that the disk and the star read under the lines; round 19b
+      // adds the distance fade below, quieter yet close to the star, now that its own shading is meant to read there)
+      const gain = Number(box.dataset.field || 0.4) * (opt.slice ? 0.6 : 1) * (0.4 + 0.6 * ss(0.15, 0.6, Math.hypot(cam[0], cam[1], cam[2])));   // quieter behind a slice
       const dL = new Array(NB).fill(''), dD = new Array(NBM).fill('');
       const asymS = asymAmp * asymAmp * (3 - 2 * asymAmp);
       shapeLines(Math.round(ASYM_F_JS * asymS * 100) / 100);
       // (close to the star every other line: they are far and many there, and the magnetosphere's lines are the subject)
-      const thin = Math.hypot(cam[0], cam[1], cam[2]) < 0.5 ? 2 : 1;
+      const dStar = Math.hypot(cam[0], cam[1], cam[2]), thin = dStar < 0.5 ? 2 : 1;
+      // (Round 19a, the visual review: "in the first view the star is buried under the field lines") A line whose foot lies within
+      // a few pixels of the star on the screen is not drawn, and comes in over the next few: lines from feet under FIELD_LOD[0]
+      // of the camera's distance from the star (0.22 au from the first view's 54 au, about 4 px) out, in full from FIELD_LOD[1]
+      // (1.6 au there). Seen from afar the inner lines wound into a bright knot on the axis that hid the star and the inner
+      // disk; closer, each comes in as its foot parts from the star. data-fieldlod="0": all, as before.
+      const lodK = FIELD_LOD_ON ? (r0) => ss(FIELD_LOD[0] * dStar, FIELD_LOD[1] * dStar, r0) : () => 1;
+      // (and no line is drawn across the star's image: within FIELD_WIN[0] px of it on the screen none, in full from FIELD_WIN[1];
+      // the lines are a drawing laid over the picture, and the light source shows through its window)
+      const qS = project([0, 0, 0]), winK = FIELD_LOD_ON && qS[2] > zN ? (q) => ss(FIELD_WIN[0], FIELD_WIN[1], Math.hypot(q[0] - qS[0], q[1] - qS[1])) : () => 1;
       for (let li = 0; li < lines.length; li += thin) {
         const L = lines[li];
-        const kL = L.k(asymS);
+        const kL = L.k(asymS) * lodK(L.r0);
         if (kL <= 0.004) continue;
         const rot = L.phi0 + Omega(L.r0) * time, n0 = L.pts.length, cr = Math.cos(rot), sr = Math.sin(rot);
         // projected samples (null behind the camera, or far off the picture: beyond twice its size on any side) and their
@@ -4532,7 +6854,7 @@ void main(){
           const P = [s.R * c, s.R * sn, s.z], q = project(P);
           if (q[2] > zN && q[0] > -2 * W && q[0] < 3 * W && q[1] > -2 * Hh && q[1] < 3 * Hh && kept(P)) {
             if (qk && j < n0 - 1 && (q[0] - qk[0]) * (q[0] - qk[0]) + (q[1] - qk[1]) * (q[1] - qk[1]) < 2.25) continue;
-            const a = s.b * kL * gain * seen(P) * (1 - faceAlpha(P));
+            const a = s.b * kL * gain * seen(P) * (1 - faceAlpha(P)) * winK(q);
             Q.push(q); A.push(a); qk = q;
             if (a > 0.04) fieldPts.push(q[0], q[1]);
           } else if (qk !== null || !Q.length || Q[Q.length - 1] !== null) { Q.push(null); A.push(0); qk = null; }
@@ -4687,6 +7009,12 @@ void main(){
       for (let b = 0; b < NBM; b++) setD(edots[b], dD[b]);
     }
 
+    // (round 15a, the owner: each kind of annotation its own choice) opt.ann, a mask of ANN's bits: the snow line's name, the planet's
+    // label, the scale bar, the cut's lines, labels and colour bar, the gas line's colour bar, each drawn here with its own fade, and
+    // KEY, the page's key of the model look's colours (app.js), only kept. diskSet's ann: 1 for all of them (as links have always
+    // written it), 0 for none, else the mask; the state says 1 when all are shown. annLast: the last mask with any, for the A key
+    const ANN = { SNOW: 2, PLANET: 4, SCALE: 8, CUT: 16, CO: 32, KEY: 64, ALL: 126 }, ANN_BITS = [2, 4, 8, 16, 32];
+    const annMask = (v) => { const n = Math.round(Number(v)) || 0; return n === 1 ? ANN.ALL : n & ANN.ALL; };
     // (round 7: the snow line follows from the temperature, see snowR; data-snow, its radius until round 6, is not read)
     const opt = {
       el: Number(box.dataset.elevation || 32) * Math.PI / 180,
@@ -4694,7 +7022,8 @@ void main(){
       dist: Number(box.dataset.distance || 90),
       fov: Number(box.dataset.fov || 32) * Math.PI / 180,
       scale: Number(box.dataset.scale || 0.6),
-      steps: Number(box.dataset.steps || 150),
+      // (round 17b: within diskSteps' range, 1 to 320, as the page's ?steps= passes any text on; 150 for one not a number)
+      steps: Number(box.dataset.steps) > 0 && Number.isFinite(Number(box.dataset.steps)) ? Math.min(320, Math.max(1, Math.round(Number(box.dataset.steps)))) : 150,
       exposure: Number(box.dataset.exposure || 1.0),
       spin: Number(box.dataset.spin || 0.004),
       seed: Number(box.dataset.seed || 2.0),
@@ -4709,7 +7038,7 @@ void main(){
       sliceQ: { T: 'T', rho: 'rho', layers: 'layers', none: 'rho', tau: 'T' }[box.dataset.sliceQ] || 'T',
       // the annotations laid over the picture (the snow line and its label, the scale bar, the planet's label, the
       // lines, labels and colour bar on the slice's face): data-annotations="off" starts without them
-      ann: box.dataset.annotations !== 'off',
+      ann: box.dataset.annotations === 'off' ? 0 : ANN.ALL,
       // the look (see uLook): 'model', or as observed: 'optical', 'mir', 'mm', 'co' (the CO line)
       look: own(LOOKS, box.dataset.look) ? box.dataset.look : 'model',
       // the CO line's display (see uCoMode): 'chan' (a channel map at coV km/s), 'm1', 'm0'
@@ -4728,15 +7057,45 @@ void main(){
       bg: own(BG.MODES, box.dataset.bg) ? box.dataset.bg : 'stars',
       // (round 8) the finish's level for the page's quality, 0 to 2 (see the note before JET): data-fx, 2 unless given
       fx: Math.max(0, Math.min(2, Math.round(Number(box.dataset.fx ?? 2)) || 0)),
+      // (round 13a, development switches to compare the model's look with that of before, read when the engine is built: the
+      // accretion layer drawn, data-acclayer="on" (see ACC; data-acc="on" until round 17b); the gas's glow raised beyond OUTER_R,
+      // data-gasrho="old" (see uGasOuter))
+      accDraw: box.dataset.acclayer === 'on',
+      gasOuter: box.dataset.gasrho === 'old',
+      // (round 15b) the gas body's glow (see uGGas): data-ggas, 0.05 to 2; 0.5 unless given (0.2 until round 15b)
+      // (round 15b) the jet hidden behind the disk (see jetOcc): off with data-jetocc="0"; the observed looks' starlight with L*
+      // (see uLstar): off with data-lscale="0"
+      jetOcc: box.dataset.jetocc !== '0',
+      // (round 15b) the envelope's gas in the gas line (see coGas): off with data-coenv="0"
+      coEnv: box.dataset.coenv !== '0',
+      // (round 15b) the pebble layer's thickness in scale heights (see uPebH): data-pebh, 0 to 0.5; 0, the plane as before; 0.1 unless given
+      pebH: box.dataset.pebh != null && box.dataset.pebh !== '' && Number.isFinite(Number(box.dataset.pebh)) ? Math.min(0.5, Math.max(0, Number(box.dataset.pebh))) : PEB_H,
+      lscale: box.dataset.lscale !== '0',
+      gGas: Number.isFinite(Number(box.dataset.ggas)) && box.dataset.ggas !== '' && box.dataset.ggas != null ? Math.min(2, Math.max(0.05, Number(box.dataset.ggas))) : G_GAS,
       // (Disk Lab v2) a display factor for each of the first four components (gas, small grains, pebbles, wind): how much
       // of it is drawn, its glow and its absorption alike, 0.25 to 3 (1: the model's amount); a choice of the viewer
-      gain: [1, 1, 1, 1]
+      gain: [1, 1, 1, 1],
+      // (round 18a) the see-through of the gas, the pebbles, the wind and the envelope: factors on their extinction alone, 0.05
+      // to 1 (OPAC; 1, the picture of before to the bit; see uOpac), the state's op. (Round 18d, the owner: "a see-through for the
+      // jet; for the field lines a palette and a see-through bar") Six: [4] the jet's, a factor on its light, as it has no
+      // extinction to take away (on uJet, see the jet's uniforms below); [5] the field lines', a factor on the opacity of their
+      // lines in the overlay (fieldG, the magnetosphere's magG, the cut's sliceFG)
+      opac: [1, 1, 1, 1, 1, 1],
+      // (round 18a) the number of the background's stars, times the default's (STARS; see uStars), the state's stars
+      stars: 1,
+      // (round 18i) the model look's light, 'star' or 'self', and the opacity of its own light, cm^2 per gram of gas (see SELF)
+      glow: 'star', selfk: SELF.DEF,
+      // (round 18l) the own light's temperature (SELF_T) and the surface's column Sigma_s, g cm^-2 (see SELF)
+      selft: 'colstar', selfnc: SELF.NC_DEF
     };
     const matLin = new Float32Array(MAT.flatMap(([, hex, k]) => linHex(hex).map((v) => v * k)));   // (round 8, see MAT)
+    const dbgV = new Float32Array(16);   // R19DBG
     const clumps = Array.from({ length: 6 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0, crossed: true }));
     const vapor = Array.from({ length: 4 }, () => ({ R: 0, phi: 0, t0: 0, amp: 0 }));
     let W = 0, Hh = 0, rW = 1, rH = 1, faceT = null, faceA = null, cam, basis, time = restoredTime, last = 0, running = false, dragging = false, touching = false, moved = false, px = 0, py = 0, azUser = opt.az, elUser = opt.el;
-    let paused = false, speed = 1, dirty = true, benching = false, fieldMs = 0;
+    // (round 15a, the owner: "the clock stopped by default": data-paused starts it stopped)
+    let paused = 'paused' in box.dataset, speed = 1, dirty = true, benching = false, fieldMs = 0;
+    let colGen = 0;   // (round 13a) one more each time the materials' colours change (box.diskColours): a still picture starts over
     const Omega = (R) => 0.5236 * Math.pow(R, -1.5);
     // --- the planets: each fades in and out over about 1.5 s when it is turned on or off (its amp); its gap's depth is
     // amp times the depth for the camera's distance to its orbit (DEPTH), and its wake's strength amp times the strength
@@ -4800,7 +7159,9 @@ void main(){
     // back (in V883 Ori, in outburst, ALMA found the snow line near 40 au; Cieza et al. 2016).
     // (Disk Lab v2: the outburst keeps its own clock, burst.age, real seconds times the speed, since the model's clock
     // slows as the view closes in: at the snow line's view it would have taken a quarter of an hour)
-    let burst = null, rSn = snowR(1), lumNow = 1;
+    // (round 14a: lumNow the star's luminosity over THERMO's, lumBase (the parameter, see PAR) times the outburst's; the shaders'
+    // uLum, the mirrors' lum)
+    let burst = null, rSn = snowR(lumBase), lumNow = lumBase;
     const burstL = () => {
       if (!burst) return 1;
       const dt = burst.age;
@@ -4808,7 +7169,7 @@ void main(){
       // (the decay tapered to nothing from 40 to 60 s, so that the exposure and the snow line do not step at its end)
       return 1 + 29 * ss(0, 1.5, dt) * (dt < 5.5 ? 1 : Math.exp(-(dt - 5.5) / 9)) * (1 - ss(40, 60, dt));
     };
-    const snowNow = () => { const l = burstL(); if (l !== lumNow || !rSn) { lumNow = l; rSn = snowR(l); } };
+    const snowNow = () => { const l = lumBase * burstL(); if (l !== lumNow || !rSn) { lumNow = l; rSn = snowR(l); } };
     // a short explanation in the panel, faded in and out
     const toast = document.createElement('div');
     toast.className = 'disk-toast'; toast.setAttribute('role', 'status'); toast.setAttribute('aria-live', 'polite');
@@ -4822,8 +7183,9 @@ void main(){
     descEl.style.cssText = keysEl.style.cssText = hidden;
     box.append(descEl, keysEl);
     canvas.setAttribute('aria-describedby', descEl.id + ' ' + keysEl.id);
-    const KEYS_JA = 'ドラッグで回転、Shift+ドラッグ(または中・右ボタン)で見る中心を動かす。タッチでは指 1 本で移動、2 本の指でピンチしてズーム、ひねって回転、そろえて上下に動かして傾き、ダブルタップで拡大、2 本指のタップで縮小。キー:矢印で回転、Shift+矢印で中心を動かす、＋と−でズーム(ホイールのズームはこの図にフォーカスしてから)、Home で元の視点と星の中心、C で中心を星に戻す(視点はそのまま)、スペースで一時停止、1〜5 で視点、P で惑星に寄る、F で磁力線、S で断面、A で注釈、B で星の増光、G で惑星を育てる。「タップで小石を置く」がオンのときは、円盤をクリックするとそこに小石の塊を置きます。';
-    const KEYS_EN = 'Drag to turn, Shift+drag (or the middle or right button) to move the point looked at. On a touch screen one finger moves, two fingers pinch to zoom, twist to turn and move up or down together to tilt; a double tap zooms in, a two-finger tap zooms out. Keys: arrows turn, Shift+arrows move the point looked at, + and - zoom (the wheel zooms once this picture has the focus), Home returns to the first view centred on the star, C brings the point looked at back to the star (the view kept), space pauses, 1 to 5 pick views, P goes to the planet, F toggles the field lines, S the cut, A the annotations, B makes the star flare, G grows the planet. With \u201cTap to drop pebbles\u201d on (under Pebbles), a click on the disk drops a clump of pebbles there.';
+    // (round 18e: a drag only turns, the point looked at moved from the page's View or Shift+arrows)
+    const KEYS_JA = 'ドラッグで回転(どのボタンでも)。タッチでは 1 本指で回転、2 本指のピンチで拡大・縮小、ひねって回転、そろえて上下に動かして傾き、ダブルタップで拡大、2 本指のタップで縮小。注視点(見る中心)は「眺め」の矢印か Shift+矢印で動かし、「星に戻す」か C で星に戻す(眺めの向きはそのまま)。キー:矢印で回転、+ と − で拡大・縮小(ホイールでの拡大・縮小はこの絵にフォーカスしてから)、Home で最初の眺め(注視点は星)、スペースで一時停止、1〜5 で角度、P で惑星に寄る、F で磁力線、S で断面、A で注釈、B で星の増光、G で惑星を育てる。「タップで小石を置く」がオンのときは、円盤をクリックするとそこに小石の塊を置きます。';
+    const KEYS_EN = 'Drag to turn, with any button. On a touch screen one finger turns, two fingers pinch to zoom, twist to turn and move up or down together to tilt; a double tap zooms in, a two-finger tap zooms out. The point looked at moves with the arrows under View or with Shift+arrows, and \u201cBack to the star\u201d or C brings it back to the star (the view kept). Keys: arrows turn, + and − zoom (the wheel zooms once this picture has the focus), Home returns to the first view centred on the star, space pauses, 1 to 5 set the angle, P goes to the planet, F toggles the field lines, S the cut, A the annotations, B makes the star flare, G grows the planet. With \u201cTap to drop pebbles\u201d on (under Pebbles), a click on the disk drops a clump of pebbles there.';
     let toastTimer = 0, toastSwap = 0, toastMsg = null;   // toastMsg: the text showing, in both languages (and short ones)
     // the text for the panel: the short version on a narrow one, when there is one
     const toastText = () => { const n = W > 0 && W < 560, m = toastMsg; return ja() ? (n && m[2] ? m[2] : m[0]) : (n && m[3] ? m[3] : m[1]); };
@@ -4853,10 +7215,13 @@ void main(){
     const startBurst = () => {
       if (reduce || (burst && burst.age < 8)) return;   // the clock does not run with reduced motion
       burst = { age: 0 };
-      say('FU オリオン型の増光:星への降着が一時的に急増して、星が約 30 倍明るくなりました。円盤が温まってスノーラインが約 4 au まで外へ動き、小石の氷が昇華します。降着が収まると暗くなり、水は再び凍ります(実際の増光は数十年続きます。オリオン座 V883 では、増光中のスノーラインが約 40 au にあります)。',
-        'An FU Orionis outburst: accretion onto the star surges and it brightens about thirtyfold. The disk warms, the snow line moves out to about 4 au and the pebbles\u2019 ice sublimates; as the accretion calms down the star dims and the water freezes again (real outbursts last decades; in V883 Ori the snow line lies near 40 au during the outburst).', 14000,
-        'FU オリオン型の増光:星が約 30 倍明るくなり、スノーラインが約 4 au まで外へ動きます(降着が収まると元に戻ります)。',
-        'An FU Orionis outburst: the star brightens about thirtyfold and the snow line moves out to about 4 au (it returns as the accretion calms down).');
+      // (round 14a: the snow line in the outburst from the model, snowR at 30 times the star's luminosity: 5.1 au with the
+      // defaults; the text said "about 4 au", the number of round 7's thinner disk)
+      const sb = snowR(30 * lumBase), au = sb >= 10 ? String(Math.round(sb)) : sb.toFixed(1);
+      say('FU オリオン型の増光:星への降着が一時的に急増して、星が約 30 倍明るくなりました。円盤が温まってスノーラインが約 ' + au + ' au まで外へ動き、小石の氷が昇華します。降着が収まると暗くなり、水は再び凍ります(実際の増光は数十年続きます。オリオン座 V883 では、増光中のスノーラインが約 40 au にあります)。',
+        'An FU Orionis outburst: accretion onto the star surges and it brightens about thirtyfold. The disk warms, the snow line moves out to about ' + au + ' au and the pebbles\u2019 ice sublimates; as the accretion calms down the star dims and the water freezes again (real outbursts last decades; in V883 Ori the snow line lies near 40 au during the outburst).', 14000,
+        'FU オリオン型の増光:星が約 30 倍明るくなり、スノーラインが約 ' + au + ' au まで外へ動きます(降着が収まると元に戻ります)。',
+        'An FU Orionis outburst: the star brightens about thirtyfold and the snow line moves out to about ' + au + ' au (it returns as the accretion calms down).');
     };
     // Growing a planet: three clumps of pebbles dropped near one radius (within a tenth of it, 0.3 au at 3 au) in 20 s of
     // the model clock, where a planet may be (within PLANETS.RANGE, no shown planet nearer than the mutual Hill rule in the
@@ -4867,23 +7232,47 @@ void main(){
     // (round 8: neighbours MASS.K_HILL mutual Hill radii apart, for a new planet of mass m; see MASS)
     const plRoom = (R, skip = -1, m = 1) => R >= PLANETS.RANGE[0] && R <= PLANETS.RANGE[1]
       && planets.every((p, i) => i === skip || !plWant(p) || Math.max(R, p.a) / Math.min(R, p.a) >= minRatio(m, p.m));
-    const seedPlanet = (R) => {
+    // (Round 13b, the owner: "when dropped pebbles make a planet, clear every pebble on its orbit") The dropped clumps a new
+    // planet p takes in: those that made it (made: its seeds, each with the clump it dropped, if that clump still holds that
+    // drop: c.n), wherever they have drifted to, and every clump whose radius now (drifted inward since its drop, 0.05 au a
+    // second of the clock, as the shader draws it) lies within the planet's gap, |R - a| < dR2 = 0.33 K'^1/4 a (gapK: the
+    // walls' feet, where the gas is back to the smooth disk's, Kanagawa et al. 2017; the reach uGapR gives each gap, without
+    // its margin: 1.43 au to each side for Jupiter at 3 au), at every azimuth; they fade out over CLEAR_S seconds. Round 9's
+    // band, 4 Hill radii about the drifted radius (0.82 au at 3 au), left on the clumps dropped further out and the seeds
+    // that had drifted further in during their 20 s (1 au at most). The model's own pebbles (the pile-up beyond the snow
+    // line, the ring at each gap's pressure maximum, at the outer foot a + dR2, the band's edge) are the sheet's, not clumps:
+    // untouched. For a planet grown from pebbles (seedPlanet) and one placed by a click (clickAt).
+    const clearOrbit = (p, made = []) => {
+      for (const s of made) if (s.c && s.c.n === s.n) s.c.gone = true;
+      const w = gapK(p.a, p.q).dR2;
+      for (const c of clumps) if (c.amp > 0 && Math.abs(c.R - 0.05 * (time - c.t0) - p.a) < w) c.gone = true;
+    };
+    // (round 13b: c, the clump this drop made, kept with its seed; see clearOrbit)
+    const seedPlanet = (R, c) => {
       if (!plRoom(R)) return;
-      seeds = seeds.filter((s) => time - s.t < 20 && Math.abs(s.R - R) < 0.1 * R).concat([{ t: time, R }]);
+      seeds = seeds.filter((s) => time - s.t < 20 && Math.abs(s.R - R) < 0.1 * R).concat([{ t: time, R, c, n: c ? c.n : 0 }]);
       if (seeds.length < 3) return;
-      const Rc = Math.round(seeds.reduce((m, s) => m + s.R, 0) / seeds.length * 100) / 100;
+      // (Round 15c, the owner: "the planet forms where the pebbles gathered") Each seed's clump where it is drawn now: drifted
+      // in 0.05 au a second since its drop and gone round at Omega of its radius (the sheet draws it so, uClump), or the
+      // drop's place if its clump was taken since. The core at their mean radius, in their mean direction (the vector sum),
+      // its phase set so that it is there now (planetPhiOf); the places' rule (plRoom) judged at that radius. It was at
+      // the mean of the drops' radii, in the next default direction (PLANETS.PHI0), away from the pebbles.
+      const now = seeds.map((s) => { const k = s.c && s.c.n === s.n ? s.c : null, dt = k ? time - k.t0 : 0, Rn = k ? k.R - 0.05 * dt : s.R; return { R: Rn, phi: k ? k.phi + Omega(Rn) * dt : null }; });
+      const Rc = Math.round(now.reduce((m, s) => m + s.R, 0) / now.length * 100) / 100, made = seeds;
+      if (!plRoom(Rc)) return;
+      const dirs = now.filter((s) => s.phi != null), phiNow = dirs.length ? Math.atan2(dirs.reduce((m, s) => m + Math.sin(s.phi), 0), dirs.reduce((m, s) => m + Math.cos(s.phi), 0)) : null;
       seeds = [];
       // (a place: one that is off, else a new one)
       let i = planets.findIndex((p) => !p.on || !(opt.mode & 16));
       if (!(opt.mode & 16)) { for (const p of planets) p.on = false; i = planets.length ? 0 : -1; }
       if (i < 0) { if (planets.length >= PLANETS.MAX) return; planets.push(planetObj(Rc, true, planets.length)); i = planets.length - 1; }
       // (round 8: it grows to Jupiter's mass, as the text says)
-      Object.assign(planets[i], { a: Rc, on: true, m: 1, q: qOfM(1), amp: 0, fade: 8, dSet: -1 });
-      // (round 9, the owner: "once a planet is made, clear the pebbles around it") the clumps within its feeding zone, CLEAR
-      // Hill radii of its orbit (the zone from which a planet gathers solids reaches about 2 sqrt(3), 3.5 Hill radii, to each
-      // side), wherever they have drifted to, fade out over CLEAR_S seconds as the planet takes them in
-      const rH = hillOf(planets[i]);
-      for (const c of clumps) if (c.amp > 0 && Math.abs(c.R - 0.05 * (time - c.t0) - Rc) < CLEAR * rH) c.gone = true;
+      Object.assign(planets[i], { a: Rc, on: true, m: 1, q: qOfM(1), amp: 0, fade: 8, dSet: -1, phi0: phiNow == null ? PLANETS.PHI0(i) : Math.atan2(Math.sin(phiNow - Omega(Rc) * time), Math.cos(phiNow - Omega(Rc) * time)) });
+      // (round 9, the owner: "once a planet is made, clear the pebbles around it": then the clumps within its feeding zone,
+      // CLEAR = 4 Hill radii of its orbit (the zone from which a planet gathers solids reaches about 2 sqrt(3), 3.5 Hill radii,
+      // to each side), where they had drifted to; round 13b, the owner: "clear every pebble on its orbit": the clumps that made
+      // it, and every one within its gap, see clearOrbit) fade out over CLEAR_S seconds as the planet takes them in
+      clearOrbit(planets[i], made);
       opt.mode |= 16;
       box.dispatchEvent(new CustomEvent('diskmode', { detail: { mode: opt.mode } }));
       emitState();
@@ -4939,13 +7328,106 @@ void main(){
     const PLANET_GLOW = { model: 1, optical: 0.15, mir: 0.5, mm: 0.25, co: 0 };
     const glowOf = (p) => Math.min(1.8, Math.max(0.25, Math.sqrt(p.m)));   // (round 8: brighter for a heavier planet, see MASS)
     // (round 8) the planet's own disk: H/r of its three clouds (see uCpd in the shader) and its glow
-    const CPD_X = [0.1, 0.3, 0.55].map((w) => 1.5 * w * 0.4);   // the clouds' half-light radii in Hill radii
-    const cpdOf = (p) => {
-      if (!p) return [0.1, 0.1, 0.1, 1];
-      const hp = MODEL.H0 * Math.pow(p.a, 0.25), qth = p.q / (hp * hp * hp);
-      return [...CPD_X.map((x) => Math.min(0.8, Math.max(0.1, 0.83 * Math.pow(qth, -1 / 3) * Math.sqrt(x) / Math.sqrt(1 + x * x * x / 3)))), glowOf(p)];
+    // (Round 13e, the owner's first step of the CPD's study: ver2/docs/cpd-detail-study.md 7.1-7.3 with the decisions D-1 to D-7
+    // of its section 9; DESIGN.md, section 35.) The planet's own disk from its physics, cpdPhys(a, m, mdot, drawn), pure (the
+    // engine's mirrors only, so that ver2/tools/disk-lab-v2/cpd-check.mjs runs it in Node):
+    //   its kind and size from the planet's mass in thermal masses, q_th = q / h^3, h = H/R of the parent disk at the orbit: the
+    //     gas's own, c_s / v_K at the midplane's temperature (tMidJS: 0.026 at 1 au, 0.033 at 3 au), the owner's choice (D-1),
+    //     or with data-cpdh="drawn" the drawn H0 a^1/4 (1.8 times thicker at 3 au, q_th 5.6 times smaller), to compare. A disk
+    //     where q_th is large, an envelope where it is small, blended over q_th = 1 to 8, D = smoothstep (D-3): the simulations
+    //     find a continuum (Sagynbayeva et al. 2025), and rotational support from about 10 q_th in the adiabatic limit (Fung,
+    //     Zhu & Chiang 2019); the cooling criterion of Krapp et al. (2024) is left out (D-3). The disk reaches R_H min(0.4, 0.1
+    //     r_B / R_H), the tidal truncation (Martin & Lubow 2011) or the isothermal disk's bound 0.1 r_B (Fung et al.), with r_B /
+    //     R_H = 3^1/3 q_th^2/3; the envelope R_H min(1/3, 0.2 r_B / R_H) (the isentropic envelope to R_H / 3, Krapp et al.; the
+    //     adiabatic 0.2 r_B, Fung et al.), round (H/r 0.8, the clouds' cap of round 8);
+    //   its temperature, T^4 = T_acc^4 + T_irr^4 + T_0^4: the steady disk's accretion heating, sigma T_acc^4 = 3 G M_p Mdot_p
+    //     (1 - (R_p / r)^1/2) / 8 pi r^3 (Zhu 2015; Adams & Batygin 2025, eq. 88); the planet's light, sigma T_irr^4 = PHI L_p /
+    //     4 pi r^2, L_p = G M_p Mdot_p / R_p the accretion luminosity (D-2), PHI the grazing angle (an estimate), R_p from the
+    //     planet's mass by the mean relation of Chen & Kipping (2017, Table 1; for mature planets: a young accreting one is
+    //     larger, 1.5-2 R_J, and its L_p smaller); T_0, the parent disk's midplane at the orbit (tMidJS); held below T_MAX;
+    //   Mdot_p, the planet's accretion rate (M_J/yr): a tenth of the disk's at the orbit (mdotAccJS, round 13c's mass budget;
+    //     the gap's filtering lets a fraction through, D-2: 3e-5 M_J/yr for a Jupiter at 3 au), or the page's for all the
+    //     planets (cpdMdot, the planets' panel, MDOT; PDS 70 b and c accrete about 1e-8, Thanathibodee et al. 2019);
+    //   its thickness from that temperature, H/r = c_s(T) / v_K about the planet (the radiative CPDs are thick and hardly
+    //     flare: Ayliffe & Bate 2009; Szulagyi et al. 2016), or round 8's isothermal disk at the parent's temperature where it is
+    //     thicker (the form of Tanigawa et al. 2012 and Fung et al. 2019, with the h above: with the drawn h the flaring of
+    //     before), within HR, toward the envelope's 0.8 by D;
+    //   its millimetre optical depth (D-5): steady accretion, Sigma = Mdot_p Omega / 3 pi alpha c_s^2 with alpha = ALPHA (3.1e-3,
+    //     the laminar wind-driven CPD of Shibaike & Mori 2023), dust D2G (a tenth of the parent disk's 0.01), KAPPA_MM, 3.5 cm^2
+    //     per gram of dust at 0.87 mm (Isella et al. 2019): the clouds' columns (TAU, CPD_TAU in the GLSL) scaled so that their
+    //     sum is the disk's at the middle cloud's half-light radius (mmK). The model's pebbles are drawn far thinner than their
+    //     Sigma would make them (K_MM, SD0: a translucent picture); the CPD as its physics has it, thick at the default rate, as
+    //     PDS 70 c's is (spectral index 2.0: Dominguez-Jamett et al. 2025; Shibaike et al. 2026), thin at a low one.
+    // The observed looks' light: each look's own law (cpdSrc in the GLSL) times one display factor DISP, set so that a Jupiter
+    // at 3 au shows about as bright in the mid-infrared as round 8's disk (cpd-check.mjs: the face-on integral of its light).
+    const CPD = { TAU: [2.84, 1.93, 1.23], X: [0.1, 0.3, 0.55], HALF: 1.5, D: [1, 8], R_DISK: 0.4, K_DISK: 0.1, R_ENV: 1 / 3, K_ENV: 0.2, HR: [0.1, 0.8],
+      MDOT_K: 0.1, MDOT: [1e-10, 1e-4], PHI: 0.05, T_MAX: 3000, R_IN: 1.5, ALPHA: 3.1e-3, D2G: 0.1 * 0.01, KAPPA_MM: 3.5, DISP: 0.7,
+      C: { G: 6.674e-8, MSUN: 1.989e33, YR: 3.156e7, AU: 1.496e13, SIG: 5.6704e-5, K: 1.3807e-16, MH: 1.6726e-24, MU: 2.34, RJ: 7.1492e9, LSUN: 3.828e33, ME: 317.83, RJE: 11.209 } };
+    // a planet's radius (R_J) from its mass (M_J): Chen & Kipping (2017), Table 1, R ∝ M^0.279 up to 2.04 Earth masses (1.008
+    // Earth radii at one), M^0.589 up to 0.414 M_J, M^-0.044 beyond, continuous
+    const CK = { S: [0.279, 0.589, -0.044], T: [2.04, 0.414 * 317.83], R1: 1.008 };
+    const radiusOf = (m) => {
+      const me = m * CPD.C.ME, r2 = CK.R1 * Math.pow(CK.T[0], CK.S[0]), r3 = r2 * Math.pow(CK.T[1] / CK.T[0], CK.S[1]);
+      return (me < CK.T[0] ? CK.R1 * Math.pow(me, CK.S[0]) : me < CK.T[1] ? r2 * Math.pow(me / CK.T[0], CK.S[1]) : r3 * Math.pow(me / CK.T[1], CK.S[2])) / CPD.C.RJE;
     };
-    box.diskCpd = (i = 0) => cpdOf(planets[i]);   // (for checks: a planet's disk's H/r, three clouds, and glow)
+    const cpdPhys = (a, m, mdotSet = 0, drawn = false) => {
+      const C = CPD.C, q = m * MASS.MJ, Mp = q * C.MSUN, rH = a * Math.cbrt(q / 3), T0 = tMidJS(a, 1);
+      const hGas = Math.sqrt(C.K * T0 / (C.MU * C.MH) * a * C.AU / (C.G * C.MSUN)), h = drawn ? MODEL.H0 * Math.pow(a, 0.25) : hGas;
+      const qth = q / (h * h * h), D = ss(CPD.D[0], CPD.D[1], qth), rB = Math.cbrt(3) * Math.pow(qth, 2 / 3);   // (r_B in R_H)
+      const rDisk = Math.min(CPD.R_DISK, CPD.K_DISK * rB), rEnv = Math.min(CPD.R_ENV, CPD.K_ENV * rB), rOut = rH * (rEnv + (rDisk - rEnv) * D);
+      const mdot = mdotSet > 0 ? Math.min(CPD.MDOT[1], Math.max(CPD.MDOT[0], mdotSet)) : CPD.MDOT_K * mdotAccJS(a) / MASS.MJ;   // M_J/yr
+      const Md = mdot * MASS.MJ * C.MSUN / C.YR, Rp = radiusOf(m) * C.RJ, L = C.G * Mp * Md / Rp;   // g/s, cm, erg/s
+      // at r (au) from the planet: T (K), H/r, Sigma (g cm^-2) and the millimetre's vertical optical depth; no closer than R_IN
+      // planetary radii (a steady disk is hottest at 1.36 times its inner edge: inside, the planet; at 0.05-0.1 au a disk of 0.4
+      // R_H is only a few planetary radii across)
+      const at = (r) => {
+        const rc = Math.max(r * C.AU, CPD.R_IN * Rp), acc = 3 * C.G * Mp * Md * Math.max(0, 1 - Math.sqrt(Rp / rc)) / (8 * Math.PI * C.SIG * rc * rc * rc);
+        const T = Math.min(CPD.T_MAX, Math.pow(acc + CPD.PHI * L / (4 * Math.PI * C.SIG * rc * rc) + T0 * T0 * T0 * T0, 0.25));
+        const cs2 = C.K * T / (C.MU * C.MH), vK = Math.sqrt(C.G * Mp / rc), x = rc / C.AU / rH;
+        const hr = Math.min(CPD.HR[1], Math.max(CPD.HR[0], Math.sqrt(cs2) / vK, 0.83 * Math.pow(qth, -1 / 3) * Math.sqrt(x) / Math.sqrt(1 + x * x * x / 3)));
+        const sigma = Md * vK / rc / (3 * Math.PI * CPD.ALPHA * cs2);
+        return { T, Hr: CPD.HR[1] + (hr - CPD.HR[1]) * D, sigma, tauMm: CPD.KAPPA_MM * CPD.D2G * sigma };
+      };
+      const xs = CPD.X.map((w) => CPD.HALF * w * rOut), c = xs.map(at);
+      const s2 = CPD.X.reduce((s, w, i) => s + CPD.TAU[i] * Math.exp(-0.5 * Math.pow(xs[1] / (w * rOut), 2)), 0);
+      return { a, m, q, h, hGas, drawn, qth, D, rH, rB: rB * rH, rDisk: rDisk * rH, rEnv: rEnv * rH, rOut, mdot, auto: !(mdotSet > 0), Rp, L: L / C.LSUN, T0, xs,
+        T: c.map((v) => v.T), Hr: c.map((v) => v.Hr), sigma: c.map((v) => v.sigma), tauMm: c.map((v) => v.tauMm), mmK: c[1].tauMm / s2, at };
+    };
+    // the page's accretion rate for all the planets' disks (M_J/yr; 0: each a tenth of the disk's at its orbit), see diskSet;
+    // the development switches, read when the engine is built: data-cpdh="drawn", the thermal mass with the drawn h (D-1's
+    // comparison); data-cpd="old", round 8's disk (0.4 R_H, its clouds' H/r, colours and glow)
+    let cpdMdot = 0;
+    const CPD_DRAWN = box.dataset.cpdh === 'drawn', CPD_OLD = box.dataset.cpd === 'old';
+    // (round 15b) CPD_FLARE, a display factor on the flaring of the planet's disk as drawn: the clouds' H/r (at their half-light
+    // radii, 0.1, 0.3 and 0.55 of R_out times 1.5) become H/r_1 (H/r_i / H/r_1)^CPD_FLARE, the log-slope of H/r between them
+    // multiplied, the innermost cloud's kept (and at most CPD.HR's 0.8). 1 (the default) is the physics of cpdPhys; data-cpdflare
+    // (the page's ?cpdflare=1.6) exaggerates the rise of H/r with radius for the picture, as the parent disk is drawn 1.8 times as
+    // thick as its temperature holds it (MODEL.H0). Only what is drawn (uCpd[0]); cpdPhys, the probe and the checks keep the physics
+    const CPD_FLARE = Number(box.dataset.cpdflare) > 0 ? Math.min(3, Math.max(0.5, Number(box.dataset.cpdflare))) : 1;
+    const cpdFlare = (hr) => (CPD_FLARE === 1 ? hr : hr.map((h) => Math.min(CPD.HR[1], hr[0] * Math.pow(h / hr[0], CPD_FLARE))));
+    const cpdMemo = new Map();
+    const cpdState = (p) => {
+      const key = p.a + ':' + p.m + ':' + cpdMdot + ':' + MF.mdot + ':' + THERMO.MDOT;
+      let c = cpdMemo.get(key);
+      if (!c) { if (cpdMemo.size > 64) cpdMemo.clear(); c = cpdPhys(p.a, p.m, cpdMdot, CPD_DRAWN); cpdMemo.set(key, c); }
+      return c;
+    };
+    // the disk's outer radius as drawn (au)
+    const cpdROut = (p) => (CPD_OLD ? 0.4 * hillOf(p) : cpdState(p).rOut);
+    // (round 8's: the larger of 0.1 and the isothermal disk at the drawn h, within 0.8, at the half-light radii in Hill radii)
+    const CPD_X = [0.1, 0.3, 0.55].map((w) => 1.5 * w * 0.4);
+    const cpdOld = (p) => { const hp = MODEL.H0 * Math.pow(p.a, 0.25), qth = p.q / (hp * hp * hp); return CPD_X.map((x) => Math.min(0.8, Math.max(0.1, 0.83 * Math.pow(qth, -1 / 3) * Math.sqrt(x) / Math.sqrt(1 + x * x * x / 3)))); };
+    // uCpd[3] (see the GLSL): the clouds' H/r and the glow; R_out and the clouds' temperatures; the millimetre's factor, D, DISP
+    // and 1 for round 8's disk
+    const cpdU = new Float32Array(12);
+    const cpdOf = (p) => {
+      if (!p) cpdU.set([0.1, 0.1, 0.1, 1, 0.4 * PLANET.RH, 1200, 530, 330, 1, 1, CPD.DISP, 1]);
+      else if (CPD_OLD) cpdU.set([...cpdOld(p), glowOf(p), 0.4 * hillOf(p), 1200, 530, 330, 1, 1, CPD.DISP, 1]);
+      else { const c = cpdState(p); cpdU.set([...cpdFlare(c.Hr), glowOf(p), c.rOut, ...c.T, c.mmK, c.D, CPD.DISP, 0]); }
+      return cpdU;
+    };
+    box.diskCpd = (i = 0) => Array.from(cpdOf(planets[i]));   // (for checks: uCpd as sent)
+    box.diskCpdState = (i = 0) => (planets[i] ? cpdState(planets[i]) : null);   // (round 13e, for checks: the disk's physics)
     const plGlowD = new Float32Array(4 * PLANETS.MAX);
     function planetGlowSet(pV, pVis) {
       plGlowD.fill(0);
@@ -5027,7 +7509,8 @@ void main(){
 
     // The camera looks at the star, or (follow) at the planet, turning with its orbit, or at a point moved from it by the
     // pan (panV, au, in the frame that turns with the view: the slow spin, or the planet's orbit, so that what is framed
-    // stays framed; Shift+drag, the middle or right button, two fingers, Shift+arrows; Home and the planet's view bring it
+    // stays framed; the View's arrows (box.diskNudge) and Shift+arrows move it, and the zooms toward a point under the fingers;
+    // until round 18e Shift+drag, the middle or right button and one finger too; Home and the planet's view bring it
     // back, the cut looks at the star and restores it when closed). Every change of view (buttons,
     // keys, the wheel, the tour) flies there: the view (elevation, azimuth the shorter way round, ln distance) and the
     // point looked at each move on a cubic Hermite curve that starts with the camera's present velocity, so that a
@@ -5035,10 +7518,51 @@ void main(){
     // duration grows with the size of the move, from FLY_MIN to FLY_MAX seconds, for an even pace. Flights aim at the
     // view as it is at each moment (the slow spin and the planet's orbit keep moving it). A drag or a pinch takes over:
     // the view stays where it is (the point looked at still settles). With reduced motion, views change at once.
+    // (Round 11a) One clock for everything that moves with time on the picture, nowMs (ms): the flights and paths, the fades
+    // (dtR), the look's dip and the scale bar's. It is the wall clock, or the page's own (diskManual): an exporter then moves it
+    // on a frame at a time (diskAdvance), with the model's clock. The measures of GPU work (fences, pieces, the guard) keep the
+    // wall clock, performance.now(): they time the device, not the picture.
+    let clockOff = 0, manualMs = null;
+    const nowMs = () => (manualMs === null ? performance.now() + clockOff : manualMs);
     const FLY_MIN = 0.35, FLY_MAX = 1.6, wrapPi = (a) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
     let follow = false, flyV = null, flyT = null, camT = [0, 0, 0], camEl = opt.el, camAz = opt.az, camD = opt.dist;
+    // (round 18a, the owner: "turn the camera about the line of sight") the camera's roll (rad, -pi to pi; the state's roll, in
+    // degrees): rollUser the view's, camRoll the one drawn, which a flight or a path eases to it (rollEase: { t0 (ms), dur (s),
+    // from }, over the flight's or the path's time); 0, the camera of before to the bit. The picture turns counterclockwise as it grows
+    let rollUser = 0, rollEase = null, camRoll = 0;
     let camV = [0, 0, 0], camTV = [0, 0, 0];   // velocities of the view and of the point looked at, per second
+    // (round 11a) a flight along a smooth path (diskPath, see PATH-MATH): { id, plan, t0 (ms, nowMs) }; its events told to the page
+    // ('diskpath') in a microtask, once the script that drew the frame has returned (or awaits), never from inside camera() or draw()
+    let path = null, pathN = 0;
+    const pathTell = (state, extra) => { const detail = { state, ...extra }; queueMicrotask(() => box.dispatchEvent(new CustomEvent('diskpath', { detail }))); };
     const viewOff = () => (follow ? planetPhi(time) : reduce ? 0 : opt.spin * time);
+    // (Round 13b, the owner: "the background need not move: over years the stars behind hardly move") The sky behind (the
+    // stars, the molecular cloud) is turned back about the disk's axis by bgTurn (uBgTurn), the view's own turn with the
+    // clock (viewOff: the slow spin, or the orbit of the planet followed), so that it holds still in the picture while the
+    // clock turns the view and turns only as the view is turned (a drag, the keys, a flight, a path, the tilt), as a sky
+    // does; nothing else in it moves with time (its map is drawn once, its stars are hashed on the direction, uSeed is
+    // fixed). Before, it was fixed in the disk's frame and swept across the picture with the slow spin (0.004 rad a second
+    // of the clock: 7 to 14 degrees a minute in the whole view as fitted, where the clock runs at 0.5 to 1) and with the
+    // planet followed (11 degrees a minute at the planet's place). Where the frame of the view changes under a flight or a
+    // path (following a planet or no longer, another one, a new time), the sky starts from where it was drawn (bgDrawn) and
+    // the difference is eased out over the flight's or the path's time (bgEase), so that it never jumps; a view set at once
+    // takes it at once. ?bgmove=1 (data-bgmove="on") keeps the sky fixed in the disk's frame, as before, for comparison.
+    let bgEase = null, bgDrawn = null;
+    const bgMoves = () => box.dataset.bgmove === 'on';
+    // what the ease has left of its difference (rad); 0 once it has run its time, and then let go
+    const bgLeft = () => {
+      if (!bgEase) return 0;
+      const u = (nowMs() - bgEase.t0) / (1000 * bgEase.dur);
+      if (u >= 1) { bgEase = null; return 0; }
+      return bgEase.d * (1 - u * u * (3 - 2 * u));
+    };
+    const bgTurn = () => (bgMoves() ? 0 : viewOff() + bgLeft());
+    // a flight or a path from t0 (ms, nowMs) for dur seconds: the sky eased from where it was drawn to the turn of the view
+    // it flies to (a difference under a microradian is none)
+    const bgEaseFrom = (t0, dur) => {
+      const d = bgDrawn === null || bgMoves() ? 0 : wrapPi(bgDrawn - viewOff());
+      bgEase = Math.abs(d) > 1e-6 && dur > 0 ? { d, t0, dur } : null;
+    };
     let panV = [0, 0, 0];
     const PAN_MAX = 400;
     // the point looked at now (without a flight): the star or the planet, and the pan turned with the view
@@ -5054,7 +7578,7 @@ void main(){
     const clampPan = (v) => { const m = Math.hypot(v[0], v[1], v[2]); return m > PAN_MAX ? v.map((x) => x * PAN_MAX / m) : v; };
     // position (out) and velocity (vel) along a flight now; true when it has arrived
     function hermite(fl, p1, out, vel) {
-      const u = Math.min(1, (performance.now() - fl.t0) / (1000 * fl.dur)), u2 = u * u, u3 = u2 * u;
+      const u = Math.min(1, (nowMs() - fl.t0) / (1000 * fl.dur)), u2 = u * u, u3 = u2 * u;
       const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = 3 * u2 - 2 * u3, d00 = 6 * u2 - 6 * u, d10 = 3 * u2 - 4 * u + 1, d01 = 6 * u - 6 * u2;
       for (let i = 0; i < p1.length; i++) {
         out[i] = h00 * fl.p0[i] + h10 * fl.dur * fl.v0[i] + h01 * p1[i];
@@ -5062,22 +7586,51 @@ void main(){
       }
       return u >= 1;
     }
+    // (round 11a) the camera on the path now, in the world: { T, v: [el, az, ln d] }, with its velocity in camV and camTV (for a
+    // flight that takes over, as from a flight); null once the path has ended: it is dropped and 'arrive' told, and the camera
+    // takes the state's view, which is the path's end (so that the still on arrival is the state's, bit for bit)
+    function pathNow() {
+      const t = (nowMs() - path.t0) / 1000, e = pathEaseAt(path.plan.ease, t);
+      if (e.s >= 1) { const id = path.id; path = null; camV = [0, 0, 0]; camTV = [0, 0, 0]; pathTell('arrive', { id }); return null; }
+      const a = viewOff(), c = Math.cos(a), s = Math.sin(a), B = follow ? planetPos(time) : [0, 0, 0];
+      const world = (P) => [B[0] + c * P[0] - s * P[1], B[1] + s * P[0] + c * P[1], B[2] + P[2]];
+      const q = pathAt(path.plan, e.s), ds = Math.min(1e-4, 1 - e.s), q2 = pathAt(path.plan, e.s + ds), k = ds > 0 ? e.v / path.plan.L / ds : 0;
+      const T = world(q.T), T2 = world(q2.T);
+      // (the velocity along the path; the frame's own turn left out, slow but for a planet followed)
+      camV = [(q2.el - q.el) * k, (q2.az - q.az) * k, (q2.lnd - q.lnd) * k];
+      camTV = [(T2[0] - T[0]) * k, (T2[1] - T[1]) * k, (T2[2] - T[2]) * k];
+      return { T, v: [q.el, q.az + a, q.lnd] };
+    }
+    // a path left (by a flight, a jump, a new path): told; the camera's velocity kept for a flight that takes over
+    const pathStop = (why = 'stop') => { if (!path) return; const id = path.id; path = null; pathTell(why, { id }); };
+    // the view taken from where the path has brought the camera, and the path left (a drag, the wheel, a key, a new view set
+    // with some of its keys: those left out are what is seen, as after a drag)
+    // (the distance within its range: van Wijk's arc and the midplane rule's lift may carry the camera past DMAX, and the next wheel
+    // step would jump back; review of round 11a)
+    const pathGrab = () => { if (!path) return; if (rollEase) { rollUser = camRoll; rollEase = null; } elUser = clampEl(camEl); azUser = camAz - viewOff(); opt.dist = Math.min(DMAX, Math.max(dmin(), camD)); panV = clampPan(panOf(camT)); pathStop(); };
     // start (or redirect) a flight from where the camera is to the view set now
     function startFly() {
-      if (reduce || !W || !cam) { flyV = flyT = null; return; }
-      const now = performance.now(), p0 = [camEl, camAz, Math.log(camD)], to = [elUser, azUser + viewOff(), Math.log(opt.dist)];
+      pathStop();   // (round 11a: a flight takes over a path, from its pose and velocity)
+      if (reduce || !W || !cam) { flyV = flyT = null; rollEase = null; return; }
+      const now = nowMs(), p0 = [camEl, camAz, Math.log(camD)], to = [elUser, azUser + viewOff(), Math.log(opt.dist)];
       to[1] = p0[1] + wrapPi(to[1] - p0[1]);
       const Tl = lookAt(), dT = Math.hypot(Tl[0] - camT[0], Tl[1] - camT[1], Tl[2] - camT[2]);
-      const m = Math.abs(to[0] - p0[0]) + Math.abs(to[1] - p0[1]) * Math.cos(p0[0]) + Math.abs(to[2] - p0[2]) + dT / Math.max(1, Math.min(camD, opt.dist));
+      const dRoll = Math.abs(wrapPi(rollUser - camRoll));   // (round 18a: the roll's turn, eased with the flight)
+      const m = Math.abs(to[0] - p0[0]) + Math.abs(to[1] - p0[1]) * Math.cos(p0[0]) + Math.abs(to[2] - p0[2]) + dT / Math.max(1, Math.min(camD, opt.dist)) + dRoll;
       const dur = Math.min(FLY_MAX, FLY_MIN + 0.45 * m);
+      rollEase = dRoll > 1e-9 ? { t0: now, dur, from: camRoll } : null;
       flyV = { t0: now, dur, p0, v0: camV.slice() };
+      bgEaseFrom(now, dur);   // (round 13b: the sky from where it was drawn, see bgTurn)
       if (dT > 1e-6 || flyT) flyT = { t0: now, dur, p0: camT.slice(), v0: camTV.slice() };
       dirty = true;
     }
     // a drag or a pinch takes over: the view is left where the flight has brought it
     const takeOver = () => {
-      if (!flyT && !flyV) return;
+      if (rollEase) { rollUser = camRoll; rollEase = null; }   // (round 18a: the roll left where it is drawn)
+      if (!flyT && !flyV && !path) return;
+      if (bgEase) bgEaseFrom(nowMs(), FLY_MIN);   // (round 13b: what the sky's ease has left, eased out in a moment; see bgTurn)
       const before = [elUser, wrapPi(azUser + viewOff()), Math.log(opt.dist), ...lookAt()];
+      pathGrab();   // (round 11a: and a path)
       if (flyT) { panV = clampPan(panOf(camT)); flyT = null; camTV = [0, 0, 0]; }
       if (flyV) { elUser = clampEl(camEl); azUser = camAz - viewOff(); opt.dist = camD; flyV = null; camV = [0, 0, 0]; }
       const after = [elUser, wrapPi(azUser + viewOff()), Math.log(opt.dist), ...lookAt()];
@@ -5094,13 +7647,23 @@ void main(){
       for (let i = 0; i < 3; i++) P[i] += (-dx * basis.r[i] + dy * basis.u[i]) * k;
       panV = clampPan(panOf(P));
     };
+    // (Round 18e, the owner: "move the camera from the control panel") A step of the point looked at along the picture as it is
+    // drawn (rolled, see camera): dx to the right and dy up, in tenths of the picture's height, as far as that spans at its
+    // distance (panBy), and a flight there from where the camera is, as a key's step. Shift+arrows take it, and the page's View
+    // its arrows (box.diskNudge); the point goes the arrow's way, so that the picture moves the other. (Until round 18e
+    // Shift+arrows moved the picture the arrow's way, as a drag with Shift did.)
+    const nudge = (dx, dy) => { const a = 0.1 * Hh; panBy(-dx * a, dy * a); startFly(); };
     // The overlay leaves out points nearer the camera than zN (behind it, or so near that they would be thrown far off the
     // screen): in proportion to the camera's distance from the point it looks at, up to 0.05 au, so that close to the
     // star (0.04 au) the lines in front of it and the scale bar stay (a fixed 0.05 au dropped them inside 0.1 au)
     let zN = 0.05;
+    // (round 12b) the tilt's offset drawn (box.diskTilt, see TILT-RULE): { el, az } (rad), t (ms, its last step)
+    let tilt = { el: 0, az: 0, t: 0 };
     function camera() {
       const Tl = lookAt(), vl = [elUser, azUser + viewOff(), Math.log(opt.dist)];
       let T = Tl, v = vl;
+      const q = path ? pathNow() : null;   // (round 11a: on a path, its pose; arrived, the state's, as with none)
+      if (q) { T = q.T; v = q.v; }
       if (flyT) { const o = [0, 0, 0]; if (hermite(flyT, Tl, o, camTV)) { flyT = null; camTV = [0, 0, 0]; } else T = o; }
       if (flyV) {
         vl[1] = flyV.p0[1] + wrapPi(vl[1] - flyV.p0[1]);
@@ -5109,12 +7672,23 @@ void main(){
       }
       camT = T; camEl = v[0]; camAz = v[1]; camD = Math.exp(v[2]);
       zN = Math.min(0.05, 0.02 * camD);
-      const el = camEl, az = camAz, d = camD;
+      // (round 12b) The tilt's offset (box.diskTilt) turns the pose drawn, not camEl and camAz: a flight, a path, a drag or a
+      // pinch take over from the view itself, and the offset never reaches the state, the links or the settings kept (a view of
+      // the same state). Without an offset the pose is the one drawn before, bit for bit. Not under reduced motion, nor with
+      // data-tilt="off" (the page's ?tilt=0), nor on the page's own clock (diskManual: an export draws the state's view).
+      const tl = (tilt.el || tilt.az) && !reduce && manualMs === null && box.dataset.tilt !== 'off';
+      const el = tl ? clampEl(camEl + tilt.el) : camEl, az = tl ? camAz + tilt.az : camAz, d = camD;
       const f = [-Math.cos(el) * Math.cos(az), -Math.cos(el) * Math.sin(az), -Math.sin(el)];
       cam = [T[0] - d * f[0], T[1] - d * f[1], T[2] - d * f[2]];
       const r = [f[1], -f[0], 0]; const rl = Math.hypot(r[0], r[1]) || 1; r[0] /= rl; r[1] /= rl;
       const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
-      basis = { f, r, u, n: [r[1], -r[0], 0], th: Math.tan(opt.fov / 2) };
+      // (round 18a) the roll (see rollUser): r and u turned about f, the picture counterclockwise by camRoll; h the right before
+      // the roll, level, for what stands in the world as the view's azimuth sets it (the cut's planes, n); none: as before
+      if (rollEase) { const k = (nowMs() - rollEase.t0) / (1000 * rollEase.dur); if (!(k < 1)) rollEase = null; else camRoll = rollEase.from + wrapPi(rollUser - rollEase.from) * k * k * (3 - 2 * k); }
+      if (!rollEase) camRoll = rollUser;
+      const cR = Math.cos(camRoll), sR = Math.sin(camRoll);
+      const rR = camRoll ? [cR * r[0] - sR * u[0], cR * r[1] - sR * u[1], cR * r[2] - sR * u[2]] : r, uR = camRoll ? [sR * r[0] + cR * u[0], sR * r[1] + cR * u[1], sR * r[2] + cR * u[2]] : u;
+      basis = { f, r: rR, u: uR, h: r, n: [r[1], -r[0], 0], th: Math.tan(opt.fov / 2) };
     }
     function project(p) {
       const v = [p[0] - cam[0], p[1] - cam[1], p[2] - cam[2]];
@@ -5133,14 +7707,19 @@ void main(){
     // it keeps)
     const SLICE_Q = { T: 1, rho: 2, layers: 4 }, SQ_OLD = { none: 'rho', tau: 'T' };
     const sqOf = (v) => (own(SLICE_Q, v) ? v : own(SQ_OLD, v) ? SQ_OLD[v] : null);
-    const sliceG = overlay.querySelector('.disk-slice');
+    // (round 15b, the owner: "the poloidal field on the 1/2 and 1/4 cuts: tie it to the field's on/off, not to the captions") the
+    // field lines in the plane have a group of their own, shown with the cut and the field lines (F, data-nofield), whatever
+    // the annotations; the rest of the face's lines and labels stay annotations (sliceG)
+    const sliceG = overlay.querySelector('.disk-slice'), sliceFG = overlay.querySelector('.disk-slice-field');
     // the CO look's colour bar and channel velocity (top left; the cut, whose bar sits there, is closed in the observed
     // looks)
     const coG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     overlay.appendChild(coG);
     const LN10 = Math.LN10, CHI_C = 0.03;
-    // ln tau* toward the star with the planets' gaps, behind each inner rim at least that of the rim (as xRim)
-    const lnTauJS = (R, z) => {
+    // ln tau* toward the star with the planets' gaps, behind each inner rim at least that of the rim (as xRim). (Round 18b: and
+    // beyond the crest of the irradiated surface at least the crest's at the same angle, xCrestJS, as the shaders' x. lnTauLocJS
+    // without the crest's shadow: the gas's own depth, which places the faces as the GLSL's q.z does, where there is gas)
+    const lnTauLocJS = (R, z) => {
       let x = MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnAll(R) - 0.5 * z * z / (Hof(R) * Hof(R));
       const th = Math.abs(z) / R;
       for (const rim of rims()) {
@@ -5150,8 +7729,10 @@ void main(){
       }
       return x;
     };
+    const lnTauJS = (R, z) => Math.max(lnTauLocJS(R, z), xCrestJS(R, Math.abs(z)));
     // height where ln tau* = lt (the irradiation surface for lt = 0), and where the disk gas is 10^lr of the
-    // midplane at 1 au; NaN where the column does not reach it. Behind the gap's rim tau* is found by bisection.
+    // midplane at 1 au; NaN where the column does not reach it. Behind the gap's rim tau* is found by bisection. (Round 18b:
+    // beyond the crest the higher of the gas's own and the crest's shadow's, R h_c sqrt(2 (a_c - lt)))
     const zOfTau = (R, lt) => {
       if (rims().some((rim) => R > rim.R && R < rim.end + 0.5)) {
         if (lnTauJS(R, 0) < lt) return NaN;
@@ -5159,8 +7740,10 @@ void main(){
         for (let i = 0; i < 40; i++) { const m = 0.5 * (lo + hi); if (lnTauJS(R, m) > lt) lo = m; else hi = m; }
         return 0.5 * (lo + hi);
       }
-      const a = MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnAll(R) - lt;
-      return a > 0 ? Hof(R) * Math.sqrt(2 * a) : NaN;
+      const a = MODEL.LNTAU1 - 1.25 * Math.log(R) - cutOut(R) + gapLnAll(R) - lt, z = a > 0 ? Hof(R) * Math.sqrt(2 * a) : NaN;
+      const c = crestJS();
+      if (c && R > c.R && c.a > lt) { const zc = R * c.h * Math.sqrt(2 * (c.a - lt)); return isNaN(z) ? zc : Math.max(z, zc); }
+      return z;
     };
     const zOfRho = (R, lr) => { const v = Math.log(SigmaJS(R) * Math.exp(gapLnAll(R)) * MODEL.H0 / Hof(R)) - lr * LN10; return v > 0 ? Hof(R) * Math.sqrt(2 * v) : NaN; };
     const sliceGeom = {};               // lines in (R, z), R >= 0 and z >= 0, built once per quantity and gap depth
@@ -5201,7 +7784,8 @@ void main(){
     }
     const logspace = (a, b, n) => Array.from({ length: n }, (_, i) => a * Math.pow(b / a, i / (n - 1)));
     function buildSlice(q) {
-      const key = q + ':' + planetsKey() + ':' + rSn.toFixed(3) + ':' + (opt.asym ? 1 : 0);
+      // (round 14a: and the model's parameters, parGen, which move the dead zone, the layers, the wind's lines and density, the gaps)
+      const key = q + ':' + planetsKey() + ':' + rSn.toFixed(3) + ':' + (opt.asym ? 1 : 0) + ':' + parGen;
       if (sliceGeom.key === key) return sliceGeom.g;
       const g = { lines: [], labels: [] };
       const curve = (f, R0, R1) => logspace(R0, R1, 160).map((R) => [R, f(R)]).filter((pt) => !isNaN(pt[1]));
@@ -5218,24 +7802,29 @@ void main(){
           if (c.length > 2) g.lines.push({ pts: c, quads: ALL, lr });
         }
         // (the lower side has its own contours, at 0.1 of the upper with the wind's asymmetry, and its lines' own bases)
-        const lowW = opt.asym ? WIND_LOW_JS : 1, sideS = opt.asym ? ASYM_F_JS : 0;
+        // (round 13c: the density as the wind map draws it, windLnRho, the mass budget's or round 8's; it falls along the line
+        // from chi_c, so the contour's chi is bisected over the table's rows from there)
+        const lowW = opt.asym ? WIND_LOW_JS : 1, sideS = opt.asym ? ASYM_F_JS : 0, aS = opt.asym ? 1 : 0, lnMid = Math.log(Math.sqrt(2 * Math.PI) * MODEL.H0);
         for (const [lr, low, lower] of [[-6, 1, 0], [-9, 1, 0], [-6, lowW, 1], [-9, lowW, 1]]) {
           const c = [];
           for (const Rf of logspace(0.07, 30, 180)) {
-            const zb = zBase(Rf), r0 = r0Of(Rf, lower ? -sideS : sideS), T = bpOf(Rf), lnEta = T.LNEK;   // (round 8: the line's own solution)
-            const base = -MODEL.LNTAU1 - 1.5 * Math.log(r0) - LNREF - cutOut(r0) + gapLnAll(r0) + Math.log(Math.max(ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, r0) * low, 1e-30));
-            const want = lr * LN10 - base;   // ln (ETA / kappa) with the loading's factor at the contour
-            if (want > tabF(lnEta, tabS(CHI_C)) || want < lnEta[NT - 1]) continue;
-            let lo = tabS(CHI_C), hi = NT - 1.001;
-            for (let k = 0; k < 30; k++) { const m = 0.5 * (lo + hi); if (tabF(lnEta, m) > want) lo = m; else hi = m; }
-            const chi = chiOfS(0.5 * (lo + hi)), z = zb + r0 * chi;
-            if (z < ZB_JS) c.push([r0 * tabF(T.XI, tabS(chi)), z]);
+            const L = windLine(Rf, lower ? -sideS : sideS, aS), zb = zBase(Rf), r0 = L.r0, T = L.T;   // (round 8: the line's own solution)
+            const off = gapLnAll(r0) + Math.log(low) + lnMid - lr * LN10, f = (m) => windLnRho(L, chiOfS(m)) + off;   // (> 0 below the contour)
+            let lo = tabS(L.cc), hi = NT - 1.001;
+            if (f(lo) < 0 || f(hi) > 0) continue;
+            for (let k = 0; k < 30; k++) { const m = 0.5 * (lo + hi); if (f(m) > 0) lo = m; else hi = m; }
+            const chi = chiOfS(0.5 * (lo + hi)), z = zb + r0 * chi, R = r0 * tabF(T.XI, tabS(chi)), r = Math.hypot(R, z);
+            // (round 15b) not where the envelope holds the place (EXCL): the run of the contour broken there
+            if (z < ZB_JS && !(exclOn && windLnP(L, chi) + Math.log(low) < envLnP(r, z / r, envLnRho0))) c.push([R, z]);
+            else if (c.length > 2) g.lines.push({ pts: c.splice(0), quads: lower ? LOWER : UPPER });
+            else c.length = 0;
           }
           if (c.length > 2) g.lines.push({ pts: c, quads: lower ? LOWER : UPPER });
         }
       }
       sliceGeom.key = key; sliceGeom.g = g;
-      g.tau1 = logspace(MODEL.R_IN, RB_JS - 1, 300).map((R) => [R, zOfTau(R, 0)]).filter((pt) => !isNaN(pt[1]));
+      // (round 18b: on the painted face only, where the gas's own depth reaches e^-4.5: beyond the gas the crest's shadow goes on)
+      g.tau1 = logspace(MODEL.R_IN, RB_JS - 1, 300).map((R) => [R, zOfTau(R, 0)]).filter((pt) => !isNaN(pt[1]) && lnTauLocJS(pt[0], pt[1]) > -4.5);
       // (the snow line on the faces: the 160 K surface of the temperature (round 7: tempAt), from the midplane at the snow
       // line up to where even the superheated grains in full starlight are colder (rIceS), and up along that radius to
       // the top of the painted face)
@@ -5277,7 +7866,7 @@ void main(){
     const mkS = (tag, attrs) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in attrs) e.setAttribute(k, attrs[k]); sliceG.appendChild(e); return e; };
     const sP = {
       contour: mkS('path', { fill: 'none', stroke: '#ffffff', 'stroke-opacity': 0.55, 'stroke-width': 0.9 }),
-      flines: mkS('path', { fill: 'none', stroke: '#cfe3ff', 'stroke-opacity': 0.5, 'stroke-width': 0.8 }),
+      flines: sliceFG.appendChild(mkS('path', { fill: 'none', stroke: '#cfe3ff', 'stroke-opacity': 0.5, 'stroke-width': 0.8 })),
       arrows: mkS('path', { fill: 'none', stroke: '#e8f4ff', 'stroke-opacity': 0.85, 'stroke-width': 1, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
       tau1: mkS('path', { fill: 'none', stroke: '#fff3df', 'stroke-opacity': 0.95, 'stroke-width': 1.5 }),
       // (round 6: the snow line thicker and more opaque, on a dark halo, so that it reads over the white of 160 K and over
@@ -5287,6 +7876,11 @@ void main(){
       // so that every dash is outlined and the gaps are empty. Both run along the same path, so their phases agree on curves)
       iceHalo: mkS('path', { fill: 'none', stroke: '#0a0d18', 'stroke-opacity': 0.6, 'stroke-width': 4.6, 'stroke-dasharray': '9 2', 'stroke-dashoffset': 1, 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }),
       ice: mkS('path', { fill: 'none', stroke: '#6fd0ff', 'stroke-width': 2.6, 'stroke-dasharray': '7 4', 'stroke-linecap': 'butt', 'stroke-linejoin': 'round' }),
+      // (Round 19e, the visual review: a dark edge under the pebbles' lines, as the snow line's dashes have theirs: the white of the
+      // icy pebbles lies on the temperature's palest colours, just outside the snow line, and the rock's brown on the warm colours
+      // inside it; 0.8 px on either side at 0.45. Not with data-cutlook="old")
+      pebHalo: mkS('path', { fill: 'none', stroke: '#0a0d18', 'stroke-opacity': cutOld ? 0 : 0.45, 'stroke-width': 3.8 }),
+      pileHalo: mkS('path', { fill: 'none', stroke: '#0a0d18', 'stroke-opacity': cutOld ? 0 : 0.45, 'stroke-width': 5.6 }),
       rock: mkS('path', { fill: 'none', stroke: '#b07a52', 'stroke-width': 2.2 }),
       icy: mkS('path', { fill: 'none', stroke: '#e3f1ff', 'stroke-width': 2.2 }),
       pile: mkS('path', { fill: 'none', stroke: '#f2f8ff', 'stroke-width': 4 }),
@@ -5320,12 +7914,17 @@ void main(){
         [0.865, 0.317, 0.226], [0.955, 0.469, 0.100], [0.988, 0.645, 0.040], [0.964, 0.844, 0.273], [0.988, 0.998, 0.645]]
     };
     const cmapJS = (t, m) => { t = Math.min(Math.max(t, 0), 1) * 10; const i = Math.min(Math.floor(t), 9), f = t - i; return MAPS[m][i].map((v, k) => v + (MAPS[m][i + 1][k] - v) * f); };
+    // (round 19e) the cut's own maps (CUT.T, CUT.RHO) at u along the bar, as cutT and cutRho in the GLSL: straight lines between the stops
+    const cutStops = { T: CUT.T.map(cutRGB), rho: CUT.RHO.map(cutRGB) };
+    const cutMapJS = (q, u) => { const s = cutStops[q], n = s.length - 1, t = Math.min(Math.max(u, 0), 1) * n, i = Math.min(Math.floor(t), n - 1), f = t - i; return s[i].map((v, k) => v + (s[i + 1][k] - v) * f); };
+    const lay = (k, old) => (cutOld ? old : CUT.LAY[k]);   // (a region's colour in the keys: the table's, or that of before)
     // per quantity: colour at u in [0, 1] along the bar, ticks (u, text) and a title
-    const T0 = 30, T1 = 2000, uT = (T) => Math.log(T / T0) / Math.log(T1 / T0);
+    const [T0, T1] = CUT.TR, uT = (T) => Math.log(T / T0) / Math.log(T1 / T0);
     const CBAR = {
-      T: { col: (u) => tcolorJS(T0 * Math.pow(T1 / T0, u)), ticks: [50, 160, 300, 1000].map((T) => [uT(T), String(T)]), title: ['温度 (K)', 'temperature (K)'], units: 'K', min: T0, max: T1,
+      // (round 19e: the ticks at the bar's start, 100 K, the snow line, 300 and 1000 K; 50, 160, 300, 1000 before)
+      T: { col: (u) => (cutOld ? tcolorJS(T0 * Math.pow(T1 / T0, u)) : cutMapJS('T', u)), stops: cutOld ? 25 : CUT.T.length, ticks: (cutOld ? [50, 160, 300, 1000] : [30, 100, 160, 300, 1000]).map((T) => [uT(T), String(T)]), title: ['温度(K)', 'temperature (K)'], units: 'K', min: T0, max: T1,
         description: ['色は温度を対数の尺度で示します。白い線は星の光が届く深さ(τ* = 1)、水色の破線はスノーライン(160 K)です。', 'Colour shows temperature on a logarithmic scale. The white line is where starlight reaches (tau* = 1); the dashed blue line is the snow line (160 K).'] },
-      rho: { col: (u) => cmapJS(u, 'viridis'), ticks: [-9, -6, -3, 0].map((l) => [(l + 10) / 12.5, '10' + sup(l)]), title: ['ガスの密度(1 au の赤道面に対する比)', 'gas density (relative to the midplane at 1 au)'], units: '', min: 1e-10, max: Math.pow(10, 2.5),
+      rho: { col: (u) => (cutOld ? cmapJS(u, 'viridis') : cutMapJS('rho', u)), stops: cutOld ? 25 : CUT.RHO.length, ticks: [-9, -6, -3, 0].map((l) => [(l + 10) / 12.5, '10' + sup(l)]), title: ['ガスの密度(1 au の赤道面に対する比)', 'gas density (relative to the midplane at 1 au)'], units: '', min: 1e-10, max: Math.pow(10, 2.5),
         description: ['密度は 1 au の赤道面に対する比で、色は対数の尺度です。細い線は目盛りの値の等密度線です。', 'Density is relative to the midplane at 1 au; the colour scale is logarithmic. The thin lines are contours at the ticks\u2019 values.'] },
       // the layers of the coupling: swatches (the colours of layersFace)
       // (round 6: one region for each point of the face, and names that do not overlap: the strong turbulence of the hot
@@ -5333,23 +7932,28 @@ void main(){
       // in. The dust-free gas close to the star is in the strong turbulence's region, as its coupling is)
       // (round 8: named by what happens there, one axis: no "laminar" (the dead zone, the accretion layer and the wind all
       // are); the wind-launching region between the accretion layer and the wind's base; the Hall layer with the asymmetry)
-      layers: { swatches: [['#e0784a', '乱流(熱電離)', 'turbulence (thermally ionized)'], ['#273157', 'デッドゾーン', 'dead zone'], ['#ffb547', '降着層', 'accretion layer'], ['#5c9eb3', '風の根元', 'wind base'], ['#a3d9f2', '円盤風', 'disk wind'], ['#ba8f99', '弱い乱流', 'weak turbulence']],
+      // (round 19e: the colours from CUT.LAY, lay(); with data-cutlook="old" those of before, written here)
+      layers: { swatches: [[lay('MRI', '#e0784a'), '乱流(熱電離)', 'turbulence (thermally ionized)'], [lay('DEAD', '#273157'), 'デッドゾーン', 'dead zone'], [lay('ACC', '#ffb547'), '降着層', 'accretion layer'], [lay('BASE', '#5c9eb3'), '風の根元', 'wind base'], [lay('WIND', '#a3d9f2'), '円盤風', 'disk wind'], [lay('WEAK', '#ba8f99'), '弱い乱流', 'weak turbulence']],
         title: ['領域(何が起きている所か)', 'regions (what happens there)'], units: '', min: null, max: null,
         description: ['色は、乱流、デッドゾーン、降着層、風の根元、円盤風など、何が起きている所かで分けた領域を示します。', 'Colours mark the regions by what happens there: turbulence, the dead zone, the accretion layer, the wind base, the wind.'] }
     };
     // The painted face and its text counterpart use the same swatches, including the close stellar regions (round 6: on
     // every face, under the bar too, since their names on the face are gone; the gas falling onto the star is not the
     // accretion layer's, hence not called accretion)
-    const MAG_SW = [['#9a7adb', '磁気圏', 'magnetosphere'], ['#ff5c80', '星へ落ちるガス', 'infall onto the star']];
-    const HALL_SW = ['#8a995c', 'ホール効果の層', 'Hall layer'];   // (round 8: with the asymmetry, see LAY_HALL)
-    const JET_SW = ['#ff6b5c', 'ジェット', 'jet'];                  // (round 8: with the jet shown, see LAY_JET)
-    const layerSwatches = (c) => (c.swatches || []).concat(c.swatches && asymSm() > 0.5 ? [HALL_SW] : [], c.swatches && (opt.mode & 64) ? [JET_SW] : [], magFrame.vis > 0.5 ? MAG_SW : []);
+    const MAG_SW = [[lay('MAG', '#9a7adb'), '磁気圏', 'magnetosphere'], [lay('STREAM', '#ff5c80'), '星へ落ちるガス', 'infall onto the star']];
+    const HALL_SW = [lay('HALL', '#8a995c'), 'ホール効果の層', 'Hall layer'];   // (round 8: with the asymmetry, see LAY_HALL)
+    const JET_SW = [lay('JET', '#ff6b5c'), 'ジェット', 'jet'];                  // (round 8: with the jet shown, see LAY_JET)
+    const ENV_SW = [lay('ENV', '#8c73a6'), 'エンベロープ(落下が占める所)', 'envelope (where the infall holds)'];   // (round 15b: with the exclusion, see LAY_ENV)
+    const layerSwatches = (c) => (c.swatches || []).concat(c.swatches && asymSm() > 0.5 ? [HALL_SW] : [], c.swatches && (opt.mode & 64) ? [JET_SW] : [], c.swatches && exclOn ? [ENV_SW] : [], magFrame.vis > 0.5 ? MAG_SW : []);
     const cbarId = 'disk-cbar-' + Math.random().toString(36).slice(2, 9);
     const cbarDefs = mkS('defs', {});
     cbarDefs.innerHTML = '<linearGradient id="' + cbarId + '" x1="0" x2="1" y1="0" y2="0"></linearGradient>';
     const cbarGrad = cbarDefs.firstChild;
     const CBW = 220;
-    const cbarRect = mkS('rect', { x: 18, y: 24, width: CBW, height: 8, fill: 'url(#' + cbarId + ')', stroke: 'rgba(190,215,240,0.5)', 'stroke-width': 0.6 });
+    // (Round 19e, the visual review: the cut's bar a little taller, 11 px for 8, so that its colours read at the size the page shows
+    // it. KB: the bar's top and height; the ticks, their labels and what follows are placed from them. As before with data-cutlook="old")
+    const KB = cutOld ? { y: 24, h: 8 } : { y: 25, h: 11 };
+    const cbarRect = mkS('rect', { x: 18, y: KB.y, width: CBW, height: KB.h, fill: 'url(#' + cbarId + ')', stroke: 'rgba(190,215,240,0.5)', 'stroke-width': 0.6 });
     // a dark backing under the legend (beneath everything on the slice), so that it reads over the bright wind and faces
     const cbarBack = mkS('rect', { x: 8, y: 4, rx: 5, fill: 'rgba(8,11,20,0.62)' });
     sliceG.insertBefore(cbarBack, sliceG.firstChild);
@@ -5383,24 +7987,28 @@ void main(){
         return li;
       }
       if (cbarFor !== q) {
-        cbarGrad.innerHTML = Array.from({ length: 25 }, (_, i) => { const u = i / 24, k = c.col(u).map((v) => Math.round(255 * Math.min(1, Math.max(0, v)))); return '<stop offset="' + u.toFixed(3) + '" stop-color="rgb(' + k.join(',') + ')"/>'; }).join('');
+        // (round 19e: the bar's stops are the map's own, c.stops of them, so that the bar is the face's colours to the stop: the
+        // temperature's lightest, at 160 K, lies between two of the 25 even ones of before)
+        const ns = c.stops || 25;
+        cbarGrad.innerHTML = Array.from({ length: ns }, (_, i) => { const u = i / (ns - 1), k = c.col(u).map((v) => Math.round(255 * Math.min(1, Math.max(0, v)))); return '<stop offset="' + u.toFixed(3) + '" stop-color="rgb(' + k.join(',') + ')"/>'; }).join('');
         cbarFor = q;
       }
       let d = '';
-      for (const [u, t] of c.ticks) { const x = 18 + CBW * u; d += 'M' + x.toFixed(1) + ' 32L' + x.toFixed(1) + ' 36'; sLabel(li++, x, 47, t, 'middle'); }
+      const yb = KB.y + KB.h;   // (the bar's lower edge: 32 before round 19e, see KB)
+      for (const [u, t] of c.ticks) { const x = 18 + CBW * u; d += 'M' + x.toFixed(1) + ' ' + yb + 'L' + x.toFixed(1) + ' ' + (yb + 4); sLabel(li++, x, yb + 15, t, 'middle'); }
       cbarTicks.setAttribute('d', d);
       sLabel(li++, 18, 18, title);
       // (close to the star, the magnetosphere's two regions under the bar)
-      let right = Math.max(18 + CBW + 14, 18 + textW(title)), bottom = 53;
+      let right = Math.max(18 + CBW + 14, 18 + textW(title)), bottom = yb + 21;
       if (magFrame.vis > 0.5) {
         let x = 18;
         MAG_SW.forEach(([col, ja_, en], i) => {
           const t = ja() ? ja_ : en, w = 14 + textW(t);
           if (!swatchRects[i]) swatchRects[i] = mkS('rect', { width: 10, height: 10, stroke: 'rgba(190,215,240,0.5)', 'stroke-width': 0.6 });
-          const e = swatchRects[i]; e.setAttribute('x', x); e.setAttribute('y', 57); e.setAttribute('fill', col); e.setAttribute('visibility', 'visible');
-          sLabel(li++, x + 14, 66, t); right = Math.max(right, x + w); x += w + 12;
+          const e = swatchRects[i]; e.setAttribute('x', x); e.setAttribute('y', yb + 25); e.setAttribute('fill', col); e.setAttribute('visibility', 'visible');
+          sLabel(li++, x + 14, yb + 34, t); right = Math.max(right, x + w); x += w + 12;
         });
-        bottom = 72;
+        bottom = yb + 40;
       }
       backTo(cbarBack, right, bottom);
       return li;
@@ -5415,18 +8023,18 @@ void main(){
     });
     // One definition for the CO bar and its accessible text; the scale is the shader's existing one.
     const coSpec = () => {
-      const rng = coRange(), mode = opt.coMode, top = (mode === 'm0' ? 900 : 220) * Math.exp(coLn);
+      const rng = coRange(), mode = opt.coMode, top = (mode === 'm0' ? CO_M0_JS : 220) * Math.exp(coLn);
       const div = (u) => { const v = 2 * u - 1, g = [0.60, 0.61, 0.64], b = [0.20, 0.36, 0.92], r = [0.88, 0.16, 0.12]; return g.map((c, i) => c + ((v < 0 ? b : r)[i] - c) * Math.abs(v)); };
-      return mode === 'm1' ? { col: div, ticks: [[0, '−' + rng.toFixed(0)], [0.5, '0'], [1, '+' + rng.toFixed(0)]], title: ['平均の視線速度 (km/s、赤は遠ざかる)', 'mean line-of-sight velocity (km/s, red receding)'], units: 'km/s', min: -rng, max: rng,
+      return mode === 'm1' ? { col: div, ticks: [[0, '−' + rng.toFixed(0)], [0.5, '0'], [1, '+' + rng.toFixed(0)]], title: ['平均の視線速度(km/s、赤は遠ざかる)', 'mean line-of-sight velocity (km/s, red receding)'], units: 'km/s', min: -rng, max: rng,
         description: ['赤は遠ざかるガス、青は近づくガスです。', 'Red gas recedes; blue gas approaches.'] }
-        : mode === 'm0' ? { col: (u) => cmapJS(u, 'inferno'), ticks: coTicks(top, [1 / 9, 4 / 9, 1]), title: ['輝線の積分強度 (K km/s)', 'line integrated intensity (K km/s)'], units: 'K km/s', min: 0, max: top,
+        : mode === 'm0' ? { col: (u) => cmapJS(u, 'inferno'), ticks: coTicks(top, [1 / 9, 4 / 9, 1]), title: ['輝線の積分強度(K km/s)', 'line integrated intensity (K km/s)'], units: 'K km/s', min: 0, max: top,
           description: ['色は速度にわたって積分した強度の平方根を示します。', 'Colour follows the square root of intensity integrated over velocity.'] }
-          : { col: (u) => cmapJS(u, 'inferno'), ticks: coTicks(top, [25 / 220, 100 / 220, 1]), title: ['輝線の輝度温度 (K)', 'line brightness temperature (K)'], units: 'K', min: 0, max: top,
+          : { col: (u) => cmapJS(u, 'inferno'), ticks: coTicks(top, [25 / 220, 100 / 220, 1]), title: ['輝線の輝度温度(K)', 'line brightness temperature (K)'], units: 'K', min: 0, max: top,
             description: ['チャンネル ' + opt.coV.toFixed(2) + ' km/s。色は輝度温度の平方根を示します。', 'Channel ' + opt.coV.toFixed(2) + ' km/s. Colour follows the square root of brightness temperature.'] };
     };
     function drawCoBar() {
-      const on = lookNow === 'co' && annAmp > 0;
-      coG.setAttribute('opacity', on ? annAmp.toFixed(3) : '0');
+      const aC = annOf(ANN.CO), on = lookNow === 'co' && aC > 0;
+      coG.setAttribute('opacity', on ? aC.toFixed(3) : '0');
       if (!on) return;
       if (!coE.rect) {
         const mk = (tag, attrs) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in attrs) e.setAttribute(k, attrs[k]); coG.appendChild(e); return e; };
@@ -5462,12 +8070,22 @@ void main(){
       if (c) return { title: c.title[j], description: c.description[j], units: c.units, min: c.min, max: c.max,
         rangeMode: lookNow === 'co' ? (coHold ? 'fixed' : 'auto') : 'fixed',
         items: c.swatches ? layerSwatches(c).map(([color, ja_, en]) => ({ label: j ? en : ja_, color })) : c.ticks.map(([u, label]) => ({ label, color: rgb(c.col(u)) })) };
+      // (round 18k) the own light: its colours of the brightness temperature at the ticks, then the materials that keep theirs
+      if (lookNow === 'model' && selfOn() && !selfOld) {
+        const k = box.diskSelfKey();
+        // (round 18m: by default the brightness alone, the disk in shades of its colour; ?selfhue=1 round 18k's)
+        return { title: j ? 'Brightness temperature (K)' : '輝度温度(K)',
+          description: selfTcol ? (j ? 'The gas, its dust and the pebbles glow in their own thermal light: brightness and colour show the brightness temperature, the brightness on a logarithmic scale. The other colours are materials.' : 'ガスと塵、小石は自らの熱で光り、明るさと色は輝度温度(明るさは対数の尺度)を示します。ほかの色は物質の種類です。')
+            : (j ? 'The gas, its dust and the pebbles glow in their own thermal light: the brightness shows the brightness temperature, on a logarithmic scale, in shades of the gas\u2019s colour. The other colours are materials.' : 'ガスと塵、小石は自らの熱で光り、明るさが輝度温度(対数の尺度)を、ガスの色の濃淡で示します。ほかの色は物質の種類です。'),
+          units: 'K', min: k.min, max: k.max, rangeMode: 'fixed',
+          items: k.ticks.map(([u, t]) => ({ label: t + ' K', color: k.colourAt(u) })).concat(MAT.filter(([key]) => !['disk', 'rock', 'ice', 'acc'].includes(key)).map(([, hex, , ja_, en]) => ({ label: j ? en : ja_, color: hex }))) };
+      }
       const desc = { model: ['色は物質の種類(円盤、小石、円盤風、エンベロープなど)を、明るさはその量を示します。', 'Colour shows the material (the disk, the pebbles, the wind, the envelope and so on); brightness, how much of it is there.'],
         optical: ['星の光を散乱する表層と円盤風を示します。', 'The surface and wind scatter starlight.'],
         mir: ['暖かい表層の熱放射を示します。', 'The warm surface emits thermal radiation.'],
         mm: ['赤道面に沈んだ小石の熱放射を示します。', 'Settled pebbles at the midplane emit thermal radiation.'] }[lookNow];
       return { title: j ? 'Colour and brightness' : '色と明るさ', description: desc ? desc[j] : '', units: '', min: null, max: null, rangeMode: 'none',
-        items: lookNow === 'model' ? MAT.map(([, hex, , ja_, en]) => ({ label: j ? en : ja_, color: hex })) : [] };
+        items: lookNow === 'model' ? MAT.filter(([key]) => key !== 'acc' || opt.accDraw).map(([, hex, , ja_, en]) => ({ label: j ? en : ja_, color: hex })) : [] };   // (round 13a: the accretion layer only where drawn)
     };
     let legendKey = '';
     const legendEvent = () => {
@@ -5524,7 +8142,7 @@ void main(){
       // (Disk Lab v2, round 6: the density's face is clear in the tube along the axis, where no field line of the model
       // carries gas (those from inside the disk's inner edge, R_IN, are empty), as in the shader)
       if (opt.sliceQ === 'rho') return R < RB_JS - 1 && Math.abs(z) < ZB_JS - 1 && !(Math.abs(z) > zBase(MODEL.R_IN) && R < fieldRP(MODEL.R_IN, Math.abs(z))[0]) ? ss(0.82, 1, sliceU) : 0;
-      const x = lnTauJS(Math.max(R, 1e-3), z), hole = ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, R);
+      const x = lnTauLocJS(Math.max(R, 1e-3), z), hole = ss(MODEL.R_IN * 0.8, MODEL.R_IN * 1.3, R);   // (round 18b: the gas's own, as the face's q.z)
       return (opt.sliceQ === 'layers' ? (Math.abs(z) <= zBase(R) ? 1 : 0) : ss(-6, -4.5, x)) * hole * ss(0.82, 1, sliceU);
     }
     // The cutaway opens and closes as a sweep: sliceU goes from 0 (closed) to 1 (open) in 1.5 s, as the fades do, and
@@ -5543,11 +8161,13 @@ void main(){
     // Round 7: 10 -> 6 degrees, the owner's "the left face shows a little too much"; tried 5, 6, 7 and 10 at the dead
     // zone's place: at 6 the left face is a narrow band that still shows its dead zone and accretion layers.)
     const SWEEP = RB_JS, CUT_A = { half: 0, quarter: Math.PI / 4 }, CUT_TURN = -6.0 * Math.PI / 180;
-    let sliceU = opt.slice ? 1 : 0, annAmp = opt.ann ? 1 : 0;   // annAmp: the annotations' fade (0.4 s)
+    // annA: each kind's fade (0.4 s), in ANN_BITS' order; annAmp, the highest (round 15a)
+    let sliceU = opt.slice ? 1 : 0, annA = ANN_BITS.map((b) => (opt.ann & b ? 1 : 0)), annAmp = Math.max(...annA), annLast = opt.ann || ANN.ALL;
+    const annOf = (b) => annA[ANN_BITS.indexOf(b)], annDone = () => annA.every((v, i) => v === (opt.ann & ANN_BITS[i] ? 1 : 0));
     let cutA = CUT_A[opt.cut], cutN = [[1, 0, 0], [1, 0, 0]], cutE = [[0, -1, 0], [0, 1, 0]], faceSeen = [true, true];
     let cutFn = [0, 1, 0], cutFr = [1, 0, 0];
     function cutFrame() {
-      const tq = CUT_TURN * (cutA / CUT_A.quarter), ct = Math.cos(tq), st = Math.sin(tq), n0 = basis.n, r0 = basis.r;
+      const tq = CUT_TURN * (cutA / CUT_A.quarter), ct = Math.cos(tq), st = Math.sin(tq), n0 = basis.n, r0 = basis.h;   // (round 18a: h, the right before the roll)
       const n = cutFn = [ct * n0[0] + st * r0[0], ct * n0[1] + st * r0[1], 0], r = cutFr = [ct * r0[0] - st * n0[0], ct * r0[1] - st * n0[1], 0];
       const c = Math.cos(2 * cutA), s = Math.sin(2 * cutA);
       cutN = [[c * n[0] + s * r[0], c * n[1] + s * r[1], 0], [n[0], n[1], 0]];
@@ -5560,6 +8180,10 @@ void main(){
     // jumps; the model's own drawings (field lines, wind tracers, the envelope's streamlines) fade out in the observed
     // looks (fieldAmp, which also fades the field lines' toggle).
     let lookNow = 'model', lookT0 = -1e9, fieldAmp = 1;   // (round 9: an observed look switched to as any, once FULL is warm)
+    // (round 18i) the model look's light drawn (see SELF): a change of opt.glow dips the exposure as a change of look does and takes
+    // effect at its darkest; selfOn, the gas's own light drawn in this frame
+    let glowNow = 'star';
+    const selfOn = () => glowNow === 'self' && lookNow === 'model';
     // Other fades (in real time, as the others): the components gas, surface, pebbles and wind (compAmp, 0.6 s; uComp),
     // the model's drawings of the envelope between looks (modelAmp, 0.4 s), the scale bar when it changes its length
     // (the old bar fades out as the new one fades in, 0.25 s; both are true to scale)
@@ -5596,8 +8220,8 @@ void main(){
     // moment 1's range: the line-of-sight speeds for the inclination, and faster closer in (the gas the camera frames
     // turns faster: up to twice as fast, as the square root of 30 au over the distance)
     const coRange = () => Math.max(2, 12 * Math.sqrt(Math.max(0, 1 - basis.f[2] * basis.f[2]))) * Math.min(2, Math.max(1, Math.sqrt(30 / camD)));
-    const fadesDone = () => !clumps.some((c) => c.gone && c.amp > 0) && jetAmp === (opt.mode & 64 ? 1 : 0) && fxAmp === opt.fx && COMP_BITS.every((b, i) => compAmp[i] === (opt.mode & b ? 1 : 0)) && modelAmp === (lookNow === 'model' ? 1 : 0) && performance.now() - sbT >= 250 && msAmp === (opt.ms ? 1 : 0) && asymAmp === (opt.asym ? 1 : 0) && marksAmp === (marksOn() ? 1 : 0) && wavesAmp === (opt.waves ? 1 : 0);
-    const lookDip = () => { const u = (performance.now() - lookT0) / 600; return reduce || u >= 1 || u <= 0 ? 1 : 1 - 0.92 * Math.sin(Math.PI * u); };
+    const fadesDone = () => !clumps.some((c) => c.gone && c.amp > 0) && jetAmp === (opt.mode & 64 ? 1 : 0) && fxAmp === opt.fx && COMP_BITS.every((b, i) => compAmp[i] === (opt.mode & b ? 1 : 0)) && modelAmp === (lookNow === 'model' ? 1 : 0) && nowMs() - sbT >= 250 && msAmp === (opt.ms ? 1 : 0) && asymAmp === (opt.asym ? 1 : 0) && marksAmp === (marksOn() ? 1 : 0) && wavesAmp === (opt.waves ? 1 : 0);
+    const lookDip = () => { const u = (nowMs() - lookT0) / 600; return reduce || u >= 1 || u <= 0 ? 1 : 1 - 0.92 * Math.sin(Math.PI * u); };
     const sliceOff = () => { const u = sliceU; return (1 - u * u * (3 - 2 * u)) * Math.min(Math.max(Math.hypot(cam[0], cam[1]), 2), SWEEP); };
     // the part of space kept by the cutaway: outside the part between the planes toward the camera
     const kept = (P) => {
@@ -5606,7 +8230,8 @@ void main(){
       return !(P[0] * cutN[0][0] + P[1] * cutN[0][1] > off && P[0] * cutN[1][0] + P[1] * cutN[1][1] > off);
     };
     function drawSlice() {
-      sliceG.setAttribute('opacity', (ss(0.82, 1, sliceU) * annAmp).toFixed(3));
+      sliceG.setAttribute('opacity', (ss(0.82, 1, sliceU) * annOf(ANN.CUT)).toFixed(3));
+      sliceFG.setAttribute('opacity', (ss(0.82, 1, sliceU) * opt.opac[5]).toFixed(3));   // (round 15b: the field lines in the plane, not annotations; round 18d: with their see-through)
       if (sliceU <= 0) { for (const k in sP) sP[k].setAttribute('d', ''); sLabels.forEach((e) => { e.textContent = ''; }); drawCbar('', 0); return; }
       const ja_ = ja(), g = buildSlice(opt.sliceQ);
       let li = 0;
@@ -5624,6 +8249,7 @@ void main(){
       sP.rock.setAttribute('d', pebOn ? segs(spans(MODEL.R_IN, rSn, (R) => peb(R) > 0.3)) : '');
       sP.icy.setAttribute('d', pebOn ? segs(spans(rSn, 31, (R) => peb(R) > 0.3)) : '');
       sP.pile.setAttribute('d', pebOn ? segs([[rSn * 1.02, rSn * 1.3], ...spans(Math.max(rSn, 2), 31, (R) => peb(R) > 1.8)]) : '');
+      sP.pebHalo.setAttribute('d', sP.rock.getAttribute('d') + sP.icy.getAttribute('d')); sP.pileHalo.setAttribute('d', sP.pile.getAttribute('d'));   // (round 19e: their dark edge)
       // the planet's orbit, where it crosses the plane
       let dPl = '', dHill = '';
       const circ = (x, y, r) => 'M' + (x - r).toFixed(1) + ' ' + y.toFixed(1) + 'a' + r.toFixed(1) + ' ' + r.toFixed(1) + ' 0 1 0 ' + (2 * r).toFixed(1) + ' 0a' + r.toFixed(1) + ' ' + r.toFixed(1) + ' 0 1 0 ' + (-2 * r).toFixed(1) + ' 0';
@@ -5690,7 +8316,7 @@ void main(){
       // contours' values sit in regions too narrow to tell": the page's key names the lines, and the legend the colours,
       // with the magnetosphere's two regions close to the star)
       li = drawCbar(opt.sliceQ, li);
-      const boxes = [[0, 0, CBW + 30, 52]], textW = (t) => [...t].reduce((w, c) => w + (c.charCodeAt(0) > 0x2e80 ? 11 : 6.3), 0);
+      const boxes = [[0, 0, CBW + 30, KB.y + KB.h + 20]], textW = (t) => [...t].reduce((w, c) => w + (c.charCodeAt(0) > 0x2e80 ? 11 : 6.3), 0);
       const place = (x, y, t, anchor) => {
         const w = textW(t), x0 = anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x, b = [x0 - 2, y - 11, x0 + w + 2, y + 3];
         if (b[0] < 2 || b[2] > W - 2 || b[1] < 2 || b[3] > Hh - 24 || boxes.some((o) => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])) return false;
@@ -5713,7 +8339,8 @@ void main(){
       // (the 1/4 cut: through its face, below the disk's thin layer, lies the space under the disk behind it, dark, beside
       // the left half of the disk left whole: named, as it reads as a hole; a name of what is seen past the face, not on it)
       sP.edge.setAttribute('d', '');
-      if (opt.cut === 'quarter' && sliceU >= 0.82) {
+      // (round 19e: not on the density's face, which paints the wind's gas there: nothing is seen through it)
+      if (opt.cut === 'quarter' && sliceU >= 0.82 && (cutOld || opt.sliceQ !== 'rho')) {
         const sz = cam[2] >= 0 ? -1 : 1, qL = sp(0.3 * camD, sz * 0.14 * camD);
         if (inView(qL)) place(qL[0], qL[1], sz < 0 ? (ja_ ? '円盤の下の空間(切り口ごしに)' : 'the space under the disk, through the cut') : (ja_ ? '円盤の上の空間(切り口ごしに)' : 'the space over the disk, through the cut'), 'middle');
       }
@@ -5734,17 +8361,25 @@ void main(){
     // diskSnapshot), and snapBands splits each frame's volume into that many bands, each sent to the GPU on its own, so that
     // no single piece of GPU work takes seconds (the system stops it, and the WebGL context is lost)
     let snapK = 1, snapBands = 1;
+    // (round 11b) a video's frames at a size of their own (diskOut): { w, h, px }, null for the box's
+    let outSz = null;
+    const pxOf = () => (outSz ? outSz.px : Math.min(window.devicePixelRatio || 1, 2) * snapK);   // (the canvas's pixels a CSS pixel)
     function resize() {
       // the height follows data-aspect when given (the canvas's default size would otherwise set it)
-      W = box.clientWidth; Hh = box.dataset.aspect ? Math.round(W * Number(box.dataset.aspect)) : (box.clientHeight || Math.round(W * 0.62));
-      box.style.height = Hh + 'px';
+      // (round 11b: with a size for a video's frames, diskOut, the stage is that size's, w / px x h / px CSS pixels, and the box
+      // is left as it is)
+      if (outSz) { W = outSz.w / outSz.px; Hh = outSz.h / outSz.px; }
+      else {
+        W = box.clientWidth; Hh = box.dataset.aspect ? Math.round(W * Number(box.dataset.aspect)) : (box.clientHeight || Math.round(W * 0.62));
+        box.style.height = Hh + 'px';
+      }
       toastFit();
       if (lost) return;   // (without a context: the static picture shows, and the canvas is sized when the context is back)
       // the canvas at the screen's pixels (the cut face is drawn there, faceT), the volume at the render scale (accT,
       // rW x rH, upsampled by SHOW_FS)
-      const dprS = Math.min(window.devicePixelRatio || 1, 2) * snapK, dpr = dprS * opt.scale;
-      canvas.style.width = W + 'px'; canvas.style.height = Hh + 'px';
-      const cw = Math.max(1, Math.round(W * dprS)), ch = Math.max(1, Math.round(Hh * dprS));
+      const dprS = pxOf(), dpr = dprS * opt.scale;
+      if (!outSz) { canvas.style.width = W + 'px'; canvas.style.height = Hh + 'px'; }
+      const cw = outSz ? outSz.w : Math.max(1, Math.round(W * dprS)), ch = outSz ? outSz.h : Math.max(1, Math.round(Hh * dprS));
       if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
       rW = Math.max(1, Math.round(W * dpr)); rH = Math.max(1, Math.round(Hh * dpr));
       overlay.setAttribute('viewBox', '0 0 ' + W + ' ' + Hh);
@@ -5765,7 +8400,7 @@ void main(){
     function rescale() {
       cancelJob();   // (round 9: a frame being drawn in bands at the scale before is left; round 10a: its kicks' queries with it)
       if (lost || !accT || !accFor || accFor[0] !== canvas.width || accFor[1] !== canvas.height) { resize(); return; }
-      const dpr = Math.min(window.devicePixelRatio || 1, 2) * snapK * opt.scale;
+      const dpr = pxOf() * opt.scale;
       rW = Math.max(1, Math.round(W * dpr)); rH = Math.max(1, Math.round(Hh * dpr));
       if (rW > accT.w || rH > accT.h) {
         gl.deleteFramebuffer(accT.fb); gl.deleteTexture(accT.tex);
@@ -5779,7 +8414,9 @@ void main(){
     // discrepancy sequences) and averaged with the frames before it, up to ACC_MAX, so that the grain of the march, the
     // banding of its steps and the jagged edges fade out; the maps are not redrawn meanwhile. Any change starts over at
     // once. A snapshot averages ACC_SNAP frames.
-    const ACC_MAX = 16, ACC_SNAP = 12;
+    // (round 16c, for the owner's timing trials: data-acc, the page's ?acc=, 1-16 frames in a still; the default 16. Round 17b:
+    // the accretion layer's switch of round 13a, data-acc="on", which this took over, is data-acclayer="on")
+    const ACC_MAX = Math.min(16, Math.max(1, Math.round(Number(box.dataset.acc)) || 16)), ACC_SNAP = 12;
     const TIME_MAX = 1e6;   // the model's clock from outside, at most (s: 12 days at x1)
     // The automatic exposure (the model's look, the camera within AE.D of the star). Close to the star the inner disk's lit
     // surface fills the picture and the stretch runs into white (a mean level of 200 or more, a third of the pixels blown
@@ -5792,17 +8429,25 @@ void main(){
     // motion it is found at once (blocking reads, up to five frames). While the view moves (a flight, a drag, a touch) it
     // follows: every frame that can be measured is, whatever the view's key by the time it is read, and the step is a
     // plain one from the exposure of the frame measured (the bounds and the count of tries belong to one view).
-    const AE = { D: 12, TARGET: 0.46, BLOWN: 0.02, DEAD: 0.06, GAIN: 3, STEP: 1.2, MIN: 0.01, TRIES: 8 };
+    // (Round 19a, the visual review: "the star-lit look sinks into black seen edge-on, from above and from afar") And it rises above
+    // 1 where the picture is dim: when its brightest part, the highest of the measurement's cells (their mean display level, a
+    // cell 1/32 of the picture across: the lit nebulae edge-on, the envelope's lit cavity from afar), is under AE.PEAK, up to AE.UP
+    // times, as a camera is exposed for its subject (the level there weighed by the volume's share, see aeAim); from anywhere, no longer within AE.D alone (D is kept for the record; the
+    // close views' rule is as it was, and a view whose brightest part is bright keeps the exposure 1 it had: the first view, the
+    // wind's). The sky and its stars are not multiplied (see main's end), nor the star's own light (uStarK). data-aeup="0" (the
+    // page's ?aeup=0): as before, never above 1 and within AE.D alone.
+    const AE = { D: 12, TARGET: 0.46, BLOWN: 0.02, DEAD: 0.06, GAIN: 3, STEP: 1.2, MIN: 0.01, TRIES: 8, UP: 8, PEAK: 0.6, PDEAD: 0.12, PNEW: 0.04 };
+    const aeUp = box.dataset.aeup === '0' ? 0 : Math.log(AE.UP);
     const aeT = target(AE_W, AE_H, gl.RGBA8, gl.CLAMP_TO_EDGE), aeBuf = gl.createBuffer(), aePx = new Uint8Array(AE_W * AE_H * 4);
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, aeBuf); gl.bufferData(gl.PIXEL_PACK_BUFFER, AE_W * AE_H * 4, gl.STREAM_READ); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
     let aeLn = 0, aeGoal = 0, aeSync = null, aeLnUsed = 0, aeFresh = true, aeTries = 0, aeTrack = false, aeKindUsed = '', aeSeen = null;
     let aeLo = -Infinity, aeHi = Infinity;   // ln of exposures found too dark and too bright for this view (bisection)
     let aeGen = 0, aeGenUsed = 0, aeKey = '';  // the view's count, that of the frame being measured (an older one is not used),
                                                // and the view, coarsely (the clock running does not make a new one)
-    const aeOn = () => lookNow === 'model' && !!cam && Math.hypot(cam[0], cam[1], cam[2]) < AE.D;
+    const aeOn = () => lookNow === 'model' && !selfOn() && !!cam && (aeUp > 0 || Math.hypot(cam[0], cam[1], cam[2]) < AE.D);   // (round 18i: not with the own light, see SELF)
     const aeHeld = () => !!burst || lookDip() < 1;
     // (the view moving: a flight, a drag, a touch on the picture)
-    const viewMoving = () => !!flyV || !!flyT || dragging || touching;
+    const viewMoving = () => !!flyV || !!flyT || !!path || !!rollEase || dragging || touching;   // (round 18a: rollEase)
     function aePass() {   // the measurement of the frame in accT, into aeT
       firstUse('ae');
       gl.bindFramebuffer(gl.FRAMEBUFFER, aeT.fb); gl.viewport(0, 0, AE_W, AE_H);
@@ -5815,28 +8460,45 @@ void main(){
     // as the exposure, in ln; blown pixels count as ln 1.1 per percent over), at most AE.STEP; between exposures known to
     // be too bright and too dark for this view it goes halfway, and it settles on the darker side when they are close.
     function aeAim(px, lnUsed, track) {
-      let s = 0, b = 0, w = 0;
-      for (let i = 0; i < px.length; i += 4) { s += px[i]; b += px[i + 1]; w += px[i + 2]; }
+      let s = 0, b = 0, w = 0, pk = 0;
+      // (round 19a: pk, the brightest cell: the cell's mean of the level times the volume's share, so that the star's own light,
+      // which the exposure does not move (its glare lies over the cells about it), and a cut face count for nothing)
+      for (let i = 0; i < px.length; i += 4) { s += px[i]; b += px[i + 1]; w += px[i + 2]; pk = Math.max(pk, px[i] / 255); }
       // (round 10a, dev.6, for checks: what the last measurement saw, diskLoops().ae.seen: the mean level and the blown share of
       // the volume's part, and that part's share of the picture)
-      aeSeen = { m: w > 0 ? Math.round(1000 * s / w) / 1000 : null, blown: w > 0 ? Math.round(10000 * b / w) / 10000 : null, vol: Math.round(1000 * w / (255 * AE_W * AE_H)) / 1000, ln: Math.round(1000 * lnUsed) / 1000 };
+      aeSeen = { m: w > 0 ? Math.round(1000 * s / w) / 1000 : null, blown: w > 0 ? Math.round(10000 * b / w) / 10000 : null, vol: Math.round(1000 * w / (255 * AE_W * AE_H)) / 1000, ln: Math.round(1000 * lnUsed) / 1000, pk: Math.round(1000 * pk) / 1000 };
       if (!track && aeTries >= AE.TRIES) { aeFresh = true; return false; }
       // (nothing to measure: cut faces or the star cover nearly all of the picture; back to 1)
       if (w < 0.05 * 255 * AE_W * AE_H) { aeFresh = true; if (lnUsed === 0) return false; aeGoal = 0; return true; }
       const m = s / w, blown = b / w, e = Math.log(Math.max(m, 1e-3) / AE.TARGET);
-      const bright = blown > AE.BLOWN || e > AE.DEAD, dark = !bright && lnUsed < 0 && e < -AE.DEAD && blown < 0.3 * AE.BLOWN;
+      // (round 19a: above 1, ep, the brightest cell's level against AE.PEAK: too bright there over the band AE.PDEAD, too dark under
+      // it; a step from it, the Newton step's part as below)
+      // (the band: AE.PNEW for a view's first three moves and while the view moves, AE.PDEAD after that. The level answers the
+      // exposure weakly, so the wide band alone left the exposure where the way to a view had brought it: turned down to edge-on
+      // and back up to 8 degrees, 8 times where it was 2.4 times on the way down. A new view is brought to the band's middle
+      // first; the wide band then keeps a view at rest from hunting)
+      const band = track || aeTries < 3 ? AE.PNEW : AE.PDEAD;
+      // (Two rules, each in its own range of the exposure. The rule of before, by the mean level and the blown share: too bright,
+      // brightN, lowers it from anywhere; too dark under 1, darkN, raises it back to 1 at most. The brightest part's, between 1
+      // and AE.UP: over lowers it to 1 at most, dim raises it. Neither carries the exposure across 1 into the other's range)
+      const ep = Math.log(Math.max(pk, 1e-3) / AE.PEAK), quiet = e < -AE.DEAD && blown < 0.3 * AE.BLOWN;
+      const brightN = blown > AE.BLOWN || e > AE.DEAD, over = !brightN && lnUsed > 0 && ep > band;
+      const darkN = !brightN && lnUsed < 0 && quiet, dim = !brightN && !over && lnUsed >= 0 && lnUsed < aeUp && ep < -band && quiet;
+      const bright = brightN || over, dark = darkN || dim;
       if (!bright && !dark) { aeFresh = true; return false; }
+      const stepOf = () => Math.min(AE.STEP, AE.GAIN * (brightN ? Math.max(e, 0) + 10 * Math.max(blown - AE.BLOWN, 0) : over ? ep : darkN ? -e : -ep));
+      const gLo = over || dim ? 0 : Math.log(AE.MIN), gHi = darkN ? 0 : aeUp;   // (the range the rule at work may move it in)
       // (following a moving view: a plain step from the frame measured)
       if (track) {
-        aeGoal = Math.min(0, Math.max(Math.log(AE.MIN), lnUsed + (bright ? -1 : 1) * Math.min(AE.STEP, AE.GAIN * (bright ? Math.max(e, 0) + 10 * Math.max(blown - AE.BLOWN, 0) : -e))));
+        aeGoal = Math.min(gHi, Math.max(gLo, lnUsed + (bright ? -1 : 1) * stepOf()));
         aeFresh = false;
         return true;
       }
       if (bright) aeHi = Math.min(aeHi, lnUsed); else aeLo = Math.max(aeLo, lnUsed);
-      let goal = lnUsed + (bright ? -1 : 1) * Math.min(AE.STEP, AE.GAIN * (bright ? Math.max(e, 0) + 10 * Math.max(blown - AE.BLOWN, 0) : -e));
+      let goal = lnUsed + (bright ? -1 : 1) * stepOf();
       if (aeHi - aeLo < 0.1) goal = aeLo;
       else if (goal <= aeLo || goal >= aeHi) goal = 0.5 * (aeLo + aeHi);
-      goal = Math.min(0, Math.max(Math.log(AE.MIN), goal));
+      goal = Math.min(gHi, Math.max(gLo, goal));
       aeTries++;
       if (Math.abs(goal - lnUsed) < 1e-3) { aeFresh = true; return false; }
       aeGoal = goal; aeFresh = false;
@@ -6221,6 +8883,13 @@ void main(){
       return true;
     }
     let accT = null, accN = 0, lastSig = [], jitN = 0;
+    // (round 16a, see FAST) fastNow: this frame takes the shortcuts (settled in drawOnce); fastLast: the last frame begun did;
+    // stepsU, marchU: the step cap and uMarch sent for this frame (the coarse pass sends its own, then these again); maskT, its
+    // key, its view (maskAt: the camera and its forward direction) and age: the empty blocks' mask (fastPasses)
+    let fastNow = false, fastLast = false, stepsU = 0, marchU = [0, 0, 0, 0], maskT = null, maskKey = '', maskAt = null, maskAge = 0;
+    // (a frame of a moving picture: the view moved by a drag, held or not, a touch, a flight or a path, or the clock running; not a
+    // measurement's, a script's or a snapshot's frame)
+    const fastWant = () => FAST.lvl > 0 && !reduce && !fullFrame && !snapping && !stepping && !benching && !probing && !warming && !coStudy && (viewMoving() || (!paused && manualMs === null && speed !== 0));
     let fadeT = 0, fstats = null;   // fstats: a running measurement, see diskFrameStats
     // (round 10a) a frame drawn outside the animation frames (a new size, a new language, a script's time or clump, a touch
     // with reduced motion): its piece fenced as the animation frames' are, so that its time is measured and the next piece
@@ -6260,6 +8929,48 @@ void main(){
       slowSync('getBufferSubData ae', ts);   // (round 10a: see slowSync)
       aeReady = true;
     }
+    // (round 16a) A moving picture's frame, its shortcut beyond fewer steps (FAST), set up before its volume is drawn, with the
+    // program and uniforms of the frame (U); returns 2 where it takes the empty blocks' mask. Not in the gas line's look (its march
+    // is its own), nor while the cut, a cut face or a planet close up shows, nor in a frame drawn in kicks (`off`: their parts are
+    // not in the coarse pass's ray nor added where an empty block's ray starts; round 16b: in kicks, a mask's pass ahead of every
+    // frame and its kicks' own measures made the visible look's moving frames uneven, see DESIGN.md section 39)
+    // The mask: a coarse pass of the same program at 1 / FAST.B of the volume's size (a ray through each block's middle), its
+    // ray the march itself within FAST.N of its iterations, its whole steps in the continuum and no step cap (a ray cut short
+    // there is not empty), into maskT (the volume's format: the pipeline of the volume drawn whole). Round 16b: made again only
+    // when the picture has moved by half a block since it was made (the camera's turn and travel, in render pixels at its focal
+    // length; the margin of a block covers less), when the look, the components, the program, the size or the exposure (10 %)
+    // change, or every FAST.AGE frames (the clock alone moves the volume's light a little; the planets' points of light are the
+    // volume pass's own); it was made on every frame of a drag. Then unit 12 (the cut face's, unused here) holds it
+    function fastPasses(F, U, sig, expo, off) {
+      let bits = 0;
+      if (FAST.lvl >= 2 && lookNow !== 'co' && !off) {
+        const cw = Math.max(1, Math.ceil(rW / FAST.B)), ch = Math.max(1, Math.ceil(rH / FAST.B));
+        if (!maskT || maskT.w < cw || maskT.h < ch) {
+          const w = Math.max(cw, maskT ? maskT.w : 1), h = Math.max(ch, maskT ? maskT.h : 1);
+          if (maskT) { gl.deleteFramebuffer(maskT.fb); gl.deleteTexture(maskT.tex); }
+          maskT = target(w, h, gl.RGBA16F, gl.CLAMP_TO_EDGE, gl.NEAREST); glErr('fast mask'); maskKey = '';
+        }
+        // (the state but the clock and the camera, sig[0..6]: the camera by the picture's motion)
+        const key = cw + 'x' + ch + ':' + (F ? 1 : 0) + ':' + Math.round(10 * Math.log(Math.max(expo, 1e-30))) + ':' + sig.slice(7, sig.length - 2).join();
+        const fpx = 0.5 * rH / Math.tan(opt.fov / 2), f = basis.f;
+        const moved = !maskAt ? Infinity : fpx * (Math.acos(Math.min(1, f[0] * maskAt.f[0] + f[1] * maskAt.f[1] + f[2] * maskAt.f[2]))
+          + Math.hypot(cam[0] - maskAt.cam[0], cam[1] - maskAt.cam[1], cam[2] - maskAt.cam[2]) / Math.max(camD, 1e-6));
+        if (key !== maskKey || moved > 0.5 * FAST.B || ++maskAge >= FAST.AGE) {
+          maskKey = key; maskAge = 0; maskAt = { f: f.slice(), cam: cam.slice() };
+          gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, noFace); gl.activeTexture(gl.TEXTURE2);   // (not the target drawn into)
+          gl.bindFramebuffer(gl.FRAMEBUFFER, maskT.fb); gl.viewport(0, 0, cw, ch);
+          gl.uniform2f(U.uRes, cw, ch); gl.uniform4f(U.uFast, 1, FAST.N, cw, ch); gl.uniform1i(U.uSteps, 32768); gl.uniform1i(U.uCtMax, 32768);
+          gl.uniform4f(U.uMarch, 1, marchU[1], marchU[2], marchU[3]); gl.uniform1i(U.uSplit, 0);
+          firstUse('fastmask'); gl.drawArrays(gl.TRIANGLES, 0, 3);
+          gl.uniform2f(U.uRes, rW, rH); gl.uniform1i(U.uSteps, stepsU); gl.uniform1i(U.uCtMax, ctMax); gl.uniform4f(U.uMarch, marchU[0], marchU[1], marchU[2], marchU[3]);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, accT.fb); gl.viewport(0, 0, rW, rH);
+        }
+        gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, maskT.tex); gl.activeTexture(gl.TEXTURE2);
+        gl.uniform4f(U.uFast, 2, 0, cw, ch);
+        bits |= 2;
+      }
+      return bits;
+    }
     function drawOnce() {
       // (round 9: and between the context's loss and its event, where a timer may run: a target made then is incomplete)
       if (!W || lost || gl.isContextLost()) return;
@@ -6273,7 +8984,7 @@ void main(){
       // the planet's fade, in real time (so that it also completes while the model is paused); the step is at most 0.1 s,
       // since a paused model draws nothing until something changes and the first frame of a fade would otherwise jump
       // to its end
-      const now = performance.now(), dtR = fadeT ? Math.min(0.1, (now - fadeT) / 1000) : 0;
+      const now = nowMs(), dtR = fadeT ? Math.min(0.1, (now - fadeT) / 1000) : 0;
       fadeT = now;
       for (const p of planets) {
         const w = plWant(p);
@@ -6285,19 +8996,30 @@ void main(){
       sliceU = reduce ? wantS : wantS > sliceU ? Math.min(wantS, sliceU + dtR / 1.5) : Math.max(wantS, sliceU - dtR / 1.5);
       // (a closed cut takes its new angle at once: the sweep shows the opening)
       cutA = reduce || sliceU <= 0 ? CUT_A[opt.cut] : toward(cutA, CUT_A[opt.cut], dtR, 0.9 * 4 / Math.PI);
-      const wantA = opt.ann ? 1 : 0;
-      annAmp = reduce ? wantA : wantA > annAmp ? Math.min(wantA, annAmp + dtR / 0.4) : Math.max(wantA, annAmp - dtR / 0.4);
-      if (lookNow !== opt.look && (reduce || performance.now() - lookT0 >= 300)) {
+      for (let i = 0; i < ANN_BITS.length; i++) { const w = opt.ann & ANN_BITS[i] ? 1 : 0, a = annA[i]; annA[i] = reduce ? w : w > a ? Math.min(w, a + dtR / 0.4) : Math.max(w, a - dtR / 0.4); }
+      annAmp = Math.max(...annA);
+      if (lookNow !== opt.look && (reduce || nowMs() - lookT0 >= 300)) {
         // (round 9: an observed look waits for FULL, linked and warmed; the picture held at the dip's darkest meanwhile)
         // (round 10a, dev.6: with reduced motion too, and until the warm's pipelines are made, see fullReady)
         const f = opt.look === 'model' ? true : fullProgram();
         if (f === true || f === false || (f && fullReady())) { lookNow = opt.look; kickResetAll(); }   // (round 10a: see kickKOf)
-        else lookT0 = performance.now() - 300;
+        else lookT0 = nowMs() - 300;
       }
+      if (glowNow !== opt.glow && (reduce || nowMs() - lookT0 >= 300)) glowNow = opt.glow;   // (round 18i: at the dip's darkest, see glowNow)
+      // (round 16a) a frame of a moving picture: the view moved by a drag, a touch, a flight or a path, or the clock running (not a
+      // measurement's, a script's or a snapshot's frame) takes the shortcuts (FAST); the guard predicts it from its own kind's
+      // measures where there are some (gC1F). Round 16b: every frame of the motion, the state changed since the last frame or not.
+      // (16a drew a frame of the same state as the last in full: a drag held a moment, or an animation frame with no new input,
+      // alternated full frames with the moving ones, each full one in bands after its kind's measure was dropped, DESIGN.md section
+      // 39.) A change between the two starts the picture over (neither is averaged into the other); at the motion's end, fastEnd
+      fastNow = fastWant();
+      if (!warming && fastNow !== fastLast) { accN = 0; if (!fastNow) fastEnd(kindNow()); }
       guardFrame();   // (round 9: the engine's own guard, see GFAC)
       const wantF = showField && lookNow === 'model' ? 1 : 0;
       fieldAmp = reduce ? wantF : wantF > fieldAmp ? Math.min(wantF, fieldAmp + dtR / 0.4) : Math.max(wantF, fieldAmp - dtR / 0.4);
-      fieldG.setAttribute('opacity', fieldAmp.toFixed(3));
+      // (round 18d: and the field lines' see-through, opt.opac[5], a factor on the lines' opacity, the envelope's streamlines drawn
+      // with them as well, as the field's toggle hides them; the fade itself, fieldAmp, and the frames' work are as before)
+      fieldG.setAttribute('opacity', (fieldAmp * opt.opac[5]).toFixed(3));
       COMP_BITS.forEach((b, i) => { compAmp[i] = toward(compAmp[i], opt.mode & b ? 1 : 0, dtR, 0.6); });
       modelAmp = toward(modelAmp, lookNow === 'model' ? 1 : 0, dtR, 0.4);
       msAmp = toward(msAmp, opt.ms ? 1 : 0, dtR, 0.6);
@@ -6333,7 +9055,7 @@ void main(){
       coLn += (coGoal - coLn) * (reduce ? 1 : Math.min(1, dtR / 0.15)); if (Math.abs(coGoal - coLn) < 1e-3) coLn = coGoal;
       // (the star itself keeps its brightness: far brighter than the disk, it stays white whatever the exposure)
       const dS = Math.hypot(cam[0], cam[1], cam[2]), lg = LOOK_GAIN[lookNow] ? Math.pow(LOOK_GAIN[lookNow], ss(8, 60, dS) * (1 - ss(120, 300, dS))) : 1;
-      const expo = opt.exposure * lg * Math.exp(aeLn) * Math.pow(burstL(), 0.6) * lookDip(), starL = Math.pow(burstL(), 0.7) * LOOK_STAR[lookNow] / (Math.exp(aeLn) * lg);
+      const expo = opt.exposure * lg * Math.exp(aeLn) * Math.pow(burstL(), 0.6) * lookDip(), starL = Math.pow(burstL(), 0.7) * LOOK_STAR[lookNow] * (opt.lscale && lookNow !== 'model' ? lumBase : 1) / (Math.exp(aeLn) * lg);   // (round 15b: L*, see uLstar)
       const envMade = !env3T && envVis > 0; if (envVis > 0) makeEnv3();   // (round 9: made in this frame, a first use; see warmFull)
       // the volume, with the FULL program while the slice or the planet close up shows (the usual one stands in while
       // FULL is still compiling)
@@ -6352,9 +9074,12 @@ void main(){
       const tF = performance.now(), F = warming || lookNow !== 'model' || (featF && fullReady()) ? fullProgram() : null, U = F ? F.U : U0;   // (round 8: not for the envelope)
       if (F) slowSync('fullProgram', tF);   // (round 10a, dev.6: linked here where the browser cannot link in the background)
       fNow = !!F;   // (round 10a: see knownNow)
+      // (round 13b) the sky's turn for this frame (see bgTurn): what an ease has left of it goes into the signature below, so
+      // that a still is not averaged over a turning sky (the view's own turn with the clock goes with the time, sig[0])
+      const bgK = bgMoves() ? 0 : bgLeft(), bgA = bgMoves() ? 0 : viewOff() + bgK;
       // a still picture (see ACC_MAX): the same state as the last frame, drawn by the same program
-      const sig = [time, ...cam, ...basis.f, rW, rH, canvas.width, opt.steps, opt.fov, opt.seed, starL, LOOKS[lookNow], rSn, opt.mode, BG.MODES[opt.bg], ...compAmp, ...opt.gain,
-        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), coLn, expo];
+      const sig = [time, ...cam, ...basis.f, rW, rH, canvas.width, opt.steps, opt.fov, opt.seed, starL, LOOKS[lookNow], rSn, opt.mode, BG.MODES[opt.bg], bgK, ...compAmp, ...opt.gain,
+        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), parGen, colGen, cpdMdot, ...opt.opac, camRoll, opt.stars, selfOn() ? opt.selfk : 0, selfOn() ? SELF_T[opt.selft] : 0, selfOn() ? opt.selfnc : 0, coLn, expo];   // (round 18l: its temperature and the surface's column, see SELF_T) (round 18i: the own light and its opacity, see SELF; round 13a: colGen, the materials' colours, see box.diskColours; round 14a: parGen, the model's parameters, see box.diskParams)
       // (a new view: the exposure is measured afresh, with its moves counted anew; a new exposure or CO range: measured again)
       const ne = sig.length - 2, viewNew = sig.length !== lastSig.length || sig.some((v, i) => i < ne && v !== lastSig[i]);
       // (Disk Lab v2) While only the clock moves, the picture is not started over but averaged with the last few frames
@@ -6385,7 +9110,7 @@ void main(){
       else if (lookNow === 'co' && coModeSeen >= 0 && opt.mode !== coModeSeen) { coHold = true; coGoal = coLn; coFresh = true; coGen++; }
       coModeSeen = opt.mode;
       if (coPending && !viewMoving() && lookNow === opt.look && lookDip() === 1 && fadesDone()
-        && planets.every((p) => p.amp === plWant(p)) && envAmp === wantE && sliceU === wantS && (sliceU <= 0 || cutA === CUT_A[opt.cut]) && annAmp === wantA && fieldAmp === wantF) {
+        && planets.every((p) => p.amp === plWant(p)) && envAmp === wantE && sliceU === wantS && (sliceU <= 0 || cutA === CUT_A[opt.cut]) && annDone() && fieldAmp === wantF) {
         coLn = coGoal = coPending.ln; coHold = coPending.fixed; coPending = null;
         coSavedKey = coKey; coTries = AE.TRIES; coLo = -Infinity; coHi = Infinity; coFresh = true; coGen++;
         accN = 0; sig[ne] = coLn;
@@ -6393,6 +9118,7 @@ void main(){
       lastSig = sig;
       const acc = accN, mapsDue = !acc || clockOnly;   // (the maps follow the clock)
       if (mapsDue) {
+        if (mpDirty) mpUpload();   // (round 14a: the parameters changed)
         drawWindMap(Math.round(ASYM_F_JS * asymSm() * 100) / 100);
         // (round 9: while only the clock moves, the eddies drawn every eddyEvery frames: 2 on a guarded device, a phone's
         // power; they move on orbital time scales, and 15 updates a second at 30 frames do not show. 1 elsewhere)
@@ -6416,10 +9142,12 @@ void main(){
       gl.viewport(0, 0, rW, rH);
       gl.useProgram(F ? F.prog : prog);
       gl.uniform1i(U.uBg, BG.MODES[opt.bg]);
+      gl.uniform2f(U.uBgTurn, Math.cos(bgA), Math.sin(bgA)); if (!warming) bgDrawn = bgA;   // (round 13b: see bgTurn)
       gl.uniform1i(U.uRayB, coStudy && coStudy.rayB != null ? coStudy.rayB : rayBound ? 1 : 0);   // (round 9: see CO_IT, CT_IT)
       gl.uniform1i(U.uCtMax, ctMax);   // (round 10a: see box.diskCtMax)
       gl.uniform1i(U.uProbe, probing);
-      { const m = marchNow(); gl.uniform4f(U.uMarch, m.sub, m.coStep, m.coRef, m.coThr); gl.uniform1i(U.uCoRec, m.coRec); gl.uniform1i(U.uCoP, m.coP); gl.uniform3fv(U.uCoIt, m.coIt); gl.uniform3fv(U.uCtIt, m.ctIt); }
+      // (round 16a: on a moving picture's frame, FAST.K of the continuum's substeps and of the gas line's first steps' count, see FAST)
+      { const m = marchNow(); marchU = fastNow ? [Math.max(1, Math.round(m.sub * FAST.K)), m.coStep / FAST.K, m.coRef, m.coThr] : [m.sub, m.coStep, m.coRef, m.coThr]; gl.uniform4f(U.uMarch, marchU[0], marchU[1], marchU[2], marchU[3]); gl.uniform1i(U.uCoRec, m.coRec); gl.uniform1i(U.uCoP, m.coP); gl.uniform3fv(U.uCoIt, m.coIt); gl.uniform3fv(U.uCtIt, m.ctIt); }
       // (round 10a, dev.7: the moments' grid's offset for this frame, and the frame's weight in the average of the frames' sums, as a
       // still's colours were weighted: see coDithOf, coWeight)
       coDithLast = coStudy ? coStudy.dith || 0 : coDithOf(acc, clockOnly || !!coSim);
@@ -6438,6 +9166,7 @@ void main(){
       gl.uniform1f(U.uTanHalf, Math.tan(opt.fov / 2));
       gl.uniform1f(U.uRSnow, rSn);
       gl.uniform1f(U.uLum, lumNow);
+      gl.uniform4fv(U.uMP, MPV); gl.uniform1f(U.uWindK, WIND_GAIN.k);   // (round 14a: the model's parameters, see CONST_GLSL; the wind's brightness, box.diskWindGain)
       gl.uniform1f(U.uExposure, expo);   // brighter starlight, compressed by the stretch
       gl.uniform1f(U.uStar, starL);
       // the dipole: tilted toward the azimuth the star has turned to (it turns with the star, MAG.SPIN)
@@ -6448,17 +9177,22 @@ void main(){
       gl.uniform3fv(U.uMagAxis, mAx);
       gl.uniform3f(U.uMagE1, e1[0] / e1n, e1[1] / e1n, e1[2] / e1n);
       gl.uniform1f(U.uMagT, time % 600);
+      gl.uniform4f(U.uDbg, dbgV[0], dbgV[1], dbgV[2], dbgV[3]); gl.uniform4f(U.uDbg2, dbgV[4], dbgV[5], dbgV[6], dbgV[7]); gl.uniform4f(U.uDbg3, dbgV[8], dbgV[9], dbgV[10], dbgV[11]);   // R19DBG
       // the wind's puffs (see puffFactor): their clock, and in the model's look only
       gl.uniform1f(U.uPuffT, time % (PUFF.P * 1000));
       gl.uniform1f(U.uPuff, lookNow === 'model' ? modelAmp : 0);
       magFrame = { vis: magVis, ax: mAx, e1: e1.map((v) => v / e1n) };
       gl.uniform1i(U.uLook, LOOKS[lookNow]);
       gl.uniform3fv(U.uMat, matLin);   // (round 8: the materials' colours, see MAT)
-      // (round 8) the jet: its fade times the look's strength, the lower lobe's speed with the asymmetry, the clock
-      gl.uniform1f(U.uJet, jetAmp * jetAmp * (3 - 2 * jetAmp) * (JET.LOOK[lookNow] || 0));
+      // (round 8) the jet: its fade times the look's strength, the lower lobe's speed with the asymmetry, the clock. (Round 18d:
+      // and its see-through, opt.opac[4]: the jet only shines, so the factor dims its light, 1 to 0.05. On uJet, whose only other
+      // use in the shaders is to ask whether there is a jet (uJet > 0, which no factor of OPAC changes): no shader changes, and at
+      // 1 the uniform is the one of before to the bit)
+      gl.uniform1f(U.uJet, jetAmp * jetAmp * (3 - 2 * jetAmp) * (JET.LOOK[lookNow] || 0) * opt.opac[4]);
       gl.uniform1f(U.uJetLow, 1 - (1 - 1 / JET.LOW) * asymSm());
       gl.uniform1f(U.uJetT, time % 3600);
-      gl.uniform1i(U.uSteps, Math.round(opt.steps * (camD < 10 ? 2 : 1)));   // finer march when zoomed in
+      stepsU = fastNow ? Math.round(opt.steps * (camD < 10 ? 2 : 1) * FAST.K) || 1 : Math.round(opt.steps * (camD < 10 ? 2 : 1));   // (round 16a: FAST.K of it on a moving picture's frame)
+      gl.uniform1i(U.uSteps, stepsU);   // finer march when zoomed in
       gl.uniform1f(U.uSeed, opt.seed);
       gl.uniform1f(U.uPx, rW / W);
       gl.uniform4fv(U.uClump, clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]));
@@ -6467,11 +9201,27 @@ void main(){
       gl.uniform4fv(U.uComp, compAmp.map((v, i) => v * v * (3 - 2 * v) * opt.gain[i]));
       gl.uniform1f(U.uMS, msAmp * msAmp * (3 - 2 * msAmp));
       // (round 8) the star's light in the model's look and the finish, by the quality of the moment (see FX)
-      gl.uniform1f(U.uLit, modelAmp * Math.min(fxAmp, 1)); gl.uniform1f(U.uFx, Math.min(fxAmp, 1) * modelAmp);
+      // (2026-11-03, the owner on Safari: "Reset all makes the gas vanish". The starlight's shading was tied to the finish's level (fx),
+      // which Auto on a guarded device sets to 0: the model look then showed the gas's own glow alone, dim since round 13a's white gas.
+      // Now the shading is drawn at every level; data-lit="fx" (?lit=fx) keeps the old coupling for comparison)
+      gl.uniform1f(U.uLit, selfOn() ? 0 : modelAmp * (box.dataset.lit === 'fx' ? Math.min(fxAmp, 1) : 1)); gl.uniform1f(U.uFx, Math.min(fxAmp, 1) * modelAmp);
+      // (round 18i) the model look's own light (see SELF): the opacity in the model's units, 0 with the starlight's; the display's light
+      // per kelvin over the outburst's exposure (expo above), which its temperature follows (uLum)
+      gl.uniform2f(U.uSelf, selfOn() ? opt.selfk * SELF.SIGMA1 : 0, SELF.G / Math.pow(burstL(), 0.6));
+      // (round 18l) its temperature's depth (see selfX): which (SELF_T) and ln(SIGMA1 / 2 Sigma_s) for the column's (none with SELF_OLD)
+      gl.uniform2f(U.uSelfT, SELF_T[opt.selft], Math.log(SELF.SIGMA1 / (2 * opt.selfnc)));
       gl.uniform1f(U.uFocus, Math.max(camD, 1e-3));
       gl.uniform1f(U.uWindLow, 1 - (1 - WIND_LOW_JS) * asymAmp * asymAmp * (3 - 2 * asymAmp));
       gl.uniform2fv(U.uAcc, accW());
       gl.uniform2fv(U.uAccV, accK());
+      gl.uniform1f(U.uAccDraw, opt.accDraw ? 1 : 0); gl.uniform1f(U.uGasOuter, opt.gasOuter ? 1 : 0);   // (round 13a: see ACC, uGasOuter)
+      gl.uniform1f(U.uGGas, opt.gGas);   // (round 15b: see uGGas)
+      gl.uniform1f(U.uJetOcc, opt.jetOcc ? 1 : 0); gl.uniform1f(U.uLstar, opt.lscale ? lumBase : 1);   // (round 15b: see jetOcc, uLstar)
+      gl.uniform4f(U.uOpac, opt.opac[0], opt.opac[1], opt.opac[2], opt.opac[3]);   // (round 18a: the see-through, see uOpac)
+      gl.uniform1f(U.uStars, opt.stars);   // (round 18a: the background's stars, see uStars)
+      gl.uniform1f(U.uPebH, opt.pebH);   // (round 15b: the pebble layer's thickness, see uPebH)
+      gl.uniform2f(U.uExcl, exclOn ? 1 : 0, envLnRho0); gl.uniform1f(U.uCoEnv, opt.coEnv ? envAmp * envAmp * (3 - 2 * envAmp) : 0);   // (round 15b: see EXCL, coGas)
+      gl.uniform4f(U.uMflux, MF.on ? 1 : 0, MF.chic, MF.mdot, 0); gl.uniform4fv(U.uMdotV, MF.tabV);   // (round 13c: see MFLUX, coGas)
       gl.uniform1i(U.uCoMode, CO_MODES[opt.coMode]);
       gl.uniform1f(U.uCoV, opt.coV);
       gl.uniform1f(U.uCoRange, coRange());
@@ -6511,8 +9261,9 @@ void main(){
         gl.bindFramebuffer(gl.FRAMEBUFFER, faceT.fb); gl.uniform1i(U.uFacePass, 2); gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.uniform1i(U.uFacePass, 0); gl.uniform2f(U.uRes, rW, rH);
         gl.bindFramebuffer(gl.FRAMEBUFFER, accT.fb); gl.viewport(0, 0, rW, rH);
-      }
+      } else if (faceOn && FAST.lvl >= 2 && faceA) { gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, faceA.tex); gl.activeTexture(gl.TEXTURE2); }   // (round 16a: unit 12 may hold the empty blocks' mask, see fastPasses)
       gl.uniform1i(U.uFaceRdy, faceOn ? 1 : 0); gl.uniform2f(U.uFaceRes, canvas.width, canvas.height);
+      if (FAST.lvl >= 2) gl.uniform4f(U.uFast, 0, 0, 1, 1);   // (round 16a: no mask, until fastPasses)
       // (the first frame replaces what the target holds, so that nothing from before carries over, not even a NaN:
       // blended with weight 0 it would stay, since NaN times 0 is NaN)
       // (round 9) The volume, in one draw or in bands (see bandsFor): a frame in bands is a job (bandJob) whose first band is
@@ -6556,6 +9307,9 @@ void main(){
         lastWarmGt = gtNote(gtEnd(preQ), { what: 'warm', key: kindNow(), first: 1 });
         return;
       }
+      // (round 16a) a moving picture's frame: its other shortcut (FAST), the empty blocks' mask made with the work before the volume
+      // (round 16b: not in a frame drawn in kicks, see fastPasses)
+      const fastBits = fastNow ? 1 | fastPasses(F, U, sig, expo, faceOn || pVis > 0 || sliceU > 0 || !!opt.slice || splitWants(F)) : 0;
       // (round 9) The frame's work before its volume (the maps for this moment: the wind's, the eddies', the wind's streamers,
       // the disk's; the sky's; the cut face at the screen's resolution; the tables uploaded): sent on its own and measured as
       // a piece of its own, which the guard counts with the frame's. It ran in the volume's first piece, unseen: a settling
@@ -6574,6 +9328,8 @@ void main(){
       // (round 10a, dev.6: and the gas line's stages, measured apart: see coStage)
       if (job.split) { const k0 = frameKeyOf(F), m0 = kickT[k0]; if (m0 && (m0.w !== rW || m0.h !== rH)) for (const k of [k0, k0 + ':w', k0 + ':g']) kickReset(k, true); job.K = kOf(k0); }
       job.kk = job.key;
+      // (round 16a: the shortcuts this frame takes, see FAST)
+      job.fast = fastBits; fastLast = fastNow;
       // (round 9: the moments in passes, see coGrid: each group pass, then the composite, every one a piece of its own in its
       // bands; the bands asked for the frame shared among the group passes)
       const nPass = F ? coPassesNow() : 0;
@@ -6597,7 +9353,7 @@ void main(){
       // (round 9: the first animation frames after a jump, see probeNext: the same, each band's rows from the one before)
       // (round 10a: and any frame of a kind not measured lately (gKnown, 30 s): a prediction carried by the factors is not
       // trusted with a whole frame)
-      else if ((probeNext > 0 || (gBudget > 0 && !knownNow(kindNow()))) && !fullFrame && !snapping && !stepping && !reduce) {
+      else if ((probeNext > 0 || (gBudget > 0 && !(fastNow ? knownF(kindF()) : knownNow(kindF())))) && !fullFrame && !snapping && !stepping && !reduce) {
         if (probeNext > 0) probeNext--;
         job.ad = true; job.st = {}; job.y = 0; job.rows = firstRows(aimFirst); job.n = (job.stages ? job.stages.length : 1) * Math.ceil(rH / job.rows);
       }
@@ -6681,9 +9437,10 @@ void main(){
       // a point lies off the picture by more than the picture's size, or a step on the screen spans more than half of
       // it (the ring is sampled too coarsely there to be drawn straight); its points come back to the first, so it is
       // not closed with Z, which would join the ends of a cut path across the picture.)
+      // (round 13a: the ring itself is no longer drawn, SNOW_RING; its points still place and fade its name)
       let d = '', pen = false, qPrev = null;
       const inRing = Math.hypot(...cam) < 1.25 * rSn;   // actual proximity: a high, face-on camera is outside the ring
-      const ringA = annAmp * (1 - ss(0.82, 1, sliceU)), ringOn = ringA > 0.002 && !inRing, pts = [];
+      const ringA = annOf(ANN.SNOW) * (1 - ss(0.82, 1, sliceU)), ringOn = ringA > 0.002 && !inRing, pts = [];
       let x0r = Infinity, x1r = -Infinity;
       for (let i = 0; i <= 72 && ringOn; i++) {
         const a = i / 72 * Math.PI * 2, P = [rSn * Math.cos(a), rSn * Math.sin(a), 0];
@@ -6706,27 +9463,35 @@ void main(){
         const sc = n - 0.002 * q[1];   // (fewest lines, then the lowest)
         if (sc < bestS) { bestS = sc; best = q; }
       }
-      ring.setAttribute('d', shown ? d : '');
+      ring.setAttribute('d', shown && SNOW_RING ? d : '');
       label.textContent = best && labF > 0 ? lt : '';
       const aop = annAmp.toFixed(3);
       ring.setAttribute('opacity', (ringA * ringF).toFixed(3)); label.setAttribute('opacity', (ringA * labF).toFixed(3));
       if (best) { label.setAttribute('x', best[0] + 8); label.setAttribute('y', best[1] + 14); }
       // the planet, named when it shows (close up)
       const pq = project(pPos), pa = ss(0.3, 0.6, pVis) * (kept(pPos) ? 1 : 0);
-      plabel.textContent = pa > 0 && pq[2] > zN ? (ja() ? '惑星と周惑星円盤' : 'planet and its disk') : '';
+      // (round 13e: a planet of few thermal masses wears an envelope, see cpdPhys)
+      const pEnv = !!pV && !CPD_OLD && cpdState(pV).D < 0.5;
+      plabel.textContent = pa > 0 && pq[2] > zN ? (ja() ? (pEnv ? '惑星とまわりの包み' : '惑星と周惑星円盤') : (pEnv ? 'planet and its envelope' : 'planet and its disk')) : '';
       if (plabel.textContent) {
-        const rc = 0.4 * (pV ? hillOf(pV) : PLANET.RH) / pq[2] * Hh / (2 * basis.th);   // radius of the planet's disk on the screen (px)
-        plabel.setAttribute('x', (pq[0] + 0.75 * rc + 10).toFixed(1)); plabel.setAttribute('y', (pq[1] - 0.35 * rc - 12).toFixed(1)); plabel.setAttribute('opacity', (pa * annAmp).toFixed(2));
+        const rc = (pV ? cpdROut(pV) : 0.4 * PLANET.RH) / pq[2] * Hh / (2 * basis.th);   // radius of the planet's disk on the screen (px; round 13e: as drawn)
+        plabel.setAttribute('x', (pq[0] + 0.75 * rc + 10).toFixed(1)); plabel.setAttribute('y', (pq[1] - 0.35 * rc - 12).toFixed(1)); plabel.setAttribute('opacity', (pa * annOf(ANN.PLANET)).toFixed(2));
       }
       const QN = { T: ['温度', 'temperature'], rho: ['ガスの密度', 'gas density'], layers: ['磁場とガスの結びつきによる領域', 'the regions of how the field couples to the gas'] }[opt.sliceQ] || ['温度', 'temperature'];
       const CON = { chan: ['チャンネルマップ(' + opt.coV.toFixed(2) + ' km/s)', 'a channel map at ' + opt.coV.toFixed(2) + ' km/s'], m1: ['平均の視線速度(モーメント 1)', 'its mean velocity (moment 1)'], m0: ['積分強度(モーメント 0)', 'its integrated intensity (moment 0)'] }[opt.coMode];
       const cutJa = opt.cut === 'quarter' ? '右手前の 4 分の 1 を切り取り(右の切り口を正面から見る)' : '星を通る鉛直な面で手前の半分を切り取り', cutEn = opt.cut === 'quarter' ? ' The near right quarter is cut away (its right face seen face-on)' : ' The near half is cut away along a vertical plane through the star';
       const LKD = { optical: ['可視光・近赤外線の散乱光で見た姿で、星の光を散乱する表層と円盤風が見えます。', ' Seen in scattered light (visible and near infrared): the surface and the wind scatter starlight.'],
         mir: ['中間赤外線で見た姿で、暖かい表層の熱放射が内側ほど明るく見えます。', ' Seen in the mid-infrared: the warm surface glows, brightest close in.'],
-        mm: ['ミリ波で見た姿で、赤道面に沈んだ小石の熱放射が、惑星のギャップのすぐ外の環とともに見えます。', ' Seen at millimetre wavelengths: the pebbles at the midplane glow, with a ring just outside the planet\u2019s gap.'] }[lookNow];
+        mm: ['ミリ波で見た姿で、赤道面に沈んだ小石の熱放射が、惑星のギャップのすぐ外の環とともに見えます。', ' Seen at millimetre wavelengths: the pebbles at the midplane glow, with a ring just outside the planet\u2019s gap.'],
+        // (round 18i: the model look in its own light, see SELF)
+        // (round 18k: its brightness and colour the brightness temperature, see SELF_LOOK; ?selflook=old as before)
+        ...(selfOn() ? { model: selfOld ? ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、明るさは輝度温度です(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g)。', ' Shown in its own thermal light, with no starlight on it: the brightness is the brightness temperature (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g).']
+          // (round 18l: and with the column depth's temperature the surface's column)
+          // (round 18m: the brightness alone by default, in the gas's colour; ?selfhue=1 brightness and colour)
+          : ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、' + (selfTcol ? '明るさと色は輝度温度(明るさは対数の尺度)です' : '明るさは輝度温度(対数の尺度)です') + '(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? '、表層の柱密度 ' + +opt.selfnc.toPrecision(2) + ' g/cm²' : '') + ')。', ' Shown in its own thermal light, with no starlight on it: ' + (selfTcol ? 'brightness and colour are the brightness temperature, the brightness on a logarithmic scale' : 'the brightness is the brightness temperature, on a logarithmic scale') + ' (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? ', the surface\u2019s column ' + +opt.selfnc.toPrecision(2) + ' g/cm\u00b2' : '') + ').'] } : {}) }[lookNow];
       const desc = ja()
-        ? '原始惑星系円盤(半径30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、ダストが赤道面に沈み、約1 auのスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に木星質量の惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + QN[0] + 'を色で示しています。' : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? 'ガスの輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
-        : 'Volume rendering of a model of a protoplanetary disk (30 au in radius): warm surface layers, a cold midplane with settled dust, and a water snow line near 1 au.' + (plShown().length ? (plShown().length > 1 ? ' Jupiter-mass planets at ' + plShown().join(', ') + ' au open gaps.' : ' A Jupiter-mass planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + QN[1] + ' in colour.' : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in an emission line of the gas: ' + CON[1] + '.' : '');
+        ? '原始惑星系円盤(半径およそ 30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、赤道面に沈んだ塵はスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + QN[0] + 'を色で示しています。' : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? 'ガスの輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
+        : 'Volume rendering of a model of a protoplanetary disk (some 30 au in radius): warm surface layers, and a cold midplane with settled dust, icy beyond the water snow line.' + (plShown().length ? (plShown().length > 1 ? ' Planets at ' + plShown().join(', ') + ' au open gaps.' : ' A planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + QN[1] + ' in colour.' : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in an emission line of the gas: ' + CON[1] + '.' : '');
       if (desc !== descEl.textContent) descEl.textContent = desc;
       const name = ja() ? '操作できる原始惑星系円盤のモデル' : 'Interactive model of a protoplanetary disk';
       if (canvas.getAttribute('aria-label') !== name) { canvas.setAttribute('aria-label', name); keysEl.textContent = ja() ? KEYS_JA : KEYS_EN; }
@@ -6735,14 +9500,14 @@ void main(){
       let Lb = 0.005; for (const c of [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]) if (c * pxAu <= 150) Lb = c;
       // (the clock's rate, slower zoomed in (clockK), is not written on the picture: Disk Lab says it beside its clock,
       // from diskframe's detail.clock)
-      if (Lb !== sbLb) { if (sbLb && !reduce) { sbOld = sbLb; sbT = performance.now(); } sbLb = Lb; }
-      const sbU = Math.min(1, (performance.now() - sbT) / 250), x0 = 18, y0 = Hh - 18;
+      if (Lb !== sbLb) { if (sbLb && !reduce) { sbOld = sbLb; sbT = nowMs(); } sbLb = Lb; }
+      const sbU = Math.min(1, (nowMs() - sbT) / 250), x0 = 18, y0 = Hh - 18;
       const bar = (g, L, a) => {
         const [hl, ln, tx] = g.children;
         if (L * pxAu > 320) a = 0;   // (the bar fading out after a big zoom would be drawn across the panel: not at all)
         for (const e of [hl, ln]) { e.setAttribute('x1', x0); e.setAttribute('x2', x0 + L * pxAu); e.setAttribute('y1', y0); e.setAttribute('y2', y0); }
         tx.textContent = pxAu > 0 && a > 0 ? L + ' au' : ''; tx.setAttribute('x', x0); tx.setAttribute('y', y0 - 6);
-        g.setAttribute('opacity', (a * annAmp).toFixed(3));
+        g.setAttribute('opacity', (a * annOf(ANN.SCALE)).toFixed(3));
       };
       bar(sgroup, Lb, sbU * sbU * (3 - 2 * sbU)); bar(sgroup2, sbOld, sbU < 1 ? 1 - sbU * sbU * (3 - 2 * sbU) : 0);
       if (fstats) {
@@ -6755,7 +9520,7 @@ void main(){
       // moved, a flight, a drag or a touch (viewMoving), which the state alone does not tell: it gives a flight's end.
       // clock: the clock's rate for the view, clockK, 1 far out and slower zoomed in)
       // (round 9: bands, the number of bands its volume was drawn in)
-      box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12, acc: accN, accMax: ACC_MAX, moving: viewMoving() ? 1 : 0, clock: clockK(), bands: job.n, held: Math.round(heldNow), ...(job.split ? { kicks: job.kicks || 0, bandPieces: job.bandPieces || 0 } : {}) } }));
+      box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12, acc: accN, accMax: ACC_MAX, moving: viewMoving() ? 1 : 0, clock: clockK(), bands: job.n, held: Math.round(heldNow), ...(job.split ? { kicks: job.kicks || 0, bandPieces: job.bandPieces || 0 } : {}), ...(job.fast ? { fast: job.fast } : {}) } }));
       };
       // (a script's frame: its first band sent by the script, once the work before it is done and measured; see above)
       if (pre && adaptRows > 0) { job.defer = true; gl.flush(); return; }
@@ -6808,6 +9573,25 @@ void main(){
       const pred = gLast.c1 > 0 ? gLast.c1 * gFactor(k) / gFactor(gLast.key || 'model') : 0;
       return Math.max(pred, own);
     }
+    // (round 16a) a frame of a moving picture (FAST) predicted from its own kind's fresh measure ('model:fast'), else as a full frame of
+    // its kind: the plain frame's own prediction (more: a frame with fewer steps costs at most the full one)
+    const gC1F = (k) => (fastNow && ownC1(k + ':fast') > 0 ? ownC1(k + ':fast') : gC1(k));
+    // (round 16b) The end of a moving picture's frames (FAST): the kind's measure of a full frame, from before the motion, kept for the
+    // still (16a dropped it, and the still began in bands), raised to the moving frames' own measure over FAST.K at least (a ray
+    // marched with FAST.K of the step cap takes FAST.K of its steps at least, so a full frame costs at most 1 / FAST.K of the moving
+    // one: the view's cost as it is now) and taken over by the next full frame's own; dropped, the still then drawn in bands sized as
+    // they go as after a jump, only where the camera is far from where it was measured (a third of its distance, or 25 degrees)
+    function fastEnd(k) {
+      const kn = gKnown[k];
+      if (!kn) return;
+      if (kn.cam && cam) {
+        const r0 = Math.hypot(kn.cam[0], kn.cam[1], kn.cam[2]), r1 = Math.hypot(cam[0], cam[1], cam[2]);
+        const cosA = (kn.cam[0] * cam[0] + kn.cam[1] * cam[1] + kn.cam[2] * cam[2]) / Math.max(r0 * r1, 1e-12);
+        if (Math.abs(Math.log(r1 / Math.max(r0, 1e-12))) > 0.29 || cosA < 0.906) { delete gKnown[k]; return; }
+      }
+      const cf = ownC1(k + ':fast');
+      if (cf > 0) { kn.c = [Math.max(ownC1(k), cf / FAST.K)]; kn.t = performance.now(); kn.ub = 0; kn.tub = 0; if (cam) kn.cam = cam.slice(); }
+    }
     // (round 10a: isF, a frame of the FULL program; see fNow)
     function gNote(k, ms, scale, n, band, isF = false) {
       if (!(scale > 0) || !(ms > 0)) return;
@@ -6824,11 +9608,12 @@ void main(){
       const c = (n > 1 && band > 2 * gBudget ? band * n : ms) / (scale * scale);
       const kn = gKnown[k] || (gKnown[k] = { c: [], t: 0, ub: 0, tub: 0, s: 0 });
       kn.s = scale;   // (round 10a: the scale it was measured at, see knownNow)
+      if (!/:fast$/.test(k) && cam) kn.cam = cam.slice();   // (round 16b: and the camera, see fastEnd)
       // (round 10a: FULL's first measure of a kind replaces the usual program's, see fNow)
       if (isF && !kn.F) { kn.c = []; kn.ub = 0; kn.tub = 0; kn.F = true; }
       if (n > 1) { kn.ub = c; kn.tub = performance.now(); }
       else { kn.c.push(c); if (kn.c.length > 3) kn.c.shift(); kn.t = performance.now(); }
-      gLast = { key: k, c1: ownC1(k) };
+      if (!/:fast$/.test(k)) gLast = { key: k, c1: ownC1(k) };   // (round 16a: a frame with the shortcuts says nothing of the others' cost)
     }
     // (the bands the guard asks for this frame, 0 for none; set at the start of drawOnce)
     let gBands = 0, gFixed = false;
@@ -6841,7 +9626,7 @@ void main(){
       // failed to link the observed looks are drawn whole by the light program, and guarded here as before)
       if (splitOn && !reduce && !probing && !fullFrame && fullWarm && full && typeof full === 'object' && stT && splitLook() && !splitBroken[kindNow() + ':F']) return;
       // (round 9: a frame of the moments in passes, see coGrid, judged by a pass: its bands are the frame's shared among them)
-      const parts = Math.max(1, coPassesNow()), k = kindNow(), c1 = gC1(k) / parts, p0 = c1 * opt.scale * opt.scale;
+      const parts = Math.max(1, coPassesNow()), k = kindNow(), c1 = gC1F(k) / parts, p0 = c1 * opt.scale * opt.scale;
       if (!(p0 > GUARD_SLACK * gBudget)) return;
       // (round 10a, dev.5: where the page keeps the scale (gFixed: a fixed level, or the ramp, the view at rest; not the gas line's
       // look), a frame over the budget is cut into bands, never drawn at a lower scale: each band within the budget, the frame as
@@ -7051,8 +9836,13 @@ void main(){
     // and took 185 to 235 (dev.3: 101, 109); a measure at another scale now sizes nothing, the frame's bands sized as they go
     // from the least, and its measure at this scale taken)
     const knownNow = (k) => ownC1(k) > 0 && (!fNow || !!(gKnown[k] && gKnown[k].F)) && Math.abs((gKnown[k].s || 0) - opt.scale) < 0.004;
+    // (round 16a: a frame with the shortcuts, FAST, from its own kind where that is known. Round 16b: known for such a frame at any
+    // scale, its own measure or a full frame's (the governor's steps are small and a frame's cost goes nearly as its pixels: a moving
+    // frame is not drawn in bands for want of a measure at its scale); a still's frame as before, at its scale (knownNow))
+    const knownF = (k) => ownC1(k) > 0 && (!fNow || !!(gKnown[k] && gKnown[k].F));
+    const kindF = () => (fastNow && knownF(kindNow() + ':fast') ? kindNow() + ':fast' : kindNow());
     const firstRows = (aim) => {
-      const k = kindNow(), kn = gKnown[k], trusted = knownNow(k);
+      const k = kindF(), kn = gKnown[k], trusted = knownNow(k);
       let r = BAND_ROWS;
       if (trusted) { const perRow = ownC1(k) / Math.max(1, coPassesNow()) * opt.scale * opt.scale / rH; r = perRow > 0 ? Math.floor(aim / perRow) : rH; }
       if (gBands > 0) r = Math.min(r, Math.ceil(rH / gBands));
@@ -7081,8 +9871,9 @@ void main(){
     }
     // a flight, a fade or the sweep under way
     const plShown = () => planets.filter((p) => p.amp > 0.5).map((p) => +p.a.toFixed(p.a < 10 ? 1 : 0));
-    const busy = () => !!(flyV || flyT) || planets.some((p) => p.amp !== plWant(p)) || envAmp !== ((opt.mode & 32) ? 1 : 0) || sliceU !== (opt.slice ? 1 : 0) || (sliceU > 0 && cutA !== CUT_A[opt.cut])
-      || annAmp !== (opt.ann ? 1 : 0) || lookNow !== opt.look || waitShown || lookDip() < 1 || fieldAmp !== (showField && lookNow === 'model' ? 1 : 0) || !fadesDone()
+    // (round 13b: and the sky's ease, see bgTurn)
+    const busy = () => !!(flyV || flyT || path || rollEase) || bgLeft() !== 0 || planets.some((p) => p.amp !== plWant(p)) || envAmp !== ((opt.mode & 32) ? 1 : 0) || sliceU !== (opt.slice ? 1 : 0) || (sliceU > 0 && cutA !== CUT_A[opt.cut])
+      || !annDone() || lookNow !== opt.look || glowNow !== opt.glow || waitShown || lookDip() < 1 || fieldAmp !== (showField && lookNow === 'model' ? 1 : 0) || !fadesDone()
       || (!aeHeld() && aeGoal !== aeLn) || coGoal !== coLn           // (the automatic exposure and the CO line's range on their way,
       || (aeOn() && !aeHeld() && !aeFresh) || (coOn() && !coHold && coSavedKey !== coKey && !coFresh) || !!coPending;  // or finding their levels)
     // Disk Lab v2 (engine-patch.py): at most data-flight (default 2; 0: no limit) frames of this loop unfinished on the
@@ -7211,9 +10002,12 @@ void main(){
         // (round 10a: the volume's cost alone: the work before it (the maps) is a piece of its own, sent and measured on its own,
         // and does not grow with the pixels; counted in, divided by the scale squared, it made a frame at 0.125 cost 3000 ms at
         // scale 1 in the millimetre look (maps of 50 to 90 ms after a jump), and the guard held the looks at their lowest scale)
-        if (!gpuBad && !gpuFirst && !gpuOut) gNote(f.key.replace(/:F$/, ''), gpuSum - gpuPre, f.scale, f.n, gpuVolMax, /:F$/.test(f.key));
+        // (round 16a: a frame that took the shortcuts, FAST, as a kind of its own, 'model:fast' (the page's guard leaves it out: not the
+        // kind it predicts from))
+        const fk = f.j && f.j.fast ? f.key.replace(/(:F)?$/, ':fast$1') : f.key;
+        if (!gpuBad && !gpuFirst && !gpuOut) gNote(fk.replace(/:F$/, ''), gpuSum - gpuPre, f.scale, f.n, gpuVolMax, /:F$/.test(f.key));
         // (first: a program's first use in a blend state, see warmFull; its time is mostly the pipeline's making)
-        if (!gpuBad) box.dispatchEvent(new CustomEvent('diskgpu', { detail: { ms: Math.round(gpuSum * 10) / 10, band: Math.round(gpuMax * 10) / 10, vband: Math.round(gpuVolMax * 10) / 10, bands: f.n, px: f.px, scale: f.scale, key: f.key, still: f.still ? 1 : 0, next: stillBands, first: gpuFirst ? 1 : 0, ...(gpuOut ? { out: 1 } : {}), pre: Math.round(gpuPre * 10) / 10, ...(gpuStages.length ? { stages: gpuStages.map((v) => Math.round((v || 0) * 10) / 10) } : {}), ...(f.j && f.j.split ? { kicks: f.j.kicks || 0, kick: Math.round(gpuKick * 10) / 10, kick1: Math.round(gpuKick1 * 10) / 10 } : {}) } }));
+        if (!gpuBad) box.dispatchEvent(new CustomEvent('diskgpu', { detail: { ms: Math.round(gpuSum * 10) / 10, band: Math.round(gpuMax * 10) / 10, vband: Math.round(gpuVolMax * 10) / 10, bands: f.n, px: f.px, scale: f.scale, key: fk, still: f.still ? 1 : 0, next: stillBands, first: gpuFirst ? 1 : 0, ...(gpuOut ? { out: 1 } : {}), pre: Math.round(gpuPre * 10) / 10, ...(gpuStages.length ? { stages: gpuStages.map((v) => Math.round((v || 0) * 10) / 10) } : {}), ...(f.j && f.j.split ? { kicks: f.j.kicks || 0, kick: Math.round(gpuKick * 10) / 10, kick1: Math.round(gpuKick1 * 10) / 10 } : {}) } }));
         if (!gpuBad) lastGpuFrame = gpuSum;   // (round 10a: see duty)
         gpuReset();
       }
@@ -7319,9 +10113,12 @@ void main(){
       if (!fullWarm && !warmQueued && !lost && full !== false && lastDrawT) { warmQueued = true; warmLater(warmFull); }
       const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
       if (fstats) { dirty = true; if (t >= fstats.until) fsDone(); }
-      if (!paused) { time += dt * speed * clockK(); if (burst) burst.age += dt * speed; update(); dirty = true; }
+      // (round 11a: on the page's own clock, diskManual, the model's clock moves with diskAdvance only)
+      if (!paused && manualMs === null) { time += dt * speed * clockK(); if (burst) burst.age += dt * speed; update(); dirty = true; }
       const moving = busy();
       if (moving) dirty = true;   // flights, fades and the sweep run in real time (see draw)
+      // (round 16b: a motion over, its still drawn in full at once, also where its frames had filled the average, a drag held long)
+      if (fastLast && !fastWant()) dirty = true;
       // (round 9) a frame being drawn in bands goes on, one band at a time, each waited for (see bandsFor)
       // (round 10a: a frame in kicks, see SPLIT: its next piece once its band in hand is seen done or not; its last piece, the
       // band's picture and the finish, is light, and the next frame may be drawn in the same animation frame)
@@ -7493,13 +10290,17 @@ void main(){
       running = false;
       if (frameRequest !== null) { cancelAnimationFrame(frameRequest); frameRequest = null; }
     };
+    // (round 13b: the clump returned, numbered by its drop, n, so that a seed knows whether its clump still holds it: see
+    // clearOrbit)
+    let clumpN = 0;
     const addClump = (R, phi, age) => {
       const c = clumps.reduce((a, b) => (a.amp <= 0 ? a : b.amp <= 0 ? b : a.t0 < b.t0 ? a : b));
-      c.R = R; c.phi = phi; c.t0 = time - (age || 0); c.amp = 1; c.crossed = R - 0.05 * (age || 0) < rSn; c.gone = false;
+      c.R = R; c.phi = phi; c.t0 = time - (age || 0); c.amp = 1; c.crossed = R - 0.05 * (age || 0) < rSn; c.gone = false; c.n = ++clumpN;
+      return c;
     };
-    const CLEAR = 4, CLEAR_S = 2.5;   // (round 9: see seedPlanet)
+    const CLEAR_S = 2.5;   // (round 9: see seedPlanet; round 13b: its band of 4 Hill radii, CLEAR, gave way to the gap's, see clearOrbit)
 
-    // --- input: drag to rotate, wheel, pinch or keys to zoom, click to drop pebbles; touch as a map (see below) ---
+    // --- input: drag to rotate (round 18e: a drag only turns), wheel, pinch or keys to zoom, click to drop pebbles; touch alike (see below) ---
     // closest approach: 2 au, or 0.25 au with the slice, where the structure of the inner disk (a few
     // hundredths of an au thick at 0.1 au) is to be seen
     const EL_MAX = 89 * Math.PI / 180;
@@ -7510,7 +10311,7 @@ void main(){
     const touched = () => { dirty = true; urgent = true; if (reduce) drawOut(); };
     // tells the page that the view or the components changed from inside (keys, tour, easter eggs, a drag)
     const emitState = () => { if (box.diskState) box.dispatchEvent(new CustomEvent('diskstate', { detail: box.diskState() })); };
-    const zoomBy = (f) => { const d = Math.min(DMAX, Math.max(dmin(), opt.dist * f)); if (d !== opt.dist && (coPending || coSavedKey || coHold)) coResume(); opt.dist = d; startFly(); touched(); };
+    const zoomBy = (f) => { pathGrab(); const d = Math.min(DMAX, Math.max(dmin(), opt.dist * f)); if (d !== opt.dist && (coPending || coSavedKey || coHold)) coResume(); opt.dist = d; startFly(); touched(); };
     // the outburst (a click on the star, the B key): its clock is the model's, so a paused model starts again (the page's
     // button follows); none with reduced motion, where the clock does not run
     const burstNow = () => { if (reduce) return; if (paused) { paused = false; emitState(); } startBurst(); touched(); };
@@ -7521,7 +10322,7 @@ void main(){
       if (!R) return;
       seeds = [];
       const ph = PLANETS.PHI0(planets.length) + Omega(R) * time;
-      for (let i = 0; i < 3; i++) { addClump(R + 0.08 * R * (i - 1), ph + 0.6 * (i - 1), 0); seedPlanet(R); }
+      for (let i = 0; i < 3; i++) seedPlanet(R, addClump(R + 0.08 * R * (i - 1), ph + 0.6 * (i - 1), 0));
       touched();
     };
     // a ring that spreads and fades where a clump was dropped (none with reduced motion)
@@ -7552,28 +10353,56 @@ void main(){
         if (p.amp < 0.5) continue;
         const P = planetPosOf(p, time), q = project(P);
         if (q[2] <= zN || !kept(P) || behindStar(P)) continue;
-        const rc = 0.4 * hillOf(p) / q[2] * Hh / (2 * basis.th);
-        if (Math.hypot(cx - rect.left - q[0], cy - rect.top - q[1]) < Math.max(12, 1.1 * rc)) { box.dispatchEvent(new CustomEvent('diskplanet', { detail: { i, a: p.a, x: q[0], y: q[1] } })); return; }
+        // (round 13e: the disk as drawn, cpdROut; with the probe, the point only, so that a tap on the disk reaches the probe)
+        const rc = cpdROut(p) / q[2] * Hh / (2 * basis.th);
+        if (Math.hypot(cx - rect.left - q[0], cy - rect.top - q[1]) < (box.dataset.pick === 'probe' ? 12 : Math.max(12, 1.1 * rc))) { box.dispatchEvent(new CustomEvent('diskplanet', { detail: { i, a: p.a, x: q[0], y: q[1] } })); return; }
       }
-      if (so[2] > zN && Math.hypot(cx - rect.left - so[0], cy - rect.top - so[1]) < 14 && box.dataset.pick !== 'planet') { burstNow(); return; }
+      // (round 12a: data-pick="probe", the page's probe, picks as placing a planet does: diskpick, and no outburst)
+      const pickR = box.dataset.pick === 'planet' || box.dataset.pick === 'probe';
+      if (so[2] > zN && Math.hypot(cx - rect.left - so[0], cy - rect.top - so[1]) < 14 && !pickR) { burstNow(); return; }
       const nx = ((cx - rect.left) / rect.width) * 2 - 1, ny = 1 - ((cy - rect.top) / rect.height) * 2;
       const th = Math.tan(opt.fov / 2), asp = W / Hh;
       const rd = [0, 1, 2].map((i) => basis.f[i] + th * (nx * asp * basis.r[i] + ny * basis.u[i]));
-      const t = -cam[2] / rd[2]; if (t <= 0) return;
-      const x = cam[0] + rd[0] * t, y = cam[1] + rd[1] * t, R = Math.hypot(x, y);
-      // (round 7: placing a planet reaches the gas disk's inner edge, PLANETS.RANGE; pebbles are dropped from 0.15 au)
-      if (R < (box.dataset.pick === 'planet' ? 0.9 * PLANETS.RANGE[0] : 0.15) || R > 31 || !kept([x, y, 0]) || faceAlpha([x, y, 0]) > 0.5) return;
-      if (box.dataset.pick === 'planet') { box.dispatchEvent(new CustomEvent('diskpick', { detail: { R, phi: Math.atan2(y, x), x: cx - rect.left, y: cy - rect.top } })); return; }
+      const t = -cam[2] / rd[2], x = cam[0] + rd[0] * t, y = cam[1] + rd[1] * t, R = Math.hypot(x, y), probe = box.dataset.pick === 'probe';
+      // (round 15a) the probe hears of a ray that misses the disk too, meeting the midplane beyond 31 au or not at all: miss, with the
+      // ray's point closest to the star (R, z, phi; au), where the page asks the model what is there (the wind, the jet, the envelope)
+      if (probe && !(t > 0 && R <= 31)) {
+        const u = Math.max(0, -(cam[0] * rd[0] + cam[1] * rd[1] + cam[2] * rd[2]) / (rd[0] * rd[0] + rd[1] * rd[1] + rd[2] * rd[2])), P = cam.map((c, i) => c + rd[i] * u);
+        box.dispatchEvent(new CustomEvent('diskpick', { detail: { miss: true, R: Math.hypot(P[0], P[1]), z: P[2], phi: Math.atan2(P[1], P[0]), x: cx - rect.left, y: cy - rect.top } }));
+        return;
+      }
+      if (!(t > 0)) return;
+      // (round 7: placing a planet reaches the gas disk's inner edge, PLANETS.RANGE; pebbles are dropped from 0.15 au; round 15a: the
+      // probe reaches the star, inside the magnetosphere)
+      if (R < (probe ? 0 : pickR ? 0.9 * PLANETS.RANGE[0] : 0.15) || R > 31 || !kept([x, y, 0]) || faceAlpha([x, y, 0]) > 0.5) return;
+      if (pickR) {
+        // (round 13b) a planet the page places in answer (data-pick="planet": its diskpick handler sets the planets with
+        // diskSet within this dispatch, which runs its listeners before it returns) takes in the dropped clumps on its orbit,
+        // as one grown from them does (clearOrbit): the one now shown whose place was off, new, or at another radius
+        const was = planets.map((p) => p.on && p.a);
+        box.dispatchEvent(new CustomEvent('diskpick', { detail: { R, phi: Math.atan2(y, x), x: cx - rect.left, y: cy - rect.top } }));
+        planets.forEach((p, i) => { if (plWant(p) && p.a !== was[i]) clearOrbit(p); });
+        return;
+      }
       if (box.dataset.pick !== 'pebbles') return;
-      addClump(R, Math.atan2(y, x), 0);
+      const c = addClump(R, Math.atan2(y, x), 0);
       ripple(cx - rect.left, cy - rect.top);
-      seedPlanet(R);
+      seedPlanet(R, c);
       touched();
     }
-    // The mouse and the pen: a drag turns (with Shift, or the middle or the right button, it moves the point looked at);
-    // a click is clickAt.
-    let panning = false, mousePtr = null, mouseTravel = 0;
-    // (the right button pans: no menu over the picture)
+    // the view turned by a move of dx, dy pixels on the screen, as a drag turns it (the mouse's, and one finger's since round
+    // 18e), 0.006 rad a pixel: what is under the pointer turns with it (round 18a: the move taken on the picture as it is drawn,
+    // turned back by the roll)
+    const turnBy = (dx, dy) => {
+      if (camRoll) { const c = Math.cos(camRoll), sn = Math.sin(camRoll); azUser -= (dx * c - dy * sn) * 0.006; elUser = clampEl(elUser + (dx * sn + dy * c) * 0.006); }
+      else { azUser -= dx * 0.006; elUser = clampEl(elUser + dy * 0.006); }
+    };
+    // The mouse and the pen: a drag turns, whichever button and whatever key is held; a click is clickAt. (Round 18e, the owner:
+    // "the drag is hard to follow: let it turn the disk only, and move the camera from the panel". Until then Shift, the middle
+    // or the right button moved the point looked at and Alt (Option) rolled the camera (round 18a): the point looked at is moved
+    // now from the View's arrows (box.diskNudge) or Shift+arrows, the roll from the View's slider.)
+    let mousePtr = null, mouseTravel = 0, mouseQuiet = false;
+    // (the right button turns too: no menu over the picture)
     canvas.addEventListener('contextmenu', (e) => e.preventDefault(), on);
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch' || mousePtr !== null) return;
@@ -7581,7 +10410,9 @@ void main(){
       // (only a real pointer can be captured; events made by a script have none)
       if (e.isTrusted) canvas.setPointerCapture(e.pointerId);
       takeOver(); pauseTour();
-      dragging = true; moved = false; mouseTravel = 0; px = e.clientX; py = e.clientY; panning = e.shiftKey || e.button === 1 || e.button === 2; if (e.button === 1) e.preventDefault();
+      // (a click with Shift or Alt held stays one that does nothing, as when they moved or rolled the view; the middle button's
+      // press would start the page's own scrolling on some systems)
+      dragging = true; moved = false; mouseTravel = 0; px = e.clientX; py = e.clientY; mouseQuiet = e.shiftKey || e.altKey; if (e.button === 1) e.preventDefault();
     }, on);
     canvas.addEventListener('pointermove', (e) => {
       if (e.pointerId !== mousePtr || !dragging) return;
@@ -7589,34 +10420,36 @@ void main(){
       if ((dx || dy) && (coPending || coSavedKey || coHold)) coResume();
       // Small moves add up: a slow drag (including a path that comes back) must never become a click on release.
       mouseTravel += Math.abs(dx) + Math.abs(dy); if (mouseTravel > 3) moved = true;
-      if (panning) panBy(dx, dy);
-      else { azUser -= dx * 0.006; elUser = clampEl(elUser + dy * 0.006); }
+      turnBy(dx, dy);
       px = e.clientX; py = e.clientY;
       touched();
     }, on);
-    const endMouse = () => { mousePtr = null; dragging = false; panning = false; };
+    const endMouse = () => { mousePtr = null; dragging = false; };
     canvas.addEventListener('pointercancel', (e) => { if (e.pointerId === mousePtr) { const wasDrag = moved; endMouse(); moved = true; if (wasDrag) emitState(); } }, on);
     canvas.addEventListener('pointerup', (e) => {
       if (e.pointerId !== mousePtr) return;
-      const wasDrag = moved, wasPan = panning; endMouse();
+      const wasDrag = moved, quiet = mouseQuiet; endMouse();
       if (wasDrag) emitState();
-      if (wasDrag || wasPan || e.button > 0) return;   // (a click of the middle or right button, or with Shift, does nothing)
+      if (wasDrag || quiet || e.button > 0) return;   // (a click of the middle or right button, or with Shift or Alt, does nothing)
       clickAt(e.clientX, e.clientY);
     }, on);
-    // Touch, as a map on a phone: one finger moves the point looked at (what is under it follows it); two fingers pinch
-    // to zoom, twist to turn (the azimuth: what is under them turns with them) and, moved up or down together, tilt (the
-    // elevation: up for a lower view); a double tap zooms in toward the tapped point (it stays under the finger), a tap
-    // with two fingers zooms out; a single tap is a click (clickAt) once no second tap has followed. The picture takes
-    // every touch (touch-action: none): the page scrolls from outside the panel. The first touch shows a short hint.
+    // Touch: one finger turns, as the mouse's drag does (turnBy; round 18e, the owner: a drag only turns. Until then it moved
+    // the point looked at, as on a map: that is moved now from the View's arrows); two fingers pinch to zoom, twist to turn (the
+    // azimuth: what is under them turns with them) and, moved up or down together, tilt (the elevation: up for a lower view);
+    // a double tap zooms in toward the tapped point (it stays under the finger), a tap with two fingers zooms out; a single
+    // tap is a click (clickAt) once no second tap has followed. The zooms toward a point under the fingers (the pinch, the
+    // double tap) move the point looked at as they did. The picture takes every touch (touch-action: none): the page scrolls
+    // from outside the panel. The first touch shows a short hint.
     // (Round 8, the owner: "on a phone, two fingers sometimes move the view sideways". Reproduced with synthetic touches
     // (ver2/tools/disk-lab-v2/touch-check.js, in frame.html at 390 px): two fingers moved the point looked at in three
     // ways, now gone. Two fingers never pan: their middle's drift moved the view (80 px for two fingers dragged 80 px
     // sideways, 30 px for a pinch opened unevenly); a pinch now zooms toward the point under the fingers' first middle,
     // which stays there, and nothing follows the middle. A second finger that comes within LATE_MS of the first undoes the
-    // first one's pan (the start of a pinch, not a move; 24 px before). A finger left after two pans only once it has moved
-    // LIFT_PX from where it was when the other lifted (the drift of a lifting finger, 14 px, moved the view).)
+    // first one's move (the start of a pinch, not a move; 24 px before; since round 18e its turn, until then its pan). A finger
+    // left after two moves the view only once it has moved LIFT_PX from where it was when the other lifted (the drift of a
+    // lifting finger, 14 px, moved the view).)
     const TAP_MS = 300, TAP_PX = 10, DTAP_PX = 32, LATE_MS = 250, LIFT_PX = 24;
-    const tch = { pts: new Map(), last: null, t1: 0, t2: 0, moved: false, two: false, mode: '', g0: null, anc: null, pan0: null, lift: null, tapT: 0, tapX: 0, tapY: 0, tapTimer: 0, hinted: false };
+    const tch = { pts: new Map(), last: null, t1: 0, t2: 0, moved: false, two: false, mode: '', g0: null, anc: null, turn0: null, lift: null, tapT: 0, tapX: 0, tapY: 0, tapTimer: 0, hinted: false };
     // the first two fingers: their spread, angle and middle
     const twoOf = () => { const [a, b] = [...tch.pts.values()]; return { a, b, s: Math.hypot(b.x - a.x, b.y - a.y), ang: Math.atan2(b.y - a.y, b.x - a.x), mx: 0.5 * (a.x + b.x), my: 0.5 * (a.y + b.y) }; };
     // zoom by f toward the point under (cx, cy): the point looked at moves toward it, so that it stays under the finger
@@ -7635,10 +10468,10 @@ void main(){
       takeOver(); pauseTour();
       if (!tch.hinted) { tch.hinted = true; touchHint(); }
       // (taps are timed by the events' own times: a long frame does not stretch them)
-      if (tch.pts.size === 1) { tch.t1 = e.timeStamp; tch.moved = false; tch.two = false; tch.lift = null; tch.last = { x: e.clientX, y: e.clientY }; tch.pan0 = panV.slice(); }
+      if (tch.pts.size === 1) { tch.t1 = e.timeStamp; tch.moved = false; tch.two = false; tch.lift = null; tch.last = { x: e.clientX, y: e.clientY }; tch.turn0 = [azUser, elUser]; }
       else if (tch.pts.size === 2) {
-        // (a second finger soon after the first: the first one's pan is undone, it began the pinch)
-        if (!tch.two && e.timeStamp - tch.t1 < LATE_MS && tch.pan0) { panV = tch.pan0.slice(); touched(); }
+        // (a second finger soon after the first: the first one's turn is undone, it began the pinch)
+        if (!tch.two && e.timeStamp - tch.t1 < LATE_MS && tch.turn0) { azUser = tch.turn0[0]; elUser = tch.turn0[1]; touched(); }
         // (the gesture is told from where both fingers are now)
         tch.two = true; tch.t2 = e.timeStamp; tch.mode = ''; tch.g0 = null; tch.lift = null;
         for (const q of tch.pts.values()) { q.x0 = q.x; q.y0 = q.y; }
@@ -7651,7 +10484,7 @@ void main(){
         // (a finger left after two: still until it has moved LIFT_PX from where it was)
         if (tch.lift) { if (Math.hypot(p.x - tch.lift.x, p.y - tch.lift.y) < LIFT_PX) { tch.last = { x: p.x, y: p.y }; return; } tch.lift = null; }
         if (!tch.moved && Math.hypot(p.x - p.x0, p.y - p.y0) > TAP_PX) tch.moved = true;
-        if (tch.moved) { if (coPending || coSavedKey || coHold) coResume(); panBy(p.x - tch.last.x, p.y - tch.last.y); tch.last = { x: p.x, y: p.y }; touched(); }
+        if (tch.moved) { if (coPending || coSavedKey || coHold) coResume(); turnBy(p.x - tch.last.x, p.y - tch.last.y); tch.last = { x: p.x, y: p.y }; touched(); }
         return;
       }
       const g = twoOf();
@@ -7688,7 +10521,7 @@ void main(){
       tch.pts.delete(e.pointerId); touching = tch.pts.size > 0;
       const now = e.timeStamp;
       if (tch.two) {
-        // (a finger left after two: it goes on moving the point looked at, from where it is, once it has moved LIFT_PX)
+        // (a finger left after two: it goes on turning, from where it is, once it has moved LIFT_PX)
         if (tch.pts.size === 1) { const [r] = [...tch.pts.values()]; tch.last = { x: r.x, y: r.y }; tch.lift = { x: r.x, y: r.y }; tch.mode = ''; tch.g0 = null; return; }
         if (tch.pts.size) return;
         const tap = !tch.moved && !cancel && now - tch.t2 < TAP_MS;
@@ -7717,21 +10550,21 @@ void main(){
     box.appendChild(hint);
     let hintT = 0;
     const wheelHint = () => {
-      hint.textContent = ja() ? 'クリックしてからホイールでズーム(⌘/Ctrl+ホイールでも。クリックで小石が置かれます。Tab でも可)' : 'Click the picture, then scroll to zoom (or \u2318/Ctrl + scroll; a click drops pebbles, Tab works too)';
+      hint.textContent = ja() ? 'クリックしてからホイールで拡大・縮小(⌘/Ctrl+ホイールでも。Tab でも可)' : 'Click the picture, then scroll to zoom (or \u2318/Ctrl + scroll; Tab works too)';
       hint.style.opacity = '1'; clearTimeout(hintT); hintT = setTimeout(() => { hint.style.opacity = '0'; }, 1600);
     };
-    // (the first touch: how to move, as on a map)
+    // (the first touch: how to move; round 18e: one finger turns, as a drag does, no longer as on a map)
     const touchHint = () => {
-      hint.textContent = ja() ? '指 1 本で移動、2 本でズーム' : 'One finger moves, two zoom';
+      hint.textContent = ja() ? '1 本指で回転、2 本指で拡大と回転' : 'One finger turns, two zoom and turn';
       hint.style.opacity = '1'; clearTimeout(hintT); hintT = setTimeout(() => { hint.style.opacity = '0'; }, 2200);
     };
     canvas.addEventListener('wheel', (e) => {
       if (document.activeElement !== canvas && !e.ctrlKey && !e.metaKey) { wheelHint(); return; }
       e.preventDefault(); pauseTour(); zoomBy(Math.exp(e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015))); emitState();
     }, { passive: false, signal: ac.signal });
-    // The keys: arrows turn (with Shift they move the point looked at, by a tenth of the picture), + and - zoom, Home goes
-    // back to the first view and to the star, C brings the point looked at back to the star (the view kept), space
-    // pauses; 1 to 5 the views' angles (VIEWS, in step with the preview page's buttons: the distance and the point looked
+    // The keys: arrows turn (with Shift they move the point looked at the arrow's way, by a tenth of the picture: nudge), + and
+    // - zoom, Home goes back to the first view and to the star, C brings the point looked at back to the star (the view kept),
+    // space pauses; 1 to 5 the views' angles (VIEWS, in step with the preview page's buttons: the distance and the point looked
     // at stay), P the planet, F the field lines, S the slice, A the annotations.
     const VIEWS = [[el0 * 180 / Math.PI, az0 * 180 / Math.PI, dist0], [10, -80, 85], [2, -80, 85], [89, -65, 100], [-14, -80, 85]];
     const PLANET_VIEW = { p: 1, el: 30, az: 160, d: 1.6, tx: 0, ty: 0, tz: 0 };
@@ -7740,8 +10573,9 @@ void main(){
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       const k = e.key; let used = true;
       const view = (st) => { if (opt.slice) box.diskSlice(false); box.diskSet({ ...st, fly: 1 }); };
+      if (path && (k.startsWith('Arrow') || k === '+' || k === '=' || k === '-' || k === '_')) pathGrab();   // (round 11a: a step from what is seen)
       if (k.startsWith('Arrow') && (coPending || coSavedKey || coHold)) coResume();
-      if (e.shiftKey && k.startsWith('Arrow')) { const a = 0.1 * Hh; panBy(k === 'ArrowLeft' ? -a : k === 'ArrowRight' ? a : 0, k === 'ArrowUp' ? -a : k === 'ArrowDown' ? a : 0); startFly(); }
+      if (e.shiftKey && k.startsWith('Arrow')) nudge(k === 'ArrowLeft' ? -1 : k === 'ArrowRight' ? 1 : 0, k === 'ArrowUp' ? 1 : k === 'ArrowDown' ? -1 : 0);
       else if (k === 'ArrowLeft') { azUser += 0.08; startFly(); } else if (k === 'ArrowRight') { azUser -= 0.08; startFly(); }
       else if (k === 'ArrowUp') { elUser = clampEl(elUser + 0.05); startFly(); } else if (k === 'ArrowDown') { elUser = clampEl(elUser - 0.05); startFly(); }
       else if (k === '+' || k === '=') zoomBy(0.8); else if (k === '-' || k === '_') zoomBy(1.25);
@@ -7768,7 +10602,8 @@ void main(){
       if (++fN < 90) return;
       fN = 0;
       if (fEma > 24 && opt.scale > 0.4) { opt.scale = Math.max(0.4, opt.scale * 0.8); raiseLock = 20; rescale(); }
-      else if (fEma < 17.5 && opt.scale < opt.scaleMax && raiseLock-- <= 0) { opt.scale = Math.min(opt.scaleMax, opt.scale * 1.15); rescale(); }
+      // (round 16a: not raised by frames with the shortcuts, FAST, which a still's frames at that scale would not match)
+      else if (fEma < 17.5 && !fastLast && opt.scale < opt.scaleMax && raiseLock-- <= 0) { opt.scale = Math.min(opt.scaleMax, opt.scale * 1.15); rescale(); }
     }
     // resize writes the box's height. Do that in the next task, outside ResizeObserver's delivery, so a width change
     // does not resize the observed box again in that delivery (and produce an undelivered-notification error).
@@ -7791,7 +10626,7 @@ void main(){
     canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();   // (so that the browser restores it)
       const inFlight = flight.map((f) => (f.pre ? 'pre:' : '') + f.key + '@' + f.scale + (f.n > 1 ? '/' + f.n : '') + (f.rect ? ' rows ' + f.rect[0] + '-' + f.rect[1] + ' of ' + f.rect[3] + ' x' + f.rect[2] : '') + ' ' + Math.round(performance.now() - f.t) + 'ms');
-      lost = true; stop(); stopTour(true); hush(); stillShown(true); lostEvent(true, { msg: String(e.statusMessage || ''), key: kindNow(), sc: opt.scale, inFlight, warming: warmSync ? 1 : 0 });
+      lost = true; stop(); stopTour(true); hush(); stillShown(true); pathStop(); lostEvent(true, { msg: String(e.statusMessage || ''), key: kindNow(), sc: opt.scale, inFlight, warming: warmSync ? 1 : 0 });
       if (bandJob) { bandJob.cancelled = true; bandJob = null; }   // (round 10a: see cancelJob)
     }, on);
     canvas.addEventListener('webglcontextrestored', () => {
@@ -7819,30 +10654,101 @@ void main(){
     box.diskAddClump = (R, phi, age = 0) => {
       const r = finiteNumber(R), ph = finiteNumber(phi), a = finiteNumber(age);
       if (!isFinite(r) || r < 0.15 || r > 31 || !isFinite(ph) || !isFinite(a) || a < 0 || a > 120) return;
-      addClump(r, wrapPi(ph % (2 * Math.PI)), a); if (!a) seedPlanet(r); drawOut();
+      const c = addClump(r, wrapPi(ph % (2 * Math.PI)), a); if (!a) seedPlanet(r, c); drawOut();
     };
     // controls for the preview page: view (degrees, au), components, time, state for links, snapshots
     // (to 0.01 degree and 0.001 au, so that a link restores the picture to within a pixel)
     const deg = (r) => Math.round(r * 18000 / Math.PI) / 100;
     // az is measured from the planet's azimuth while following it (p = 1)
-    box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 1000) / 1000, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? (opt.cut === 'quarter' ? 2 : 1) : 0, sq: opt.sliceQ, p: follow ? 1 : 0, pi: followI, gain: opt.gain.slice(), planets: planets.map((pl) => [pl.a, pl.on ? 1 : 0, pl.m]), ann: opt.ann ? 1 : 0, look: opt.look, ms: opt.ms ? 1 : 0, asym: opt.asym ? 1 : 0, marks: opt.marks ? 1 : 0, waves: opt.waves ? 1 : 0, bg: opt.bg, fx: opt.fx, coMode: opt.coMode, coV: opt.coV, coRange: Math.exp(coLn), coRangeFixed: coHold ? 1 : 0,
-      tx: Math.round(panV[0] * 1e4) / 1e4, ty: Math.round(panV[1] * 1e4) / 1e4, tz: Math.round(panV[2] * 1e4) / 1e4 });
+    box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 1000) / 1000, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? (opt.cut === 'quarter' ? 2 : 1) : 0, sq: opt.sliceQ, p: follow ? 1 : 0, pi: followI, gain: opt.gain.slice(), planets: planets.map((pl) => [pl.a, pl.on ? 1 : 0, pl.m]), ann: opt.ann === ANN.ALL ? 1 : opt.ann, look: opt.look, ms: opt.ms ? 1 : 0, asym: opt.asym ? 1 : 0, marks: opt.marks ? 1 : 0, waves: opt.waves ? 1 : 0, bg: opt.bg, fx: opt.fx, coMode: opt.coMode, coV: opt.coV, coRange: Math.exp(coLn), coRangeFixed: coHold ? 1 : 0,
+      tx: Math.round(panV[0] * 1e4) / 1e4, ty: Math.round(panV[1] * 1e4) / 1e4, tz: Math.round(panV[2] * 1e4) / 1e4,
+      cpdMdot, op: opt.opac.slice(), roll: deg(rollUser), stars: opt.stars, glow: opt.glow, selfk: opt.selfk, selft: opt.selft, selfnc: opt.selfnc });   // (round 18l: selft, selfnc)   // (round 18i: glow, the model look's light, and selfk, the opacity of its own light, see SELF; round 18a: op, the see-through; round 13e: the planets' disks' accretion rate, M_J/yr, 0 for a tenth of the disk's; see cpdPhys)
     box.diskLegend = () => legendSpec();
+    // (round 18k) the own light's key for the page (see SELF_LOOK): old, true with ?selflook=old (the gas's colour, no bar); the bar
+    // from min to max K on a log scale, stops [u, css colour] (a thick gas at that T_b on the display), ticks [u, text], colourAt(u)
+    // (round 18m: by default the gas's colour in shades, the colour chosen for the gas as it is now; hue, true with ?selfhue=1, round
+    // 18k's colours)
+    box.diskSelfKey = () => {
+      const T = (u) => SELF_KEY.MIN * Math.pow(SELF_KEY.MAX / SELF_KEY.MIN, u), css = (c) => 'rgb(' + c.map((v) => Math.round(255 * Math.min(1, Math.max(0, v)))).join(',') + ')';
+      const gas = selfGasJS(), hue = selfTcol ? selfHueJS : () => gas, show = (t) => selfShowJS(t, hue);
+      return { old: selfOld, hue: selfTcol, min: SELF_KEY.MIN, max: SELF_KEY.MAX, stops: Array.from({ length: 25 }, (_, i) => [i / 24, css(show(T(i / 24)))]),
+        ticks: SELF_KEY.TICKS.map((t) => [Math.log(t / SELF_KEY.MIN) / Math.log(SELF_KEY.MAX / SELF_KEY.MIN), String(t)]), colourAt: (u) => css(show(T(u))) };
+    };
     // (round 8) the materials' colours of the model's look (see MAT), for the page's key: key, colour (sRGB), names; with
     // { key: '#rrggbb' } or { key: ['#rrggbb', k] } a colour (and its brightness factor) is changed for this page (for trying
     // colours; nothing keeps it)
     box.diskPalette = (set) => {
       if (set && typeof set === 'object') for (const m of MAT) {
         const v = set[m[0]], hex = Array.isArray(v) ? v[0] : v, k = Array.isArray(v) ? Number(v[1]) : m[2];
-        if (typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex) && k > 0 && k < 10) { m[1] = hex; m[2] = k; matLin.set(linHex(hex).map((c) => c * k), 3 * MAT.indexOf(m)); dirty = true; }
+        if (typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex) && k > 0 && k < 10) { m[1] = hex; m[2] = k; matLin.set(linHex(hex).map((c) => c * k), 3 * MAT.indexOf(m)); dirty = true; colGen++; }
       }
       return MAT.map(([key, hex, k, ja_, en]) => ({ key, hex, k, ja: ja_, en }));
+    };
+    // (round 13a, the owner: "make each colour changeable") The materials' colours as the viewer chose them, in one call:
+    // { key: '#rrggbb' } for MAT's keys (the page offers the gas 'disk', the pebbles' 'rock' and 'ice', the 'wind', the 'jet'
+    // and the envelope 'env'); a key left out, or not such a colour, takes its default (MAT_DEF), so that each call says all
+    // of them and the same call twice is the same picture. The brightness factors stay (they scale the glow each material has,
+    // MAT's third column). Into the uniform uMat at the next frame, and a still picture starts over (colGen). Nothing is kept
+    // here: the page keeps them with its settings and in its links; MAT holds them (shared, as box.diskPalette's), so that an
+    // engine built again after a lost context draws them still. Returns { now, def }: the colours now and the defaults, by
+    // key; without an argument it changes nothing. (Round 18d: and 'field', the field lines' colour, FIELD, in the same way; it
+    // is the overlay's, put on the lines at once, so no still starts over for it)
+    box.diskColours = (set) => {
+      if (set !== undefined) {
+        const o = set && typeof set === 'object' ? set : {};
+        let changed = false;
+        MAT.forEach((m, i) => {
+          const v = o[m[0]], hex = typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : MAT_DEF[m[0]];
+          if (hex === m[1]) return;
+          m[1] = hex; matLin.set(linHex(hex).map((c) => c * m[2]), 3 * i); changed = true;
+        });
+        if (changed) { colGen++; touched(); }
+        const f = typeof o.field === 'string' && /^#[0-9a-f]{6}$/i.test(o.field) ? o.field.toLowerCase() : FIELD.DEF;
+        if (f !== FIELD.now) { FIELD.now = f; fieldPaint(); }
+      }
+      return { now: { ...Object.fromEntries(MAT.map(([key, hex]) => [key, hex])), field: FIELD.now }, def: { ...MAT_DEF, field: FIELD.DEF } };
+    };
+    // (round 14a, the owner: "let the model's parameters be changed") The model's parameters (PAR, PAR_SPEC) in one call:
+    // { key: value } for PAR_SPEC's keys; a key left out, or not a finite number, takes its default, a value outside its range the
+    // nearest end, so that each call says all of them and the same call twice is the same model. What follows is set at once in the
+    // script (parApply: THERMO, R_TI, the budget, the mirrors; here the snow line and the field lines' shapes), and in the shaders,
+    // the temperature's table and the wind map at the next frame (mpUpload); a still picture and the cut's lines start over
+    // (parGen). Nothing is kept here but PAR: the page keeps them with its settings and in its links (mp=). Without an argument it
+    // changes nothing. Returns { now, def, spec, derived } (derived: parDerived, the numbers that follow).
+    const paramsTouched = (gapChanged) => {
+      mpDirty = true; linesS = null; rSn = 0; snowNow();
+      if (gapChanged) { planets.forEach((p) => { p.dSet = -1; }); plRows = ''; }
+      touched();
+    };
+    box.diskParams = (set) => {
+      if (set !== undefined) {
+        const o = set && typeof set === 'object' ? set : {};
+        const next = Object.fromEntries(Object.keys(PAR_SPEC).map((k) => [k, parClamp(k, o[k])]));
+        parFolded = true;
+        if (Object.keys(next).some((k) => next[k] !== PAR[k])) {
+          const gapChanged = next.alphaGap !== PAR.alphaGap;
+          Object.assign(PAR, next);
+          parApply(parSw(box.dataset));
+          paramsTouched(gapChanged);
+        }
+      }
+      return { now: { ...PAR }, def: { ...PAR_DEF }, spec: JSON.parse(JSON.stringify(PAR_SPEC)), derived: parDerived() };
+    };
+    // (round 14a) The wind's brightness in the model look, as the viewer chose it (a factor on G_WIND, WIND_GAIN.MIN to MAX; 1 the
+    // default): a display choice for the owner's tuning of the wind's look, kept by the page with its settings and in its links (wb=).
+    // No argument reads it.
+    box.diskWindGain = (k) => {
+      if (k != null) {
+        const v = finiteNumber(k);
+        if (isFinite(v)) { const c = Math.min(WIND_GAIN.MAX, Math.max(WIND_GAIN.MIN, v)); if (c !== WIND_GAIN.k) { WIND_GAIN.k = c; colGen++; touched(); } }
+      }
+      return WIND_GAIN.k;
     };
     // A state from outside (a link, the page, a script) is checked first: the numbers must be finite (a link copied with
     // text after it, or edited by hand, must not poison the picture: a NaN in the camera or the clock would blank it),
     // the distance and the speed positive, the components a mask of the six, the time within [0, TIME_MAX] (the shader's
     // clock is single precision); what fails is left as it is.
-    const NUM_KEYS = ['slice', 'p', 'pi', 'time', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'mode', 'field', 'ann', 'ms', 'asym', 'marks', 'waves', 'coV', 'coRange', 'coRangeFixed', 'speed', 'paused', 'fly'];
+    const NUM_KEYS = ['slice', 'p', 'pi', 'time', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'mode', 'field', 'ann', 'ms', 'asym', 'marks', 'waves', 'coV', 'coRange', 'coRangeFixed', 'speed', 'paused', 'fly', 'roll', 'stars', 'selfk', 'selfnc'];
     const checked = (raw) => {
       const st = { ...raw };
       for (const k of NUM_KEYS) {
@@ -7858,17 +10764,33 @@ void main(){
       if (st.slice != null) st.slice = Math.min(2, Math.max(0, Math.round(st.slice)));
       // Wrap degrees before converting to radians: even a finite 1e308 would overflow when multiplied by pi.
       if (st.az != null) st.az = ((st.az % 360) + 540) % 360 - 180;
+      if (st.roll != null) st.roll = ((st.roll % 360) + 540) % 360 - 180;   // (round 18a: the roll, as the azimuth)
+      if (st.stars != null) st.stars = Math.min(STARS[1], Math.max(STARS[0], Math.round(st.stars * 100) / 100));   // (round 18a)
       // The CO range search uses factors 1..30; a fixed flag is exactly 0 or 1, not an arbitrary truthy number.
       if (st.coRange != null && (st.coRange < 1 || st.coRange > Math.exp(Math.log(30)))) delete st.coRange;
       if (st.coRange != null) st.coRange = Math.min(30, st.coRange);   // exp(log(30)) may exceed 30 by one rounding unit
       if (st.coRangeFixed != null && st.coRangeFixed !== 0 && st.coRangeFixed !== 1) delete st.coRangeFixed;
       for (const k of ['tx', 'ty', 'tz']) if (st[k] != null) st[k] = Math.min(PAN_MAX, Math.max(-PAN_MAX, st[k]));
+      // (round 18a) the see-through, four factors (the gas, the pebbles, the wind, the envelope) within OPAC; one that is not a
+      // finite number is 1, a list of another length is left out. (Round 18d: six, with the jet's and the field lines' (see
+      // opt.opac); a list of four, as dev.23 to dev.25 wrote them in links and kept them on the device, taken with those two at 1)
+      if (st.op != null) { if (Array.isArray(st.op) && (st.op.length === 6 || st.op.length === 4)) st.op = [...st.op, 1, 1].slice(0, 6).map((v) => { const x = finiteNumber(v); return isFinite(x) ? Math.min(OPAC[1], Math.max(OPAC[0], x)) : 1; }); else delete st.op; }
+      // (round 18i) the model look's light, a name it knows; the opacity of its own light, positive, to three figures within SELF's
+      if (st.glow != null && st.glow !== 'star' && st.glow !== 'self') delete st.glow;
+      if (st.selfk != null) { if (st.selfk > 0) st.selfk = Math.min(SELF.K_MAX, Math.max(SELF.K_MIN, +st.selfk.toPrecision(3))); else delete st.selfk; }
+      // (round 18l) the own light's temperature, a name it knows; the surface's column, as the opacity: positive, three figures, within SELF's
+      if (st.selft != null && !own(SELF_T, st.selft)) delete st.selft;
+      if (st.selfnc != null) { if (st.selfnc > 0) st.selfnc = Math.min(SELF.NC_MAX, Math.max(SELF.NC_MIN, +st.selfnc.toPrecision(3))); else delete st.selfnc; }
       return st;
     };
     box.diskSet = (raw) => {
       const st = checked(raw || {});
       const coBefore = [elUser, wrapPi(azUser + viewOff()), opt.dist, follow, ...panV, opt.look, opt.coMode, opt.coV];
-      const mode0 = opt.mode, slice0 = opt.slice, asym0 = opt.asym, waves0 = opt.waves;
+      const mode0 = opt.mode, slice0 = opt.slice, asym0 = opt.asym, waves0 = opt.waves, follow0 = follow, glow0 = opt.glow;   // (round 18i: glow0)
+      // (round 11a: a new view on a path is taken from where the path has brought the camera, as after a drag: the keys left out
+      // are what is seen)
+      const viewSet = st.el != null || st.az != null || st.d != null || st.p != null || st.tx != null || st.ty != null || st.tz != null || st.roll != null;   // (round 18a: roll)
+      if (viewSet) pathGrab();
       // the slice and following the planet first (they exclude each other), since they set how close the camera may come
       // slice: 0 closed, 1 the 1/2 cut, 2 the 1/4 cut
       if (st.slice != null) { const k = Number(st.slice); opt.slice = k > 0; if (k > 0) opt.cut = k === 2 ? 'quarter' : 'half'; if (opt.slice) follow = false; }
@@ -7885,6 +10807,8 @@ void main(){
         if (followI >= planets.length) followI = 0;
       }
       if (Array.isArray(st.gain) && st.gain.length === 4 && st.gain.every((g) => isFinite(Number(g)))) opt.gain = st.gain.map((g) => Math.min(3, Math.max(0.25, Number(g))));
+      if (Array.isArray(st.dbg)) { dbgV.fill(0); dbgV.set(st.dbg.slice(0, 16).map(Number)); colGen++; }   // R19DBG
+      if (Array.isArray(st.op)) opt.opac = st.op.slice();   // (round 18a: the see-through, checked to four factors, see checked)
       if (st.pi != null) followI = Math.max(0, Math.min(PLANETS.MAX - 1, Math.round(st.pi)));
       if (st.p != null) { follow = !!Number(st.p) && planets.length > 0; if (follow) opt.slice = false; }
       if (st.sq != null && sqOf(st.sq)) opt.sliceQ = sqOf(st.sq);
@@ -7894,28 +10818,44 @@ void main(){
       if (st.el != null) elUser = clampEl(st.el * Math.PI / 180);
       if (st.az != null) azUser = st.az * Math.PI / 180 - (follow || reduce ? 0 : opt.spin * time);
       if (st.d) opt.dist = Math.min(DMAX, Math.max(dmin(), st.d));
+      if (st.roll != null) rollUser = wrapPi(st.roll * Math.PI / 180);   // (round 18a: the roll, degrees, see rollUser)
       if (st.tx != null || st.ty != null || st.tz != null) panV = clampPan([st.tx ?? panV[0], st.ty ?? panV[1], st.tz ?? panV[2]]);
       if (st.mode != null) opt.mode = Number(st.mode);
       if (st.field != null) showField = !!Number(st.field);
-      if (st.ann != null) opt.ann = !!Number(st.ann);
+      if (st.ann != null) { opt.ann = annMask(st.ann); if (opt.ann) annLast = opt.ann; }   // (round 15a: a mask, see ANN)
       if (st.ms != null) opt.ms = !!Number(st.ms);
       if (st.asym != null) opt.asym = !!Number(st.asym);
       if (st.marks != null) opt.marks = !!Number(st.marks);
       if (st.waves != null) opt.waves = !!Number(st.waves);
+      // (round 13e) the planets' disks' accretion rate, M_J/yr within CPD.MDOT, or 0 (or anything not positive): each a tenth of the
+      // disk's at its orbit (see cpdPhys); what is not a finite number is left as it is
+      if (st.cpdMdot != null && isFinite(finiteNumber(st.cpdMdot))) { const v = finiteNumber(st.cpdMdot); cpdMdot = v > 0 ? Math.min(CPD.MDOT[1], Math.max(CPD.MDOT[0], v)) : 0; }
       if (st.bg != null && own(BG.MODES, st.bg)) opt.bg = st.bg;   // (round 8: the background, see BG)
+      if (st.stars != null) opt.stars = st.stars;   // (round 18a: the number of its stars, see uStars)
       if (st.fx != null && isFinite(Number(st.fx))) opt.fx = Math.max(0, Math.min(2, Math.round(Number(st.fx))));   // (round 8: see opt.fx)
       if (st.coMode != null && own(CO_MODES, st.coMode)) opt.coMode = st.coMode;
       if (st.coV != null && isFinite(Number(st.coV))) opt.coV = Math.max(-20, Math.min(20, Math.round(Number(st.coV) * 100) / 100));
       // the look: the slice belongs to the model's look (opening it returns there; an observed look closes it)
       if (st.look != null && own(LOOKS, st.look) && st.look !== opt.look) {
-        opt.look = st.look; lookT0 = performance.now();
+        opt.look = st.look; lookT0 = nowMs();
         if (opt.look !== 'model' && opt.slice && st.slice == null) box.diskSlice(false);
       }
-      if (opt.slice && opt.look !== 'model') { opt.look = 'model'; lookT0 = performance.now(); }
+      if (opt.slice && opt.look !== 'model') { opt.look = 'model'; lookT0 = nowMs(); }
+      // (round 18i) the model look's light and the opacity of its own light (see SELF): a new light seen in the model look dips the
+      // exposure as a new look does and is drawn from the dip's darkest (glowNow); in another look it waits there, unseen
+      if (st.glow != null && st.glow !== opt.glow) { opt.glow = st.glow; if (lookNow === 'model') lookT0 = nowMs(); }
+      if (st.selfk != null) opt.selfk = st.selfk;
+      if (st.selft != null) opt.selft = st.selft;   // (round 18l: its temperature and the surface's column, see SELF_T; a still starts over)
+      if (st.selfnc != null) opt.selfnc = st.selfnc;
       if (st.speed) speed = Number(st.speed);
       if (st.paused != null) paused = !!Number(st.paused);
       // a new view: with fly the camera flies there from where it is, otherwise it is there at once
-      if (st.el != null || st.az != null || st.d != null || st.p != null || st.slice != null || st.tx != null || st.ty != null || st.tz != null) { if (Number(st.fly)) startFly(); else flyV = flyT = null; }
+      // (round 11a: a cut alone leaves a path under way, as long as the planet is followed or not as before, the path's frame: the
+      // player of a sequence sets the cut with its scene, the cut's sweep a picture's change, not the view's)
+      if (viewSet || st.slice != null) {
+        if (!viewSet && path && follow === follow0) { /* (the path goes on) */ }
+        else if (Number(st.fly)) startFly(); else { flyV = flyT = null; pathStop(); bgEase = null; rollEase = null; }   // (round 13b: the sky at once too; round 18a: the roll)
+      }
       const coAfter = [elUser, wrapPi(azUser + viewOff()), opt.dist, follow, ...panV, opt.look, opt.coMode, opt.coV];
       // (round 9) a jump: see probeNext
       // (the view's own jump: a turn of more than 5 degrees, a tenth of the distance, following a planet or not; not the small
@@ -7925,7 +10865,7 @@ void main(){
       const viewJump = !Number(st.fly) && !Array.isArray(st.planets) && (dA(0) > 0.09 || dA(1) > 0.09 || Math.abs(coAfter[2] - coBefore[2]) > 0.1 * coBefore[2]
         || coAfter[3] !== coBefore[3] || Math.hypot(coAfter[4] - coBefore[4], coAfter[5] - coBefore[5], coAfter[6] - coBefore[6]) > 0.1 * coBefore[2]);
       const jump = viewJump || coAfter[7] !== coBefore[7] || coAfter[8] !== coBefore[8]
-        || [mode0, slice0, asym0, waves0].some((v, i) => v !== [opt.mode, opt.slice, opt.asym, opt.waves][i]);
+        || [mode0, slice0, asym0, waves0, glow0].some((v, i) => v !== [opt.mode, opt.slice, opt.asym, opt.waves, opt.glow][i]);   // (round 18i: and the model look's light)
       if (jump && !reduce) { probeNext = PROBE_FRAMES; for (const k in gKnown) delete gKnown[k]; kickResetAll(); }
       if (jump) cancelJob();   // (round 10a: see cancelJob)
       // A later visitor command redirects the view, so an unfinished restore no longer owns its range. The target
@@ -7950,7 +10890,9 @@ void main(){
     box.diskGapAlpha = (a) => {
       if (a == null) return GAP_ALPHA;
       const v = finiteNumber(a);
-      if (isFinite(v) && v >= 1e-5 && v <= 0.1) { GAP_ALPHA = v; gapKMemo.clear(); trapMemo.clear(); gapLightMemo.clear(); planets.forEach((p) => { p.dSet = -1; }); plRows = ''; dirty = true; }
+      // (round 14a: the parameter alphaGap too, and the cut's lines with it (parGen), which this did not start over; its own range
+      // is wider than the page's slider's)
+      if (isFinite(v) && v >= 1e-5 && v <= 0.1) { GAP_ALPHA = PAR.alphaGap = v; gapKMemo.clear(); trapMemo.clear(); gapLightMemo.clear(); planets.forEach((p) => { p.dSet = -1; }); plRows = ''; parGen++; dirty = true; }
       return GAP_ALPHA;
     };
     // (round 8) the smallest ratio of radii between neighbouring planets of masses m1 and m2 (M_J), see MASS
@@ -7958,8 +10900,144 @@ void main(){
     box.diskPlanets = () => planets.map((p) => { const q = project(planetPosOf(p, time)); return { a: p.a, on: p.on, shown: p.amp, x: q[2] > zN ? q[0] : null, y: q[2] > zN ? q[1] : null }; });
     // back to the centre: the point looked at back to the star (the planet, when following it), the view as it is
     box.diskCenter = () => { box.diskSet({ tx: 0, ty: 0, tz: 0, fly: 1 }); emitState(); };
+    // (round 18e) the View's arrows: the point looked at stepped along the picture, dx to the right and dy up in tenths of its
+    // height (the page sends -1, 0 or 1), as Shift+arrows step it (nudge); from what is seen, as a key's step (a path left where
+    // it has brought the camera). Anything not a number, or no step, does nothing
+    box.diskNudge = (dx, dy) => {
+      const x = finiteNumber(dx), y = finiteNumber(dy);
+      if (!isFinite(x) || !isFinite(y) || (!x && !y)) return;
+      pathGrab();
+      if (coPending || coSavedKey || coHold) coResume();
+      nudge(x, y); touched(); emitState();
+    };
     // the first view and the star (the Home key, the page's button): the slice closed, the point looked at the star
-    box.diskHome = () => { box.diskSet({ p: 0, slice: 0, el: el0 * 180 / Math.PI, az: az0 * 180 / Math.PI, d: dist0, tx: 0, ty: 0, tz: 0, fly: 1 }); emitState(); };
+    box.diskHome = () => { box.diskSet({ p: 0, slice: 0, el: el0 * 180 / Math.PI, az: az0 * 180 / Math.PI, d: dist0, tx: 0, ty: 0, tz: 0, roll: 0, fly: 1 }); emitState(); };   // (round 18a: roll 0)
+    // (Round 12b) diskTilt({ el, az }): the view turned by a small offset (degrees, each at most 6), for looking in by tilting the
+    // phone (the page's setting; DESIGN.md section 30). It is drawn in camera() on the pose, never written into the state: a view
+    // of the same state. A step is drawn only when it moves the picture by a pixel's worth (the vertical field of view over the
+    // canvas's height in CSS pixels), and frames are asked for only then: at rest nothing is drawn and a still keeps refining.
+    // Returns { el, az, moving } (degrees, the offset drawn now; moving when the step's rate is above TILT.MOVE pixels a second:
+    // the page then draws its lighter picture, as for a drag; the engine's frames do not count it in viewMoving, so that the rest's
+    // and the phone's duty still apply). Without an argument, the offset drawn; diskTilt(false) or { el: 0, az: 0 } takes it away.
+    // Nothing under reduced motion, nor with data-tilt="off" (the page's ?tilt=0).
+    box.diskTilt = (o) => {
+      const deg = (x) => x * 180 / Math.PI, now = () => ({ el: deg(tilt.el), az: deg(tilt.az), moving: false });
+      if (o === undefined) return now();
+      // (a frame asked for with dirty, not touched(): not urgent, so that the frame rate's cap and the phone's duty still apply)
+      if (reduce || box.dataset.tilt === 'off') { if (tilt.el || tilt.az) { tilt = { el: 0, az: 0, t: 0 }; dirty = true; } return now(); }
+      const want = o === false ? { el: 0, az: 0 } : { el: finiteNumber(o && o.el) * Math.PI / 180, az: finiteNumber(o && o.az) * Math.PI / 180 };
+      if (!isFinite(want.el)) want.el = 0;
+      if (!isFinite(want.az)) want.az = 0;
+      const step = tiltRule(tilt, want, performance.now(), opt.fov / Math.max(1, Hh));
+      if (!step.moved) return now();
+      tilt = { el: step.el, az: step.az, t: step.t };
+      dirty = true;
+      return { ...now(), moving: step.moving };
+    };
+    // (Round 11a) diskPath(view, o): a flight along a smooth path (see PATH-MATH), for talks: from where the camera is (a flight or
+    // a path under way: its pose, and its speed along the new way) to the view { el, az, d, tx, ty, tz, p, pi } (diskSet's view
+    // keys; those left out as they are), which is set at once, as a flight sets it (not a jump: the guard keeps its measures).
+    // o: { speed (the pace: times the cruise speed, 0.25 to 4), dur (s, from rest), rho (the arc's curvature), turns (whole turns
+    // more round: an orbit) }. The camera is moved in the frame of the destination (the view's slow spin, or the planet's orbit
+    // when following it), on nowMs. Its frames are the animation frames', as a flight's: the view moving (diskframe's moving), the
+    // page draws them at its moving scale, in kicks or bands within the guard; the path's end is the state's view, exactly. A
+    // still being refined is left at once (leaveStill). A drag, the wheel, a key or a new view takes over, as from a flight;
+    // a cut alone does not end it. 'diskpath' tells { state: 'start' | 'arrive' | 'stop', id, dur, L }. With reduced motion,
+    // the view at once and 'arrive'. Returns { id, dur, L, lift } (s; the path's length; the midplane rule's lift, e-folds);
+    // without a view, the path under way: { id, t, dur, s, L, lift } or null; false: the path left where the camera is (a page's
+    // stop button), 'stop' told
+    box.diskPath = (view, o = {}) => {
+      if (view === false) { if (path) { pathGrab(); if (bgEase) bgEaseFrom(nowMs(), FLY_MIN); touched(); emitState(); } return null; }   // (round 13b: the sky as in takeOver)
+      if (view == null) { if (!path) return null; const t = (nowMs() - path.t0) / 1000; return { id: path.id, t, dur: path.plan.ease.D, s: pathEaseAt(path.plan.ease, t).s, L: path.plan.L, lift: path.plan.lift ? path.plan.lift.b : 0 }; }
+      const st = checked(view), keys = {};
+      for (const k of ['el', 'az', 'd', 'tx', 'ty', 'tz', 'p', 'pi', 'roll']) if (st[k] != null) keys[k] = st[k];   // (round 18a: roll)
+      const id = ++pathN, from = cam ? { el: camEl, az: camAz, lnd: Math.log(camD), T: camT.slice(), v: camV.slice(), tv: camTV.slice() } : null;
+      box.diskSet({ ...keys, fly: 1 });   // (the destination, as a flight sets it; a path under way taken over from what is seen)
+      flyV = flyT = null; pathStop();   // (a path under way to the same view (no view keys): left for this one)
+      if (reduce || !from || !W) { pathTell('arrive', { id, dur: 0, L: 0 }); return { id, dur: 0, L: 0, lift: 0 }; }
+      // the two ends in the frame of the destination (the state's now: following a planet or not)
+      const a0 = viewOff(), c = Math.cos(a0), s = Math.sin(a0), B = follow ? planetPos(time) : [0, 0, 0];
+      const local = (P) => { const x = P[0] - B[0], y = P[1] - B[1]; return [c * x + s * y, -s * x + c * y, P[2] - B[2]]; };
+      const pa = { el: from.el, az: from.az - a0, lnd: from.lnd, T: local(from.T) }, pb = { el: elUser, az: azUser, lnd: Math.log(opt.dist), T: panV.slice() };
+      const sp = finiteNumber(o.speed), dur = finiteNumber(o.dur), rho = finiteNumber(o.rho), turns = finiteNumber(o.turns);
+      const po = { fov: opt.fov, rho: rho > 0.2 && rho < 4 ? rho : PATH.RHO, kappa: PATH.KAPPA, V: PATH.V * (sp > 0 ? Math.min(4, Math.max(0.25, sp)) : 1), ramp: PATH.RAMP,
+        dmin: PATH.DMIN, dmax: PATH.DMAX, dur: dur > 0 && dur <= 600 ? dur : 0, turns: isFinite(turns) ? Math.max(-8, Math.min(8, Math.round(turns))) : 0, v0: 0,
+        star: local([0, 0, 0]), midR: PATH.MID_R, midH: PATH.MID_H, midMax: PATH.MID_MAX, hOf: Hof };
+      const plan = pathPlan(pa, pb, po);
+      // (a moving camera's speed taken on: its part along the path's first direction, in the shared measure (KAPPA a radian of
+      // turn, an e-fold of zoom, a view's width of pan), so that the speed on the screen carries on; from rest with dur)
+      const v = from.v, tv = local([from.T[0] + from.tv[0], from.T[1] + from.tv[1], from.T[2] + from.tv[2]]).map((x, i) => x - pa.T[i]);
+      if (!(po.dur > 0) && plan.L > 0 && Math.hypot(v[0], v[1], v[2], tv[0], tv[1], tv[2]) > 0) {
+        const q0 = pathAt(plan, 0), q1 = pathAt(plan, 1e-4), w = 2 * Math.tan(opt.fov / 2) * camD, ce = Math.cos(pa.el);
+        const m = (dEl, dAz, dLn, dT) => [PATH.KAPPA * dEl, PATH.KAPPA * ce * dAz, dLn, dT[0] / w, dT[1] / w, dT[2] / w];
+        const mt = m((q1.el - q0.el) / 1e-4, (q1.az - q0.az) / 1e-4, (q1.lnd - q0.lnd) / 1e-4, q1.T.map((x, i) => (x - q0.T[i]) / 1e-4)), mv = m(v[0], v[1], v[2], tv);
+        const nt = Math.hypot(...mt), along = nt > 0 ? mt.reduce((acc, x, i) => acc + x * mv[i], 0) / nt : 0;
+        if (along > 0) { po.v0 = along * plan.L / nt; plan.ease = pathEase(plan.L, po); }
+      }
+      if (!(plan.ease.D > 0)) { bgEase = null; pathTell('arrive', { id, dur: 0, L: 0 }); return { id, dur: 0, L: 0, lift: 0 }; }
+      leaveStill();
+      path = { id, plan, t0: nowMs() };
+      if (rollEase) { rollEase.t0 = path.t0; rollEase.dur = plan.ease.D; }   // (round 18a: the roll over the path's time)
+      bgEaseFrom(path.t0, plan.ease.D);   // (round 13b: the sky eased over the path's time, not the flight's it replaced; see bgTurn)
+      touched();
+      pathTell('start', { id, dur: plan.ease.D, L: plan.L });
+      return { id, dur: plan.ease.D, L: plan.L, lift: plan.lift ? plan.lift.b : 0 };
+    };
+    // (round 11b) A path's time and length without flying it, from one view to another (diskSet's view keys: those left out of `from`
+    // as the state has them, those left out of `to` as `from` has them), for an exporter, which counts a video's frames before it
+    // begins and then flies each path in the time planned (diskPath's dur). The ends are taken at the clock's time now, with the
+    // planets as they are, from rest, in the destination's frame as diskPath takes them; o as diskPath's. Returns { dur, L, lift } as
+    // diskPath does; nothing is set, flown or drawn. (Later, the frames' slow spin has turned a little: the path flown then, its time
+    // given, is a hair longer or shorter in its measure and fits the time.)
+    box.diskPathPlan = (from, to, o = {}) => {
+      const s = box.diskState(), f = checked(from || {}), g = checked(to || {});
+      const keys = (v, b) => Object.fromEntries(['el', 'az', 'd', 'tx', 'ty', 'tz', 'p', 'pi'].map((k) => [k, v[k] != null ? v[k] : b[k]]));
+      const A = keys(f, s), B = keys(g, A);
+      // a view's pose in the world: the frame it is set in (the planet followed, or the slow spin), as diskSet and camera() take it
+      const pose = (v) => {
+        const fol = !!v.p && planets.length > 0, pl = fol ? planets[Math.max(0, Math.min(planets.length - 1, Math.round(v.pi) || 0))] : null;
+        const a = fol ? planetPhiOf(pl, time) : reduce ? 0 : opt.spin * time, Bx = fol ? planetPosOf(pl, time) : [0, 0, 0], c = Math.cos(a), sn = Math.sin(a);
+        const azU = v.az * Math.PI / 180 - (fol || reduce ? 0 : opt.spin * time), pan = clampPan([v.tx, v.ty, v.tz]);
+        const dmn = fol ? 0.25 * pl.a / PLANET.A : MAG.DMIN;
+        return { a, B: Bx, el: clampEl(v.el * Math.PI / 180), azW: azU + a, azU, lnd: Math.log(Math.min(DMAX, Math.max(dmn, v.d))), pan,
+          T: [Bx[0] + c * pan[0] - sn * pan[1], Bx[1] + sn * pan[0] + c * pan[1], Bx[2] + pan[2]] };
+      };
+      const pa0 = pose(A), pb0 = pose(B), c = Math.cos(pb0.a), sn = Math.sin(pb0.a);
+      const local = (P) => { const x = P[0] - pb0.B[0], y = P[1] - pb0.B[1]; return [c * x + sn * y, -sn * x + c * y, P[2] - pb0.B[2]]; };
+      const pa = { el: pa0.el, az: pa0.azW - pb0.a, lnd: pa0.lnd, T: local(pa0.T) }, pb = { el: pb0.el, az: pb0.azU, lnd: pb0.lnd, T: pb0.pan };
+      const sp = finiteNumber(o.speed), dur = finiteNumber(o.dur), rho = finiteNumber(o.rho), turns = finiteNumber(o.turns);
+      const po = { fov: opt.fov, rho: rho > 0.2 && rho < 4 ? rho : PATH.RHO, kappa: PATH.KAPPA, V: PATH.V * (sp > 0 ? Math.min(4, Math.max(0.25, sp)) : 1), ramp: PATH.RAMP,
+        dmin: PATH.DMIN, dmax: PATH.DMAX, dur: dur > 0 && dur <= 600 ? dur : 0, turns: isFinite(turns) ? Math.max(-8, Math.min(8, Math.round(turns))) : 0, v0: 0,
+        star: local([0, 0, 0]), midR: PATH.MID_R, midH: PATH.MID_H, midMax: PATH.MID_MAX, hOf: Hof };
+      const plan = pathPlan(pa, pb, po);
+      return reduce || !(plan.ease.D > 0) ? { dur: 0, L: 0, lift: 0 } : { dur: plan.ease.D, L: plan.L, lift: plan.lift ? plan.lift.b : 0 };
+    };
+    // (round 11a, for checks) The state's picture as a still's first frame (no jitter, nothing averaged, no fade moving on), drawn
+    // as frames are (a script's frame, through the guard, in kicks or bands, each piece waited for) into a 32-bit float target and
+    // read back, with the exposure and the line's range given (o.expo, as an earlier call returned it) or as they are: two ways
+    // to the same state compared bit for bit (check.js: a path's arrival against a jump, as diskSplitTest compares kicks and
+    // whole rays). { busy: true } while a flight, a path or a look's switch is under way
+    box.diskFrameRead = async (o = {}) => {
+      if (lost || !fbFloat) return null;
+      if (testBy) return { error: 'another test holds the target', by: testBy };   // (testT is one: see diskTestBusy)
+      testBy = 'frameread';
+      await gpuDone(); stepping++;
+      const e0 = [aeLn, aeGoal, coLn, coGoal], ex = Array.isArray(o.expo) && o.expo.length === 4 && o.expo.every((x) => Number.isFinite(x)) ? o.expo.slice() : e0.slice();
+      try {
+        await warmNow(); if (lost) return null;
+        if (flyV || flyT || path || rollEase || lookNow !== opt.look || glowNow !== opt.glow || lookDip() < 1) return { busy: true };
+        testT = target(rW, rH, gl.RGBA32F, gl.CLAMP_TO_EDGE, gl.NEAREST);
+        [aeLn, aeGoal, coLn, coGoal] = ex; accN = 0; fadeT = 0;
+        const ms = await scriptFrame('frameread', {});
+        if (lost) return null;
+        return { px: readF(testT), size: [rW, rH], scale: opt.scale, key: kindNow(), expo: ex, ms: Math.round(ms), split: !!(lastJob && lastJob.split), cancelled: !!(lastJob && lastJob.cancelled) };
+      } finally {
+        [aeLn, aeGoal, coLn, coGoal] = e0;
+        if (testT) { gl.deleteFramebuffer(testT.fb); gl.deleteTexture(testT.tex); testT = null; }
+        stepping--; accN = 0; dirty = true;
+        testBy = '';
+      }
+    };
     // --- the tour: chapters may be selected by the visitor, or advanced automatically by the legacy diskTour(true).
     // Each chapter establishes the view/components its existing text describes, even when entered directly from an
     // observed look or with components disabled. Direct model input pauses advancement, keeping the chapter and its
@@ -7967,8 +11045,8 @@ void main(){
     const home = () => box.diskSet({ p: 0, slice: 0, el: VIEWS[0][0], az: VIEWS[0][1], d: VIEWS[0][2], tx: 0, ty: 0, tz: 0, fly: 1 });
     const TOUR = [
       { go: () => home(), ms: 8000, title: ['円盤の全体像', 'The whole disk'],
-        ja: '原始惑星系円盤のモデル(半径 30 au)。星の光が反り返った表層を温め、赤道面は冷たいままです。表面からは、磁場に駆動された風が吹き出しています。',
-        en: 'A model of a protoplanetary disk, 30 au in radius. Starlight warms its flared surface while the midplane stays cold. A magnetically driven wind leaves the surface.' },
+        ja: '原始惑星系円盤のモデル(半径およそ 30 au)。星の光が反り返った表層を温め、赤道面は冷たいままです。表面からは、磁場に駆動された風が吹き出しています。',
+        en: 'A model of a protoplanetary disk, some 30 au in radius. Starlight warms its flared surface while the midplane stays cold. A magnetically driven wind leaves the surface.' },
       { go: () => box.diskSet({ p: 0, slice: 0, el: 30, az: -65, d: 9, tx: 0, ty: 0, tz: 0, fly: 1 }), ms: 9000, tmp: { waves: 1 }, title: ['スノーラインと惑星', 'Snow line and planet'],
         ja: '内側の数 au に寄りました。約 1 au のスノーラインの外では、赤道面に沈んだ小石が氷をまとっています。3 au の惑星がギャップを開け、渦巻きの波を立てています(この段では波を強調表示しています)。',
         en: 'Closer in, the inner few au: beyond the snow line near 1 au the pebbles settled at the midplane are icy, and a planet at 3 au opens a gap and raises spiral waves (shown exaggerated in this step).' },
@@ -8066,15 +11144,98 @@ void main(){
       touched(); emitState();
     };
     box.diskField = (on) => box.diskSet({ field: on ? 1 : 0 });
-    box.diskAnnotations = (on) => box.diskSet({ ann: on ? 1 : 0 });
+    // (round 15a) on: the annotations shown before they were all hidden (all at first); off: none
+    box.diskAnnotations = (on) => box.diskSet({ ann: on ? annLast : 0 });
     box.diskLook = (look) => { box.diskSet({ look }); emitState(); };
     box.diskPlay = (on) => { paused = !on; touched(); };
     // (round 7, for checks and the notes) the model's temperature at R (au) and z (au) with the planets' gaps as they are:
     // { T, Tmid, x (ln tau*), snow (the snow line's radius), rTI (the turbulent inner disk's edge) }
     box.diskTemp = (R, z = 0) => { const x = lnTauJS(R, z); return { T: tempJS(R, z / Hof(R), x, lumNow), Tmid: tMidJS(R, lumNow), x, snow: rSn, rTI: NONIDEAL.R_TI }; };
+    // (round 12a) the probe at R (au) and z (au), with the planets' gaps, the star's luminosity, the asymmetry and the jet as
+    // they are now (see probeJS for every number and its unit), and: zS (au), the irradiation surface's height (tau* = 1, NaN
+    // where the column does not reach it); rTI (au), the thermally ionized inner disk's edge; snow, the snow line's radius
+    // (au) and whether R is inside it; planets, each shown planet's orbit (au) and mass (Jupiters), its gap's factor on Sigma
+    // at R, its pressure maximum (au, null when there is none: trapOf) and whether R is within one ring width (2 w) of it
+    // (round 13e) with phi, the point's azimuth (radians, as diskpick gives it), also cpd: the planet's own disk when the point
+    // lies within its outer radius as drawn (cpdROut) of a shown planet where it is now, else null: the planet's orbit (au) and
+    // mass (M_J), the point's distance from it r (au, and rH in its Hill radii), the disk's outer radius rOut (au, rOutH), the
+    // planet's thermal mass qth and the blend D (kind: 'disk' from D 0.5, else 'envelope'), its accretion rate mdot (M_J/yr;
+    // auto, a tenth of the disk's) and at r: T (K), Hr (H/r), sigma (g cm^-2) and the millimetre's vertical optical depth tauMm
+    // (cpdPhys; DESIGN.md, section 35)
+    const cpdProbe = (R, z, phi) => {
+      if (!isFinite(phi)) return null;
+      const X = [R * Math.cos(phi), R * Math.sin(phi), z];
+      for (const p of planets) {
+        if (p.amp <= 0.5) continue;
+        const P = planetPosOf(p, time), r = Math.hypot(X[0] - P[0], X[1] - P[1], X[2] - P[2]);
+        if (r >= cpdROut(p)) continue;
+        const c = cpdState(p), v = c.at(Math.max(r, 1.01 * c.Rp / CPD.C.AU));
+        return { a: p.a, m: p.m, r, rH: r / c.rH, rOut: cpdROut(p), rOutH: cpdROut(p) / c.rH, qth: c.qth, D: c.D, kind: c.D >= 0.5 ? 'disk' : 'envelope', mdot: c.mdot, auto: c.auto, T: v.T, Hr: v.Hr, sigma: v.sigma, tauMm: v.tauMm };
+      }
+      return null;
+    };
+    // (round 15a) the wind at (R, z) as the wind map has it: the line through the point found by bisection on its foot (the map's
+    // footRadius), and on it the solution's speeds (F, G and XIP: v_z, v_phi in v_K(r0) and dR/dz) and the density (windLine,
+    // windLnRho, with the lower side's share and the gaps at the base, as the cut's contours take them; without the fades at the
+    // marched cylinder's edges and the puffs). foot, r0 (au), lam (the line's solution's lambda) and lamBud (the budget's, at the
+    // base), rho (g cm^-3), vp, vphi and vInf ((2 lambda - 3)^1/2 v_K(r0), the terminal speed) in km/s; null below the line's base
+    function windProbe(R, z) {
+      const f = asymSm(), lower = z < 0, h = Math.abs(z), s = (lower ? -1 : 1) * ASYM_F_JS * f, R5 = Math.max(R, 0.05);
+      let lo = 0.05, hi = R5 + 2 * 2.1 * ASYM_F_JS * MODEL.H0 * Math.pow(R5, 1.25) * 4;
+      for (let i = 0; i < 28; i++) { const m = 0.5 * (lo + hi); if (fieldRP(m, h, s)[0] > R) hi = m; else lo = m; }
+      const Rf = 0.5 * (lo + hi), zb = zBase(Rf), L = windLine(Rf, s, f), r0 = L.r0;
+      if (!(h > zb)) return null;
+      const chi = (h - zb) / r0, fi = tabS(chi), vK0 = PROBE.vK1 / Math.sqrt(r0), lam = lamOf(Rf);
+      const lnRho = windLnRho(L, chi) + gapLnAll(r0) + (lower ? Math.log(1 - (1 - WIND_LOW_JS) * f) : 0);
+      return { foot: Rf, r0, lam, lamBud: lamBud(L.rb), rho: Math.exp(lnRho) * PROBE.SIG1 / PROBE.au, vp: tabF(L.T.F, fi) * Math.hypot(1, tabF(L.T.XIP, fi)) * vK0,
+        vphi: tabF(L.T.G, fi) * vK0, vInf: Math.sqrt(Math.max(0, 2 * lam - 3)) * vK0 };
+    }
+    // (round 15a) and: mag, the magnetosphere's numbers (au: r_T, the star's radius rS; the curtains' lines from r_T to (1 + dl) r_T;
+    // the star's period in days); each planet's gap as Kanagawa et al. (2016) give it: depth (1 - Sigma_min / Sigma_0 at the orbit),
+    // width (au, at half depth: (0.41 + Sigma_min / 4 Sigma_0) K'^1/4 a for this profile), K (q^2 / h^5 alpha) and alpha (GAP_ALPHA);
+    // wind (windProbe) where the point is in the wind, else null; jetV, the jet's speed on that side (km/s); env, the envelope's outer
+    // radius (au), its cavity's half angle (rad) and r_c (au)
+    box.diskProbe = (R, z = 0, phi) => {
+      R = Math.max(Number(R) || 0, 1e-3); z = Number(z) || 0;
+      const jet = jetAmp * jetAmp * (3 - 2 * jetAmp) * (JET.LOOK[lookNow] || 0);
+      const P0 = probeJS(R, z, lnTauJS(R, z), gapLnAll(R), lumNow, asymSm(), accW(), jet, exclOn && windShareJS(R, z, asymSm(), envLnRho0) < 0.5);
+      return { ...P0, zS: zOfTau(R, 0), rTI: NONIDEAL.R_TI, lum: lumNow,
+        snow: { R: rSn, inside: R < rSn },
+        planets: planets.filter((p) => p.amp > 0.5 && p.d > 0).map((p) => { const k = gapK(p.a, p.q); return { a: p.a, m: p.m, gap: Math.exp(gapLnJS(R, p.d, p.a, p.q)), trap: p.trap.s > 0 ? p.trap.R : null, atTrap: p.trap.s > 0 && Math.abs(R - p.trap.R) < 2 * p.trap.w,
+          depth: k.depth, width: (0.41 + k.smin / 4) * k.k4 * p.a, K: k.Kp / (k.h * k.h), alpha: GAP_ALPHA }; }),
+        cpd: cpdProbe(R, z, Number(phi)),
+        mag: { rT: MAG.RT, rS: MAG.RS, dl: MAG.DL, pDays: MAG.P_DAYS }, wind: P0.region === 'wind' ? windProbe(R, z) : null,
+        jetV: JET.V * KMS * (z < 0 ? 1 - (1 - 1 / JET.LOW) * asymSm() : 1), env: { R: ENV.R, thCav: ENV.TH_CAV, rc: ENV.RC } };
+    };
+    // (round 12a, for the probe's check) a point (Rs, z) of the open cut's face on the canvas (CSS px; Rs >= 0 on the right
+    // face, as sp), and the face's colour for a value of its quantity (display values, 0 to 1: T in K, rho relative to the
+    // midplane at 1 au) from the legend's colour maps (CBAR), which are the shader's
+    box.diskFacePoint = (Rs, z) => { if (sliceU < 1) return null; const q = sp(Rs, z); return inView(q) ? [q[0], q[1]] : null; };
+    box.diskFaceColour = (q, v) => (q === 'T' ? CBAR.T.col(Math.min(Math.max(uT(v), 0), 1)) : q === 'rho' ? CBAR.rho.col((Math.log10(v) + 10) / 12.5) : null);
     // (the speed as diskSet takes it: a finite number, positive, 0.1 to 10; the zoom's factor finite and positive, 0.01
     // to 100, the distance then held within its range: anything else is left out)
     box.diskSpeed = (x) => { const st = checked({ speed: x }); if (st.speed != null) speed = st.speed; };
+    // (round 11a) The page's own clock (see nowMs), for an exporter that draws a frame at a time: diskManual(true) holds the clock
+    // where it is (the flights, the paths, the fades and the look's dip wait with it, and the animation frames no longer move the
+    // model's clock); diskAdvance(dt) moves it on by dt seconds (0 to 10), the model's clock with it as an animation frame would
+    // (dt x the speed x clockK, the outburst's age; not while paused); diskManual(false) gives it back to the wall clock from where
+    // it stands, so that nothing jumps. Neither draws: the frames are the animation frames' or a script's (diskSettle, diskSnapshot).
+    // No argument reads it.
+    box.diskManual = (on) => {
+      if (on != null && !!on !== (manualMs !== null)) {
+        if (on) manualMs = nowMs(); else { clockOff = manualMs - performance.now(); manualMs = null; }
+        dirty = true;
+      }
+      return manualMs !== null;
+    };
+    box.diskAdvance = (dt) => {
+      const s = finiteNumber(dt);
+      if (manualMs === null || !isFinite(s) || s < 0 || s > 10) return null;
+      manualMs += 1000 * s;
+      if (!paused) { time += s * speed * clockK(); if (burst) burst.age += s * speed; update(); }
+      dirty = true;
+      return { ms: manualMs, time };
+    };
     box.diskZoom = (f) => { const k = typeof f === 'number' || typeof f === 'string' ? Number(f) : NaN; if (isFinite(k) && k > 0) zoomBy(Math.min(100, Math.max(0.01, k))); };
     // for checks: render n frames (the model clock advances 0.05 per frame) and return the cost of a frame
     // in ms (medians), with the canvas size, render scale and steps they were measured at:
@@ -8184,6 +11345,33 @@ void main(){
       const l = snapLimits(), m = Math.min(l.texture, l.renderbuffer, l.viewport, 8192), d = Math.min(window.devicePixelRatio || 1, 2);
       return { k: Math.max(1, Math.floor(100 * m / (Math.max(W, Hh) * d)) / 100), limits: l, screen: [Math.round(W * d), Math.round(Hh * d)] };
     };
+    // (round 11b) A size of its own for the canvas, for a video's frames: { w, h, px }, w x h pixels (16 to snapMax's limit), px of them
+    // a CSS pixel (0.25 to 8); null gives the box's back; no argument reads it. While set, the picture is framed for that size: the
+    // projection, the lines, the labels and the scale bar laid out on a stage of w / px x h / px CSS pixels (the vertical field of view
+    // held, so a wider frame shows more to the sides), each frame drawn so (an animation frame's or a script's: diskSnapshot reads it at
+    // that size, k = 1) through the guard as any; the canvas's CSS size and the box are left as they are, so that nothing around them
+    // moves (the canvas then shows the frame stretched to the box: the page covers it meanwhile). The snapshot's size k multiplies
+    // the screen's pixels at the stage's aspect, so it cannot give a 16:9 frame on another stage, nor one smaller than the screen.
+    box.diskOut = (o) => {
+      if (o === undefined) return outSz ? { ...outSz } : null;
+      if (o === null) { if (outSz) { outSz = null; resize(); } return null; }
+      const l = snapLimits(), m = Math.min(l.texture, l.renderbuffer, l.viewport, 8192);
+      const w = finiteNumber(o.w), h = finiteNumber(o.h), px = finiteNumber(o.px);
+      if (!(Number.isInteger(w) && Number.isInteger(h) && w >= 16 && h >= 16 && w <= m && h <= m && px >= 0.25 && px <= 8)) return null;
+      outSz = { w, h, px };
+      resize();
+      return { ...outSz };
+    };
+    // (round 11b) On the page's own clock (diskManual: an exporter's frames, with no frame rate to keep and nothing else drawn), a
+    // piece's end looked for at every turn of the event loop (a message to the page itself), not every 8 ms, nor 16 for a band's
+    // query: a fence's and a query's state can change only between tasks, and in Chrome each look reads it from memory shared with
+    // the GPU's process (in WebKit each is a round trip: the video is not offered as checked there). A frame of the visible look at
+    // 1080p and scale 1 is some 45 to 50 pieces a picture, 8 pictures a frame, and each piece waited 4 to 20 ms beyond its work: 2 to
+    // 8 s a frame. The pieces themselves, their sizes and the guard's measures of them are as before; they only follow sooner
+    const turnMc = new MessageChannel(), turnQ = [];
+    turnMc.port1.onmessage = () => { const r = turnQ.shift(); if (r) r(); };
+    const nextTurn = () => new Promise((r) => { turnQ.push(r); turnMc.port2.postMessage(0); });
+    const pieceWait = (ms) => (manualMs !== null ? nextTurn() : new Promise((r) => setTimeout(r, ms)));
     // (round 10a: a wait over HUNG_MS told to the recorder as hung, once, with the band in flight; and its end as late)
     const gpuDone = () => new Promise((res) => {
       const f = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0), t0 = performance.now(), rid = lastRid; gl.flush();
@@ -8191,7 +11379,7 @@ void main(){
       const poll = () => {
         if (lost || gl.clientWaitSync(f, 0, 0) !== gl.TIMEOUT_EXPIRED) { gl.deleteSync(f); if (hung) rec({ k: 'late', id: rid, s: 'script', ms: performance.now() - t0 }); res(); return; }
         if (!hung && performance.now() - t0 > HUNG_MS) { hung = true; rec({ k: 'hung', id: rid, s: 'script', key: kindNow(), sc: opt.scale, ms: performance.now() - t0 }); }
-        setTimeout(poll, 8);
+        pieceWait(8).then(poll);
       };
       poll();
     });
@@ -8383,6 +11571,14 @@ void main(){
       for (let i = 0; i < n; i++) { const u = gl.getActiveUniform(f.prog, i); if (u && T.includes(u.type)) names.push(u.name); }
       return { max: gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS), used: names.length, names };
     };
+    // (2026-11-02, checks hygiene) The test target testT is one: diskSplitTest, diskCoStudy and diskFrameRead each make it and
+    // delete it in their finally. Two of them at once (check.js ran an item again after it timed out on a hidden page, the
+    // first call still running) drew into one target and deleted it under the other, whose readF(testT) then threw on a null.
+    // A call while another test holds the target is told so ({ error: 'another test holds the target', by }) and does nothing;
+    // diskTestBusy() says which test holds it ('frameread', 'splittest', 'costudy'; '' when none), so that a check can wait
+    // for it to end. Set at a call's entry, before its first wait, and given back in its finally
+    let testBy = '';
+    box.diskTestBusy = () => testBy;
     // (round 10a, for checks) The picture of the march in kicks against the same frame drawn whole: one frame of the present
     // view (paused; the exposure held), drawn whole and then in kicks, each as a script's frame (in the guard's bands), into a
     // target of 32-bit floats, and compared value by value: the share bit for bit the same, the largest and mean difference
@@ -8390,6 +11586,8 @@ void main(){
     // frame in kicks; o.rows, its bands at most so many rows, so that a frame of many bands is compared on purpose)
     box.diskSplitTest = async (o = {}) => {
       if (lost || !fbFloat) return null;
+      if (testBy) return { error: 'another test holds the target', by: testBy };   // (see diskTestBusy)
+      testBy = 'splittest';
       await gpuDone(); stepping++;
       const was = splitOn, e0 = [aeLn, aeGoal, coLn, coGoal], k0 = kickK, a0 = kickAdapt;
       const kT = finiteNumber(o.k), rT = finiteNumber(o.rows);
@@ -8402,7 +11600,7 @@ void main(){
         // and kicks of 16 to 96 at the same views settled. So no fade moves on in either draw (fadeT: their step, dtR, is the time
         // since the last frame; every fade of the picture goes by it), the exposure and the line's range are those of the start
         // (e0), and the two draws are compared only where no flight is under way nor a look's switch, whose dip goes by the clock)
-        if (flyV || flyT || lookNow !== opt.look || lookDip() < 1) return { changed: true, busy: true };
+        if (flyV || flyT || path || rollEase || lookNow !== opt.look || glowNow !== opt.glow || lookDip() < 1) return { changed: true, busy: true };
         if (isFinite(kT) && kT > 0) { kickK = Math.min(4096, Math.max(4, Math.round(kT))); kickAdapt = false; kickResetAll(); }
         testRows = isFinite(rT) && rT >= 1 ? Math.round(rT) : 0;
         // (o.maxMs: the test's time; its frame left at the end of it, and { timedOut } returned)
@@ -8443,6 +11641,7 @@ void main(){
         if (kickK !== k0 || kickAdapt !== a0) { kickK = k0; kickAdapt = a0; kickResetAll(); }
         if (testT) { gl.deleteFramebuffer(testT.fb); gl.deleteTexture(testT.tex); testT = null; }
         stepping--; accN = 0; dirty = true;
+        testBy = '';
       }
     };
     // (round 10a, dev.7 study, dev only) The moments' velocity integral measured (ver2/docs, the study's note): diskCoStudy(cfg)
@@ -8459,6 +11658,8 @@ void main(){
     let coStudyKey = '';
     box.diskCoStudy = async (cfg = {}) => {
       if (lost || !fbFloat) return null;
+      if (testBy) return { error: 'another test holds the target', by: testBy };   // (see diskTestBusy)
+      testBy = 'costudy';
       await gpuDone(); stepping++;
       const e0 = [aeLn, aeGoal, coLn, coGoal], full0 = full, var0 = [...variants], split0 = splitOn, chan = opt.coMode === 'chan';
       let rayT = null;
@@ -8509,6 +11710,7 @@ void main(){
         if (testT) { gl.deleteFramebuffer(testT.fb); gl.deleteTexture(testT.tex); testT = null; }
         if (rayT) { gl.deleteFramebuffer(rayT.fb); gl.deleteTexture(rayT.tex); }
         stepping--; accN = 0; dirty = true;
+        testBy = '';
       }
     };
     // (the study's end: the guard's measures and the kicks' dropped, measured with the study's march)
@@ -8577,6 +11779,10 @@ void main(){
     box.diskSnapLog = () => snapLog;
     box.diskSnapshot = async (o = {}) => {
       if (lost) return null;   // (no picture without a context)
+      // (round 11a, after the review: a path under way taken over first, where it is: the snapshot plans its bands once, from what is
+      // drawn at its start, and a path, a scene's dearer look on arrival or a move's next leg must not change the picture under it. Not
+      // on the page's own clock (diskManual): an exporter snapshots each frame mid-path on purpose, the path held still meanwhile)
+      if (manualMs === null) pathGrab();
       // (round 9: every snapshot one frame at a time, each band in a task of its own and waited for, so that no piece of GPU
       // work is long and the browser can show its own frames between them; the animation frames draw nothing meanwhile)
       const sc0 = opt.scale, k = o.size > 1 ? Math.min(o.size, box.diskSnapMax().k) : 1;
@@ -8604,13 +11810,20 @@ void main(){
       // in the same task as the read back below, since after a wait the browser may have shown and cleared the drawing
       // buffer, and a read back that waits for a whole heavy frame holds the GPU's process for its whole time)
       const n = o.frames || ACC_SNAP;
-      snapLog = { k, scale: opt.scale, size: [canvas.width, canvas.height], bands: [], ms: [], band: [] };
+      // (round 11b: and as it goes, the pieces so far, the picture and the last piece (its time, the frame's kicks, the band's rows and
+      // kicks): whether a long snapshot is slow or stuck)
+      snapLog = { k, scale: opt.scale, size: [canvas.width, canvas.height], bands: [], ms: [], band: [], pieces: 0, sub: 0, last: null };
       // (round 9: each band's rows from the dearest rows so far, aiming at half of bandMs or the budget; see rowsAfter. The
       // first band no larger than the bands asked for or the guard's would be)
       const bm = o.bandMs || 250, aim = 0.5 * (gBudget > 0 ? Math.min(gBudget, bm) : bm), st = {};
+      // (round 11b) { stop }: a function asked between pieces (and pictures); true leaves the frame where it is, as a jump does
+      // (cancelJob: the picture before kept), and the snapshot gives null: an exporter's Cancel taken within a piece, not a picture
+      // (a picture of the visible look at 1080p is some 45 pieces)
+      const stopped = () => !!(o.stop && o.stop());
       for (let i = 0; i < n; i++) {
-        await gpuDone(); if (lost) return null;   // (the frames before it done first)
+        await gpuDone(); if (lost || stopped()) return null;   // (the frames before it done first)
         const t0 = performance.now();
+        snapLog.sub = i;
         adaptRows = Math.min(rowsAfter(st, null, 0, aim), Math.ceil(rH / snapBands)); adaptAim = aim;
         try { draw(); } finally { adaptRows = 0; adaptAim = 0; }
         let j = await firstBand('snapshot'); if (lost) return null;
@@ -8618,8 +11831,11 @@ void main(){
         for (;;) {
           await gpuDone(); if (lost) return null;
           const now = performance.now(), ms = now - b0; bMax = Math.max(bMax, ms); sum += ms; piece('snapshot', ms, j);
+          snapLog.pieces++; snapLog.last = { ms: Math.round(ms * 10) / 10, sub: i, kicks: j && j.split ? j.kicks || 0 : 0, band: j && j.bd ? [j.bd.y0, j.bd.y1, j.bd.k] : null };
+          if (stopped()) { cancelJob(); return null; }
           if (bandJob !== j) break;
-          if (j.split) { j.bandMs = (j.bandMs || 0) + ms; j.lastMs = ms; j.st = st; j.aim = aim; while (!lost && bandJob === j && !splitReady(j)) await new Promise((r) => setTimeout(r, 16)); if (lost) return null; if (bandJob !== j) break; }   // (round 10a: see scriptFrame)
+          // (round 11b: the band's query looked for at pieceWait's pace: every turn on the page's own clock, every 16 ms else)
+          if (j.split) { j.bandMs = (j.bandMs || 0) + ms; j.lastMs = ms; j.st = st; j.aim = aim; while (!lost && bandJob === j && !splitReady(j)) await pieceWait(16); if (lost) return null; if (bandJob !== j) break; }   // (round 10a: see scriptFrame)
           else j.rows = rowsAfter(st, j, ms, aim);
           bandStep(); b0 = performance.now();
         }
