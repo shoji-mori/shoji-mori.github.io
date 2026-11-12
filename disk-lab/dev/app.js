@@ -11,13 +11,13 @@ import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stash
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=0d9c61f083';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=3d62e469d3';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9-dev.43', RELEASED = '2026-11-12';
+const VERSION = '1.9-dev.44', RELEASED = '2026-11-12';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -466,8 +466,7 @@ let selfkW = '', selfncW = '';
 function glowRows(s) {
   const w = T().glow;
   const row = el('div', { class: 'glow-row' }, el('span', { class: 'glow-name', 'aria-hidden': 'true' }, w.name),
-    segmented([['star', w.star], ['self', w.self]], s.glow, setGlow, w.label));
-  if (s.glow !== 'self') return [row];
+    el('span', { class: 'glow-name' }, w.self));
   if (!glowEls.row) {
     Object.assign(glowEls, { name: el('label', { class: 'mp-name', for: 'selfK' }), input: el('input', { type: 'range', id: 'selfK', min: '0', max: '1000', step: '1', 'data-self-k': '1' }),
       val: el('span', { class: 'mp-val', 'aria-hidden': 'true' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-self-k-reset': '1', hidden: true }) });
@@ -500,11 +499,6 @@ function renderSelfnc(s) {
   if (!selfncW) selfncW = valW([...Array(101).keys()].map((i) => selfncText(selfncOf(10 * i))));   // (the widest value, as the opacity's)
   glowEls.ncVal.textContent = selfncText(v); glowEls.ncVal.style.minWidth = selfncW;
   glowEls.ncChip.hidden = v === SELFNC_DEF; glowEls.ncChip.textContent = w.kDefault; glowEls.ncChip.setAttribute('aria-label', w.ncReset);
-}
-function setGlow(k) {
-  if (!live()) return;
-  flogAdd({ k: 'set', glow: k }); keeping = keeping || calibrated;   // (as a look chosen: see setLook)
-  box.diskSet({ glow: k }); sync();
 }
 function setSelfk(k, drag = false) {
   if (!live()) return;
@@ -1984,7 +1978,6 @@ function linkFor(s) {
   u.searchParams.set('pl', s.planets.map(([a, on, m]) => a + ':' + on + ':' + m).join(','));
   if (s.cpdMdot > 0) u.searchParams.set('pmd', String(s.cpdMdot));   // (round 13e: the planets' accretion rate, M_J/yr, when not auto)
   if (opList(s).some((f) => f !== 1)) u.searchParams.set('op', opList(s).map((f) => String(f)).join(','));   // (round 18a: the see-through; round 18d: six factors)
-  if (s.glow === 'self') u.searchParams.set('glow', 'self');   // (round 18i: the model look's own light, and its opacity when not 2)
   if (Number.isFinite(s.selfk) && s.selfk !== SELFK_DEF) u.searchParams.set('selfk', String(s.selfk));
   // (round 18l: the own light's temperature when not the column's, and the surface's column when not 0.1; see SELFNC_RANGE)
   if (typeof s.selft === 'string' && s.selft !== 'colstar') u.searchParams.set('selft', s.selft);   // (round 19a: 'colstar' the default, 'col' until round 18n)
@@ -2217,8 +2210,8 @@ function stateFromLink() {
   // (round 18a: the see-through, four factors; a blank one is 1; the engine bounds them and passes over a list of another length.
   // Round 18d: six, with the jet's and the field lines'; four, as dev.23 to dev.25 wrote them, the engine takes with those at 1)
   if (q.has('op')) st.op = q.get('op').split(',').map((x) => (x.trim() === '' ? 1 : Number(x)));
-  // (round 18i: the model look's light, a name the engine knows, and its own light's opacity, which the engine bounds)
-  if (q.has('glow')) st.glow = q.get('glow');
+  // (round 18i: the own light's opacity, which the engine bounds; the model look's light is always its own emission now, see
+  // the owner's request of round 19: "星の光モードを消す")
   if (q.has('selfk')) st.selfk = q.get('selfk');
   // (round 18l: the own light's temperature, a name the engine knows, round 18k's ?selfint=1 as selft=int where no selft= is given; and
   // the surface's column, which the engine bounds)
@@ -2743,7 +2736,7 @@ box.addEventListener('disklost', (e) => {
 // link" writes it), which wins. Not kept: the clock's time and pause, the tap modes, the saved picture's size. After a
 // visit that ended with drawing stopped they are thrown away (see record). "Reset" (the top of the rail) forgets them and
 // puts everything back as at the first visit: the engine's own start (DEF0), the first place, the device's quality.
-const DEF_KEYS = ['mode', 'field', 'marks', 'asym', 'waves', 'ann', 'bg', 'look', 'coMode', 'coV', 'slice', 'sq', 'speed', 'planets', 'ms', 'cpdMdot', 'op', 'stars', 'glow', 'selfk', 'selfnc'];   // (round 18l: selfnc, the own light's surface column)   // (round 18i: glow, selfk, the model look's light and its own light's opacity)
+const DEF_KEYS = ['mode', 'field', 'marks', 'asym', 'waves', 'ann', 'bg', 'look', 'coMode', 'coV', 'slice', 'sq', 'speed', 'planets', 'ms', 'cpdMdot', 'op', 'stars', 'selfk', 'selfnc'];   // (round 18l: selfnc, the own light's surface column)   // (round 18i: selfk, the own light's opacity; round 19: glow removed, see the owner's request to drop the starlight mode)
 // (round 18l) the engine's state that a link carries and this device does not keep, which Reset all puts back to the engine's start:
 // the own light's temperature for comparisons, selft, which no control shows (see SELFNC_RANGE)
 const UNKEPT_KEYS = ['selft'];   // (round 18a: op, stars)   // (round 13e: cpdMdot, the planets' accretion rate)

@@ -7083,8 +7083,10 @@ void main(){
       opac: [1, 1, 1, 1, 1, 1],
       // (round 18a) the number of the background's stars, times the default's (STARS; see uStars), the state's stars
       stars: 1,
-      // (round 18i) the model look's light, 'star' or 'self', and the opacity of its own light, cm^2 per gram of gas (see SELF)
-      glow: 'star', selfk: SELF.DEF,
+      // (round 18i) the model look's light, 'star' or 'self' (round 19, the owner: "星の光モードを消す" — the starlight mode is
+      // withdrawn from the public page; 'self' is now the only one the page offers, though the engine still answers to 'star' if
+      // asked), and the opacity of its own light, cm^2 per gram of gas (see SELF)
+      glow: 'self', selfk: SELF.DEF,
       // (round 18l) the own light's temperature (SELF_T) and the surface's column Sigma_s, g cm^-2 (see SELF)
       selft: 'colstar', selfnc: SELF.NC_DEF
     };
