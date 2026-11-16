@@ -9090,7 +9090,10 @@ void main(){
       // the automatic exposure toward its goal (1 when off), eased; held through an outburst and a change of look
       if (!aeOn()) { aeGoal = 0; aeFresh = true; }
       // (eased over 0.15 s, 0.05 s while the view moves, so that the exposure keeps up with a flight toward the star)
-      if (!aeHeld()) { aeLn += (aeGoal - aeLn) * (reduce ? 1 : Math.min(1, dtR / (aeTrack && viewMoving() ? 0.05 : 0.15))); if (Math.abs(aeGoal - aeLn) < 1e-3) aeLn = aeGoal; }
+      // (round 20h: at once where the clock is stopped and the view at rest: a still's frames are its refinement's, a jump each
+      // anyway, and at the planet's place 1.5 s apart, so that the easing, two thirds a frame to within 0.001, held the next
+      // measurement back some 10 s)
+      if (!aeHeld()) { aeLn += (aeGoal - aeLn) * (reduce || (paused && !viewMoving()) ? 1 : Math.min(1, dtR / (aeTrack && viewMoving() ? 0.05 : 0.15))); if (Math.abs(aeGoal - aeLn) < 1e-3) aeLn = aeGoal; }
       if (!coOn() && !coPending && coSavedKey !== coKey) { coGoal = 0; coFresh = true; }
       coLn += (coGoal - coLn) * (reduce ? 1 : Math.min(1, dtR / 0.15)); if (Math.abs(coGoal - coLn) < 1e-3) coLn = coGoal;
       // (the star itself keeps its brightness: far brighter than the disk, it stays white whatever the exposure)
@@ -9443,7 +9446,10 @@ void main(){
         if (aeReady) {   // (copied at the start of the frame, in aeRead)
           aeReady = false;
           // (a reading taken while the view moved is used whatever the view is by now: the exposure follows)
-          if (aeKindUsed === 'model' && aeNow && (aeGenUsed === aeGen || aeTrack)) aeAim(aePx, aeLnUsed, aeTrack);
+          // (round 20h: but not once the view has stopped: the still's own frame is measured next. At the planet's place a moment of
+          // motion 2.4 s after arriving sent a frame at half scale whose reading, back 2 s later with the view at rest, was a third
+          // dimmer than the picture (its brightest cell 0.43 against 0.64), and the exposure went to 2.7 times for some 30 s)
+          if (aeKindUsed === 'model' && aeNow && (aeGenUsed === aeGen || aeTrack) && !(aeTrack && !moving)) aeAim(aePx, aeLnUsed, aeTrack);
           else if (aeKindUsed === 'co' && coNow && coGenUsed === coGen) coAim(aePx, aeLnUsed);
         }
         // (measured on the first frame of a picture, drawn without the jitter of a still's refinement, so that a state
