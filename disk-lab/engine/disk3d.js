@@ -3009,8 +3009,9 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     // over the disk's surface the column from above is thin, so that the gas's own light takes that depth too; the interior's with the
     // state's selft 'int'), into the ray's T_b with the gas's (gSelfJ), its streamers as in its light; its absorption at the same K,
     // grey; both by its see-through. wl, the light it gives the display per unit length, by the brightness's slope where it is faint
-    // (SELF_WL), for the march's fine steps; its streamers (windTurb) evaluated past the same gate as its light's, 10 times that light
-    // (in one place for both lights: twice, the default picture was some 15 % dearer on the GPU, its own light's paths unused)
+    // (SELF_WL), for the march's fine steps; its streamers (windTurb) evaluated past the same gate as its light's, 2e-4 of that light
+    // (round 20p: 10 times it before, which evaluated them where the wind gives under 0.03 K an au; in one place for both lights: twice,
+    // the default picture was some 15 % dearer on the GPU, its own light's paths unused)
     bool wSelf = false;
     float gw = G_WIND * uWindK, rise = WIND_RISE, lit, kw = wk * uOpac.z, jT = 0.0;
 #ifndef SELF_OLD
@@ -3021,7 +3022,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       kw *= uSelfK.y * rho * uComp.w;
       jT = kw * tempWind(lnR, zh, r, uSelfT.x < -0.5 ? 30.0 : xs);
 #endif
-      wl = jT * SELF_WL; lit = 10.0 * wl;
+      wl = jT * SELF_WL; lit = wl;
     } else {
 #ifdef FULL
     // (round 8: in their cylinder of before, with the wind's fade of before toward its top and side; round 19a continued:
@@ -5633,6 +5634,13 @@ void main(){
   // veiled the far views in a grey haze, 15 to 20 levels in 255, the disk's contrast lost), the state's selfkp, selfkw and selfke, within
   // K_MIN to K_MAX as the gas's selfk (uSelfK in the GLSL; DESIGN.md section 57.16)
   const SELF = { K_MIN: 0.001, K_MAX: 100, DEF: 0.03, DEF_P: 0.7, DEF_W: 0.03, DEF_E: 0.01, SIGMA1: 1700, G: SELF_LOOK.G, NC_MIN: 0.001, NC_MAX: 10, NC_DEF: 0.1 };
+  // (Round 20p, the owner of the see-through: "the gas's light transparent in proportion to the bar") With the own light a component's
+  // see-through blends T_b (seeGas and the rest), and the display is about T_b's logarithm (selfLight): half of it showed only some 20 %
+  // dimmer. So there the bar's share f is mapped to T_b's, (B^f - 1) / (B - 1) with B = 1 + 30 K / TK (21): a gas at 30 K then shows about
+  // half as bright at 0.5 (10 K 0.38, 100 K 0.61), and 0 and 1 are kept. A fade in the display's light itself, T_b gathered without the gas
+  // apart, cost the default picture on the GPU, unused (DESIGN.md section 57.18)
+  const SEE_SELF_B = 1 + 30 / SELF_LOOK.TK;
+  const seeSelf = (f) => (Math.pow(SEE_SELF_B, f) - 1) / (SEE_SELF_B - 1);
   const SELF_KS = ['selfk', 'selfkp', 'selfkw', 'selfke'];   // (round 20n: the state's opacities, the gas's, the pebbles', the wind's, the envelope's)
   // (round 18l) the own light's temperature, the state's selft (uSelfT.x in the GLSL, see selfX): 'col' the column depth's (the
   // default; round 18n: with the surface only where it rises outward, selfW), 'colstar' round 18m's (the column's depth with the
@@ -6978,7 +6986,7 @@ void main(){
       const kp = compAmp[2] * compAmp[2] * (3 - 2 * compAmp[2]);   // (round 7: with the pebbles off, they hide nothing)
       // (round 20n: with the own light, their own opacity, as the picture's, see uSelfK)
       // (round 20n: their see-through a transparency, as the picture's plane, seeB)
-      const f = opt.opac[1];
+      const f = selfOn() ? seeSelf(opt.opac[1]) : opt.opac[1];   // (round 20p: as the picture's, see seeSelf)
       return f * Math.exp(-kp * (selfOn() ? opt.selfkp * SELF.SIGMA1 : MODEL.K_D) * MODEL.SD0 * SigmaJS(Rc) * pebEdge(Rc) * pebbleAll(Rc) * (0.5 + 0.5 * ice) / Math.max(mu, 0.03)) + (1 - f);   // (round 18a: their see-through)
     }
     // the starlight scattered toward the observer at P (relative to 90 degrees), behind the sheet or not (written
@@ -9434,7 +9442,9 @@ void main(){
       // (round 18a: the see-through, see uOpac. Round 20: with the own light the gas's is 1, as kappa alone sets its opacity: a factor on
       // its extinction alone would lift its brightness temperature to 1 / factor of its temperature where it is thick)
       // (round 20n: with the own light too, a transparency now, not a factor on the extinction that broke Kirchhoff's law: see seeB)
-      gl.uniform4f(U.uOpac, opt.opac[0], opt.opac[1], opt.opac[2], opt.opac[3]);
+      // (round 20p: with the own light, mapped so that the display fades in proportion, see seeSelf)
+      const opS = selfOn() ? opt.opac.slice(0, 4).map(seeSelf) : opt.opac;
+      gl.uniform4f(U.uOpac, opS[0], opS[1], opS[2], opS[3]);
       gl.uniform1f(U.uStars, opt.stars);   // (round 18a: the background's stars, see uStars)
       gl.uniform1f(U.uPebH, opt.pebH);   // (round 15b: the pebble layer's thickness, see uPebH)
       gl.uniform2f(U.uExcl, exclOn ? 1 : 0, envLnRho0); gl.uniform1f(U.uCoEnv, opt.coEnv ? envAmp * envAmp * (3 - 2 * envAmp) : 0);   // (round 15b: see EXCL, coGas)
