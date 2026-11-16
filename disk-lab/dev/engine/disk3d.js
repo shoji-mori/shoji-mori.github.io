@@ -2158,10 +2158,14 @@ const float G_LIT_HG = 0.55, G_LIT = 0.3, LIT_DARK = 0.6;
 // one opacity leaves as it was; seen edge-on the band's inner 10 au still needs it, now that the far side's lit surface no longer
 // shows through the disk there: the midplane at the star's column 0.18 on the stretch with it, 0.26 with 0.2 and 0.35 without, and
 // the band down to 0.04 from 17 au with it, 28 au with 0.2 and 34 au without. DESIGN.md section 48)
+// (Round 20m, the owner: "in the gas's starlit look, edge-on should be a dark lane") 0.3 -> 0.4: none of the glow left where the
+// diffuse light does not reach either (1 - LIT_DARK - LIT_DEEP = 0). Its tenth there, over the edge-on path through the shadowed
+// midplane, still reached its thick limit as a thin bright bar between the two nebulae, and the exposure of a dim edge-on view (up
+// to 8 times since round 19a) made it plain; the glow within the diffuse light's reach (0.4 of the lit) is as it was
 #ifdef SKIN_THRU
 const float LIT_DEEP = 0.0;
 #else
-const float LIT_DEEP = 0.3;
+const float LIT_DEEP = 0.4;
 #endif
 // (Round 13a, the owner: "show the gas in proportion to its density") The gas body's glow is G_GAS K_G rho, in proportion to
 // its density as its extinction K_G rho is, and nothing else beside the starlight's LIT_DARK above. Until round 13 it was
@@ -4509,6 +4513,16 @@ void main(){
   vec2 spx = (vec2(sv.x / (sv.z * uTanHalf * aspect), sv.y / (sv.z * uTanHalf)) * 0.5 + 0.5) * uRes;
   float dpx = length(gFc - spx) / uPx;
   vec3 starGlow = STARCOL * (40.0 * exp(-dpx * dpx / 1.2) + 0.4 * exp(-dpx / 2.0) + 0.02 / (1.0 + dpx * dpx / 50.0) + STAR_HALO / (1.0 + dpx * dpx / 80.0) / (1.0 + roLen * roLen / 22500.0)) * uStar;
+  // (Round 20m, the owner: "edge-on, a dark lane") In the model look lit by the star, the star is hidden from where its light does not
+  // reach: through the column from the star toward the camera that shades the disk, the table's (lnTauStar along the camera's
+  // direction from the star, taken within the table's reach, 150 au: the angle alone sets it). The march's own extinction is the
+  // model look's translucent one, and the star, far brighter than the disk, still showed white through the midplane edge-on, in
+  // the middle of the lane. From below the disk's surface cone (some 0.27 rad beyond 30 au) the star is now hidden, as in an
+  // edge-on disk's scattered light; from above it, as in the first view, it is as before
+  // (not with the cut open: the part cut away is what stood between, uSlice)
+  // (from afar only, where the star is a point: within 1 to 3 au its sphere and the magnetosphere are drawn, by the march, as before)
+  float starOcc = 1.0;
+  if (uLook == 0 && uSelf.x <= 0.0 && uSlice == 0 && roLen > 1.0) { float Rc = length(ro.xy), kc = min(1.0, 150.0 / max(Rc, 1e-3)); starOcc = mix(1.0, exp(-exp(lnTauStar(vec3(ro.xy * kc, ro.z * kc)))), smoothstep(1.0, 3.0, roLen)); starGlow *= starOcc; }
   float tStar = max(-dot(ro, rd), 0.0);
 
   // the cutaway: from a camera in the part cut away the ray enters the kept part at tCut, where it meets a cut face
@@ -4919,7 +4933,11 @@ ${BG.LAMPS.map(([x, y, z, , k]) => `      { float t = acos(clamp(dot(dSky, norma
     // as they are (their share reckoned without the compensation, so that it does not grow as the exposure falls), nor a
     // cut face, a picture of a quantity laid over in display values)
     float lC = cL / uStarK, lT = dot(col, LUMW) - cL + lC;
-    float aeW = (1.0 - face.a) * (1.0 - clamp(lC / max(lT, 1e-9), 0.0, 1.0));
+    // (round 20m) the weight as if the star were not hidden (starOcc): the cells about it stay out of the exposure's measurement as
+    // they were. Taken in with the star hidden, the bright inner disk there became the brightest cell and the exposure of afar fell
+    // from 8 to 4.6 times, the envelope dimmer for no change of its own
+    float lCw = cL / max(starOcc, 1e-6) / uStarK, lTw = lT - lC + lCw;
+    float aeW = (1.0 - face.a) * (1.0 - clamp(lCw / max(lTw, 1e-9), 0.0, 1.0));
     col = col * uExposure + tr * bg + sky;
     // asinh stretch of the luminance, as for astronomical images of high dynamic range; hue is kept and
     // channels that run past white roll off toward it
