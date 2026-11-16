@@ -17,7 +17,7 @@ const ENGINE_SRC = 'engine/disk3d.js?v=7245c2c5f5';   // ?v= the first ten chara
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9.7', RELEASED = '2026-11-16';
+const VERSION = '1.9.8', RELEASED = '2026-11-16';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -313,6 +313,7 @@ function renderPlace() {
 function renderAll() {
   const w = T();
   document.querySelectorAll('[data-aria-en]').forEach((e) => e.setAttribute('aria-label', e.dataset[L() === 'ja' ? 'ariaJa' : 'ariaEn']));
+  document.querySelectorAll('[data-title-en]').forEach((e) => { e.title = e.dataset[L() === 'ja' ? 'titleJa' : 'titleEn']; });   // (round 20l: Reset all's list, over the button)
   $('prev').setAttribute('aria-label', w.prev); $('next').setAttribute('aria-label', w.next);
   $('route').setAttribute('aria-label', w.ariaRoute);
   lookGroup.setAttribute('aria-label', L() === 'ja' ? '見え方' : 'Look');
@@ -734,10 +735,12 @@ const compEls = COMPS.map((c) => {
   for (const o of c.opts || []) box_.append(el('button', { type: 'button', class: 'toggle small', 'data-opt': o, 'aria-pressed': 'false' }));
   // (round 13e) the planets' accretion rate, which sets their own disks (see cpdRowSync)
   if (c.planets) box_.append(el('div', { class: 'cpd-mdot' }, el('span', { class: 'cpd-mdot-k', 'data-cpd-k': '' }), el('span', { class: 'cpd-mdot-v', 'data-cpd-v': '' }),
-    el('input', { type: 'range', min: '0', max: '1000', step: '1', 'data-cpd-mdot': '' }), el('button', { type: 'button', class: 'chip quiet', 'data-cpd-auto': '', hidden: true })),
-  el('p', { class: 'rail-note cpd-note', 'data-cpd-note': '' }));
+    el('input', { type: 'range', min: '0', max: '1000', step: '1', 'data-cpd-mdot': '' }), el('button', { type: 'button', class: 'chip quiet', 'data-cpd-auto': '', hidden: true })));
   if (c.key === 'wind') box_.append(wbRow());   // (round 14a: its brightness in the model look)
-  if (c.planets) box_.append(el('p', { class: 'rail-note planets-note' }));
+  // (round 20l) the planets' two notes, their own disks' and where they may stand, behind "More" (ten lines of the rail open by
+  // default, the planets being on at first); a planet set where it cannot stand still says why (noRoom)
+  if (c.planets) box_.append(el('details', { class: 'note-more' }, el('summary', {}, el('span', { class: 'en', lang: 'en' }, 'More'), el('span', { class: 'ja', lang: 'ja' }, 'くわしく')),
+    el('p', { class: 'rail-note cpd-note', 'data-cpd-note': '' }), el('p', { class: 'rail-note planets-note' })));
   // (round 13a) beside the toggle, its colours (shown in the model look once the engine has started) and the chip back to the
   // default (shown while one of them is changed). (Round 18c: the see-through's mark and slider after them.) (Round 18d) One small
   // round swatch instead, which opens the component's palette (see the palettes below): its colours' rows and its see-through's.
