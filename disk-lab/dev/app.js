@@ -17,7 +17,7 @@ const ENGINE_SRC = 'engine/disk3d.js?v=be37d90b10';   // ?v= the first ten chara
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9.1-dev.50', RELEASED = '2026-11-16';
+const VERSION = '1.9.2-dev.51', RELEASED = '2026-11-16';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -2723,8 +2723,9 @@ function settingsNow() {
   const s = S();
   // (round 13a: col, the model look's colours as a link writes them, '' for the defaults; see COL-LINK)
   // (round 14a: mp, the model's parameters as a link writes them, '' for the defaults, see MP-LINK; wb, the wind's brightness)
+  // (round 20f: sk0, the own light's default opacity of the day, see keptState)
   return talkHeld({ v: 1, place: PLACES[placeI].id, ...pick(s, DEF_KEYS), ...pick(s, VIEW_KEYS), quality: qChosen ? quality : null, col: colDef ? colToLink(cols, colDef) : '',
-    mp: parDef ? mpToLink(params, parDef) : '', wb: windGain !== 1 ? mpNum(windGain) : '' });   // (round 11a: see talkHeld)
+    mp: parDef ? mpToLink(params, parDef) : '', wb: windGain !== 1 ? mpNum(windGain) : '', sk0: SELFK_DEF });   // (round 11a: see talkHeld)
 }
 function keepNow() {
   clearTimeout(keepTimer); keepTimer = 0;
@@ -2737,6 +2738,10 @@ addEventListener('pagehide', keepNow);
 function keptState() {
   if (!saved) return null;
   const st = pick(saved, [...DEF_KEYS, ...VIEW_KEYS]);
+  // (round 20f) The own light's opacity kept at the default of its day follows the default: every visit keeps it, moved or not, so a
+  // new default (0.03 since round 20e) would not reach a device that had been here before. The settings say their day's default
+  // (sk0) since round 20f; those kept before, by 1.9 and 1.9.1, do not, and 1.9's was 2 (1.9.1 kept 1.9's 2 back as it found it)
+  if (st.selfk === (Number.isFinite(saved.sk0) ? saved.sk0 : 2)) delete st.selfk;
   if (st.mode != null) st.mode = linkMode(Number(st.mode));
   if (Array.isArray(st.planets)) st.planets = st.planets.filter((p) => Array.isArray(p)).map((p) => p.map(Number));
   st.place = placeById(saved.place) ? saved.place : null;
