@@ -8525,6 +8525,13 @@ void main(){
       const brightN = blown > AE.BLOWN || e > AE.DEAD, over = !brightN && lnUsed > 0 && ep > band;
       const darkN = !brightN && lnUsed < 0 && quiet, dim = !brightN && !over && lnUsed >= 0 && lnUsed < aeUp && ep < -band && quiet;
       const bright = brightN || over, dark = darkN || dim;
+      // (round 20i) Home: under 1, neither too bright nor too dark there, at rest, and 1 not yet found too bright for this view
+      // (aeHi): back to 1 where the mean level there would stay within half the dead band (it answers about a fifth of the exposure,
+      // in ln) with little blown. The exposure stays under 1 only where the picture needs it: the bright frames of the flight to
+      // the star's place had left it at 0.78 there (its mean 0.447, within the band's other side) where a fresh start and the
+      // stills have 1 (0.481). Found too bright at 1 after all, it goes down and aeHi keeps it from coming back: no hunting
+      const home = !track && !brightN && !darkN && lnUsed < 0 && aeHi > 0 && e - 0.2 * lnUsed < 0.5 * AE.DEAD && blown < 0.3 * AE.BLOWN;
+      if (home) { aeTries++; aeGoal = 0; aeFresh = false; return true; }
       if (!bright && !dark) { aeFresh = true; return false; }
       const stepOf = () => Math.min(AE.STEP, AE.GAIN * (brightN ? Math.max(e, 0) + 10 * Math.max(blown - AE.BLOWN, 0) : over ? ep : darkN ? -e : -ep));
       const gLo = over || dim ? 0 : Math.log(AE.MIN), gHi = darkN ? 0 : aeUp;   // (the range the rule at work may move it in)
