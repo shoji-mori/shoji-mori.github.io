@@ -534,6 +534,11 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   .tool{height:40px}
   .route button{padding:9px 12px}
   .segmented button{padding-top:9px;padding-bottom:9px}
+  /* (round 20j) the bar's targets 45 px tall to the finger, the text buttons 42 wide: padding with an equal negative margin, so
+     that nothing moves and none overlaps another (the bar is 48 px; the text buttons stand 16 px apart, 22 on a wide screen) */
+  .mark .home{padding:15px 0;margin:-15px 0}
+  .bar .text-button{padding:12px 8px;margin:-6px -8px}
+  .lang-switch button{padding-top:13px;padding-bottom:13px;margin-top:-7px;margin-bottom:-7px}
 }
 /* a short phone (or a phone on its side): let the page scroll so that the stage keeps its size */
 @media (max-height:560px){
