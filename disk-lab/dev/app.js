@@ -17,7 +17,7 @@ const ENGINE_SRC = 'engine/disk3d.js?v=b6df2cb55b';   // ?v= the first ten chara
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.10.0-dev.62', RELEASED = '2026-11-17';
+const VERSION = '1.10.1-dev.63', RELEASED = '2026-11-17';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -66,6 +66,7 @@ const SPIN_DEG = 0.004 * 180 / Math.PI;   // the engine's slow turn of the view 
 let mode = 'loading';           // 'loading' | 'live' | 'still'
 let stillReason = null;
 let placeI = 0;
+let ptKey = '';   // (round 20o: the lesson text's measured height, by language and width, see placeTextHeight)
 let target = null;              // the engine state of the place arrived at, and the clock then (see away)
 let gov = null;
 let burstUntil = 0;
@@ -313,7 +314,37 @@ function renderPlace() {
   });
   $('prev').disabled = placeI === 0; $('next').disabled = placeI === PLACES.length - 1;
   if (mode === 'still') poster.alt = w.title;
+  placeTextHeight();
 }
+// (Round 20o) The lesson's text a steady height: the tallest of the nine at this width and in this language, measured off screen, so
+// that stepping through the highlights no longer resizes the stage, and the picture with it (74, 99 and 123 px at 920 px wide: the
+// stage went 499, 474, 449 px tall from step to step). Again after a resize, the fonts' arrival, and where the dock is first shown
+function placeTextHeight() {
+  const wd = placeText.clientWidth, key = L() + '|' + wd, host = placeText.parentNode;
+  if (!wd || !host || key === ptKey) return;
+  ptKey = key;
+  const probe = el('p', { class: placeText.className, 'aria-hidden': 'true' });   // (in the card, so that its language's styles hold)
+  probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;min-height:0;width:${wd}px`;
+  host.append(probe);
+  let h = 0;
+  for (const p of PLACES) { const t = T().places[p.id].text; probe.textContent = typeof t === 'function' ? t(placeNums()) : t; h = Math.max(h, probe.offsetHeight); }
+  probe.remove();
+  placeText.style.minHeight = h > 0 ? h + 'px' : '';
+}
+addEventListener('resize', () => { ptKey = ''; requestAnimationFrame(placeTextHeight); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { ptKey = ''; placeTextHeight(); });
+// (round 20o) in the lesson, the arrow keys step through the highlights while the focus is in it (on the stage they turn the view),
+// the focus following on the route; Esc closes it on a wide screen, as its button does
+$('dock').addEventListener('keydown', (e) => {
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    const i = placeI + (e.key === 'ArrowRight' ? 1 : -1);
+    if (i < 0 || i >= PLACES.length) return;
+    e.preventDefault(); goPlace(i); routeButtons[placeI].focus({ preventScroll: true });
+  } else if (e.key === 'Escape' && lab.dataset.tab === 'tour' && !matchMedia('(max-width: 860px)').matches && lab.dataset.state !== 'still') {
+    e.preventDefault(); setTab('explore'); $('learnOpen').focus({ preventScroll: true });
+  }
+});
 
 function renderAll() {
   const w = T();
@@ -2253,6 +2284,7 @@ function stateFromLink() {
 function setTab(t) {
   lab.dataset.tab = t === 'tour' ? 'tour' : 'explore';
   pressedTab();
+  if (t === 'tour') requestAnimationFrame(placeTextHeight);   // (round 20o: the lesson's steady height, measured once shown)
 }
 function pressedTab() {
   const tour = lab.dataset.tab === 'tour';
