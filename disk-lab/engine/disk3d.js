@@ -1919,7 +1919,7 @@ uniform float uLit;     // (round 8) the model's look lit by the star (see G_LIT
 // instead") The model look's light (the state's glow, SELF in the script): the starlight as until now (uSelf.x 0), or the gas's own
 // thermal light (x > 0). Then the gas with its small grains glows at its own temperature (tempAt: the laws and the depth the cut's
 // Temperature takes) through one grey opacity, for its emission and its absorption alike (Kirchhoff): j = K rho S(T), alpha = K
-// rho, x = K = kappa Sigma(1 au), kappa the state's selfk in cm^2 per gram of gas (2 by default: 3400 in Sigma's units, 9.2 times
+// rho, x = K = kappa Sigma(1 au), kappa the state's selfk in cm^2 per gram of gas (2 by default until round 20, 0.03 since: 3400 and 51 in Sigma's units; 2 was 9.2 times
 // K_OCC). S(T) = T, the long-wavelength (Rayleigh-Jeans) brightness, so that where the gas is thick the pixel's light is the
 // temperature where the line of sight reaches tau = 1 and where it is thin its column times its temperature (the bolometric T^4
 // shown as T^1/4 lifted the thin warm atmosphere to tau^1/4 of its temperature, 0.18 at tau = 1e-3: a veil over the whole
@@ -2353,22 +2353,27 @@ void envLight(vec3 p, vec3 rd, out vec3 em, out vec3 ex){
 #endif
 }
 
-// the disk map at (ln R, φ): factors of the gas density, the skin brightness, the pebble density and the starlight
+// the disk map at (ln R, φ): factors of the gas density, the skin brightness, the pebble density and the starlight. (Round 20)
+// Beyond the map the neutral 1, approached over its last 2% in ln R (52 to 60 au), as eddies() is beyond its texture: the map's
+// last column, clamped, was not neutral where the turbulence's pattern was resolved (its cells over a render pixel's footprint: the
+// pattern fades below it), and carried its factors outward along their azimuths, a wedge of the lit tail out to the cylinder's
+// edge (the place afar at 2400 px, 7 times the exposure; not at 1280)
 #ifdef TURB3D_OFF
-vec4 diskMap(float lnR, float phi){ return texture(uDiskMap, vec2((lnR - LNR_MIN) / LNR_SPAN, phi / TAU + 0.5)); }
+vec4 diskMap(float lnR, float phi){ float u = (lnR - LNR_MIN) / LNR_SPAN; return mix(texture(uDiskMap, vec2(u, phi / TAU + 0.5)), vec4(1.0), smoothstep(0.98, 1.0, u)); }
 #else
-vec4 diskMap(float lnR, float phi){ return texture(uDiskMap, vec3((lnR - LNR_MIN) / LNR_SPAN, phi / TAU + 0.5, 0.0)); }
+vec4 diskMap(float lnR, float phi){ float u = (lnR - LNR_MIN) / LNR_SPAN; return mix(texture(uDiskMap, vec3(u, phi / TAU + 0.5, 0.0)), vec4(1.0), smoothstep(0.98, 1.0, u)); }
 // (Round 18m) The turbulence's vertical structure (see turbZPlanes, TURBZ in the script): the factor of the gas's density at (ln R, φ,
 // z/H) beyond the thermally ionized disk, from the disk map's planes on its side of the midplane (layer 1 above, 2 below: z cells 0
 // to 3, TZ_CZ per H; ln R from LNZ_MIN over LNZ_SPAN, to 120 au), between the two around |z/H| as the 3D noise goes (smoothstep),
 // the last held above 3 / TZ_CZ H. The disk map's r has the inner disk's share of the column-wide pattern alone
 const float TZ_CZ = ${G(TURBZ.CZ)}, LNZ_MIN = ${G(+Math.log(TURBZ.R0).toFixed(6))}, LNZ_SPAN = ${G(+Math.log(TURBZ.R1 / TURBZ.R0).toFixed(6))};
 float turbZ(float lnR, float phi, float zh){
-  vec4 f = texture(uDiskMap, vec3((lnR - LNZ_MIN) / LNZ_SPAN, phi / TAU + 0.5, zh >= 0.0 ? 1.0 : 2.0));
+  float u = (lnR - LNZ_MIN) / LNZ_SPAN;
+  vec4 f = texture(uDiskMap, vec3(u, phi / TAU + 0.5, zh >= 0.0 ? 1.0 : 2.0));
   float c = min(abs(zh) * TZ_CZ, 2.999), i = floor(c), t = c - i;
   t = t * t * (3.0 - 2.0 * t);
   vec4 k = vec4(0.0, 1.0, 2.0, 3.0);
-  return dot(f, (1.0 - t) * vec4(equal(k, vec4(i))) + t * vec4(equal(k, vec4(i + 1.0))));
+  return mix(dot(f, (1.0 - t) * vec4(equal(k, vec4(i))) + t * vec4(equal(k, vec4(i + 1.0)))), 1.0, smoothstep(0.98, 1.0, u));   // (round 20: neutral beyond, as diskMap)
 }
 #endif
 // the eddies at (ln R, φ, z/H): the factor of the gas density, and the extra optical depth toward the star that they add
@@ -2665,7 +2670,17 @@ bool gDiskOff = false;
 // every step of the march (it is smooth on that scale): gEnvAcc, the length marched since it was last sampled; at a
 // sample its emission and extinction stand for that whole length
 float gEnvAcc = 0.0;
-float envStep(float r){ return max(1.5, 0.08 * r); }
+// (Round 20) gEnvThr: this pixel's share of envStep at which it samples (0.5 to 1.5, its own noise, set in main): at one share for
+// every pixel the samples of neighbouring rays fell at the same places, and the envelope's light, steep where its column shades it,
+// came out as bands (arcs under the disk from 120 au); spread so, they are a noise that the still's frames take away
+float gEnvThr = 1.0;
+// (Round 20) 0.02 r beyond 75 au (0.08 r until now): sampled every 0.08 r, the samples of neighbouring pixels fell at the same
+// places along their rays, from the cylinder's top or side where the count began, and the envelope's light between them, steep where
+// its column shades it (ENV_M), came out as bands: rings about the star seen from the pole, stripes across the cavity from the side,
+// alike at any number of the march's steps. Beyond 60 au the march's own step is 0.05 r, so out there it is sampled at each step,
+// whose places the march's jitter spreads; within 75 au it is as before (the far views' GPU time unchanged: 19 and 23 ms at scale
+// 0.5 against 20 and 25)
+float envStep(float r){ return max(1.5, 0.02 * r); }
 // (round 10a) The march in kicks (SPLIT in the script; DESIGN.md, section 23): the work a step of each loop counts against a
 // kick's budget, in steps of the march (KW_: the envelope's steps outside the cylinder, the star's light with the
 // magnetosphere's columns (magLight), a lobe of the jet, the planet's light; from their costs on the M1 Max, rounded up);
@@ -2945,7 +2960,9 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
   // the envelope, where it reaches into the marched cylinder (lit unless in the disk's shadow): every envStep along the ray
   if (uEnv > 0.0 && uLook <= 1) {
     gEnvAcc += ds;
-    if (gEnvAcc >= envStep(length(p))) { vec3 e1, e2; envLight(p, rd, e1, e2); float k = gEnvAcc / max(ds, 1e-6); em += e1 * k; ex += e2 * k; gEnvAcc = 0.0; }
+    // (round 20: taken at the middle of the length it stands for, not at its end: the envelope's light falls off from the star, and
+    // the end's value was too low going away from it and too high coming toward it, unlike the march outside the cylinder)
+    if (gEnvAcc >= envStep(length(p)) * gEnvThr) { vec3 e1, e2; envLight(p - rd * (0.5 * gEnvAcc), rd, e1, e2); float k = gEnvAcc / max(ds, 1e-6); em += e1 * k; ex += e2 * k; gEnvAcc = 0.0; }
   }
   x = xs;   // carry the true endpoint into the next continuum segment
 }
@@ -4556,6 +4573,7 @@ void main(){
   bool inside = b.y > b.x && !faceOpaque;
   bool cyl = b0.y > b0.x && !faceOpaque;   // (the cylinder met: its stretches in the part cut away hold the wind, cutWind)
   float jitter = fract(52.9829189 * fract(0.06711056 * gFc.x + 0.00583715 * gFc.y) + uJit.z);   // interleaved gradient noise: finer grain than a hash
+  gEnvThr = 0.5 + fract(52.9829189 * fract(0.00583715 * gFc.x + 0.06711056 * gFc.y) + uJit.z + 0.5);   // (round 20: see gEnvThr)
 #ifdef FULL
   if (uLook == 4) {
     // the CO picture over a dark sky, as dark as the other looks' (no stars: a map of the line)
@@ -4822,6 +4840,9 @@ void main(){
       if (!inCut) break;   // (the march ended, or the kick's work is done)
       }
     }
+    // (round 20) the envelope's length marched since its last sample, at the march's end: left out until now, it was the more of a ray's
+    // envelope the less of the cylinder the ray crossed, and the cylinder's top showed as a line from afar (600 au)
+    if (marchDone && uEnv > 0.0 && uLook <= 1 && gEnvAcc > 0.0) { vec3 e1, e2; envLight(ro + rd * (t - 0.5 * gEnvAcc), rd, e1, e2); vec3 tau = e2 * gEnvAcc; col += tr * e1 * gEnvAcc * transferWeight(tau); tr *= exp(-tau); gEnvAcc = 0.0; }
     if (marchDone) ph = PH_BACK;
   }
   // (4) what the march left: the midplane's crossing, the planets' points of light and the jet's lobes behind its end, and
@@ -5441,7 +5462,13 @@ void main(){
   // scale), NC_DEF by default: the column above round 18k's surface tau* = 1 is 0.05 g cm^-2 at 1 au, 0.11 at 10 au, 0.12 at 30
   // au, and with 0.1 the hot layer's lower edge is within 0.2 H of that surface from 1 to 40 au, 0.3 H under it at 0.1 au (DESIGN.md
   // section 53)
-  const SELF = { K_MIN: 0.001, K_MAX: 100, DEF: 2, SIGMA1: 1700, G: SELF_LOOK.G, NC_MIN: 0.001, NC_MAX: 10, NC_DEF: 0.1 };
+  // (Round 20, the owner: "it is up to you; make the best design you can") DEF 0.03 (2 until now): the own light is shown as its
+  // long-wavelength (Rayleigh-Jeans) brightness temperature, which holds at millimetre wavelengths, where small grains mixed with the
+  // gas take some 0.02 to 0.03 cm^2 per gram of gas (2 to 3 per gram of dust, a hundredth of the mass); 2 is a far-infrared
+  // opacity, where the law does not hold for gas at tens of kelvin. At 2 the disk was thick everywhere: a grey surface temperature
+  // in the first view, the planet's disk hidden, a drum with a cut edge from afar. At 0.03 the inner disk is thick and the outer thin:
+  // the gap, the planet's disk and the taper show, and edge-on the lit surfaces' warm layers frame the cold midplane (DESIGN.md 57.8)
+  const SELF = { K_MIN: 0.001, K_MAX: 100, DEF: 0.03, SIGMA1: 1700, G: SELF_LOOK.G, NC_MIN: 0.001, NC_MAX: 10, NC_DEF: 0.1 };
   // (round 18l) the own light's temperature, the state's selft (uSelfT.x in the GLSL, see selfX): 'col' the column depth's (the
   // default; round 18n: with the surface only where it rises outward, selfW), 'colstar' round 18m's (the column's depth with the
   // starlight's shadow), 'star' round 18k's (the depth toward the star, P), 'int' round 18j's (the interior's)
@@ -6787,10 +6814,10 @@ void main(){
     }
     // the starlight scattered toward the observer at P (relative to 90 degrees), behind the sheet or not (written
     // without Math.hypot, which is slow, as these run for every sample of every line in every frame)
-    function seen(P) {
+    function seen(P, e = 1) {
       const vx = cam[0] - P[0], vy = cam[1] - P[1], vz = cam[2] - P[2];
       const mu = (P[0] * vx + P[1] * vy + P[2] * vz) / ((Math.sqrt(P[0] * P[0] + P[1] * P[1] + P[2] * P[2]) || 1e-3) * Math.sqrt(vx * vx + vy * vy + vz * vz));
-      return phaseWind(mu) * sheetT(P);
+      return (e === 1 ? phaseWind(mu) : Math.pow(phaseWind(mu), e)) * sheetT(P);
     }
     const fx = (v) => Math.round(v * 10);
     const TRACE_T = 0.3;   // (the arrows' moment: where the gas was TRACE_T earlier gives their direction and speed)
@@ -6839,6 +6866,11 @@ void main(){
       // (and no line is drawn across the star's image: within FIELD_WIN[0] px of it on the screen none, in full from FIELD_WIN[1];
       // the lines are a drawing laid over the picture, and the light source shows through its window)
       const qS = project([0, 0, 0]), winK = FIELD_LOD_ON && qS[2] > zN ? (q) => ss(FIELD_WIN[0], FIELD_WIN[1], Math.hypot(q[0] - qS[0], q[1] - qS[1])) : () => 1;
+      // (Round 20, the owner: "streaks of light" in a view from 167 au at 14 degrees: the lines in front of the star, lit as the wind's
+      // scattering has it, forward and up to 8 times their light at 90 degrees, swept across the foreground as bright arcs.) The lines
+      // take the square root of the wind's phase function: the near side still a little brighter, a cue of depth, at most about 2.8
+      // times; a drawing of the field, not of the light it scatters
+      const FPH = 0.5;
       for (let li = 0; li < lines.length; li += thin) {
         const L = lines[li];
         const kL = L.k(asymS) * lodK(L.r0);
@@ -6854,7 +6886,7 @@ void main(){
           const P = [s.R * c, s.R * sn, s.z], q = project(P);
           if (q[2] > zN && q[0] > -2 * W && q[0] < 3 * W && q[1] > -2 * Hh && q[1] < 3 * Hh && kept(P)) {
             if (qk && j < n0 - 1 && (q[0] - qk[0]) * (q[0] - qk[0]) + (q[1] - qk[1]) * (q[1] - qk[1]) < 2.25) continue;
-            const a = s.b * kL * gain * seen(P) * (1 - faceAlpha(P)) * winK(q);
+            const a = s.b * kL * gain * seen(P, FPH) * (1 - faceAlpha(P)) * winK(q);
             Q.push(q); A.push(a); qk = q;
             if (a > 0.04) fieldPts.push(q[0], q[1]);
           } else if (qk !== null || !Q.length || Q[Q.length - 1] !== null) { Q.push(null); A.push(0); qk = null; }
@@ -7083,10 +7115,8 @@ void main(){
       opac: [1, 1, 1, 1, 1, 1],
       // (round 18a) the number of the background's stars, times the default's (STARS; see uStars), the state's stars
       stars: 1,
-      // (round 18i) the model look's light, 'star' or 'self' (round 19, the owner: "星の光モードを消す" — the starlight mode is
-      // withdrawn from the public page; 'self' is now the only one the page offers, though the engine still answers to 'star' if
-      // asked), and the opacity of its own light, cm^2 per gram of gas (see SELF)
-      glow: 'self', selfk: SELF.DEF,
+      // (round 18i) the model look's light, 'star' or 'self', and the opacity of its own light, cm^2 per gram of gas (see SELF)
+      glow: 'star', selfk: SELF.DEF,
       // (round 18l) the own light's temperature (SELF_T) and the surface's column Sigma_s, g cm^-2 (see SELF)
       selft: 'colstar', selfnc: SELF.NC_DEF
     };
@@ -9219,7 +9249,9 @@ void main(){
       gl.uniform1f(U.uAccDraw, opt.accDraw ? 1 : 0); gl.uniform1f(U.uGasOuter, opt.gasOuter ? 1 : 0);   // (round 13a: see ACC, uGasOuter)
       gl.uniform1f(U.uGGas, opt.gGas);   // (round 15b: see uGGas)
       gl.uniform1f(U.uJetOcc, opt.jetOcc ? 1 : 0); gl.uniform1f(U.uLstar, opt.lscale ? lumBase : 1);   // (round 15b: see jetOcc, uLstar)
-      gl.uniform4f(U.uOpac, opt.opac[0], opt.opac[1], opt.opac[2], opt.opac[3]);   // (round 18a: the see-through, see uOpac)
+      // (round 18a: the see-through, see uOpac. Round 20: with the own light the gas's is 1, as kappa alone sets its opacity: a factor on
+      // its extinction alone would lift its brightness temperature to 1 / factor of its temperature where it is thick)
+      gl.uniform4f(U.uOpac, selfOn() ? 1 : opt.opac[0], opt.opac[1], opt.opac[2], opt.opac[3]);
       gl.uniform1f(U.uStars, opt.stars);   // (round 18a: the background's stars, see uStars)
       gl.uniform1f(U.uPebH, opt.pebH);   // (round 15b: the pebble layer's thickness, see uPebH)
       gl.uniform2f(U.uExcl, exclOn ? 1 : 0, envLnRho0); gl.uniform1f(U.uCoEnv, opt.coEnv ? envAmp * envAmp * (3 - 2 * envAmp) : 0);   // (round 15b: see EXCL, coGas)
