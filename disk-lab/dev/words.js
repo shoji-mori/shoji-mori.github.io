@@ -59,11 +59,14 @@ export const WORDS = {
       noteCol: '星の光が照らす表層の光は描かず、ガスと塵が、密度 × 温度 × 不透明度で自ら光り、同じ不透明度で吸収する姿を体積として描きます。温度は模擬の構造で、上からの鉛直の柱密度が Σ_s ほどまでの表層は星の光に熱せられた塵の温度、それより深い所は内部の温度です。ただし、その表層が外へ下がっていく所(外側の裾と、惑星の溝の内側の斜面)は影とみなし、上まで内部の温度です。明るさは輝度温度で(対数の尺度、絵の隅の帯。色はガスの色の濃淡)、厚い所では見る側から光学的深さ 1 の所の温度、薄い所では柱密度と温度の積を表します。',
       noteStar: '星の光が照らす表層の光は描かず、ガスと塵が、密度 × 温度 × 不透明度で自ら光り、同じ不透明度で吸収する姿を体積として描きます。温度は断面の「温度」と同じで、星からの光学的深さが 1 ほどまでの表層は星の光に熱せられた塵の温度、それより深い所は内部の温度です。明るさは輝度温度で(対数の尺度、絵の隅の帯。色はガスの色の濃淡)、厚い所では見る側から光学的深さ 1 の所の温度、薄い所では柱密度と温度の積を表します。',
       noteInt: '星の光が照らす表層の光は描かず、ガスと塵が、密度 × 温度 × 不透明度で自ら光り、同じ不透明度で吸収する姿を体積として描きます。温度は内部の温度で、星の光に直接熱せられた表層の塵の温度は除いています。明るさは輝度温度で(対数の尺度、絵の隅の帯。色はガスの色の濃淡)、厚い所では見る側から光学的深さ 1 の所の温度、薄い所では柱密度と温度の積を表します。',
-      k: '不透明度 κ', kOf: '自身の発光の不透明度(ガス 1 g あたり)', kReset: '不透明度を既定に戻す', kDefault: '既定',
-      kSpoken: (n) => `ガス 1 グラムあたり ${n.k} 平方センチメートル` },
+      // (round 20n) each object's opacity, a row in its settings under 見せるもの (app.js kRow): by the object's name and what it is per
+      // gram of (perGas, perPeb); kWhere, after the note, where they are and how the wind and the envelope glow
+      k: '不透明度 κ', kOf: (name, per) => `${name}の自身の発光の不透明度(${per} 1 g あたり)`, kReset: (name) => `${name}の不透明度を既定に戻す`, kDefault: '既定',
+      kSpoken: (n) => `${n.per} 1 グラムあたり ${n.k} 平方センチメートル`, perGas: 'ガス', perPeb: '小石',
+      kWhere: '円盤風とエンベロープも同じように、その場の塵の温度で光ります。円盤風は星の光に熱せられた塵の温度、エンベロープは星の光の届き方で決まる温度(円盤の影では 10 K)です。不透明度 κ は物体ごとに、「見せるもの」の各欄で変えられます(ガス・円盤風・エンベロープはガス 1 g あたり、小石は小石 1 g あたり)。' },
     // (round 18k) the key's bar of the own light's brightness temperature: what takes its colours (app.js renderMatKey; round 18m: by
     // default the gas's colour in shades)
-    selfKey: { gas: '円盤(ガスと塵)', peb: '小石', both: '円盤と小石' },
+    selfKey: { gas: '円盤(ガスと塵)', peb: '小石', both: '円盤と小石', wind: '円盤風', env: 'エンベロープ', join: '、' },   // (round 20n: wind, env, joined)
     cutQ: { T: '温度', rho: '密度', layers: '領域' },
     cutNotes: {
       T: '切り口の色は温度です(対数の尺度、左上の目盛り)。',
@@ -185,7 +188,7 @@ export const WORDS = {
       // (round 18a) each component's see-through, under its settings (app.js, opEls): the share of its extinction taken away
       // (round 18d: in its palette, opac the row's name; the jet's, which has no extinction and only shines, dims its light, and the
       // field lines' draws their lines fainter: opacOf by the component's key, opacJet the note in the jet's palette)
-      opac: '透過', opacOf: (name, k) => `${name}の透過(${k === 'jet' ? '光を弱める割合' : k === 'field' ? '線を薄く描く割合' : '光をさえぎる強さを弱める割合'})`, opacReset: (name) => `${name}の透過を既定(0 %)に戻す`, opacVal: (p) => `${p} %`,
+      opac: '透過', opacOf: (name, k) => `${name}の透過(${k === 'jet' ? '光を弱める割合' : k === 'field' ? '線を薄く描く割合' : '透けて消える割合'})`, opacReset: (name) => `${name}の透過を既定(0 %)に戻す`, opacVal: (p) => `${p} %`,
       opacJet: 'ジェットは光るだけなので、透過は明るさを下げます。',
       planetsNote: '軌道半径 0.05〜20 au(内側の端は、星の磁場が円盤を切り取る所)、質量は地球の 10 倍から木星の 3 倍(重いほどギャップが深く広く、小石の環は孤立質量を超えるとできます)。隣どうしは相互ヒル半径の 4 倍以上離します(近すぎる軌道は不安定です)。絵の中の惑星をクリックしても動かせます。'
     },
@@ -362,9 +365,10 @@ export const WORDS = {
       noteCol: 'No light of a surface lit by the star: the gas and its dust glow by density × temperature × opacity and absorb at the same opacity, drawn as a volume. The temperature is a mock structure: down to a column Σ_s from above, the surface is at the temperature of grains the starlight heats; deeper, the interior’s. Where that surface falls outward (the outer tail, and the inner slopes of planets’ gaps) it is taken as shadowed, at the interior’s temperature all the way up. The brightness is the brightness temperature (on a logarithmic scale, the bar in a corner; the colour is the gas’s, in shades): where thick, the temperature at optical depth 1 seen from the camera; where thin, the column density times the temperature.',
       noteStar: 'No light of a surface lit by the star: the gas and its dust glow by density × temperature × opacity and absorb at the same opacity, drawn as a volume. The temperature is the cut’s: down to an optical depth of about 1 toward the star, the surface is at the temperature of grains the starlight heats; deeper, the interior’s. The brightness is the brightness temperature (on a logarithmic scale, the bar in a corner; the colour is the gas’s, in shades): where thick, the temperature at optical depth 1 seen from the camera; where thin, the column density times the temperature.',
       noteInt: 'No light of a surface lit by the star: the gas and its dust glow by density × temperature × opacity and absorb at the same opacity, drawn as a volume. The temperature is the interior’s, without the surface’s grains heated directly by the starlight. The brightness is the brightness temperature (on a logarithmic scale, the bar in a corner; the colour is the gas’s, in shades): where thick, the temperature at optical depth 1 seen from the camera; where thin, the column density times the temperature.',
-      k: 'Opacity κ', kOf: 'Opacity of the own emission, per gram of gas', kReset: 'Opacity: back to the default', kDefault: 'Default',
-      kSpoken: (n) => `${n.k} square centimetres per gram` },
-    selfKey: { gas: 'disk (gas and dust)', peb: 'pebbles', both: 'disk and pebbles' },
+      k: 'Opacity κ', kOf: (name, per) => `${name}: opacity of the own emission, per gram of ${per}`, kReset: (name) => `${name}: opacity back to the default`, kDefault: 'Default',
+      kSpoken: (n) => `${n.k} square centimetres per gram of ${n.per}`, perGas: 'gas', perPeb: 'pebbles',
+      kWhere: 'The wind and the envelope glow the same way, at the temperature of their grains: the wind’s that of grains the starlight heats, the envelope’s set by how much starlight reaches it (10 K in the disk’s shadow). Each object’s opacity κ is in its settings under Show (per gram of gas for the gas, the wind and the envelope; per gram of pebbles for the pebbles).' },
+    selfKey: { gas: 'disk (gas and dust)', peb: 'pebbles', both: 'disk and pebbles', wind: 'wind', env: 'envelope', join: ', ' },
     cutQ: { T: 'Temperature', rho: 'Density', layers: 'Regions' },
     cutNotes: {
       T: 'The cut face shows temperature (logarithmic; the scale at the top left).',
@@ -479,7 +483,7 @@ export const WORDS = {
       // (round 18a) each component's see-through, under its settings (app.js, opEls): the share of its extinction taken away
       // (round 18d: in its palette, opac the row's name; the jet's, which has no extinction and only shines, dims its light, and the
       // field lines' draws their lines fainter: opacOf by the component's key, opacJet the note in the jet's palette)
-      opac: 'See-through', opacOf: (name, k) => `See-through of the ${name.toLowerCase()} (${k === 'jet' ? 'how much dimmer it shines' : k === 'field' ? 'how much fainter the lines are drawn' : 'how much less light it blocks'})`, opacReset: (name) => `${name}: back to no see-through`, opacVal: (p) => `${p} %`,
+      opac: 'See-through', opacOf: (name, k) => `See-through of the ${name.toLowerCase()} (${k === 'jet' ? 'how much dimmer it shines' : k === 'field' ? 'how much fainter the lines are drawn' : 'how far it fades away'})`, opacReset: (name) => `${name}: back to no see-through`, opacVal: (p) => `${p} %`,
       opacJet: 'The jet only shines, so its see-through lowers its brightness.',
       planetsNote: 'Orbits of 0.05 to 20 au (the inner end is where the star\u2019s magnetic field cuts off the disk); masses of 10 Earths to 3 Jupiters (heavier planets open deeper, wider gaps, and those above the pebble isolation mass ring their gaps with pebbles). Neighbours are kept at least four mutual Hill radii apart (closer orbits are unstable). A planet in the picture can be clicked to move it too.'
     },

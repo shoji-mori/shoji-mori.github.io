@@ -23,7 +23,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-wave.png?v=a5-bold-20261015">
 <link rel="preload" href="/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="disk-lab.css?v=20261116r20l">
+<link rel="stylesheet" href="disk-lab.css?v=20261117r20n">
 <!-- (round 10a) the prefix of the keys this build keeps on the device: none for the public page; a development build's own
      (ver2/tools/disk-lab-v2/make-dev.sh), so that nothing of it reaches the public page on the same origin -->
 <meta name="disk-lab-store" content="">
@@ -88,12 +88,12 @@
   })();
 </script>
 <link rel="expect" href="#posterFirst" blocking="render">
-<script type="module" src="app.js?v=20261116v1910"></script>
+<script type="module" src="app.js?v=20261117v1100"></script>
 </head>
 <body>
 <div class="lab" id="lab" data-state="loading">
   <header class="bar">
-    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build" data-version-tag>v1.9.10</span></p>
+    <p class="mark"><a class="home" href="/" aria-label="Shoji Mori — Home"><img class="home-logo" src="logo-white.svg" alt="" width="42" height="15"><span class="home-name">Shoji Mori</span></a><span class="slash" aria-hidden="true">/</span><span class="title">Disk Lab</span><span class="build" data-version-tag>v1.10.0</span></p>
     <div class="bar-end">
       <button type="button" class="text-button" id="aboutOpen" aria-haspopup="dialog"><span class="en" lang="en"><span class="long">About this model</span><span class="short">About</span></span><span class="ja" lang="ja"><span class="long">このモデルについて</span><span class="short">解説</span></span></button>
       <button type="button" class="text-button" id="historyOpen" aria-haspopup="dialog"><span class="en" lang="en"><span class="long">What’s new</span><span class="short">New</span></span><span class="ja" lang="ja"><span class="long">更新履歴</span><span class="short">履歴</span></span></button>
@@ -133,7 +133,7 @@
     <!-- (round 12a) the probe's panel: the model's numbers at the point tapped (app.js, probeRender) -->
     <div class="probe-panel" id="probePanel" role="status" aria-live="polite" hidden></div>
     <p class="stage-note" id="stageNote" role="status" aria-live="polite"></p>
-    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.9.10 (2026-11-16) · engine 8a6e51130a</p></div>
+    <div class="stage-retry" id="stageRetry" role="alert" hidden><p></p><button type="button" class="action" id="retryLive"></button><p class="stage-ver" data-version>Disk Lab v1.10.0 (2026-11-17) · engine b6df2cb55b</p></div>
     <!-- (round 10a) the safe start's note, with its offers; the last visit's record to read and copy -->
     <div class="stage-safe" id="stageSafe" role="status" hidden></div>
     <div class="stage-log" id="stageLog" role="dialog" aria-modal="false" aria-labelledby="logTitle" hidden></div>
@@ -220,51 +220,64 @@
       <p class="rail-note"><span class="en" lang="en">The clock slows as you zoom in, in step with the orbital period at the radius in view.</span><span class="ja" lang="ja">寄るほど、見ている半径の公転周期に合わせて時計が遅くなります。</span><span id="clockRate"></span></p>
       <p class="rail-note" id="reducedNote" hidden></p>
     </section>
+    <!-- (round 20n, the owner: "the annotations, Save and share and the like open on a click too": Quality, View, Annotations and
+         Save and share closed until opened, as Model, Cut and Background; Look, Show and Time stay open, Time holding the clock's play) -->
     <section class="rail-sec" id="qualitySection">
-      <h3><span class="en" lang="en">Quality</span><span class="ja" lang="ja">画質</span></h3>
-      <div class="segmented small" role="group" id="qualityGroup"></div>
-      <p class="rail-note" id="qualityNote"></p>
+      <details class="talk" id="qualityDetails">
+        <summary><h3><span class="en" lang="en">Quality</span><span class="ja" lang="ja">画質</span></h3></summary>
+        <div class="segmented small" role="group" id="qualityGroup"></div>
+        <p class="rail-note" id="qualityNote"></p>
+      </details>
     </section>
-    <section class="rail-sec">
-      <h3><span class="en" lang="en">View</span><span class="ja" lang="ja">眺め</span></h3>
-      <div class="chips">
-        <button type="button" class="chip" data-angle="89,-65"><span class="en" lang="en">Face-on</span><span class="ja" lang="ja">真上</span></button>
-        <button type="button" class="chip" data-angle="22,-65"><span class="en" lang="en">Tilted</span><span class="ja" lang="ja">斜め</span></button>
-        <button type="button" class="chip" data-angle="2,-80"><span class="en" lang="en">Edge-on</span><span class="ja" lang="ja">真横</span></button>
-        <button type="button" class="chip" data-angle="-14,-80"><span class="en" lang="en">Below</span><span class="ja" lang="ja">下から</span></button>
-      </div>
-      <div class="chips">
-        <button type="button" class="chip quiet" id="resetView"><span class="en" lang="en">First view</span><span class="ja" lang="ja">最初の眺めへ</span></button>
-      </div>
-      <!-- (round 18a, the owner: the camera turned about the line of sight; app.js, renderRoll: the state's roll, in degrees) -->
-      <div class="mp-row view-roll">
-        <label class="mp-name" id="rollName" for="rollRange"></label>
-        <input type="range" id="rollRange" min="-180" max="180" step="1" value="0">
-        <span class="mp-val" id="rollVal"></span>
-        <button type="button" class="chip quiet" id="rollReset" hidden></button>
-      </div>
-      <!-- (round 18e, the owner: a drag only turns, the camera is moved from the panel: the point looked at, its arrows stepping it along
-           the picture, held on and on, and its chip back to the star; app.js, the aim's handlers and renderAim; the engine's diskNudge) -->
-      <div class="mp-row view-aim">
-        <span class="mp-name" id="aimName"></span>
-        <div class="aim-pad" role="group" aria-labelledby="aimName">
-          <button type="button" class="aim" data-aim="-1,0"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8H3m4-4L3 8l4 4"/></svg></button>
-          <button type="button" class="aim" data-aim="0,1"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg></button>
-          <button type="button" class="aim" data-aim="0,-1"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10m-4-4 4 4 4-4"/></svg></button>
-          <button type="button" class="aim" data-aim="1,0"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></button>
+    <section class="rail-sec" id="viewSection">
+      <details class="talk" id="viewDetails">
+        <summary><h3><span class="en" lang="en">View</span><span class="ja" lang="ja">眺め</span></h3></summary>
+        <div class="chips">
+          <button type="button" class="chip" data-angle="89,-65"><span class="en" lang="en">Face-on</span><span class="ja" lang="ja">真上</span></button>
+          <button type="button" class="chip" data-angle="22,-65"><span class="en" lang="en">Tilted</span><span class="ja" lang="ja">斜め</span></button>
+          <button type="button" class="chip" data-angle="2,-80"><span class="en" lang="en">Edge-on</span><span class="ja" lang="ja">真横</span></button>
+          <button type="button" class="chip" data-angle="-14,-80"><span class="en" lang="en">Below</span><span class="ja" lang="ja">下から</span></button>
         </div>
-        <button type="button" class="chip quiet" id="recentre" hidden></button>
-      </div>
-      <!-- (round 15a, the owner: the annotations each their own choice; app.js keeps them as the state's ann, the engine's ANN bits) -->
-      <div class="ann-group" role="group" aria-labelledby="annTitle">
-        <h4 class="talk-sub" id="annTitle"><span class="en" lang="en">Annotations</span><span class="ja" lang="ja">注釈</span></h4>
-        <label class="ann-row"><input type="checkbox" data-ann="8" checked><span class="en" lang="en">Scale bar</span><span class="ja" lang="ja">縮尺の帯</span></label>
-        <label class="ann-row"><input type="checkbox" data-ann="2" checked><span class="en" lang="en">Snow line label</span><span class="ja" lang="ja">スノーラインの名前</span></label>
-        <label class="ann-row"><input type="checkbox" data-ann="4" checked><span class="en" lang="en">Planet label</span><span class="ja" lang="ja">惑星の名前</span></label>
-        <label class="ann-row"><input type="checkbox" data-ann="64" checked><span class="en" lang="en">Colour key (model look)</span><span class="ja" lang="ja">色の凡例(モデルの見え方)</span></label>
-        <label class="ann-row"><input type="checkbox" data-ann="16" checked><span class="en" lang="en">Cut lines and colour bar</span><span class="ja" lang="ja">断面の線と色の帯</span></label>
-        <label class="ann-row"><input type="checkbox" data-ann="32" checked><span class="en" lang="en">Gas line colour bar</span><span class="ja" lang="ja">ガス輝線の色の帯</span></label>
-      </div>
+        <div class="chips">
+          <button type="button" class="chip quiet" id="resetView"><span class="en" lang="en">First view</span><span class="ja" lang="ja">最初の眺めへ</span></button>
+        </div>
+        <!-- (round 18a, the owner: the camera turned about the line of sight; app.js, renderRoll: the state's roll, in degrees) -->
+        <div class="mp-row view-roll">
+          <label class="mp-name" id="rollName" for="rollRange"></label>
+          <input type="range" id="rollRange" min="-180" max="180" step="1" value="0">
+          <span class="mp-val" id="rollVal"></span>
+          <button type="button" class="chip quiet" id="rollReset" hidden></button>
+        </div>
+        <!-- (round 18e, the owner: a drag only turns, the camera is moved from the panel: the point looked at, its arrows stepping it along
+             the picture, held on and on, and its chip back to the star; app.js, the aim's handlers and renderAim; the engine's diskNudge) -->
+        <div class="mp-row view-aim">
+          <span class="mp-name" id="aimName"></span>
+          <div class="aim-pad" role="group" aria-labelledby="aimName">
+            <button type="button" class="aim" data-aim="-1,0"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8H3m4-4L3 8l4 4"/></svg></button>
+            <button type="button" class="aim" data-aim="0,1"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg></button>
+            <button type="button" class="aim" data-aim="0,-1"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10m-4-4 4 4 4-4"/></svg></button>
+            <button type="button" class="aim" data-aim="1,0"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></button>
+          </div>
+          <button type="button" class="chip quiet" id="recentre" hidden></button>
+        </div>
+      </details>
+    </section>
+    <!-- (round 15a, the owner: the annotations each their own choice; app.js keeps them as the state's ann, the engine's ANN bits. Round 20n:
+         a section of its own, closed until opened; with the site's mark at the lower right, the owner: "the M logo may be hidden too", a
+         choice of the page kept on this device, app.js markSet) -->
+    <section class="rail-sec" id="annSection">
+      <details class="talk" id="annDetails">
+        <summary><h3 id="annTitle"><span class="en" lang="en">Annotations</span><span class="ja" lang="ja">注釈</span></h3></summary>
+        <div class="ann-group" role="group" aria-labelledby="annTitle">
+          <label class="ann-row"><input type="checkbox" data-ann="8" checked><span class="en" lang="en">Scale bar</span><span class="ja" lang="ja">縮尺の帯</span></label>
+          <label class="ann-row"><input type="checkbox" data-ann="2" checked><span class="en" lang="en">Snow line label</span><span class="ja" lang="ja">スノーラインの名前</span></label>
+          <label class="ann-row"><input type="checkbox" data-ann="4" checked><span class="en" lang="en">Planet label</span><span class="ja" lang="ja">惑星の名前</span></label>
+          <label class="ann-row"><input type="checkbox" data-ann="64" checked><span class="en" lang="en">Colour key (model look)</span><span class="ja" lang="ja">色の凡例(モデルの見え方)</span></label>
+          <label class="ann-row"><input type="checkbox" data-ann="16" checked><span class="en" lang="en">Cut lines and colour bar</span><span class="ja" lang="ja">断面の線と色の帯</span></label>
+          <label class="ann-row"><input type="checkbox" data-ann="32" checked><span class="en" lang="en">Gas line colour bar</span><span class="ja" lang="ja">ガス輝線の色の帯</span></label>
+          <label class="ann-row"><input type="checkbox" id="markShow" checked><span class="en" lang="en">Site mark (lower right)</span><span class="ja" lang="ja">右下のロゴ</span></label>
+        </div>
+      </details>
     </section>
     <!-- (round 11a) moves and talks: closed until opened, so that the sandbox is as the visitor knows it -->
     <section class="rail-sec" id="talkSection">
@@ -323,7 +336,7 @@
       </details>
     </section>
     <section class="rail-sec">
-      <details class="talk" id="saveDetails" open>
+      <details class="talk" id="saveDetails">
         <summary><h3><span class="en" lang="en">Save and share</span><span class="ja" lang="ja">保存と共有</span></h3></summary>
         <div class="chips">
           <button type="button" class="chip" id="copyLink"><span class="en" lang="en">Copy a link</span><span class="ja" lang="ja">リンクをコピー</span></button>
@@ -338,20 +351,26 @@
         <p class="rail-note cite" id="citeRail"></p>
       </details>
     </section>
-    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.9.10 (2026-11-16) · engine 8a6e51130a</p>
+    <p class="rail-version" id="railVersion" data-version>Disk Lab v1.10.0 (2026-11-17) · engine b6df2cb55b</p>
   </aside>
 
   <section class="dock" id="dock" aria-labelledby="dockTitle">
     <h2 class="sr-only" id="dockTitle"><span class="en" lang="en">Highlights</span><span class="ja" lang="ja">見どころ</span></h2>
+    <!-- (round 20n, the owner: "the instructions below discreet unless clicked; no explanation by default; once in the learning mode,
+         a more coherent experience") On a wide screen, while exploring, the highlights are one quiet line (learnOpen); pressed, the
+         learning mode opens (the narrow screen's tab Highlights): the route, the step's title and number, its text and its actions,
+         and a button back to exploring (learnClose). app.js setTab -->
+    <button type="button" class="learn-open" id="learnOpen" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3.6c2.2-.9 4.1-.6 6 .7 1.9-1.3 3.8-1.6 6-.7v9c-2.2-.9-4.1-.6-6 .7-1.9-1.3-3.8-1.6-6-.7zM8 4.3v9"/></svg><span class="en" lang="en">Learn from the highlights</span><span class="ja" lang="ja">見どころで学ぶ</span><span class="learn-n" aria-hidden="true">9</span></button>
     <div class="route-row">
       <div class="steppers">
         <button type="button" class="icon-button" id="prev"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
         <button type="button" class="icon-button" id="next"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
       </div>
       <nav class="route" id="route"><ol id="routeList"></ol></nav>
+      <button type="button" class="icon-button learn-close" id="learnClose" data-aria-en="Close the highlights and explore" data-aria-ja="見どころを閉じて自由に見る"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
     </div>
     <div class="card" id="card">
-      <h3 class="sr-only" id="placeTitle"></h3>
+      <h3 class="place-title" id="placeTitle"></h3>
       <p class="place-text" id="placeText" aria-live="polite"></p>
       <div class="place-actions" id="placeActions"></div>
       <p class="still-note" id="stillNote" hidden></p>
@@ -373,7 +392,7 @@
   <div class="about-inner">
     <button type="button" class="icon-button about-close" id="aboutClose" data-aria-en="Close" data-aria-ja="閉じる"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
     <h2 id="aboutTitle" tabindex="-1" autofocus><span class="en" lang="en">About this model</span><span class="ja" lang="ja">このモデルについて</span></h2>
-    <p class="about-ver"><span data-version>Disk Lab v1.9.10 (2026-11-16) · engine 8a6e51130a</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
+    <p class="about-ver"><span data-version>Disk Lab v1.10.0 (2026-11-17) · engine b6df2cb55b</span> <button type="button" class="chip quiet" id="logOpen" hidden></button></p>
     <p class="about-log"><a href="/disk-lab/changelog.html"><span class="en" lang="en">What’s new, version by version</span><span class="ja" lang="ja">更新履歴(版ごとの変更)</span></a></p>
     <p class="tagline"><span class="en" lang="en">An interactive, physics-based visualization of protoplanetary disks, from magnetic fields and disk winds to planet formation and observational signatures.</span><span class="ja" lang="ja">磁場と円盤風から、惑星の形成、観測で見える姿まで。原始惑星系円盤を物理にもとづいて描き、操作しながら見られるようにしたものです。</span></p>
     <p class="lead"><span class="en" lang="en">The model is schematic: the equations and solutions come from the literature; strengths, colours and other settings are chosen so that the structure reads clearly. It is not the output of a simulation.</span><span class="ja" lang="ja">ただし模式的なモデルです。式と解は文献のものを使い、強さや色などの値は構造が読み取りやすいように選んでいます。シミュレーションの結果そのものではありません。</span></p>
@@ -451,7 +470,7 @@
       <li>Ansdell, M. et al. 2018, ApJ, 859, 21</li>
       <li>Cieza, L. A. et al. 2016, Nature, 535, 258 <span class="en" lang="en">(the snow line of V883 Ori in outburst)</span><span class="ja" lang="ja">(増光中の V883 Ori のスノーライン)</span></li>
     </ul>
-    <p class="colophon" id="colophon" data-version>Disk Lab v1.9.10 (2026-11-16) · engine 8a6e51130a</p>
+    <p class="colophon" id="colophon" data-version>Disk Lab v1.10.0 (2026-11-17) · engine b6df2cb55b</p>
   </div>
 </dialog>
 <script id="posterFirst">

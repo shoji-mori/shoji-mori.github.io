@@ -162,6 +162,23 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .lang-ja .place-text{font-size:14px;line-height:1.8;letter-spacing:.01em;min-height:calc(3 * 1.8em)}
 .place-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;min-height:34px}
 .still-note{margin-top:10px;font-size:13px;color:var(--text-3);max-width:60ch}
+/* (round 20n, the owner: "the instructions below discreet unless clicked; no explanation by default; once in the learning mode, a more
+   coherent experience") The step's title with its number over its text; on a wide screen, while exploring, the highlights folded into
+   one quiet line (.learn-open) that opens the learning mode, where a button closes them again (.learn-close). The narrow screen keeps
+   its tabs; the still pictures' page keeps the highlights open (it is all they show) */
+.place-title{margin:0 0 3px;font-size:13.5px;font-weight:600;color:var(--text);letter-spacing:.01em}
+.place-title .place-n{margin-right:9px;font-size:12px;font-weight:500;color:var(--accent);font-variant-numeric:tabular-nums}
+.learn-open,.learn-close{display:none}
+.learn-open{align-items:center;gap:7px;justify-self:start;padding:5px 11px 5px 8px;border-radius:999px;font-size:12.5px;color:var(--text-3);transition:color .2s,background-color .2s}
+.learn-open:hover{color:var(--text);background:var(--wash)}
+.learn-open svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linejoin:round}
+.learn-n{font-size:11px;font-variant-numeric:tabular-nums;opacity:.75}
+@media (min-width:861px){
+  .lab:not([data-state=still])[data-tab=explore] .dock{padding-top:5px;padding-bottom:calc(6px + env(safe-area-inset-bottom,0px))}
+  .lab:not([data-state=still])[data-tab=explore] .dock>.route-row,.lab:not([data-state=still])[data-tab=explore] .dock>.card{display:none}
+  .lab:not([data-state=still])[data-tab=explore] .learn-open{display:inline-flex}
+  .lab:not([data-state=still])[data-tab=tour] .learn-close{display:inline-grid;flex:none;margin-left:auto}
+}
 .still-note button{margin-left:8px}
 
 /* ---- the sandbox (the rail, beside the stage) ---- */
@@ -272,8 +289,7 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .comp-opts{grid-column:1/-1;display:grid;gap:6px;justify-items:start;width:100%;margin:0 0 4px;padding:6px 0 7px 12px;border-left:1px solid var(--line-2)}
 .toggle.small{min-height:26px;padding:2px 9px;font-size:12px}
 /* (round 15a) the annotations under View: a checkbox for each kind */
-.ann-group{display:grid;margin-top:8px}
-.ann-group .talk-sub{margin:4px 0 2px}
+.ann-group{display:grid}   /* (round 20n: in its own section, under its title) */
 .ann-row{display:flex;align-items:center;gap:8px;min-height:26px;font-size:12.5px;color:var(--text-2);cursor:pointer}
 .ann-row input{width:15px;height:15px;margin:0;flex:none;accent-color:var(--accent)}
 .planet-list{display:grid;gap:4px;width:100%}
@@ -307,6 +323,8 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .mp-row .chip[hidden],.cpd-mdot .chip[hidden]{display:inline-flex!important;visibility:hidden}
 .mp-derived{margin:4px 0 2px;font-size:11.5px}
 .gain-row{margin:2px 0 0}
+/* (round 20n) the own light's opacity in a component's settings, as the wind's brightness there */
+.comp-opts .selfk-row{margin:2px 0 0}
 /* (round 18b, the owner: the see-through's controls more discreet: a mark and a short slider with no name, dimmed at rest, the value and
    the chip once changed; round 18c: in the colours' span. Round 18d: in the component's palette, a row as the parameters' (.mp-row
    above), its name, value and chip always in their places) */

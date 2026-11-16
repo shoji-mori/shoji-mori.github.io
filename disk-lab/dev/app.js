@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=389a9cd3e3';
-import { WORDS } from './words.js?v=134f510320';
+import { WORDS } from './words.js?v=c6b7344f68';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=a06fcbfa44';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=8a6e51130a';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=b6df2cb55b';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.9.10-dev.60', RELEASED = '2026-11-16';
+const VERSION = '1.10.0-dev.62', RELEASED = '2026-11-17';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -213,16 +213,20 @@ function renderMatKey(s) {
   const on = s.look === 'model' && !s.slice && !!(annBits(s.ann) & ANN_KEY) && typeof box.diskPalette === 'function';   // (round 15a: its own annotation)
   matKey.classList.toggle('on', on);
   if (!on) return;
-  const sk = s.glow === 'self' && typeof box.diskSelfKey === 'function' ? box.diskSelfKey() : null, tb = !!sk && !sk.old && !!(s.mode & 7);
+  // (round 20n: the wind and the envelope glow with it too, where the engine knows their opacities: on the bar's row, named with it, and
+  // no rows of their colours; tbK, the bar's parts)
+  const sk = s.glow === 'self' && typeof box.diskSelfKey === 'function' ? box.diskSelfKey() : null, own = !!sk && !sk.old;
+  const envNear = (s.mode & 32) && s.d > 40, tbK = own ? [(s.mode & 3) && (s.mode & 4) ? 'both' : s.mode & 3 ? 'gas' : s.mode & 4 ? 'peb' : '',
+    (s.mode & 8) && s.selfkw != null ? 'wind' : '', envNear && s.selfke != null ? 'env' : ''].filter(Boolean) : [], tb = tbK.length > 0;
   matKey.classList.toggle('tb', tb);
   matKey.classList.toggle('tbh', tb && !!sk.hue);
   const P = Object.fromEntries(box.diskPalette().map((m) => [m.key, m])), rows = [];
-  if (tb) rows.push(['tb', (s.mode & 3) && (s.mode & 4) ? 'both' : s.mode & 3 ? 'gas' : 'peb', 'disk']);   // (round 18m: 'disk', the gas's colour in the key)
+  if (tb) rows.push(['tb', tbK, 'disk']);   // (round 18m: 'disk', the gas's colour in the key)
   if (s.mode & 3) { if (!tb) rows.push(['disk']); if (SWITCH.accLayer) rows.push(['acc']); }
   if ((s.mode & 4) && !tb) rows.push(['rock', 'ice']);
-  if (s.mode & 8) rows.push(['wind']);
+  if ((s.mode & 8) && !tbK.includes('wind')) rows.push(['wind']);
   if (s.mode & 64) rows.push(['jet']);
-  if ((s.mode & 32) && s.d > 40) rows.push(['env']);
+  if (envNear && !tbK.includes('env')) rows.push(['env']);
   if ((s.mode & 16) && s.planets.some((p) => p[1])) rows.push(['planet']);
   if (s.d < 2 && !s.p) rows.push(['mag'], ['curt']);
   if (s.marks && (s.mode & 1)) rows.push(['arrows']);   // (round 8: the flow arrows, with what their length means)
@@ -230,7 +234,7 @@ function renderMatKey(s) {
   if (key === matShown) return;
   matShown = key;
   matList.replaceChildren(...rows.map((ks) => ks[0] === 'arrows' ? el('li', {}, el('i', { class: 'arr' }, '\u2192'), el('span', {}, T().arrowsKey))
-    : ks[0] === 'tb' ? el('li', { class: 'tb' }, el('span', {}, T().selfKey[ks[1]]),
+    : ks[0] === 'tb' ? el('li', { class: 'tb' }, el('span', {}, ks[1].map((k) => T().selfKey[k]).join(T().selfKey.join)),
       el('i', { class: 'tb-bar', style: 'background:linear-gradient(90deg,' + sk.stops.map(([u, c]) => c + ' ' + (100 * u).toFixed(1) + '%').join(',') + ')' }),
       el('span', { class: 'tb-ticks' }, ...sk.ticks.map(([u, t], i) => el('span', { style: 'left:' + (100 * u).toFixed(1) + '%' }, i === sk.ticks.length - 1 ? t + ' K' : t))))
     : el('li', {}, ...ks.map((k) => el('i', { style: 'background:' + P[k].hex })), el('span', {}, ks.length > 1 ? T().pebblesKey : P[ks[0]][L()]))));
@@ -296,7 +300,8 @@ const approx = (v) => (v >= 10 ? String(Math.round(v)) : v >= 0.1 ? v.toFixed(1)
 const placeNums = () => ({ snow: approx(parDerived ? parDerived.snow : 1.149), rTI: approx(parDerived ? parDerived.rTI : 0.688) });
 function renderPlace() {
   const pl = PLACES[placeI], w = T().places[pl.id], text = typeof w.text === 'function' ? w.text(placeNums()) : w.text;
-  placeTitle.textContent = w.title;
+  // (round 20n: the step's title shown, with its number, over its text: the learning mode's lesson)
+  placeTitle.replaceChildren(el('span', { class: 'place-n' }, `${placeI + 1} / ${PLACES.length}`), w.title);
   // (a new text comes in softly, unless motion is reduced)
   if (placeText.textContent !== text && placeText.textContent && !reduce && placeText.animate) {
     placeText.animate([{ opacity: 0, transform: 'translateY(3px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.7,.2,1)' });
@@ -424,7 +429,6 @@ function renderRail(s) {
     const input = lookContext.querySelector('input');
     if (input && document.activeElement !== input && Number(input.value) !== s.coV) { input.value = String(s.coV); lookContext.querySelector('output').textContent = kms(s.coV); }
   }
-  if (glowable) renderSelfk(s);   // (round 18i: the opacity's slider in step, unless it is being dragged)
   const shown = cutOpen ? keyItems(s) : [];
   const ck = [L(), cutOpen, s.sq, shown.join()].join('|');
   if (ck !== cutKey) {
@@ -432,7 +436,8 @@ function renderRail(s) {
     cutContext.replaceChildren(...(cutOpen ? [segmented(CUT_Q.map((k) => [k, w.cutQ[k]]), s.sq, (k) => { box.diskSet({ sq: k }); sync(); }, L() === 'ja' ? '断面に描く量' : 'Quantity on the cut'), cutKeyList(s.sq, shown)] : []));
   }
   // (round 18l: the own light's note by its temperature, see SELFNC_DEF)
-  lookNote.textContent = co ? w.coNotes[s.coMode] : cutOpen ? w.cutNotes[s.sq] : glowable && s.glow === 'self' ? (s.selft === 'star' ? w.glow.noteStar : s.selft === 'int' ? w.glow.noteInt : s.selft === 'col' ? w.glow.noteCol : w.glow.note) : w.looks[s.look].note;
+  // (round 20n: and with the own light where each object's opacity is, kWhere)
+  lookNote.textContent = co ? w.coNotes[s.coMode] : cutOpen ? w.cutNotes[s.sq] : glowable && s.glow === 'self' ? (s.selft === 'star' ? w.glow.noteStar : s.selft === 'int' ? w.glow.noteInt : s.selft === 'col' ? w.glow.noteCol : w.glow.note) + ' ' + w.glow.kWhere : w.looks[s.look].note;
 }
 const kms = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' km/s';
 // (Round 18i, the owner: "in the model look, the pattern of its own emission alone, with no surface lit; an opacity of about 2
@@ -443,8 +448,15 @@ const kms = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' km/s';
 // and selfk= (none at the default), Reset all
 // back to the starlight; not in the scenes (as the colours are not). DESIGN.md section 50
 const SELFK_RANGE = [0.001, 100], SELFK_DEF = 0.03;
+// (Round 20n, the owner: "make the opacity kappa an option of each object", each its own) The own light's opacity of each object that
+// glows with it, the engine's state by the component (SELFK_KEY: the gas's selfk as until now, the pebbles' selfkp, the wind's selfkw,
+// the envelope's selfke) with its default (SELFK_DEFS, the engine's SELF: the pebbles' per gram of pebbles, the others per gram of gas):
+// a row in the component's settings with the own light (kRow), no longer under the model look's light; the same log slider. Kept with
+// the settings (DEF_KEYS), in a link (none at the default), Reset all back. DESIGN.md section 57.16
+const SELFK_KEY = { gas: 'selfk', pebbles: 'selfkp', wind: 'selfkw', envelope: 'selfke' };
+const SELFK_DEFS = { selfk: SELFK_DEF, selfkp: 0.7, selfkw: 0.03, selfke: 0.01 };   // (round 20n: the envelope's a third of the gas's, see the engine's SELF)
 const selfkPos = (k) => String(Math.round(1000 * Math.log(k / SELFK_RANGE[0]) / Math.log(SELFK_RANGE[1] / SELFK_RANGE[0])));
-const selfkOf = (pos) => (String(pos) === selfkPos(SELFK_DEF) ? SELFK_DEF : Number((SELFK_RANGE[0] * Math.pow(SELFK_RANGE[1] / SELFK_RANGE[0], Number(pos) / 1000)).toPrecision(2)));
+const selfkOf = (pos, def = SELFK_DEF) => (String(pos) === selfkPos(def) ? def : Number((SELFK_RANGE[0] * Math.pow(SELFK_RANGE[1] / SELFK_RANGE[0], Number(pos) / 1000)).toPrecision(2)));
 const selfkNum = (k) => String(Number(k.toPrecision(2)));
 const selfkText = (k) => selfkNum(k) + ' cm²/g';
 // (Round 18l) The own light's surface column Sigma_s, g cm^-2 (the state's selfnc, 0.1 by default, the engine's SELF.NC_DEF), and its
@@ -454,40 +466,48 @@ const selfkText = (k) => selfkNum(k) + ' cm²/g';
 // to 0.12 g cm^-2 from 1 to 30 au: a constant of the model, not a choice of the look; the opacity alone is the own light's choice.)
 // The note under the looks says the temperature drawn. DESIGN.md sections 53 and 57
 const SELFNC_DEF = 0.1;
-const glowEls = {};
 let selfkW = '';
 function glowRows(s) {
   const w = T().glow;
-  const row = el('div', { class: 'glow-row' }, el('span', { class: 'glow-name', 'aria-hidden': 'true' }, w.name),
-    segmented([['star', w.star], ['self', w.self]], s.glow, setGlow, w.label));
-  if (s.glow !== 'self') return [row];
-  if (!glowEls.row) {
-    Object.assign(glowEls, { name: el('label', { class: 'mp-name', for: 'selfK' }), input: el('input', { type: 'range', id: 'selfK', min: '0', max: '1000', step: '1', 'data-self-k': '1' }),
-      val: el('span', { class: 'mp-val', 'aria-hidden': 'true' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-self-k-reset': '1', hidden: true }) });
-    glowEls.row = el('div', { class: 'mp-row selfk-row' }, glowEls.name, glowEls.input, glowEls.val, glowEls.chip);
-  }
-  return [row, glowEls.row];
+  return [el('div', { class: 'glow-row' }, el('span', { class: 'glow-name', 'aria-hidden': 'true' }, w.name),
+    segmented([['star', w.star], ['self', w.self]], s.glow, setGlow, w.label))];   // (round 20n: the opacities in the components', kRow)
 }
-function renderSelfk(s) {
-  if (!glowEls.row || s.glow !== 'self') return;
-  const w = T().glow, k = Number.isFinite(s.selfk) && s.selfk > 0 ? s.selfk : SELFK_DEF;
-  if (document.activeElement !== glowEls.input && glowEls.input.value !== selfkPos(k)) glowEls.input.value = selfkPos(k);
-  glowEls.name.textContent = w.k;
-  glowEls.input.setAttribute('aria-label', w.kOf); glowEls.input.setAttribute('aria-valuetext', w.kSpoken({ k: selfkNum(k) }));
-  if (!selfkW) selfkW = valW([...Array(101).keys()].map((i) => selfkText(selfkOf(10 * i))));   // (the widest value, as the parameters')
-  glowEls.val.textContent = selfkText(k); glowEls.val.style.minWidth = selfkW;
-  glowEls.chip.hidden = k === SELFK_DEF; glowEls.chip.textContent = w.kDefault; glowEls.chip.setAttribute('aria-label', w.kReset);
+// (round 20n) a component's own light's opacity, a row in its settings (made with the components; its elements in kEls by the
+// component's key), a row as the model's parameters' (mp-row): its name, the slider, the value, the chip back to the default. Shown with
+// the own light in the model look, where the engine knows that opacity (renderSelfks)
+const kEls = {};
+function kRow(ck) {
+  const e = { name: el('label', { class: 'mp-name', for: 'selfK-' + ck }), input: el('input', { type: 'range', id: 'selfK-' + ck, min: '0', max: '1000', step: '1', 'data-self-k': ck }),
+    val: el('span', { class: 'mp-val', 'aria-hidden': 'true' }), chip: el('button', { type: 'button', class: 'chip quiet', 'data-self-k-reset': ck, hidden: true }) };
+  e.row = el('div', { class: 'mp-row selfk-row', hidden: true }, e.name, e.input, e.val, e.chip);
+  kEls[ck] = e;
+  return e.row;
+}
+function renderSelfks(s) {
+  const w = T().glow, names = T().show, own = s.look === 'model' && s.glow === 'self';
+  for (const [ck, e] of Object.entries(kEls)) {
+    const key = SELFK_KEY[ck], def = SELFK_DEFS[key];
+    e.row.hidden = !own || s[key] == null;
+    if (e.row.hidden) continue;
+    const k = Number.isFinite(s[key]) && s[key] > 0 ? s[key] : def, per = ck === 'pebbles' ? w.perPeb : w.perGas;
+    if (document.activeElement !== e.input && e.input.value !== selfkPos(k)) e.input.value = selfkPos(k);
+    e.name.textContent = w.k;
+    e.input.setAttribute('aria-label', w.kOf(names[ck], per)); e.input.setAttribute('aria-valuetext', w.kSpoken({ k: selfkNum(k), per }));
+    if (!selfkW) selfkW = valW([...Array(101).keys()].map((i) => selfkText(selfkOf(10 * i))));   // (the widest value, as the parameters')
+    e.val.textContent = selfkText(k); e.val.style.minWidth = selfkW;
+    e.chip.hidden = k === def; e.chip.textContent = w.kDefault; e.chip.setAttribute('aria-label', w.kReset(names[ck]));
+  }
 }
 function setGlow(k) {
   if (!live()) return;
   flogAdd({ k: 'set', glow: k }); keeping = keeping || calibrated;   // (as a look chosen: see setLook)
   box.diskSet({ glow: k }); sync();
 }
-function setSelfk(k, drag = false) {
-  if (!live()) return;
+function setSelfk(key, k, drag = false) {
+  if (!live() || !SELFK_DEFS[key]) return;
   if (drag) moving();
-  box.diskSet({ selfk: k });
-  renderSelfk(S());
+  box.diskSet({ [key]: k });
+  renderSelfks(S());
 }
 // The key of the cut (round 6): the lines the engine draws on the faces, as it draws them, and what is left clear, in place
 // of the names it wrote beside them (the owner: "the labels on the cut say poorly which line they mean"). The colours are
@@ -622,7 +642,7 @@ rail.addEventListener('click', (e) => {
   else if (b.dataset.mpReset) setParam(b.dataset.mpReset, parDef && parDef[b.dataset.mpReset]);   // (round 14a: a parameter back to its default)
   else if (b.dataset.windReset) { windGain = 1; applyWind(); keepSoon(); }   // (round 14a: the wind's brightness)
   else if (b.dataset.opacReset != null) { setOpac(Number(b.dataset.opacReset), 1); keepSoon(); }   // (round 18a: the see-through)
-  else if (b.dataset.selfKReset) { setSelfk(SELFK_DEF); keepSoon(); }   // (round 18i: the own light's opacity)
+  else if (b.dataset.selfKReset) { const k = SELFK_KEY[b.dataset.selfKReset]; setSelfk(k, SELFK_DEFS[k]); keepSoon(); }   // (round 18i: the own light's opacity; round 20n: a component's)
   sync();
 });
 // (round 9) a planet's slider: while it is dragged, the engine makes the gap's starlight anew at most every 120 ms and the
@@ -636,12 +656,15 @@ rail.addEventListener('input', (e) => {
   else if (t.dataset.mp) setParam(t.dataset.mp, mpOf(t.dataset.mp, t.value), true);   // (round 14a: a parameter, see setParam)
   else if (t.dataset.windGain) { windGain = wbOf(t.value); applyWind(true); }
   else if (t.dataset.opac != null) setOpac(Number(t.dataset.opac), opOf(t.value), true);   // (round 18a)
-  else if (t.dataset.selfK) setSelfk(selfkOf(t.value), true);   // (round 18i)
+  else if (t.dataset.selfK) { const k = SELFK_KEY[t.dataset.selfK]; setSelfk(k, selfkOf(t.value, SELFK_DEFS[k]), true); }   // (round 18i; round 20n: a component's)
   else if (t.id === 'rollRange') { moving(); box.diskSet({ roll: Number(t.value) }); renderRoll(S()); }   // (round 18a: the roll, at once)
   else if (t.id === 'starsRange') { box.diskSet({ stars: stOf(t.value) }); renderStars(S()); }   // (round 18a)
 });
 rail.addEventListener('change', (e) => {
-  const t = e.target; if (!live()) return;
+  const t = e.target;
+  // (round 20n: the site's mark, the page's own, also while the model is not drawn live)
+  if (t.id === 'markShow') { markSet(t.checked); keeping = keeping || calibrated; keepSoon(); return; }
+  if (!live()) return;
   if (t.dataset.col) setCol(t.dataset.col, t.value);
   else if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value));
   else if (t.dataset.planetM != null) massPlanet(Number(t.dataset.planetM), mOf(t.value));
@@ -649,7 +672,7 @@ rail.addEventListener('change', (e) => {
   else if (t.dataset.mp) setParam(t.dataset.mp, mpOf(t.dataset.mp, t.value));
   else if (t.dataset.windGain) { windGain = wbOf(t.value); applyWind(); keepSoon(); }
   else if (t.dataset.opac != null) { setOpac(Number(t.dataset.opac), opOf(t.value)); keepSoon(); }   // (round 18a)
-  else if (t.dataset.selfK) { setSelfk(selfkOf(t.value)); keepSoon(); }   // (round 18i)
+  else if (t.dataset.selfK) { const k = SELFK_KEY[t.dataset.selfK]; setSelfk(k, selfkOf(t.value, SELFK_DEFS[k])); keepSoon(); }   // (round 18i; round 20n: a component's)
   else if (t.id === 'rollRange') { box.diskSet({ roll: Number(t.value) }); renderRoll(S()); keepSoon(); }   // (round 18a)
   else if (t.id === 'starsRange') { box.diskSet({ stars: stOf(t.value) }); renderStars(S()); keepSoon(); }   // (round 18a)
   else if (t.dataset.ann) setAnn(Number(t.dataset.ann), t.checked);   // (round 15a)
@@ -691,7 +714,8 @@ function wbRow() {
 // can't it go inside the colour palette?") In the component's palette (see the palettes below), a row as the model's parameters'
 // (mp-row): its name over the slider, the value beside it, the chip back to the default beside the name with its place kept while
 // it is hidden, so that the slider keeps its length and its place as the value changes. Its class op-row marks it among them.
-const OP_MIN = 0.05, OP_MAX = Math.round(100 * (1 - OP_MIN));
+// (round 20n, the owner: "the gas's light transparent in proportion to the bar, gone at 100 %": a transparency, to 0, see opPos)
+const OP_MIN = 0, OP_MAX = Math.round(100 * (1 - OP_MIN));
 const opEls = [];
 // (round 18d: the face of a component's swatch in the looks other than the model's, where its palette holds the see-through alone)
 function opMark() {
@@ -723,20 +747,22 @@ function colRow(k) {
 // looks where the see-through has something to act on, when not all of them (the engine draws the field lines in the model look
 // alone, the jet in the model and the visible look, JET.LOOK); elsewhere its palette holds no see-through (see renderPal)
 const COMPS = [
-  { key: 'gas', bit: 3, opts: ['marks'], cols: ['disk'], op: 0 }, { key: 'pebbles', bit: 4, opts: ['drop'], cols: ['rock', 'ice'], op: 1 },
+  { key: 'gas', bit: 3, opts: ['marks'], cols: ['disk'], op: 0, opLooks: ['model', 'optical', 'mir', 'mm'] }, { key: 'pebbles', bit: 4, opts: ['drop'], cols: ['rock', 'ice'], op: 1 },   // (round 20n: not the gas's in the gas line's look)
   { key: 'wind', bit: 8, opts: ['asym'], cols: ['wind'], op: 2 }, { key: 'jet', bit: 64, cols: ['jet'], op: 4, opLooks: ['model', 'optical'] },
   { key: 'field', opt: 'field', cols: ['field'], op: 5, opLooks: ['model'] },
   { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32, cols: ['env'], op: 3 }
 ];   // (round 15a: the labels, a component until now, are the View's annotations, a choice for each kind)
 const compEls = COMPS.map((c) => {
   const btn = el('button', { type: 'button', class: 'toggle', 'aria-pressed': 'false', ...(c.bit ? { 'data-bit': String(c.bit) } : { 'data-opt': c.opt }) });
-  const box_ = c.opts || c.planets ? el('div', { class: 'comp-opts', hidden: true }) : null;   // (round 18c: the see-through moved to the colours)
+  // (round 20n: and those with an opacity of their own light, the envelope's its alone, see kRow)
+  const box_ = c.opts || c.planets || SELFK_KEY[c.key] ? el('div', { class: 'comp-opts', hidden: true }) : null;   // (round 18c: the see-through moved to the colours)
   if (c.planets) box_.append(el('div', { class: 'planet-list' }), el('button', { type: 'button', class: 'chip quiet', id: 'addPlanet', 'aria-pressed': 'false' }));
   for (const o of c.opts || []) box_.append(el('button', { type: 'button', class: 'toggle small', 'data-opt': o, 'aria-pressed': 'false' }));
   // (round 13e) the planets' accretion rate, which sets their own disks (see cpdRowSync)
   if (c.planets) box_.append(el('div', { class: 'cpd-mdot' }, el('span', { class: 'cpd-mdot-k', 'data-cpd-k': '' }), el('span', { class: 'cpd-mdot-v', 'data-cpd-v': '' }),
     el('input', { type: 'range', min: '0', max: '1000', step: '1', 'data-cpd-mdot': '' }), el('button', { type: 'button', class: 'chip quiet', 'data-cpd-auto': '', hidden: true })));
   if (c.key === 'wind') box_.append(wbRow());   // (round 14a: its brightness in the model look)
+  if (SELFK_KEY[c.key]) box_.append(kRow(c.key));   // (round 20n: the opacity of its own light)
   // (round 20l) the planets' two notes, their own disks' and where they may stand, behind "More" (ten lines of the rail open by
   // default, the planets being on at first); a planet set where it cannot stand still says why (noRoom)
   if (c.planets) box_.append(el('details', { class: 'note-more' }, el('summary', {}, el('span', { class: 'en', lang: 'en' }, 'More'), el('span', { class: 'ja', lang: 'ja' }, 'くわしく')),
@@ -865,13 +891,16 @@ function cpdRowSync(s) {
 function syncComps(s) {
   cpdRowSync(s);
   const opt = { field: s.field };
+  renderSelfks(s);   // (round 20n: the opacities of the own light, with it, see kRow)
+  // (round 14a: the wind's brightness, as the colours, the model look's; round 20n: not with the own light, whose wind glows at its
+  // temperature, not in the starlight this brightness scales)
+  if (wbEls.row) wbEls.row.hidden = s.look !== 'model' || typeof box.diskWindGain !== 'function' || s.glow === 'self';
   for (const { c, opts } of compEls) {
     const on = c.bit ? !!(s.mode & c.bit) : !!opt[c.opt];
-    if (opts) opts.hidden = !on;
+    // (round 20n: settings with nothing shown in them stay closed: the envelope's, its opacity alone, without the own light)
+    if (opts) opts.hidden = !on || ![...opts.children].some((e) => e && !e.hidden);
   }
   renderPal(s);   // (round 13a: the colours are the model look's; round 18d: the swatches and the palettes' rows with the look)
-  // (round 14a: the wind's brightness, as the colours, the model look's)
-  if (wbEls.row) wbEls.row.hidden = s.look !== 'model' || typeof box.diskWindGain !== 'function';
   renderOpac(s);   // (round 18a: the see-through, in every look)
   renderRoll(s);   // (round 18a: the camera's roll)
   renderStars(s);   // (round 18a: the background's stars)
@@ -916,14 +945,17 @@ function renderPal(s) {
   const w = T().show, model = s.look === 'model';
   for (const { c, pal } of compEls) {
     if (!pal) continue;
-    // (round 20: not the gas's see-through with the model look's own light, whose opacity kappa is its one control; see glowRows)
-    const withCols = model && pal.cols.length > 0, withOp = c.op != null && (!c.opLooks || c.opLooks.includes(s.look)) && !(c.key === 'gas' && model && s.glow === 'self');
+    // (round 20: not the gas's see-through with the model look's own light, whose opacity kappa was its one control. Round 20n: a
+    // transparency now, apart from kappa, it is there with the own light too, the pebbles', the wind's and the envelope's as well; not
+    // their colours then, which they do not glow in: the own light shows its brightness temperature in the gas's colour, which stays)
+    const kOwn = model && s.glow === 'self' && s[SELFK_KEY[c.key]] != null;
+    const withCols = model && pal.cols.length > 0 && !(kOwn && c.key !== 'gas'), withOp = c.op != null && (!c.opLooks || c.opLooks.includes(s.look));
     const label = withCols ? w.pal(w[c.key]) : w.palOp(w[c.key]);
     pal.btn.hidden = !colDef || (!withCols && !withOp);
     pal.btn.classList.toggle('op-only', !withCols);
     pal.btn.setAttribute('aria-label', label); pal.btn.setAttribute('title', label); pal.box.setAttribute('aria-label', label);
     if (colDef) { const hex = pal.cols.map((r) => cols[r.k] || colDef[r.k]); pal.dot.style.background = hex.length > 1 ? `linear-gradient(90deg, ${hex[0]} 50%, ${hex[1]} 50%)` : hex[0] || ''; }
-    for (const r of pal.cols) r.row.hidden = !model;
+    for (const r of pal.cols) r.row.hidden = !withCols;
     if (opEls[c.op]) opEls[c.op].row.hidden = !withOp;
     if (pal.note) pal.note.hidden = !withOp;
     if (palOpen && palOpen.pal === pal) {
@@ -1224,6 +1256,10 @@ function renderWind() {
 // (Round 18d, the owner: "a see-through for the jet, a see-through bar for the field lines") Six factors: [4] the jet's, on its light
 // (it only shines, nothing of it takes light out of the ray), [5] the field lines', on their lines' opacity. A list of four (the
 // links and the settings of dev.23 to dev.25) is read with those two at 1, as the engine reads it; op= has the six.
+// (Round 20n, the owner: "the see-through bar should make the gas's light transparent in proportion to it; at 100 % the gas must be
+// gone") Each factor is now the share of the component seen, a transparency (the engine's seeB): its light and what it hides both
+// go with it, 0 to 100 % (OP_MIN 0), and at 100 % it is gone, as if turned off. In every look where it acts: with the own light too
+// (no longer a factor on the extinction, which broke Kirchhoff's law there); not the gas's in the gas line's look, where it does nothing
 const opPos = (f) => String(Math.round(100 * (1 - f)));
 const opOf = (pos) => Math.min(1, Math.max(OP_MIN, Number((1 - Number(pos) / 100).toFixed(2))));
 const opList = (s) => (Array.isArray(s.op) && (s.op.length === 6 || s.op.length === 4) ? [...s.op, 1, 1].slice(0, 6) : [1, 1, 1, 1, 1, 1]);
@@ -1957,6 +1993,7 @@ function linkFor(s) {
   if (opList(s).some((f) => f !== 1)) u.searchParams.set('op', opList(s).map((f) => String(f)).join(','));   // (round 18a: the see-through; round 18d: six factors)
   if (s.glow === 'self') u.searchParams.set('glow', 'self');   // (round 18i: the model look's own light, and its opacity when not 2)
   if (Number.isFinite(s.selfk) && s.selfk !== SELFK_DEF) u.searchParams.set('selfk', String(s.selfk));
+  for (const k of ['selfkp', 'selfkw', 'selfke']) if (Number.isFinite(s[k]) && s[k] !== SELFK_DEFS[k]) u.searchParams.set(k, String(s[k]));   // (round 20n: the other objects')
   // (round 18l: the own light's temperature when not the column's, and the surface's column when not 0.1; see SELFNC_DEF)
   if (typeof s.selft === 'string' && s.selft !== 'colstar') u.searchParams.set('selft', s.selft);   // (round 19a: 'colstar' the default, 'col' until round 18n)
   if (Number.isFinite(s.selfnc) && s.selfnc !== SELFNC_DEF) u.searchParams.set('selfnc', String(s.selfnc));
@@ -1967,7 +2004,8 @@ function linkFor(s) {
 async function copyLink() {
   const href = linkFor(S()), field = $('linkField');
   try { await navigator.clipboard.writeText(href); field.hidden = true; note(T().linkCopied); }
-  catch { field.value = href; field.hidden = false; field.focus(); field.select(); note(T().linkShown, 4000); }
+  // (round 20n: Save and share closed by default, opened for the field)
+  catch { field.value = href; $('saveDetails').open = true; field.hidden = false; field.focus(); field.select(); note(T().linkShown, 4000); }
 }
 // (round 11c, the roadmap's "a QR code for the audience's phones") "QR code", beside "Copy a link", shows the code of the view's
 // link over the stage; in the presenter, Q shows it, large: of the scene's link, or with scenes of one's own, of the page with
@@ -2120,6 +2158,7 @@ async function shot(opts) {
 // the site's mark, white and faint, in the lower right of a saved picture (as on the stage): a help to whoever cites it
 let markImg = null;
 async function watermark(c) {
+  if (!markShown) return;   // (round 20n: hidden, see markSet)
   if (!markImg) { markImg = new Image(); markImg.src = 'logo-white.svg'; }
   try { await markImg.decode(); } catch { return; }
   markOn(c);
@@ -2130,6 +2169,16 @@ function markOn(c) {
   g.save(); g.globalAlpha = 0.2; g.drawImage(markImg, c.width - w - m, c.height - h - m, w, h); g.restore();
   return { w, h, m };
 }
+// (Round 20n, the owner: "the M logo at the lower right may be hidden too") The site's mark on the stage, in saved pictures, in videos and
+// on the presenter's screen: shown by default; its checkbox under Annotations (#markShow), a choice of this device, kept with the
+// settings (mk) whatever a link says (it is not part of the view), and Reset all shows it again
+let markShown = !(saved && saved.mk === 0);
+function markSet(on) {
+  markShown = !!on;
+  $('watermark').hidden = !markShown;
+  $('markShow').checked = markShown;
+}
+markSet(markShown);
 // (round 11c) the shape's buttons and the credit's toggle, named in words.js (the note says the cut, renderSaveSize)
 function renderSaveFrame() {
   const w = T().saveFrame;
@@ -2191,6 +2240,7 @@ function stateFromLink() {
   // (round 18i: the model look's light, a name the engine knows, and its own light's opacity, which the engine bounds)
   if (q.has('glow')) st.glow = q.get('glow');
   if (q.has('selfk')) st.selfk = q.get('selfk');
+  for (const k of ['selfkp', 'selfkw', 'selfke']) if (q.has(k)) st[k] = q.get(k);   // (round 20n: the other objects' opacities, which the engine bounds)
   // (round 18l: the own light's temperature, a name the engine knows, round 18k's ?selfint=1 as selft=int where no selft= is given; and
   // the surface's column, which the engine bounds)
   if (q.has('selft')) st.selft = q.get('selft');
@@ -2208,7 +2258,14 @@ function pressedTab() {
   const tour = lab.dataset.tab === 'tour';
   $('tabExplore').setAttribute('aria-selected', String(!tour)); $('tabTour').setAttribute('aria-selected', String(tour));
   $('tabExplore').tabIndex = tour ? -1 : 0; $('tabTour').tabIndex = tour ? 0 : -1;
+  $('learnOpen').setAttribute('aria-expanded', String(tour));   // (round 20n)
 }
+// (Round 20n, the owner: "the instructions below discreet unless clicked; no explanation by default; once in the learning mode, a more
+// coherent experience") The learning mode is the tab Highlights, on a wide screen too: there, while exploring, the highlights are one
+// quiet line, which opens them at the step last seen and flies to its view; their button closes them again. (A link with ?place=
+// opens in it, as on a narrow screen)
+$('learnOpen').addEventListener('click', () => { setTab('tour'); goPlace(placeI); $('learnClose').focus({ preventScroll: true }); });
+$('learnClose').addEventListener('click', () => { setTab('explore'); $('learnOpen').focus({ preventScroll: true }); });
 $('tabExplore').addEventListener('click', () => setTab('explore'));
 $('tabTour').addEventListener('click', () => setTab('tour'));
 $('tabs').addEventListener('keydown', (e) => {
@@ -2714,7 +2771,7 @@ box.addEventListener('disklost', (e) => {
 // link" writes it), which wins. Not kept: the clock's time and pause, the tap modes, the saved picture's size. After a
 // visit that ended with drawing stopped they are thrown away (see record). "Reset" (the top of the rail) forgets them and
 // puts everything back as at the first visit: the engine's own start (DEF0), the first place, the device's quality.
-const DEF_KEYS = ['mode', 'field', 'marks', 'asym', 'waves', 'ann', 'bg', 'look', 'coMode', 'coV', 'slice', 'sq', 'speed', 'planets', 'ms', 'cpdMdot', 'op', 'stars', 'glow', 'selfk'];   // (round 18i: glow, selfk, the model look's light and its own light's opacity)
+const DEF_KEYS = ['mode', 'field', 'marks', 'asym', 'waves', 'ann', 'bg', 'look', 'coMode', 'coV', 'slice', 'sq', 'speed', 'planets', 'ms', 'cpdMdot', 'op', 'stars', 'glow', 'selfk', 'selfkp', 'selfkw', 'selfke'];   // (round 18i: glow, selfk, the model look's light and its own light's opacity; round 20n: the other objects')
 // (round 18l) the engine's state that a link carries and this device does not keep, which Reset all puts back to the engine's start:
 // the own light's temperature for comparisons, selft, and its surface column, selfnc (round 20: its slider gone), which no control
 // shows (see SELFNC_DEF)
@@ -2728,7 +2785,7 @@ function settingsNow() {
   // (round 14a: mp, the model's parameters as a link writes them, '' for the defaults, see MP-LINK; wb, the wind's brightness)
   // (round 20f: sk0, the own light's default opacity of the day, see keptState)
   return talkHeld({ v: 1, place: PLACES[placeI].id, ...pick(s, DEF_KEYS), ...pick(s, VIEW_KEYS), quality: qChosen ? quality : null, col: colDef ? colToLink(cols, colDef) : '',
-    mp: parDef ? mpToLink(params, parDef) : '', wb: windGain !== 1 ? mpNum(windGain) : '', sk0: SELFK_DEF });   // (round 11a: see talkHeld)
+    mp: parDef ? mpToLink(params, parDef) : '', wb: windGain !== 1 ? mpNum(windGain) : '', sk0: SELFK_DEF, mk: markShown ? 1 : 0 });   // (round 20n: mk, the site's mark)   // (round 11a: see talkHeld)
 }
 function keepNow() {
   clearTimeout(keepTimer); keepTimer = 0;
@@ -2762,6 +2819,7 @@ function resetAll() {
   box.diskSpeed(d.speed || 1);
   cols = {}; applyCols();   // (round 13a: the model look's colours, the defaults)
   params = {}; applyParams(); windGain = 1; applyWind();   // (round 14a: the model's parameters and the wind's brightness, the defaults)
+  markSet(true);   // (round 20n: the site's mark shown)
   applyQuality(d.quality);
   goPlace(0);
   keepNow();
@@ -2905,7 +2963,8 @@ function tiltKept() {
 function tiltInit() {
   if (q.get('tilt') === '0') box.dataset.tilt = 'off';   // (the development switch: the engine draws no offset)
   if (!TILT_DEV) return;   // (a desktop: no sensor, no switch)
-  const sec = $('recentre') && $('recentre').closest('.rail-sec');
+  // (round 20n: inside the View's section, opened on a click; the annotations a section of their own)
+  const sec = $('recentre') && ($('recentre').closest('details') || $('recentre').closest('.rail-sec'));
   if (!sec) return;
   tiltBtn = el('button', { type: 'button', class: 'chip', id: 'tiltSwitch', 'data-tilt': '', 'aria-pressed': 'false', 'aria-describedby': 'tiltNote',
     disabled: reduce, onclick: () => { if (tiltOn) tiltSet(false); else tiltAsk(); } },
@@ -3779,7 +3838,8 @@ async function exConfig(size, fps) {
 // corner" is on under Save an image (the owner, 2026-11-03: free to use, no credit required; the scale bar is in the lower left)
 function exStamp(c) {
   const g = c.getContext('2d'), H = c.height, W = c.width;
-  const mk = markImg && markImg.complete && markImg.naturalWidth ? markOn(c) : { w: Math.round(W * 0.06), h: Math.round(W * 0.06 * 677 / 1874), m: Math.round(W * 0.012) };
+  // (round 20n: not drawn when hidden, see markSet; its place kept for the credit)
+  const mk = markShown && markImg && markImg.complete && markImg.naturalWidth ? markOn(c) : { w: Math.round(W * 0.06), h: Math.round(W * 0.06 * 677 / 1874), m: Math.round(W * 0.012) };
   if (!saveCredit) return;
   const fs = Math.max(10, Math.round(H * 0.017));
   g.save();

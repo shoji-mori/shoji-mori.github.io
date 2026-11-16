@@ -1935,6 +1935,12 @@ uniform float uLit;     // (round 8) the model's look lit by the star (see G_LIT
 // round 18j, as above; DESIGN.md section 52). (Round 18l: by default the temperature of a surface set by the vertical column from
 // above, the owner's mock, and round 18k's and round 18j's by the state's selft, see uSelfT; SELF_INT gone; DESIGN.md section 53)
 uniform vec2 uSelf;
+// (Round 20n, the owner: "make the opacity kappa an option of each object", each its own) The own light's opacity of the other
+// objects, in the model's units as uSelf.x's (kappa SIGMA1): x the pebbles' (on their own Sigma, as K_D: the state's selfkp, per gram
+// of pebbles), y the wind's and z the envelope's (per gram of gas, as the gas's: selfkw, selfke). With the own light the wind and the
+// envelope glow as the gas does, j = K rho T and alpha = K rho, at the temperatures of their grains (tempWind, tempEnv), into the
+// ray's T_b; the light the starlight gives them is not made then (SELF_OLD, round 18j's look, keeps it; DESIGN.md section 57.16)
+uniform vec3 uSelfK;
 #ifdef SELF_OLD
 vec3 selfCol(vec3 m){ return m / max(max(m.r, m.g), max(m.b, 1e-4)); }   // (a material's colour at its full brightness)
 #else
@@ -1958,6 +1964,8 @@ float selfLight(float Tb){
   float x = pow(1.0 + max(Tb, 0.0) / ${G(SELF_LOOK.TK)}, ${G(+(7.2 * SELF_LOOK.A).toFixed(6))});
   return 0.006 * (x - 1.0 / x);
 }
+// (round 20n) its slope where T_b is small, 0.012 (7.2 A) / TK: the display's light of a kelvin there (the wind's wl, see uSelfK)
+const float SELF_WL = ${G(+(0.012 * 7.2 * SELF_LOOK.A / SELF_LOOK.TK).toPrecision(4))};
 // (Round 18l, the owner, of round 18k's own light: "rather than colouring by the optical depth from the centre, give the surface its
 // temperature, as a mock, by the column depth along the disk's vertical") selfX: the depth x that sets the temperature the gas glows
 // at (tempAt's), by the state's selft (SELF_T in the script) in uSelfT.x. 1, 'col' (by default): the vertical column from above,
@@ -2281,6 +2289,27 @@ const float SKIN_LOS = 0.0;
 const float SKIN_LOS = OPT_K - 1.0;
 #endif
 float gTauG = 0.0, gExG = 0.0;
+// (Round 20n, the owner: "the see-through bar should make the gas's light transparent in proportion to it; at 100 % the gas must be
+// gone") The see-through of the gas and the pebbles (uOpac.x, .y: the share seen, f, 1 by default, 0 at 100 %) is a transparency, as a
+// layer's: the picture is f times the one with the component and 1 - f times the one without it. Along a ray the component's own
+// optical depth so far, tau (gTauG the gas's, gTauP the pebbles'), blends its transmission, B = f e^-tau + 1 - f in place of e^-tau
+// (over a step the change of B, B(tau + dtau) / B(tau)), and weighs its own light by f e^-tau / B (seeW): the others' light comes
+// through it at B, its own at f e^-tau, and at f 0 it neither shines nor hides. The gas's blend is made in its sample (sampleDisk: its
+// light weighed, its extinction over the step the blend's, grey; gDG its true depth over the step, which the march adds to gTauG,
+// carried in the kicks' state where the march goes in kicks, the cut's slot); the pebbles' at their plane and layer. The wind and the
+// envelope (uOpac.z, .w), thin, have their light and extinction scaled by f, nearly the same. (Until now uOpac scaled the extinction
+// alone, round 18a: the light stayed, brighter where thick, and 95 % was the end. A blend of every component along the ray in the
+// march's step, tried first, made the default picture 15 to 20 % dearer on the GPU, its paths unused.) gTauWE: the depth of the rest
+// (the wind, the envelope, and the gas's blended part) for the stars behind (seeV). DESIGN.md 57.17
+float gTauP = 0.0, gTauWE = 0.0, gDG = 0.0, gDGe = 0.0;
+float seeB(float f, float tau){ return f * exp(-tau) + (1.0 - f); }
+float seeW(float f, float tau){ if (f >= 1.0) return 1.0; float e = f * exp(-tau); return e / (e + 1.0 - f); }
+// (the transmission's factor over a step of optical depth d: per colour as before where the component is wholly seen)
+vec3 seeT(float f, float tau, float d, vec3 exds){ return f >= 1.0 ? exp(-exds) : vec3(seeB(f, tau + d) / seeB(f, tau)); }
+// (round 20n, the owner: "in the starlight look the background stars must be hidden by the optical depth") the stars' share behind a
+// component in the starlit model look: at the visible light's opacity, (1 + SKIN_LOS) times the march's (K_OCC over K_G), as its
+// scattered light is seen (SKIN_LOS), blended by its see-through; 1 with SKIN_THRU, as before
+float seeV(float f, float tau){ return f >= 1.0 ? exp(-SKIN_LOS * tau) : seeB(f, (1.0 + SKIN_LOS) * tau) / seeB(f, tau); }
 // (Round 15b, the owner: "changing L* should change every observed look") uLstar: the star's luminosity over its default (the
 // parameter L*, lumBase in the script; 1 with data-lscale="0", the page's ?lscale=0, as before). The starlight the visible look
 // scatters (the disk's skin and its diffuse part, the wind's and the envelope's light) is in proportion to it; the star's own glow
@@ -2332,9 +2361,20 @@ const vec4 ENV_M = vec4(ENV_TRY.x, ENV_TRY.y / R_C, ENV_TRY.z, ENV_TRY.w);
 // its layer), z the wind, w the envelope. In every look where each absorbs (the gas line's continuum: the pebbles). 1, 1, 1, 1
 // by default: each factor is a multiplication by 1.0 at the end of what it scales, so that the picture is the one of before,
 // to the bit. (The jet has no extinction of its own: its lobes only shine, laid in where the ray passes the axis.)
+// (Round 20n, the owner: "the gas's light transparent in proportion to the bar, and gone at 100 %") Now the share of each component
+// seen, 0 to 1, a transparency as a layer's: its light and what it hides both go with it (seeB, seeW, seeT below, marchStep), with
+// the planets' disks and the magnetosphere's gas going with the gas's. At 1, 1, 1, 1 the picture is the one of before, to the bit
 uniform vec4 uOpac;
+// (the gas's sample: its light weighed by its share seen, its extinction over the step the blend's, grey; gDGe that depth)
+void seeGas(float ds, inout vec3 em, inout vec3 ex, inout vec3 skin, inout float j){
+  float w = seeW(uOpac.x, gTauG), d = -log(seeB(uOpac.x, gTauG + gDG) / seeB(uOpac.x, gTauG));
+  em *= w; skin *= w; j *= w; ex = vec3(d / max(ds, 1e-6)); gDGe = d;
+}
 vec3 tcolor(float T);   // (defined below, with the temperature palette)
+float tempEnv(float r, float sh);   // (round 20n: defined below, with the disk's temperature)
 const int ENV_N = 40;                   // samples of the envelope in front of and behind the marched cylinder
+// (round 20n) gEnvJ: with the own light, envLight's K rho T at its sample (0 without), which its callers take into the ray's T_b
+float gEnvJ = 0.0;
 void envLight(vec3 p, vec3 rd, out vec3 em, out vec3 ex){
   float r = max(length(p), 0.5), R = length(p.xy), lr = (log(r) - LNE_MIN) / LNE_SPAN, th = atan(p.z, R);
   vec4 mE = texture(uEnvMap, vec2(lr, abs(th) / (0.5 * PI)));   // (round 15b: b, a the envelope's share of the place above and below, see EXCL)
@@ -2351,9 +2391,21 @@ void envLight(vec3 p, vec3 rd, out vec3 em, out vec3 ex){
   if (uLook == 0) em = (ENV_M.x * lit * exp(-ENV_M.y * st.y * cf) / (1.0 + r * r / (ENV_M.w * ENV_M.w)) + ENV_M.z) * K_G * re * MAT_ENV;
   else em = G_ENV * K_G * re * lit * exp(-ENV_KSTAR * st.y) / (1.0 + r * r / 3164.0) * ENV_COL * uLstar;   // (round 15b: uLstar)
 #endif
-  ex = K_G * re * EXT * uOpac.w;   // (round 18a: the envelope's see-through)
+  // (round 18a: its see-through on its extinction, uOpac.w; round 20n: on its light too, see seeGas: thin, nearly a transparency)
+  ex = K_G * re * EXT * uOpac.w; em *= uOpac.w;
 #ifdef FULL
   if (uLook == 1) ex *= OPT_W;   // (round 18g: in the visible look the small grains' K_OCC, as the disk's; see OPT_W)
+#endif
+  gEnvJ = 0.0;
+#ifndef SELF_OLD
+  // (round 20n) with the own light (see uSelfK): its K rho T, at the temperature of its grains in what reaches them of the starlight,
+  // through the disk's shadow (gasK's, as its light's) and its own column toward the star at the visible look's opacity (ENV_KSTAR);
+  // its absorption at the same K, grey; no light of the starlight's; both by its see-through
+  if (uSelf.x > 0.0) {
+    float k = uSelfK.z * re * uOpac.w;
+    gEnvJ = k * tempEnv(r, mix(1.0, smoothstep(0.13, 0.2, abs(p.z) / max(R, 1e-3)), gasK()) * exp(-ENV_KSTAR * st.y));
+    em = vec3(0.0); ex = vec3(k);
+  }
 #endif
 }
 
@@ -2663,6 +2715,16 @@ float tempAt(float R, float lnR, float zh, float x){
 }
 float tMid(float R, float lnR){ return subCap(sqrt(sqrt(tInt4(lnR, 0.0)))); }
 float tSurf(float R){ return subCap(pow(TH_KDS5 * uLum * MP_TS / (R * R), 0.2)); }   // the superheated grains in full starlight (round 14a: MP_TS, T* over its default)
+// (Round 20n) The temperatures of the wind's and the envelope's grains for the own light (see uSelfK). tempWind: tempAt's law with the
+// starlight's fall at the distance r from the star rather than R (the same within 5 % at the wind's base, z under 0.5 R; 233 K rather
+// than 587 K 10 au over the disk at R = 1 au), x the depth toward the star the gas's own light takes there (selfX), the interior's below
+// (at most 8 H up). tempEnv: the grains in the share sh of the star's light at r (tSurf's law, as ENV_SELF's note: 93 K at 100 au, 49
+// K at 500 au), over the floor of the disk's thermal model (T_FLOOR, 10 K) in the shade
+float tempWind(float lnR, float zh, float r, float x){
+  float t4 = tInt4(lnR, zh);
+  return subCap(x > 3.0 ? sqrt(sqrt(t4)) : pow(t4 * sqrt(sqrt(t4)) + TH_KDS5 * uLum * MP_TS * exp(-exp(x)) / (r * r), 0.2));
+}
+float tempEnv(float r, float sh){ return subCap(pow(TH_TF4 * sqrt(sqrt(TH_TF4)) + TH_KDS5 * uLum * MP_TS * sh / (r * r), 0.2)); }
 #ifdef FULL
 // in the part cut away the disk is left out (gDiskOff, see cutWind): its gas, its lit surface, the accretion layers and
 // the vapour; the wind and the envelope stay
@@ -2707,6 +2769,7 @@ float gWindNear = 1.0;
 void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 em, out vec3 ex, out vec3 skin, out float x, out float wl){
   em = vec3(0.0); ex = vec3(0.0); skin = vec3(0.0); wl = 0.0;
   gExG = 0.0;   // (round 18f: the gas's extinction here, for the skin's dimming, SKIN_LOS)
+  gDG = 0.0; gDGe = 0.0;   // (round 20n: the gas's depth over the step, true and blended, see seeGas)
 #ifndef SELF_OLD
   gSelfJ = 0.0;   // (round 18k: the own light's K rho T here, see gTb)
 #endif
@@ -2889,7 +2952,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
         em += G_ACC * K_G * rA * MAT_ACC;   // (round 8: its material's colour; ACC_COL before)
       }
     }
-    ex *= uOpac.x;   // (round 18a: the gas's see-through, its extinction alone; see uOpac)
+    // (round 18a: the gas's see-through scaled its extinction here, uOpac.x; round 20n: a transparency, along the ray, see seeB)
     gExG = dot(ex, vec3(0.2126, 0.7152, 0.0722));   // (round 18f: the gas's, before the wind's; see SKIN_LOS)
 #ifdef FULL
     if (uLook != 0) {
@@ -2911,6 +2974,14 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
       float g = exp(-pow((R - Rv) / wr, 2.0) - pow(dphi / wp, 2.0) - 0.5 * zh * zh);
       em += v.w * vec3(0.55, 0.78, 1.0) * g * exp(-dt / 9.0) / H;
     }
+    // (round 20n) the gas's see-through (see seeGas): gDG its true depth over the step at the look's opacity, which the march adds to
+    // gTauG (in the model look the same as gExG ds, to the bit); with it under 1 its light weighed and its extinction the blend's
+    gDG = dot(ex, LUMW) * ds; gDGe = gDG;
+#ifndef SELF_OLD
+    if (uOpac.x < 1.0) seeGas(ds, em, ex, skin, gSelfJ);
+#else
+    if (uOpac.x < 1.0) { float j0 = 0.0; seeGas(ds, em, ex, skin, j0); }
+#endif
   }
 
   // The magnetically driven wind: gas flowing out along the field lines of the solution (density from the
@@ -2934,30 +3005,54 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     vec4 w = windMap(R, z);             // ln r0, azimuth relative to the foot, travel time, ln density
     // the grains that scatter and absorb: none where the gas left the disk inside about 2.5 R_IN (sublimated)
     float r0w = exp(w.x), r = length(p), rho = exp(w.w) * gapFactor(r0w) * (z > 0.0 ? 1.0 : uWindLow) * smoothstep(R_IN, 2.5 * R_IN, r0w);
-    float gw = G_WIND * uWindK, rise = WIND_RISE;
+    // (round 20n) with the own light (see uSelfK): its K rho T at its grains' temperature (tempWind, at the starlight's depth here, xs:
+    // over the disk's surface the column from above is thin, so that the gas's own light takes that depth too; the interior's with the
+    // state's selft 'int'), into the ray's T_b with the gas's (gSelfJ), its streamers as in its light; its absorption at the same K,
+    // grey; both by its see-through. wl, the light it gives the display per unit length, by the brightness's slope where it is faint
+    // (SELF_WL), for the march's fine steps; its streamers (windTurb) evaluated past the same gate as its light's, 10 times that light
+    // (in one place for both lights: twice, the default picture was some 15 % dearer on the GPU, its own light's paths unused)
+    bool wSelf = false;
+    float gw = G_WIND * uWindK, rise = WIND_RISE, lit, kw = wk * uOpac.z, jT = 0.0;
+#ifndef SELF_OLD
+    wSelf = uSelf.x > 0.0;
+#endif
+    if (wSelf) {
+#ifndef SELF_OLD
+      kw *= uSelfK.y * rho * uComp.w;
+      jT = kw * tempWind(lnR, zh, r, uSelfT.x < -0.5 ? 30.0 : xs);
+#endif
+      wl = jT * SELF_WL; lit = 10.0 * wl;
+    } else {
 #ifdef FULL
     // (round 8: in their cylinder of before, with the wind's fade of before toward its top and side; round 19a continued:
     // the coefficient 9 rather than 5, to match the model look's fade)
     if (uLook != 0) { gw = G_WIND_OBS * uLstar * exp(-9.0 * smoothstep(0.55 * ZB_OBS, ZB_OBS, az) - 9.0 * smoothstep(0.55 * RB_OBS, RB_OBS, R)); rise = 0.0; }   // (round 15b: uLstar)
 #endif
-    float lit = gw * gWindNear * K_G * rho / (1.0 + (uLook == 0 ? pow(r / 15.0, ${G(WIND_SOFT)}) : r * r / 225.0))
+    lit = gw * gWindNear * K_G * rho / (1.0 + (uLook == 0 ? pow(r / 15.0, ${G(WIND_SOFT)}) : r * r / 225.0))
               * phaseGas(dot(p, -rd) / max(r, 1e-3)) * exp(-gasK() * exp(xRim(R, az, xw)) * (1.0 + ed.y))
               * exp(-rise * min(w.w - log(RHO_B) + 1.5 * w.x, 0.0));   // (rho / rho_base)^-WIND_RISE, see G_WIND
     lit *= wk;
     wl = lit;
+    }
     if (lit > 2e-4) {
       // the foot of the line, now at azimuth phi - w.y, has turned by w.z since this gas left it
       q = vec3(w.x, atan(p.y, p.x) - w.y - w.z, w.z);
       vec3 d = q - wq; d.y = mod(d.y + PI, TAU) - PI;
       float st = windTurb(q, wq.x > 50.0 ? vec3(0.0) : abs(d), w.w - log(RHO_B) + 1.5 * w.x, length(p - uCam) / max(r, 0.1));
-      if ((uMode & 8) != 0) em += lit * st * (uLook == 0 ? MAT_WIND : WIND_COL) * uComp.w;   // (round 8: the model's look in its material's colour)
+      if (wSelf) {
+#ifndef SELF_OLD
+        gSelfJ += jT * st;
+#endif
+        ex += vec3(kw * st);
+      } else {
+      if ((uMode & 8) != 0) em += lit * st * (uLook == 0 ? MAT_WIND : WIND_COL) * uComp.w * uOpac.z;   // (round 8: the model's look in its material's colour; round 20n: and its see-through)
       // (round 18g: in the visible look at the small grains' K_OCC, as the disk's, OPT_W; the model look's K_G as before)
-      float kw = wk * uOpac.z;
 #ifdef FULL
       if (uLook == 1) kw *= OPT_W;
 #endif
       ex += K_G * rho * st * EXT * uComp.w * kw;   // (and the wind's with the wind; round 18a: its see-through, uOpac,
-      // on wk, so that the product added is the one of before, whatever the compiler fuses)
+      // on wk, so that the product added is the one of before, whatever the compiler fuses; round 20n: and on its light, see seeGas)
+      }
     }
   }
   wq = q;
@@ -2966,11 +3061,33 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
     gEnvAcc += ds;
     // (round 20: taken at the middle of the length it stands for, not at its end: the envelope's light falls off from the star, and
     // the end's value was too low going away from it and too high coming toward it, unlike the march outside the cylinder)
-    if (gEnvAcc >= envStep(length(p)) * gEnvThr) { vec3 e1, e2; envLight(p - rd * (0.5 * gEnvAcc), rd, e1, e2); float k = gEnvAcc / max(ds, 1e-6); em += e1 * k; ex += e2 * k; gEnvAcc = 0.0; }
+    // (round 20n: and its own light's K rho T, gEnvJ, with the gas's, see uSelfK)
+    if (gEnvAcc >= envStep(length(p)) * gEnvThr) { vec3 e1, e2; envLight(p - rd * (0.5 * gEnvAcc), rd, e1, e2); float k = gEnvAcc / max(ds, 1e-6); em += e1 * k; ex += e2 * k; gEnvAcc = 0.0;
+#ifndef SELF_OLD
+      gSelfJ += gEnvJ * k;
+#endif
+    }
   }
   x = xs;   // carry the true endpoint into the next continuum segment
 }
+// (Round 20n) A step of the march drawn whole (the model look), from a sample (sampleDisk's em, ex, skin, with the gas's see-through
+// blended in it, see seeGas): its light into col times kc (the depth's haze, or the cut's veil), its own light into gTb times kt, its
+// transmission into tr; and the depths so far along: gTauG the gas's true one (its blend, and the skin's dimming, SKIN_LOS), gTauWE
+// the rest's (the stars behind, seeV). The expressions of before, to the bit
+void marchStep(vec3 em, vec3 ex, vec3 sk, float ds, float kc, float kt, inout vec3 col, inout vec3 tr){
+  vec3 a = exp(-ex * ds);
+  col += tr * sk * kc;
+  col += tr * em * ds * transferWeight(ex * ds) * kc;
+#ifndef SELF_OLD
+  if (gSelfJ > 0.0) gTb += gSelfJ * ds * dot(tr * transferWeight(ex * ds), LUMW) * kt;   // (round 18k: the own light's T_b, see gTb)
+#endif
+  tr *= a;
+  gTauG += gDG;   // (round 18f: the gas's column so far, for the skin's dimming, SKIN_LOS; round 20n: and its see-through)
+  gTauWE += dot(ex, LUMW) * ds - gDGe;
+}
 // One centred continuum interval, including absorption of the skin emission.
+// (round 20n: with the gas's see-through blended in its sample, gTauG its depth so far at the look's own opacity, carried in the kicks'
+// state, see seeGas)
 void continuumInterval(vec3 p, vec3 rd, float x0, float ds, inout vec3 wq,
                        out vec3 light, out vec3 trans, out float x, out float wl){
   vec3 em, ex, sk;
@@ -2980,6 +3097,7 @@ void continuumInterval(vec3 p, vec3 rd, float x0, float ds, inout vec3 wq,
   vec3 tau = ex * ds;
   trans = exp(-tau);
   light = (em * ds + sk) * transferWeight(tau);
+  gTauG += gDG;
 }
 float maxChannel(vec3 v){ return max(v.x, max(v.y, v.z)); }
 // The envelope outside the cylinder, marched in ENV_N steps from t0 to t1 (it is smooth): beyond the disk the
@@ -2987,6 +3105,18 @@ float maxChannel(vec3 v){ return max(v.x, max(v.y, v.z)); }
 // (round 10a: from its step i, until the kick's budget is spent, see SPLIT: true when it has ended; whole where the ray is
 // drawn in one go, the budget unbounded. Its part cut away (skip), never given, is gone)
 const float ENV_B = 30.0;
+// (Round 20n) A sample of the envelope standing for a length ds (envLight's em and ex, with its see-through, its own light in gEnvJ):
+// its light into col, its own light into gTb, its transmission into tr, its depth into gTauWE (the stars behind). The expressions of
+// before, to the bit
+void envAdd(vec3 em, vec3 ex, float ds, inout vec3 col, inout vec3 tr){
+  vec3 a = exp(-ex * ds);
+  col += tr * em * ds * transferWeight(ex * ds);
+#ifndef SELF_OLD
+  if (gEnvJ > 0.0) gTb += gEnvJ * ds * dot(tr * transferWeight(ex * ds), LUMW);   // (round 20n: its own light, see uSelfK)
+#endif
+  tr *= a;
+  gTauWE += dot(ex, LUMW) * ds;
+}
 bool envMarch(vec3 ro, vec3 rd, float t0, float t1, float jitter, inout int i, inout vec3 col, inout vec3 tr, inout float budget){
   if (t1 <= t0) return true;
   int n = uEnv < 0.5 ? ENV_N / 2 : ENV_N;   // (round 8: half as many while it is faint, from 40 to 110 au away)
@@ -3008,9 +3138,7 @@ bool envMarch(vec3 ro, vec3 rd, float t0, float t1, float jitter, inout int i, i
 #endif
     i++;
     vec3 em, ex; envLight(ro + rd * t, rd, em, ex);
-    vec3 a = exp(-ex * ds);
-    col += tr * em * ds * transferWeight(ex * ds);
-    tr *= a;
+    envAdd(em, ex, ds, col, tr);   // (round 20n: with its own light, its see-through and its depth, see envAdd)
   }
   return true;
 }
@@ -3056,9 +3184,9 @@ bool cutWind(vec3 ro, vec3 rd, float t1, float jitter, inout float t, inout floa
     p = ro + rd * ts;
     vec3 em, ex, sk; float x;
     sampleDisk(p, rd, xPrev, ds, wq, em, ex, sk, x, wl);
-    vec3 a = exp(-ex * ds);
-    col += tr * em * ds * transferWeight(ex * ds) * CUT_VEIL;
-    tr *= a;
+    // (round 20n: as the march's step, its light and own light at CUT_VEIL, its see-through and depths, see marchStep; the skin, none
+    // in the part cut away, left out as before)
+    marchStep(em, ex, vec3(0.0), ds, CUT_VEIL, CUT_VEIL, col, tr);
     xPrev = x; t = t2; j++;
   }
   gDiskOff = false;
@@ -3148,22 +3276,23 @@ void sheet(vec3 p, vec3 rd, inout vec3 col, inout vec3 tr){
     // millimetre: the pebbles' thermal emission (Rayleigh-Jeans, nearly thin); in scattered light and the
     // mid-infrared they lie inside the opaque disk
     // (round 18a: the pebbles' see-through, uOpac.y, on what they take out of the ray, here and below)
-    if (uLook == 3) { float tm = K_MM * sd / max(mu, 0.15); col += tr * G_MM * (Tm / 100.0) * absorptionFraction(tm) * MM_COL; tr *= exp(-tm * uOpac.y); }
-    else if (uLook == 4) tr *= exp(-K_MM * sd / max(mu, 0.15) * uOpac.y);
-    else tr *= exp(-K_D * sd / max(mu, 0.03) * uOpac.y);
+    // (round 20n: their see-through a transparency, seeB: the plane is crossed once, so its own light is f of it and it lets 1 - f through)
+    if (uLook == 3) { float tm = K_MM * sd / max(mu, 0.15); col += tr * G_MM * (Tm / 100.0) * absorptionFraction(tm) * MM_COL * uOpac.y; tr *= seeB(uOpac.y, tm); }
+    else if (uLook == 4) tr *= seeB(uOpac.y, K_MM * sd / max(mu, 0.15));
+    else tr *= seeB(uOpac.y, K_D * sd / max(mu, 0.03));
     return;
   }
 #endif
-  float tau = K_D * sd / max(mu, 0.03);
+  float tau = (uSelf.x > 0.0 ? uSelfK.x : K_D) * sd / max(mu, 0.03);   // (round 20n: with the own light their own opacity, see uSelfK)
   float tmm = K_MM * sd / max(mu, 0.3);
   // (round 18i: with the model look's own light, their thermal light through their own absorption, Kirchhoff's, as the gas's)
 #ifndef SELF_OLD
   // (round 18k: T_mid times their absorbed fraction, into the ray's T_b, see gTb)
-  if (uSelf.x > 0.0) { gTb += dot(tr, LUMW) * srcG.r * absorptionFraction(tau); tr *= exp(-tau * uOpac.y); return; }
+  if (uSelf.x > 0.0) { gTb += dot(tr, LUMW) * srcG.r * absorptionFraction(tau) * uOpac.y; tr *= seeB(uOpac.y, tau); return; }   // (round 20n: seeB)
 #endif
   vec3 src = uSelf.x > 0.0 ? srcG.rgb * absorptionFraction(tau) : srcG.rgb * absorptionFraction(tmm) * srcG.a;
-  col += tr * src;
-  tr *= exp(-tau * uOpac.y);
+  col += tr * src * uOpac.y;   // (round 20n: their see-through a transparency, see seeB)
+  tr *= seeB(uOpac.y, tau);
 }
 // (Round 15b, the owner: "I'd like the pebbles' thickness considered, at least roughly (a plane now?)") The pebble layer as a
 // volume in the model look and the millimetre look: a Gaussian in height, H_peb = uPebH H (PEB_H, 0.1 by default: millimetre
@@ -3199,17 +3328,20 @@ void pebSlab(vec3 ro, vec3 rd, float t0, float t1, float tz, inout vec3 col, ino
   if (sd <= 0.0) return;
   float c = pebColumn(p0.z, p1.z, t1 - t0, Hp), mu = abs(rd.z);
 #ifdef FULL
-  if (uLook == 3) { float tm = K_MM * sd * c; col += tr * G_MM * (Tm / 100.0) * absorptionFraction(tm) * MM_COL; tr *= exp(-tm * uOpac.y); return; }   // (round 18a: uOpac.y)
+  // (round 20n: their see-through along the steps through the layer, gTauP, see seeB)
+  if (uLook == 3) { float tm = K_MM * sd * c; col += tr * G_MM * (Tm / 100.0) * absorptionFraction(tm) * MM_COL * seeW(uOpac.y, gTauP); tr *= seeT(uOpac.y, gTauP, tm, vec3(tm)); gTauP += tm; return; }   // (round 18a: uOpac.y)
 #endif
-  float tauAll = K_D * sd / max(mu, 0.03), tau = K_D * sd * c;
+  float kD = uSelf.x > 0.0 ? uSelfK.x : K_D;   // (round 20n: with the own light their own opacity, see uSelfK)
+  float tauAll = kD * sd / max(mu, 0.03), tau = kD * sd * c;
+  float wP = seeW(uOpac.y, gTauP);   // (round 20n: their see-through along the steps through the layer, gTauP, see seeB)
 #ifdef SELF_OLD
-  if (uSelf.x > 0.0) col += tr * srcG.rgb * absorptionFraction(tau);   // (round 18i: their own light over the step's column, see sheet)
+  if (uSelf.x > 0.0) col += tr * srcG.rgb * absorptionFraction(tau) * wP;   // (round 18i: their own light over the step's column, see sheet)
 #else
-  if (uSelf.x > 0.0) gTb += dot(tr, LUMW) * srcG.r * absorptionFraction(tau);   // (round 18k: over the step's column, into T_b, see sheet)
+  if (uSelf.x > 0.0) gTb += dot(tr, LUMW) * srcG.r * absorptionFraction(tau) * wP;   // (round 18k: over the step's column, into T_b, see sheet)
 #endif
   else
-  col += tr * srcG.rgb * absorptionFraction(K_MM * sd / max(mu, 0.3)) * srcG.a * (tauAll > 1e-4 ? absorptionFraction(tau) / absorptionFraction(tauAll) : c * max(mu, 0.03));
-  tr *= exp(-tau * uOpac.y);
+  col += tr * srcG.rgb * absorptionFraction(K_MM * sd / max(mu, 0.3)) * srcG.a * (tauAll > 1e-4 ? absorptionFraction(tau) / absorptionFraction(tauAll) : c * max(mu, 0.03)) * wP;
+  tr *= seeT(uOpac.y, gTauP, tau, vec3(tau)); gTauP += tau;
 }
 
 // (round 8) The jet (see JET in the script): its emission per unit length at p (relative; its density, as 1 / r^2, times the
@@ -4299,7 +4431,7 @@ vec3 magLight(vec3 ro, vec3 rd, float jitter, vec3 starGlow, float tCut, vec2 tS
     if (uLook <= 1 && tcs > 0.0 && q > 0.04) surf = unstretch(STARCOL * (dbg(6, 0.25) * q * q * smoothstep(0.04, 0.08, q))) * uStarK;
   }
   if (uLook > 1) em = vec3(0.0);   // (the columns and the gas disk glow in the model's look and in scattered light only)
-  em *= gasL();                    // (round 7: they are gas)
+  em *= gasL() * uOpac.x;          // (round 7: they are gas; round 20n: and fade with its see-through, see seeB)
   return uMag * (em * uStarK + surf) + (hit ? 1.0 - uMag : 1.0) * starGlow;   // (uStarK: the magnetosphere keeps its own light through the automatic exposure)
 }
 // the transmission behind the star (what it hides as the magnetosphere shows)
@@ -4320,7 +4452,7 @@ void starAt(vec3 ro, vec3 rd, float jitter, vec3 starGlow, float tCut, vec2 tSki
 // march in kicks has no room to carry)
 void midplaneAt(vec3 ro, vec3 rd, float tz, inout vec3 col, inout vec3 tr, inout float cL){
 #ifdef FULL
-  if (uMag > 0.0 && uLook <= 1) { vec3 e = tr * (uMag * uStarK * gasL()) * magGasDisk((ro + rd * tz).xy, abs(rd.z)); col += e; cL += dot(e, LUMW); }
+  if (uMag > 0.0 && uLook <= 1) { vec3 e = tr * (uMag * uStarK * gasL() * uOpac.x) * magGasDisk((ro + rd * tz).xy, abs(rd.z)); col += e; cL += dot(e, LUMW); }
 #endif
   sheet(ro + rd * tz, rd, col, tr);
 }
@@ -4348,6 +4480,7 @@ float faceForeground(vec3 ro, vec3 rd, float tIn){
   float t = b.x, end = min(b.y, tIn);
   vec3 wq = vec3(99.0);
   float xp = lnTauStar(ro + rd * t);
+  gTauG = 0.0;   // (round 20n: this ray's own, for the gas's see-through; the face's refining pass calls this four times)
   for (int i = 0; i < 320; i++) {
     if (t >= end || max(tr.r, max(tr.g, tr.b)) < 0.01) break;
     vec3 p = ro + rd * t;
@@ -4356,6 +4489,7 @@ float faceForeground(vec3 ro, vec3 rd, float tIn){
     vec3 em, ex, skin; float x, wl;
     sampleDisk(ro + rd * (t + 0.5 * ds), rd, xp, ds, wq, em, ex, skin, x, wl);
     tr *= exp(-ex * ds); xp = x; t += ds;
+    gTauG += gDG;   // (round 20n: the gas's depth along this pass's own ray, for its see-through, see seeGas)
   }
   return dot(tr, vec3(0.2126, 0.7152, 0.0722));
 }
@@ -4687,7 +4821,7 @@ void main(){
       col = s0.rgb; tr = s1.rgb; gEnvAcc = s2.a; i = int(s3.x); cL = s3.z;
       inCut = (fl & F_CUT) != 0;
       if (inCut) { tc = s0.a; xc = s1.a; wqc = s2.xyz; tsc = s3.w; wlc = (fl & F_CFINE) != 0 ? WIND_FINE + 1.0 : 0.0; }
-      else { t = s0.a; xPrev = s1.a; wq = s2.xyz; }
+      else { t = s0.a; xPrev = s1.a; wq = s2.xyz; gTauG = s3.w; }   // (round 20n: the gas's depth so far, for its see-through, in the cut's slot)
       // (wl only says whether the next step is a fine one, WIND_FINE)
       wl = (fl & F_FINE) != 0 ? WIND_FINE + 1.0 : 0.0;
       sheetDone = (fl & F_SHEET) != 0; starDone = (fl & F_STAR) != 0;
@@ -4818,7 +4952,7 @@ void main(){
           if (t >= jL.y) { col += tr * jetLobe(ro, rd, -1.0, jj, true).x * jetCol(); jL.y = 1e9; budget -= KW_JET; }
 #ifdef FULL
           if (!starDone && t >= tStar) { starAt(ro, rd, jitter, starGlow, tCut, tSkip0, col, tr, cL); starDone = true; budget -= KW_STAR; }
-          if (t >= tPl) { vec4 pl = planetLight(ro, rd, aspect); col += tr * pl.rgb; tr *= exp(-pl.a * uOpac.x); tPl = 1e9; budget -= KW_PL; }
+          if (t >= tPl) { vec4 pl = planetLight(ro, rd, aspect); col += tr * pl.rgb * uOpac.x; tr *= seeB(uOpac.x, pl.a); tPl = 1e9; budget -= KW_PL; }
 #endif
           continue;
         }
@@ -4839,7 +4973,7 @@ void main(){
         if (!starDone && t1 >= tStar) { vec3 sg = tr * starGlow; col += sg; cL += dot(sg, LUMW); starDone = true; }
 #endif
 #ifdef FULL
-        if (t1 >= tPl) { vec4 pl = planetLight(ro, rd, aspect); col += tr * pl.rgb; tr *= exp(-pl.a * uOpac.x); tPl = 1e9; budget -= KW_PL; }
+        if (t1 >= tPl) { vec4 pl = planetLight(ro, rd, aspect); col += tr * pl.rgb * uOpac.x; tr *= seeB(uOpac.x, pl.a); tPl = 1e9; budget -= KW_PL; }
         // (the millimetre look: the volume neither emits nor absorbs there, only the pebble sheet and the star; skip its
         // samples. From origin/main's dc55d44)
         if (uLook == 3) { t = t1; continue; }
@@ -4847,15 +4981,8 @@ void main(){
         p = ro + rd * t1;
         vec3 em, ex, sk; float x;
         sampleDisk(p, rd, xPrev, ds, wq, em, ex, sk, x, wl);
-        vec3 a = exp(-ex * ds);
         float ak = airK(t1);   // (round 8: the depth's haze, see AIR)
-        col += tr * sk * ak;
-        col += tr * em * ds * transferWeight(ex * ds) * ak;
-#ifndef SELF_OLD
-        if (gSelfJ > 0.0) gTb += gSelfJ * ds * dot(tr * transferWeight(ex * ds), LUMW);   // (round 18k: the own light's T_b, see gTb)
-#endif
-        tr *= a;
-        gTauG += gExG * ds;   // (round 18f: the gas's column so far, for the skin's dimming, SKIN_LOS)
+        marchStep(em, ex, sk, ds, ak, 1.0, col, tr);   // (round 20n: with the see-through and the components' depths, see marchStep)
         xPrev = x; t = t1;
       }
       if (!inCut && i >= 32768) marchDone = true;   // (its last step taken as the loop ended: see cutWind's end)
@@ -4864,7 +4991,8 @@ void main(){
     }
     // (round 20) the envelope's length marched since its last sample, at the march's end: left out until now, it was the more of a ray's
     // envelope the less of the cylinder the ray crossed, and the cylinder's top showed as a line from afar (600 au)
-    if (marchDone && uEnv > 0.0 && uLook <= 1 && gEnvAcc > 0.0) { vec3 e1, e2; envLight(ro + rd * (t - 0.5 * gEnvAcc), rd, e1, e2); vec3 tau = e2 * gEnvAcc; col += tr * e1 * gEnvAcc * transferWeight(tau); tr *= exp(-tau); gEnvAcc = 0.0; }
+    // (round 20n: as a sample of the envelope, envAdd: with its own light, which the own light missed here, and its see-through)
+    if (marchDone && uEnv > 0.0 && uLook <= 1 && gEnvAcc > 0.0) { vec3 e1, e2; envLight(ro + rd * (t - 0.5 * gEnvAcc), rd, e1, e2); envAdd(e1, e2, gEnvAcc, col, tr); gEnvAcc = 0.0; }
     if (marchDone) ph = PH_BACK;
   }
   // (4) what the march left: the midplane's crossing, the planets' points of light and the jet's lobes behind its end, and
@@ -4938,6 +5066,10 @@ ${BG.LAMPS.map(([x, y, z, , k]) => `      { float t = acos(clamp(dot(dSky, norma
     // from 8 to 4.6 times, the envelope dimmer for no change of its own
     float lCw = cL / max(starOcc, 1e-6) / uStarK, lTw = lT - lC + lCw;
     float aeW = (1.0 - face.a) * (1.0 - clamp(lCw / max(lTw, 1e-9), 0.0, 1.0));
+    // (round 20n, the owner: "in the starlight look the background stars must be hidden by the optical depth") the starlit model look's
+    // stars and the cloud behind, at the visible light's opacity of the gas, the wind and the envelope in front (seeV), as its scattered
+    // light is seen; until now at the march's translucent K_G alone, so that the stars shone through the opaque disk
+    if (uLook == 0 && uSelf.x <= 0.0) bg *= seeV(uOpac.x, gTauG) * exp(-SKIN_LOS * gTauWE);
     col = col * uExposure + tr * bg + sky;
     // asinh stretch of the luminance, as for astronomical images of high dynamic range; hue is kept and
     // channels that run past white roll off toward it
@@ -4959,7 +5091,7 @@ ${BG.LAMPS.map(([x, y, z, , k]) => `      { float t = acos(clamp(dot(dSky, norma
       fragColor = vec4(col, inCut ? tc : t);
       fragS1 = vec4(tr, inCut ? xc : xPrev);
       fragS2 = vec4(inCut ? wqc : wq, gEnvAcc);
-      fragS3 = vec4(float(i), float((jc * 16 + ph) * 2048 + fl), cL, tsc);
+      fragS3 = vec4(float(i), float((jc * 16 + ph) * 2048 + fl), cL, inCut ? tsc : gTauG);   // (round 20n: gTauG out of the cut, see seeB)
     }
     return;
   }
@@ -5494,7 +5626,14 @@ void main(){
   // opacity, where the law does not hold for gas at tens of kelvin. At 2 the disk was thick everywhere: a grey surface temperature
   // in the first view, the planet's disk hidden, a drum with a cut edge from afar. At 0.03 the inner disk is thick and the outer thin:
   // the gap, the planet's disk and the taper show, and edge-on the lit surfaces' warm layers frame the cold midplane (DESIGN.md 57.8)
-  const SELF = { K_MIN: 0.001, K_MAX: 100, DEF: 0.03, SIGMA1: 1700, G: SELF_LOOK.G, NC_MIN: 0.001, NC_MAX: 10, NC_DEF: 0.1 };
+  // (Round 20n, the owner: "make the opacity kappa an option of each object", each its own) DEF_P, DEF_W, DEF_E: the defaults of the
+  // pebbles' (per gram of pebbles: 0.7, the K_D their own light took until now, 1200 in Sigma's units, 0.706: 0.8 % less, unseen), the
+  // wind's (the disk's gas with its small grains, lifted off it: the gas's 0.03 per gram of gas) and the envelope's (0.01, a third: its
+  // density is the starlit picture's, ENV_RHO, an infall of 2.7e-4 M_sun/yr, tens of times a real envelope's, and at 0.03 its own light
+  // veiled the far views in a grey haze, 15 to 20 levels in 255, the disk's contrast lost), the state's selfkp, selfkw and selfke, within
+  // K_MIN to K_MAX as the gas's selfk (uSelfK in the GLSL; DESIGN.md section 57.16)
+  const SELF = { K_MIN: 0.001, K_MAX: 100, DEF: 0.03, DEF_P: 0.7, DEF_W: 0.03, DEF_E: 0.01, SIGMA1: 1700, G: SELF_LOOK.G, NC_MIN: 0.001, NC_MAX: 10, NC_DEF: 0.1 };
+  const SELF_KS = ['selfk', 'selfkp', 'selfkw', 'selfke'];   // (round 20n: the state's opacities, the gas's, the pebbles', the wind's, the envelope's)
   // (round 18l) the own light's temperature, the state's selft (uSelfT.x in the GLSL, see selfX): 'col' the column depth's (the
   // default; round 18n: with the surface only where it rises outward, selfW), 'colstar' round 18m's (the column's depth with the
   // starlight's shadow), 'star' round 18k's (the depth toward the star, P), 'int' round 18j's (the interior's)
@@ -5873,8 +6012,9 @@ void main(){
   // (round 14a) The wind's brightness as the viewer chose it in the model look (box.diskWindGain): a factor on G_WIND, a display
   // choice (the owner tunes the wind's look), kept here so that an engine built again keeps it
   const WIND_GAIN = { k: 1, MIN: 0.3, MAX: 10 };
-  // (round 18a) the see-through's range: a factor on a component's extinction (the state's op, opt.opac; see uOpac)
-  const OPAC = [0.05, 1];
+  // (round 18a) the see-through's range: a factor on a component's extinction (the state's op, opt.opac; see uOpac). (Round 20n: the
+  // share of the component seen, a transparency, see seeB in the GLSL; down to 0, where it is gone, rather than 0.05)
+  const OPAC = [0, 1];
   // (round 18a) the background's stars: the number of them, times the default's (the state's stars, opt.stars; see uStars)
   const STARS = [0.3, 5];
   // (round 15b) the gas body's glow in the model look by default (uGGas in the GLSL; data-ggas, the page's ?ggas=, to compare)
@@ -6087,7 +6227,7 @@ void main(){
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
     const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
-      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV', 'uMP', 'uWindK', 'uGGas', 'uJetOcc', 'uLstar', 'uExcl', 'uCoEnv', 'uPebH', 'uFast', 'uOpac', 'uStars', 'uSelf', 'uSelfT', 'uDbg', 'uDbg2', 'uDbg3'];   // R19DBG
+      'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV', 'uMP', 'uWindK', 'uGGas', 'uJetOcc', 'uLstar', 'uExcl', 'uCoEnv', 'uPebH', 'uFast', 'uOpac', 'uStars', 'uSelf', 'uSelfT', 'uSelfK', 'uDbg', 'uDbg2', 'uDbg3'];   // R19DBG
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS, 'show'), progBloom = link(BLOOM_FS, 'bloom');
     // (round 8) the bloom's targets, a quarter of accT's size (made with it): A on unit 18 (for SHOW_FS), B on unit 19
@@ -6836,7 +6976,10 @@ void main(){
       const dx = P[0] - cam[0], dy = P[1] - cam[1], dz = P[2] - cam[2], mu = Math.abs(dz) / Math.sqrt(dx * dx + dy * dy + dz * dz);
       const ice = 1 - ss(MODEL.TICE - 6, MODEL.TICE + 6, tMidJS(Rc, lumNow));
       const kp = compAmp[2] * compAmp[2] * (3 - 2 * compAmp[2]);   // (round 7: with the pebbles off, they hide nothing)
-      return Math.exp(-kp * MODEL.K_D * MODEL.SD0 * SigmaJS(Rc) * pebEdge(Rc) * pebbleAll(Rc) * (0.5 + 0.5 * ice) / Math.max(mu, 0.03) * opt.opac[1]);   // (round 18a: their see-through)
+      // (round 20n: with the own light, their own opacity, as the picture's, see uSelfK)
+      // (round 20n: their see-through a transparency, as the picture's plane, seeB)
+      const f = opt.opac[1];
+      return f * Math.exp(-kp * (selfOn() ? opt.selfkp * SELF.SIGMA1 : MODEL.K_D) * MODEL.SD0 * SigmaJS(Rc) * pebEdge(Rc) * pebbleAll(Rc) * (0.5 + 0.5 * ice) / Math.max(mu, 0.03)) + (1 - f);   // (round 18a: their see-through)
     }
     // the starlight scattered toward the observer at P (relative to 90 degrees), behind the sheet or not (written
     // without Math.hypot, which is slow, as these run for every sample of every line in every frame)
@@ -7143,6 +7286,8 @@ void main(){
       stars: 1,
       // (round 18i) the model look's light, 'star' or 'self', and the opacity of its own light, cm^2 per gram of gas (see SELF)
       glow: 'star', selfk: SELF.DEF,
+      // (round 20n) the own light's opacity of the pebbles (per gram of pebbles), the wind and the envelope (per gram of gas)
+      selfkp: SELF.DEF_P, selfkw: SELF.DEF_W, selfke: SELF.DEF_E,
       // (round 18l) the own light's temperature (SELF_T) and the surface's column Sigma_s, g cm^-2 (see SELF)
       selft: 'colstar', selfnc: SELF.NC_DEF
     };
@@ -9147,7 +9292,7 @@ void main(){
       const bgK = bgMoves() ? 0 : bgLeft(), bgA = bgMoves() ? 0 : viewOff() + bgK;
       // a still picture (see ACC_MAX): the same state as the last frame, drawn by the same program
       const sig = [time, ...cam, ...basis.f, rW, rH, canvas.width, opt.steps, opt.fov, opt.seed, starL, LOOKS[lookNow], rSn, opt.mode, BG.MODES[opt.bg], bgK, ...compAmp, ...opt.gain,
-        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), parGen, colGen, cpdMdot, ...opt.opac, camRoll, opt.stars, selfOn() ? opt.selfk : 0, selfOn() ? SELF_T[opt.selft] : 0, selfOn() ? opt.selfnc : 0, coLn, expo];   // (round 18l: its temperature and the surface's column, see SELF_T) (round 18i: the own light and its opacity, see SELF; round 13a: colGen, the materials' colours, see box.diskColours; round 14a: parGen, the model's parameters, see box.diskParams)
+        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), parGen, colGen, cpdMdot, ...opt.opac, camRoll, opt.stars, selfOn() ? opt.selfk : 0, ...(selfOn() ? [opt.selfkp, opt.selfkw, opt.selfke] : [0, 0, 0]), selfOn() ? SELF_T[opt.selft] : 0, selfOn() ? opt.selfnc : 0, coLn, expo];   // (round 18l: its temperature and the surface's column, see SELF_T) (round 18i: the own light and its opacity, see SELF; round 20n: the other objects', uSelfK; round 13a: colGen, the materials' colours, see box.diskColours; round 14a: parGen, the model's parameters, see box.diskParams)
       // (a new view: the exposure is measured afresh, with its moves counted anew; a new exposure or CO range: measured again)
       const ne = sig.length - 2, viewNew = sig.length !== lastSig.length || sig.some((v, i) => i < ne && v !== lastSig[i]);
       // (Disk Lab v2) While only the clock moves, the picture is not started over but averaged with the last few frames
@@ -9276,6 +9421,7 @@ void main(){
       // (round 18i) the model look's own light (see SELF): the opacity in the model's units, 0 with the starlight's; the display's light
       // per kelvin over the outburst's exposure (expo above), which its temperature follows (uLum)
       gl.uniform2f(U.uSelf, selfOn() ? opt.selfk * SELF.SIGMA1 : 0, SELF.G / Math.pow(burstL(), 0.6));
+      gl.uniform3f(U.uSelfK, opt.selfkp * SELF.SIGMA1, opt.selfkw * SELF.SIGMA1, opt.selfke * SELF.SIGMA1);   // (round 20n: the other objects', see uSelfK)
       // (round 18l) its temperature's depth (see selfX): which (SELF_T) and ln(SIGMA1 / 2 Sigma_s) for the column's (none with SELF_OLD)
       gl.uniform2f(U.uSelfT, SELF_T[opt.selft], Math.log(SELF.SIGMA1 / (2 * opt.selfnc)));
       gl.uniform1f(U.uFocus, Math.max(camD, 1e-3));
@@ -9287,7 +9433,8 @@ void main(){
       gl.uniform1f(U.uJetOcc, opt.jetOcc ? 1 : 0); gl.uniform1f(U.uLstar, opt.lscale ? lumBase : 1);   // (round 15b: see jetOcc, uLstar)
       // (round 18a: the see-through, see uOpac. Round 20: with the own light the gas's is 1, as kappa alone sets its opacity: a factor on
       // its extinction alone would lift its brightness temperature to 1 / factor of its temperature where it is thick)
-      gl.uniform4f(U.uOpac, selfOn() ? 1 : opt.opac[0], opt.opac[1], opt.opac[2], opt.opac[3]);
+      // (round 20n: with the own light too, a transparency now, not a factor on the extinction that broke Kirchhoff's law: see seeB)
+      gl.uniform4f(U.uOpac, opt.opac[0], opt.opac[1], opt.opac[2], opt.opac[3]);
       gl.uniform1f(U.uStars, opt.stars);   // (round 18a: the background's stars, see uStars)
       gl.uniform1f(U.uPebH, opt.pebH);   // (round 15b: the pebble layer's thickness, see uPebH)
       gl.uniform2f(U.uExcl, exclOn ? 1 : 0, envLnRho0); gl.uniform1f(U.uCoEnv, opt.coEnv ? envAmp * envAmp * (3 - 2 * envAmp) : 0);   // (round 15b: see EXCL, coGas)
@@ -9553,6 +9700,12 @@ void main(){
       const QN = { T: ['温度', 'temperature'], rho: ['ガスの密度', 'gas density'], layers: ['磁場とガスの結びつきによる領域', 'the regions of how the field couples to the gas'] }[opt.sliceQ] || ['温度', 'temperature'];
       const CON = { chan: ['チャンネルマップ(' + opt.coV.toFixed(2) + ' km/s)', 'a channel map at ' + opt.coV.toFixed(2) + ' km/s'], m1: ['平均の視線速度(モーメント 1)', 'its mean velocity (moment 1)'], m0: ['積分強度(モーメント 0)', 'its integrated intensity (moment 0)'] }[opt.coMode];
       const cutJa = opt.cut === 'quarter' ? '右手前の 4 分の 1 を切り取り(右の切り口を正面から見る)' : '星を通る鉛直な面で手前の半分を切り取り', cutEn = opt.cut === 'quarter' ? ' The near right quarter is cut away (its right face seen face-on)' : ' The near half is cut away along a vertical plane through the star';
+      // (round 20n) the own light's opacities of the objects shown (the envelope as it shows from afar), each named; the gas's alone unnamed
+      const selfKText = (j) => {
+        const ks = [[3, 'selfk', 'ガス', 'gas'], [4, 'selfkp', '小石', 'pebbles'], [8, 'selfkw', '円盤風', 'wind'], [32, 'selfke', 'エンベロープ', 'envelope']]
+          .filter(([b, k]) => (opt.mode & b) && (k !== 'selfke' || envVis > 0.5)).map(([, k, nj, ne]) => [j ? nj : ne, +opt[k].toPrecision(2)]);
+        return ks.length === 1 && ks[0][0] === (j ? 'ガス' : 'gas') ? String(ks[0][1]) : ks.map(([n, v]) => n + ' ' + v).join(j ? '、' : ', ');
+      };
       const LKD = { optical: ['可視光・近赤外線の散乱光で見た姿で、星の光を散乱する表層と円盤風が見えます。', ' Seen in scattered light (visible and near infrared): the surface and the wind scatter starlight.'],
         mir: ['中間赤外線で見た姿で、暖かい表層の熱放射が内側ほど明るく見えます。', ' Seen in the mid-infrared: the warm surface glows, brightest close in.'],
         mm: ['ミリ波で見た姿で、赤道面に沈んだ小石の熱放射が、惑星のギャップのすぐ外の環とともに見えます。', ' Seen at millimetre wavelengths: the pebbles at the midplane glow, with a ring just outside the planet\u2019s gap.'],
@@ -9561,7 +9714,8 @@ void main(){
         ...(selfOn() ? { model: selfOld ? ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、明るさは輝度温度です(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g)。', ' Shown in its own thermal light, with no starlight on it: the brightness is the brightness temperature (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g).']
           // (round 18l: and with the column depth's temperature the surface's column)
           // (round 18m: the brightness alone by default, in the gas's colour; ?selfhue=1 brightness and colour)
-          : ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、' + (selfTcol ? '明るさと色は輝度温度(明るさは対数の尺度)です' : '明るさは輝度温度(対数の尺度)です') + '(不透明度 ' + +opt.selfk.toPrecision(2) + ' cm²/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? '、表層の柱密度 ' + +opt.selfnc.toPrecision(2) + ' g/cm²' : '') + ')。', ' Shown in its own thermal light, with no starlight on it: ' + (selfTcol ? 'brightness and colour are the brightness temperature, the brightness on a logarithmic scale' : 'the brightness is the brightness temperature, on a logarithmic scale') + ' (opacity ' + +opt.selfk.toPrecision(2) + ' cm\u00b2/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? ', the surface\u2019s column ' + +opt.selfnc.toPrecision(2) + ' g/cm\u00b2' : '') + ').'] } : {}) }[lookNow];
+          // (round 20n: the opacity of each object shown, see selfKText)
+          : ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、' + (selfTcol ? '明るさと色は輝度温度(明るさは対数の尺度)です' : '明るさは輝度温度(対数の尺度)です') + '(不透明度 ' + selfKText(true) + ' cm²/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? '、表層の柱密度 ' + +opt.selfnc.toPrecision(2) + ' g/cm²' : '') + ')。', ' Shown in its own thermal light, with no starlight on it: ' + (selfTcol ? 'brightness and colour are the brightness temperature, the brightness on a logarithmic scale' : 'the brightness is the brightness temperature, on a logarithmic scale') + ' (opacity ' + selfKText(false) + ' cm\u00b2/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? ', the surface\u2019s column ' + +opt.selfnc.toPrecision(2) + ' g/cm\u00b2' : '') + ').'] } : {}) }[lookNow];
       const desc = ja()
         ? '原始惑星系円盤(半径およそ 30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、赤道面に沈んだ塵はスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + QN[0] + 'を色で示しています。' : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? 'ガスの輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
         : 'Volume rendering of a model of a protoplanetary disk (some 30 au in radius): warm surface layers, and a cold midplane with settled dust, icy beyond the water snow line.' + (plShown().length ? (plShown().length > 1 ? ' Planets at ' + plShown().join(', ') + ' au open gaps.' : ' A planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + QN[1] + ' in colour.' : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in an emission line of the gas: ' + CON[1] + '.' : '');
@@ -10735,7 +10889,7 @@ void main(){
     // az is measured from the planet's azimuth while following it (p = 1)
     box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 1000) / 1000, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? (opt.cut === 'quarter' ? 2 : 1) : 0, sq: opt.sliceQ, p: follow ? 1 : 0, pi: followI, gain: opt.gain.slice(), planets: planets.map((pl) => [pl.a, pl.on ? 1 : 0, pl.m]), ann: opt.ann === ANN.ALL ? 1 : opt.ann, look: opt.look, ms: opt.ms ? 1 : 0, asym: opt.asym ? 1 : 0, marks: opt.marks ? 1 : 0, waves: opt.waves ? 1 : 0, bg: opt.bg, fx: opt.fx, coMode: opt.coMode, coV: opt.coV, coRange: Math.exp(coLn), coRangeFixed: coHold ? 1 : 0,
       tx: Math.round(panV[0] * 1e4) / 1e4, ty: Math.round(panV[1] * 1e4) / 1e4, tz: Math.round(panV[2] * 1e4) / 1e4,
-      cpdMdot, op: opt.opac.slice(), roll: deg(rollUser), stars: opt.stars, glow: opt.glow, selfk: opt.selfk, selft: opt.selft, selfnc: opt.selfnc });   // (round 18l: selft, selfnc)   // (round 18i: glow, the model look's light, and selfk, the opacity of its own light, see SELF; round 18a: op, the see-through; round 13e: the planets' disks' accretion rate, M_J/yr, 0 for a tenth of the disk's; see cpdPhys)
+      cpdMdot, op: opt.opac.slice(), roll: deg(rollUser), stars: opt.stars, glow: opt.glow, selfk: opt.selfk, selfkp: opt.selfkp, selfkw: opt.selfkw, selfke: opt.selfke, selft: opt.selft, selfnc: opt.selfnc });   // (round 20n: selfkp, selfkw, selfke)   // (round 18l: selft, selfnc)   // (round 18i: glow, the model look's light, and selfk, the opacity of its own light, see SELF; round 18a: op, the see-through; round 13e: the planets' disks' accretion rate, M_J/yr, 0 for a tenth of the disk's; see cpdPhys)
     box.diskLegend = () => legendSpec();
     // (round 18k) the own light's key for the page (see SELF_LOOK): old, true with ?selflook=old (the gas's colour, no bar); the bar
     // from min to max K on a log scale, stops [u, css colour] (a thick gas at that T_b on the display), ticks [u, text], colourAt(u)
@@ -10821,7 +10975,7 @@ void main(){
     // text after it, or edited by hand, must not poison the picture: a NaN in the camera or the clock would blank it),
     // the distance and the speed positive, the components a mask of the six, the time within [0, TIME_MAX] (the shader's
     // clock is single precision); what fails is left as it is.
-    const NUM_KEYS = ['slice', 'p', 'pi', 'time', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'mode', 'field', 'ann', 'ms', 'asym', 'marks', 'waves', 'coV', 'coRange', 'coRangeFixed', 'speed', 'paused', 'fly', 'roll', 'stars', 'selfk', 'selfnc'];
+    const NUM_KEYS = ['slice', 'p', 'pi', 'time', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'mode', 'field', 'ann', 'ms', 'asym', 'marks', 'waves', 'coV', 'coRange', 'coRangeFixed', 'speed', 'paused', 'fly', 'roll', 'stars', ...SELF_KS, 'selfnc'];
     const checked = (raw) => {
       const st = { ...raw };
       for (const k of NUM_KEYS) {
@@ -10850,7 +11004,8 @@ void main(){
       if (st.op != null) { if (Array.isArray(st.op) && (st.op.length === 6 || st.op.length === 4)) st.op = [...st.op, 1, 1].slice(0, 6).map((v) => { const x = finiteNumber(v); return isFinite(x) ? Math.min(OPAC[1], Math.max(OPAC[0], x)) : 1; }); else delete st.op; }
       // (round 18i) the model look's light, a name it knows; the opacity of its own light, positive, to three figures within SELF's
       if (st.glow != null && st.glow !== 'star' && st.glow !== 'self') delete st.glow;
-      if (st.selfk != null) { if (st.selfk > 0) st.selfk = Math.min(SELF.K_MAX, Math.max(SELF.K_MIN, +st.selfk.toPrecision(3))); else delete st.selfk; }
+      // (round 20n: and those of the pebbles, the wind and the envelope alike)
+      for (const k of SELF_KS) if (st[k] != null) { if (st[k] > 0) st[k] = Math.min(SELF.K_MAX, Math.max(SELF.K_MIN, +st[k].toPrecision(3))); else delete st[k]; }
       // (round 18l) the own light's temperature, a name it knows; the surface's column, as the opacity: positive, three figures, within SELF's
       if (st.selft != null && !own(SELF_T, st.selft)) delete st.selft;
       if (st.selfnc != null) { if (st.selfnc > 0) st.selfnc = Math.min(SELF.NC_MAX, Math.max(SELF.NC_MIN, +st.selfnc.toPrecision(3))); else delete st.selfnc; }
@@ -10917,7 +11072,7 @@ void main(){
       // (round 18i) the model look's light and the opacity of its own light (see SELF): a new light seen in the model look dips the
       // exposure as a new look does and is drawn from the dip's darkest (glowNow); in another look it waits there, unseen
       if (st.glow != null && st.glow !== opt.glow) { opt.glow = st.glow; if (lookNow === 'model') lookT0 = nowMs(); }
-      if (st.selfk != null) opt.selfk = st.selfk;
+      for (const k of SELF_KS) if (st[k] != null) opt[k] = st[k];   // (round 20n: the gas's and the other objects')
       if (st.selft != null) opt.selft = st.selft;   // (round 18l: its temperature and the surface's column, see SELF_T; a still starts over)
       if (st.selfnc != null) opt.selfnc = st.selfnc;
       if (st.speed) speed = Number(st.speed);
