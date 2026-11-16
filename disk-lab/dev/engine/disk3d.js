@@ -3597,7 +3597,15 @@ vec3 cpdSrc(float T){
 // at 1 at the planet's place: the gap around the planet is then as dark as the exposure allows, the disk the bright thing in it.
 // Only the model look: the observed looks keep the clouds and the brightness that cpd-check.mjs reckons for them.
 // data-cpdvol="0" (the page's ?cpdvol=0, CPD_VOL_OFF): the clouds in the model look too, as before.
-const float CPD_TE = 0.35, CPD_RB = 1.3, CPD_RIN = 0.0009, CPD_PT = 2.0, CPD_HZ = 2.0, CPD_GV = 4.0, CPD_W = 0.15, CPD_PA = 10.0, CPD_PR = 10.0;
+// (Round 20g, the review of the nine places: the planet's place was still a gold smudge with a white middle, the planet's point lost
+// in it.) The light per area went as tau T^CPD_PT ∝ r^-3/4 r^-3/2 = r^-2.25: 70 times from 0.15 R_out to the edge, more than the
+// display holds, so the middle was white and the truncation's edge already out of sight. CPD_PT 2 -> 1.5 (r^-1.9, 35 times: the hot
+// middle still the brightest, the disk out to its edge in view); CPD_HZ 2 -> 4 (the light gathered to a sheet about H / 2 thick at
+// the midplane, as a disk heated within shows it); CPD_TE 0.35 -> 0.6 (from the place's angles the near side's midplane in front of
+// the hot middle reads as a lane under the planet's point; at 1 and more the cooler height of the Gaussian hid the hot midplane and
+// the middle went dark, a ring: not a disk heated within). The automatic exposure stays at 1 at the planet's place (CPD_GV kept).
+// Seen at the place, nearer (0.6, 0.3), from above (60 degrees) and low (8 degrees): DESIGN.md section 57.10
+const float CPD_TE = 0.6, CPD_RB = 1.3, CPD_RIN = 0.0009, CPD_PT = 1.5, CPD_HZ = 4.0, CPD_GV = 4.0, CPD_W = 0.15, CPD_PA = 10.0, CPD_PR = 10.0;
 const int CPD_NS = 14, CPD_NP = 12;
 float asinhS(float x){ float a = abs(x); return sign(x) * log(a + sqrt(a * a + 1.0)); }   // (odd: no cancellation for x < 0)
 vec4 cpdVolume(vec3 q, vec3 rd, float aspect){
