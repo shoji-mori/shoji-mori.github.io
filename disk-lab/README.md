@@ -205,6 +205,16 @@ Mac, about the centre (look at it: the view of round 15a sits otherwise than the
     sips -c 900 1714 /tmp/disk-stills/whole-en-wide.png --out /tmp/og-crop.png
     sips -z 630 1200 -s format jpeg -s formatOptions 86 /tmp/og-crop.png --out disk-lab/og.jpg
 
+(Round 20r) `stills-webp.sh` also writes `stills/SOURCE.txt`, the SHA-256 of the engine and of `places.js` the stills were drawn
+with (run it right after stills.html), and `release-check.mjs --release` fails while they are not the released ones: the stills
+of 1.9.10 and 1.10.0 were published from before their pictures changed. To see which stills a change moved, before converting
+them (the published ones are compared):
+
+    python3 ver2/tools/disk-lab-v2/stills-compare.py /tmp/disk-stills /tmp/stills-sheet.png
+
+Where none moved (each about as far as the compression alone leaves, under 1 level, and the sheet shows nothing), keep the
+published stills and add a line `same with engine <ten> places <ten>` (the first ten characters) to `stills/SOURCE.txt`.
+
 ## Publishing
 
 `disk-lab/` is published as it is, at `/disk-lab/` (indexed: robots, canonical and Open Graph tags in `index.html`;
@@ -226,7 +236,8 @@ section 2; `disk-lab/dev/`, the development build, goes with it as it is). On `d
    of `shasum -a 256 disk-lab/engine/disk3d.js`, and its row in `engine/CHANGES.md`. The `?v=` of each module that changed
    (Publishing, above).
 4. `python3 ver2/tools/disk-lab-v2/version-sync.py`: the version line in `index.html`.
-5. The stills and `og.jpg`, where the picture of a place changed (Remake the stills).
+5. The stills and `og.jpg`, where the picture of a place changed (Remake the stills; the release check fails while `stills/SOURCE.txt`
+   names another engine or `places.js` than the released ones).
 6. The Node checks, then `node ver2/tools/disk-lab-v2/release-check.mjs --release`, and the browser's checks of a release (check.js,
    about 50 items; the hand-over note, section 3).
 7. Publish, and check the published `VERSION` and the engine's `?v=` (the hand-over note, step 6).

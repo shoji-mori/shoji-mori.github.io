@@ -1,0 +1,3 @@
+Disk Lab stills: drawn by stills.html, converted by stills-webp.sh (README "Remake the stills")
+engine a66b53301b049a4c953c86e6682c501ed9078e5d9008ec5e6a70797aec7231b4
+places 389a9cd3e3d6e7718a9bab3b1596ba61c051bdb30d2947c4615662a96236e0a6
