@@ -149,7 +149,8 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .icon-button{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:999px;color:var(--text-2)}
 .icon-button:hover:not(:disabled){background:var(--wash);color:var(--text)}
 .icon-button:disabled{opacity:.3;cursor:default}
-.route{min-width:0;overflow-x:auto;scrollbar-width:none;mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent)}
+/* (round 20q: both edges fade where chips lie past them, set by the script, routeEdges; the left one was a hard cut once scrolled) */
+.route{min-width:0;overflow-x:auto;scrollbar-width:none;--fl:0px;--fr:24px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 var(--fl),#000 calc(100% - var(--fr)),transparent);mask-image:linear-gradient(90deg,transparent,#000 var(--fl),#000 calc(100% - var(--fr)),transparent)}
 .route::-webkit-scrollbar{display:none}
 .route ol{display:flex;gap:2px;list-style:none;margin:0;padding:0 24px 0 0}
 .route button{display:flex;align-items:baseline;gap:7px;padding:6px 10px;border-radius:999px;font-size:13px;color:var(--text-3);white-space:nowrap;transition:color .2s,background-color .2s}

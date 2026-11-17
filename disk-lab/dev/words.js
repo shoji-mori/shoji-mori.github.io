@@ -112,6 +112,7 @@ export const WORDS = {
     saveSize: {
       label: '保存する画像の大きさ', screen: '画面と同じ', twice: '2 倍', uhd: '4K',
       note: (w, h) => `保存する画像:${w} × ${h} px(線と文字と印もその大きさに合わせて)。`,
+      noteNoMark: (w, h) => `保存する画像:${w} × ${h} px(線と文字もその大きさに合わせて)。`,   // (round 20q: the mark hidden under Annotations)
       lower: (w, h, pct) => `保存する画像:${w} × ${h} px。この見え方は重いため、ガスは ${pct} % の細かさで描きます。`,
       coScreen: (w, h) => `この見え方は計算が重いため、画面と同じ ${w} × ${h} px で保存します。`
     },
@@ -412,6 +413,7 @@ export const WORDS = {
     saveSize: {
       label: 'Size of the saved image', screen: 'Screen', twice: '2×', uhd: '4K',
       note: (w, h) => `The image: ${w} × ${h} px (lines, labels and the mark at that size too).`,
+      noteNoMark: (w, h) => `The image: ${w} × ${h} px (lines and labels at that size too).`,
       lower: (w, h, pct) => `The image: ${w} × ${h} px. This look is heavy, so the gas is drawn at ${pct} % detail.`,
       coScreen: (w, h) => `This look is heavy to compute, so it is saved at the screen’s size, ${w} × ${h} px.`
     },

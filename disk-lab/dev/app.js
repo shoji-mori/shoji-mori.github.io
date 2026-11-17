@@ -4,7 +4,7 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=389a9cd3e3';
-import { WORDS } from './words.js?v=c6b7344f68';
+import { WORDS } from './words.js?v=a66555e860';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=a06fcbfa44';
@@ -17,7 +17,7 @@ const ENGINE_SRC = 'engine/disk3d.js?v=a66b53301b';   // ?v= the first ten chara
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.10.2-dev.64', RELEASED = '2026-11-17';
+const VERSION = '1.10.3-dev.65', RELEASED = '2026-11-17';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -249,6 +249,16 @@ const routeButtons = PLACES.map((p, i) => {
 });
 $('prev').addEventListener('click', () => goPlace(placeI - 1));
 $('next').addEventListener('click', () => goPlace(placeI + 1));
+// (round 20q: the route's edges fade where chips lie past them, the left one once scrolled; before, the first chip was cut hard
+// beside the arrows. Observed: the dock shown, the names in another language)
+const routeNav = $('route');
+function routeEdges() {
+  const x = routeNav.scrollLeft, m = routeNav.scrollWidth - routeNav.clientWidth;
+  routeNav.style.setProperty('--fl', x > 1 ? '24px' : '0px');
+  routeNav.style.setProperty('--fr', x < m - 1 ? '24px' : '0px');
+}
+routeNav.addEventListener('scroll', routeEdges, { passive: true });
+const routeSeen = new ResizeObserver(routeEdges); routeSeen.observe(routeNav); routeSeen.observe(routeList);
 
 // the engine's state for arriving at a place now (its distance fitted to the stage), with the planets its text needs
 // (round 11a: shared with the scenes of the places, see placeScene; round 11b: asp, a video's frame's width / height)
@@ -694,7 +704,7 @@ rail.addEventListener('input', (e) => {
 rail.addEventListener('change', (e) => {
   const t = e.target;
   // (round 20n: the site's mark, the page's own, also while the model is not drawn live)
-  if (t.id === 'markShow') { markSet(t.checked); keeping = keeping || calibrated; keepSoon(); return; }
+  if (t.id === 'markShow') { markSet(t.checked); renderSaveSize(); keeping = keeping || calibrated; keepSoon(); return; }
   if (!live()) return;
   if (t.dataset.col) setCol(t.dataset.col, t.value);
   else if (t.dataset.planetA != null) movePlanet(Number(t.dataset.planetA), aOf(t.value));
@@ -2156,7 +2166,8 @@ function renderSaveSize(p = null) {
   renderSaveFrame();
   if (!live()) { $('saveSizeNote').textContent = ''; return; }
   p = p || savePlan();
-  $('saveSizeNote').textContent = saveSize !== '1' && p.k === 1 ? w.coScreen(p.w, p.h) : p.k > 1 && p.to < 0.999 ? w.lower(p.w, p.h, Math.round(100 * p.to)) : w.note(p.w, p.h);
+  // (round 20q: without the mark when it is hidden, see markSet)
+  $('saveSizeNote').textContent = saveSize !== '1' && p.k === 1 ? w.coScreen(p.w, p.h) : p.k > 1 && p.to < 0.999 ? w.lower(p.w, p.h, Math.round(100 * p.to)) : (markShown ? w.note : w.noteNoMark)(p.w, p.h);
   if (saveRatio !== 'screen') $('saveSizeNote').textContent += T().saveFrame.crop;   // (round 11c: the cut, said)
 }
 async function saveImage(btn) {
@@ -2851,7 +2862,7 @@ function resetAll() {
   box.diskSpeed(d.speed || 1);
   cols = {}; applyCols();   // (round 13a: the model look's colours, the defaults)
   params = {}; applyParams(); windGain = 1; applyWind();   // (round 14a: the model's parameters and the wind's brightness, the defaults)
-  markSet(true);   // (round 20n: the site's mark shown)
+  markSet(true); renderSaveSize();   // (round 20n: the site's mark shown)
   applyQuality(d.quality);
   goPlace(0);
   keepNow();
