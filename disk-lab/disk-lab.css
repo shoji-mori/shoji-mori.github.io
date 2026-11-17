@@ -546,6 +546,12 @@ svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   .text-button .long{display:none}
   .text-button .short{display:inline}
 }
+/* (round 20s) the narrowest phones: the version tag left to the rail's foot and the About dialog, and of the languages only the one
+   to change to (the page is in the other), so that the bar fits (at 320 px the page was 353 px wide, 日本語 cut off: check.js's
+   phone 320x568; in English the bar's content was 303 px for 288, gaps narrower would overlap the targets of round 20j) */
+@media (max-width:374px){
+  .mark .build,.lang-switch button[aria-pressed=true],.lang-switch span{display:none}
+}
 
 @media (pointer:coarse){
   .icon-button{width:40px;height:40px}
