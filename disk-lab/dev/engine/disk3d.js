@@ -1881,6 +1881,7 @@ uniform float uRSnow;
 uniform float uLum;     // the star's luminosity relative to its own (the outburst; round 7, see tempAt)
 uniform float uExposure;
 uniform float uStar;    // the star's glow relative to quiescence (an outburst brightens it)
+uniform float uStarOcc; // (round 20t) the star's share seen past the disk, taken by the script once a frame (see starOccNow)
 // The look: 0 the model's quantities as they are (the gas and small grains filling the disk, translucent, in the
 // colours of temperature); or as observed: 1 scattered light (optical and near-infrared: the disk is opaque, only its
 // irradiated surface scatters starlight, more forward than back, so the near side is brighter and an edge-on disk
@@ -4656,8 +4657,17 @@ void main(){
   // edge-on disk's scattered light; from above it, as in the first view, it is as before
   // (not with the cut open: the part cut away is what stood between, uSlice)
   // (from afar only, where the star is a point: within 1 to 3 au its sphere and the magnetosphere are drawn, by the march, as before)
+  // (round 20t: it depends on the camera alone, so the script takes it once a frame from the same table, uStarOcc, 1 outside the
+  // model look lit by the star; taken here, a lookup never run in the other looks still made the march in kicks draw the visible
+  // look's whole disk otherwise than drawn whole about the star, by the last digits: check.js's identity, 1.9.9 passing, 1.9.10
+  // not, and the block alone taken out of 1.9.10 passing. The cut tail's build, SIG_CUT, has no table and keeps it here)
+#ifdef SIG_CUT
   float starOcc = 1.0;
   if (uLook == 0 && uSelf.x <= 0.0 && uSlice == 0 && roLen > 1.0) { float Rc = length(ro.xy), kc = min(1.0, 150.0 / max(Rc, 1e-3)); starOcc = mix(1.0, exp(-exp(lnTauStar(vec3(ro.xy * kc, ro.z * kc)))), smoothstep(1.0, 3.0, roLen)); starGlow *= starOcc; }
+#else
+  float starOcc = uStarOcc;
+  starGlow *= starOcc;
+#endif
   float tStar = max(-dot(ro, rd), 0.0);
 
   // the cutaway: from a camera in the part cut away the ray enters the kept part at tCut, where it meets a cut face
@@ -6234,7 +6244,7 @@ void main(){
     const UWS = uniforms(progWS, ['uResW', 'uLayer0', 'uTime', 'uSeed']);
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
-    const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
+    const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uStarOcc', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
       'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV', 'uMP', 'uWindK', 'uGGas', 'uJetOcc', 'uLstar', 'uExcl', 'uCoEnv', 'uPebH', 'uFast', 'uOpac', 'uStars', 'uSelf', 'uSelfT', 'uSelfK', 'uDbg', 'uDbg2', 'uDbg3'];   // R19DBG
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS, 'show'), progBloom = link(BLOOM_FS, 'bloom');
@@ -7342,6 +7352,25 @@ void main(){
     let wavesAmp = opt.waves ? 1 : 0;
     // ln of the gaps at R, and the pebbles there relative to the smooth disk, with every planet's gap as it is now
     const gapLnAll = (R) => planets.reduce((s, p) => s + gapLnJS(R, p.d, p.a, p.q), 0);
+    // (Round 20t) The star's share seen past the disk in the model look lit by the star (round 20m's starOcc), once a frame: the
+    // shader's lnTauStar at the camera's direction from the star within the table's reach (150 au), from the same table as the GPU
+    // reads it (its half floats, bilinear, clamped at the edges) with the planets' gaps; 1 elsewhere, and where the camera is
+    // within 1 au, faded in to 3 au, as the shader had it
+    const half = (v) => { if (v === 0 || !isFinite(v)) return v; const a = Math.abs(v), q = Math.pow(2, Math.max(Math.floor(Math.log2(a)), -14) - 10); return Math.sign(v) * Math.round(a / q) * q; };
+    const ST_L0 = +Math.log(ST.R0).toFixed(6), ST_DL = +(Math.log(ST.R1 / ST.R0) / (ST.NR - 1)).toFixed(8);
+    const starTabAt = (lnR, u) => {
+      const xf = (lnR - ST_L0) / ST_DL, yf = u * (ST.NU - 1), i0 = Math.floor(xf), j0 = Math.floor(yf), fx = xf - i0, fy = yf - j0;
+      const at = (i, j) => half(starTab.data[(Math.min(Math.max(j, 0), ST.NU - 1) * ST.NR + Math.min(Math.max(i, 0), ST.NR - 1)) * 4]);
+      return (at(i0, j0) * (1 - fx) + at(i0 + 1, j0) * fx) * (1 - fy) + (at(i0, j0 + 1) * (1 - fx) + at(i0 + 1, j0 + 1) * fx) * fy;
+    };
+    const starOccNow = () => {
+      const roLen = Math.max(Math.hypot(cam[0], cam[1], cam[2]), 0.05);
+      if (!starTab || LOOKS[lookNow] !== 0 || selfOn() || sliceU > 0 || roLen <= 1) return 1;
+      const Rc = Math.hypot(cam[0], cam[1]), kc = Math.min(1, 150 / Math.max(Rc, 1e-3));
+      const R = Math.max(Rc * kc, 1e-3), az = Math.abs(cam[2] * kc), u = Math.sqrt(az / (R + az));
+      const x = Math.min(Math.max((u >= starTab.ug ? -30 : starTabAt(Math.log(R), u)) + gapLnAll(R), -30), 30);
+      return 1 + (Math.exp(-Math.exp(x)) - 1) * ss(1, 3, roLen);
+    };
     const pebbleAll = (R) => planets.reduce((f, p) => f * pebbleJS(R, p.d, p.a, p.trap, p.q), 1);
     const planetsKey = () => planets.map((p) => p.a + '/' + p.m + '/' + Math.round(p.d * 50)).join(',');
     // how near the camera is to a planet's orbit: 0 beyond D1, 1 within D0 (in units of a / 3 au: the distances were
@@ -9390,6 +9419,7 @@ void main(){
       gl.uniform4fv(U.uMP, MPV); gl.uniform1f(U.uWindK, WIND_GAIN.k);   // (round 14a: the model's parameters, see CONST_GLSL; the wind's brightness, box.diskWindGain)
       gl.uniform1f(U.uExposure, expo);   // brighter starlight, compressed by the stretch
       gl.uniform1f(U.uStar, starL);
+      gl.uniform1f(U.uStarOcc, starOccNow());   // (round 20t: see starOccNow)
       // the dipole: tilted toward the azimuth the star has turned to (it turns with the star, MAG.SPIN)
       const phS = (MAG.SPIN * time) % (2 * Math.PI), sT = Math.sin(MAG.TILT), cT = Math.cos(MAG.TILT);
       const mAx = [sT * Math.cos(phS), sT * Math.sin(phS), cT], e1 = [Math.cos(phS) - sT * mAx[0], Math.sin(phS) - sT * mAx[1], -sT * mAx[2]], e1n = Math.hypot(...e1);

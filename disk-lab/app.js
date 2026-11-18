@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261107r18e';
-import { WORDS } from './words.js?v=20261117r20q';
+import { WORDS } from './words.js?v=20261118r20t';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261107r18e';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=20261107r18e';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=20261107r18e';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=20261107r18e';
 import { mp4Parts } from './mp4.js?v=20261107r18e';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=a66b53301b';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=2aec70e28d';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.10.5', RELEASED = '2026-11-17';
+const VERSION = '1.10.6', RELEASED = '2026-11-18';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all

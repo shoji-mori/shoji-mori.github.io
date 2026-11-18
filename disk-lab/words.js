@@ -16,7 +16,7 @@ export const WORDS = {
       whole: { short: '全体', title: '円盤の全体',
         text: '若い星を回るガスと塵の円盤(半径およそ 30 au)。惑星はこうした円盤で生まれます。星の光が反り返った表層を温め、赤道面は冷たいまま。円盤を貫く線は磁力線、上に淡く光るのは円盤風です。最初は 10 au に木星質量の惑星を置き、時計を止めています(「時間」の再生ボタンで動き出します)。' },
       wind: { short: '磁場と風', title: '磁場と円盤風',
-        text: '円盤を貫く磁力線は、回転にねじられながら外へ開きます。ガスはこの線に沿って加速し、風となって上下に吹き出します。磁場が回転と同じ向きなら、風は片側で強くなります。' },
+        text: '円盤を貫く磁力線は、回転にねじられながら外へ開きます。ガスはこの線に沿って加速し、風となって上下に吹き出します。磁場が回転と同じ向きなら、風は片側で強くなります。真横に近い向きから見ているので、星は円盤の暗い帯に隠れています。' },   // (round 20s: the dark lane of round 20m, the star hidden at this place's 10°)
       snow: { short: 'スノーライン', title: 'スノーライン',
         // (round 14a: from the model, n.snow; the dashed ring went in round 13a, the name stays)
         text: (n) => `スノーラインは約 ${n.snow} au にあります。その外では、赤道面の小石が氷をまといます。すぐ外に小石が少したまり、内側では氷が昇華して岩の粒になります。` },
@@ -329,7 +329,7 @@ export const WORDS = {
       whole: { short: 'Whole disk', title: 'The whole disk',
         text: 'A disk of gas and dust around a young star, some 30 au in radius: the kind of disk in which planets form. Starlight warms its flared surface; the midplane stays cold. The lines threading it are magnetic field lines, and the faint glow above is a wind. It starts with a Jupiter-mass planet at 10 au and the clock stopped (the play button under Time starts it).' },
       wind: { short: 'Field & wind', title: 'Field and wind',
-        text: 'Field lines threading the disk are wound up by its rotation and open outward. Gas speeds up along them and leaves both faces as a wind; with the field aligned with the rotation, one side blows harder.' },
+        text: 'Field lines threading the disk are wound up by its rotation and open outward. Gas speeds up along them and leaves both faces as a wind; with the field aligned with the rotation, one side blows harder. Seen nearly edge-on, the star is hidden in the disk’s dark lane.' },
       snow: { short: 'Snow line', title: 'The snow line',
         text: (n) => `The snow line lies near ${n.snow} au: beyond it, the pebbles at the midplane are coated in ice. They pile up a little just outside it; inside, the ice sublimates and the grains are bare rock.` },   // (round 14a: from the model; the ring went in round 13a)
       planet: { short: 'Planet', title: 'The planet',
