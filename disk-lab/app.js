@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=20261107r18e';
-import { WORDS } from './words.js?v=20261118r20t';
+import { WORDS } from './words.js?v=20261124r20y';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=20261107r18e';
 import { snapshot, toPng, framed, cropFor } from './capture.js?v=20261107r18e';
 import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=20261107r18e';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=20261107r18e';
 import { mp4Parts } from './mp4.js?v=20261107r18e';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=2aec70e28d';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=c91475e503';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.10.6', RELEASED = '2026-11-18';
+const VERSION = '1.11.0', RELEASED = '2026-11-24';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -786,12 +786,15 @@ function colRow(k) {
 // for the jet": its place 4, a factor on its light, as its palette's note says; "for the field lines a colour palette and a
 // see-through bar": their colour 'field', drawn in the overlay, and their place 5, a factor on their lines' opacity.) opLooks: the
 // looks where the see-through has something to act on, when not all of them (the engine draws the field lines in the model look
-// alone, the jet in the model and the visible look, JET.LOOK); elsewhere its palette holds no see-through (see renderPal)
+// alone, the jet in the model and the visible look, JET.LOOK); elsewhere its palette holds no see-through (see renderPal). selfNone: not
+// drawn with the model look's own light (round 20y: the jet, JET.SELF), its swatch then none. (Round 20y: the wind and the envelope
+// in the model and the visible look alone, as the engine draws them, windOn and the envelope's uLook <= 1: their see-through in the
+// mid-infrared, millimetre and CO looks acted on nothing)
 const COMPS = [
   { key: 'gas', bit: 3, opts: ['marks'], cols: ['disk'], op: 0, opLooks: ['model', 'optical', 'mir', 'mm'] }, { key: 'pebbles', bit: 4, opts: ['drop'], cols: ['rock', 'ice'], op: 1 },   // (round 20n: not the gas's in the gas line's look)
-  { key: 'wind', bit: 8, opts: ['asym'], cols: ['wind'], op: 2 }, { key: 'jet', bit: 64, cols: ['jet'], op: 4, opLooks: ['model', 'optical'] },
+  { key: 'wind', bit: 8, opts: ['asym'], cols: ['wind'], op: 2, opLooks: ['model', 'optical'] }, { key: 'jet', bit: 64, cols: ['jet'], op: 4, opLooks: ['model', 'optical'], selfNone: true },
   { key: 'field', opt: 'field', cols: ['field'], op: 5, opLooks: ['model'] },
-  { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32, cols: ['env'], op: 3 }
+  { key: 'planet', bit: 16, planets: true, opts: ['waves'] }, { key: 'envelope', bit: 32, cols: ['env'], op: 3, opLooks: ['model', 'optical'] }
 ];   // (round 15a: the labels, a component until now, are the View's annotations, a choice for each kind)
 const compEls = COMPS.map((c) => {
   const btn = el('button', { type: 'button', class: 'toggle', 'aria-pressed': 'false', ...(c.bit ? { 'data-bit': String(c.bit) } : { 'data-opt': c.opt }) });
@@ -990,7 +993,8 @@ function renderPal(s) {
     // transparency now, apart from kappa, it is there with the own light too, the pebbles', the wind's and the envelope's as well; not
     // their colours then, which they do not glow in: the own light shows its brightness temperature in the gas's colour, which stays)
     const kOwn = model && s.glow === 'self' && s[SELFK_KEY[c.key]] != null;
-    const withCols = model && pal.cols.length > 0 && !(kOwn && c.key !== 'gas'), withOp = c.op != null && (!c.opLooks || c.opLooks.includes(s.look));
+    const none = model && s.glow === 'self' && c.selfNone;   // (round 20y: the jet, not drawn with the own light)
+    const withCols = !none && model && pal.cols.length > 0 && !(kOwn && c.key !== 'gas'), withOp = !none && c.op != null && (!c.opLooks || c.opLooks.includes(s.look));
     const label = withCols ? w.pal(w[c.key]) : w.palOp(w[c.key]);
     pal.btn.hidden = !colDef || (!withCols && !withOp);
     pal.btn.classList.toggle('op-only', !withCols);

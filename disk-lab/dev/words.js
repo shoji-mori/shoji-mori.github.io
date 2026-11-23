@@ -16,7 +16,7 @@ export const WORDS = {
       whole: { short: '全体', title: '円盤の全体',
         text: '若い星を回るガスと塵の円盤(半径およそ 30 au)。惑星はこうした円盤で生まれます。星の光が反り返った表層を温め、赤道面は冷たいまま。円盤を貫く線は磁力線、上に淡く光るのは円盤風です。最初は 10 au に木星質量の惑星を置き、時計を止めています(「時間」の再生ボタンで動き出します)。' },
       wind: { short: '磁場と風', title: '磁場と円盤風',
-        text: '円盤を貫く磁力線は、回転にねじられながら外へ開きます。ガスはこの線に沿って加速し、風となって上下に吹き出します。磁場が回転と同じ向きなら、風は片側で強くなります。真横に近い向きから見ているので、星は円盤の暗い帯に隠れています。' },   // (round 20s: the dark lane of round 20m, the star hidden at this place's 10°)
+        text: '円盤を貫く磁力線は、回転にねじられながら外へ開きます。ガスはこの線に沿って加速し、風となって上下に吹き出します。磁場が回転と同じ向きなら、風は片側で強くなります。真横に近い向きから見ているので、星も内側の円盤も、手前の円盤の厚い層に隠れています。' },   // (round 20s: the dark lane of round 20m, the star hidden at this place's 10°; round 20v: the inner disk too)
       snow: { short: 'スノーライン', title: 'スノーライン',
         // (round 14a: from the model, n.snow; the dashed ring went in round 13a, the name stays)
         text: (n) => `スノーラインは約 ${n.snow} au にあります。その外では、赤道面の小石が氷をまといます。すぐ外に小石が少したまり、内側では氷が昇華して岩の粒になります。` },
@@ -63,7 +63,7 @@ export const WORDS = {
       // gram of (perGas, perPeb); kWhere, after the note, where they are and how the wind and the envelope glow
       k: '不透明度 κ', kOf: (name, per) => `${name}の自身の発光の不透明度(${per} 1 g あたり)`, kReset: (name) => `${name}の不透明度を既定に戻す`, kDefault: '既定',
       kSpoken: (n) => `${n.per} 1 グラムあたり ${n.k} 平方センチメートル`, perGas: 'ガス', perPeb: '小石',
-      kWhere: '円盤風とエンベロープも同じように、その場の塵の温度で光ります。円盤風は星の光に熱せられた塵の温度、エンベロープは星の光の届き方で決まる温度(円盤の影では 10 K)です。不透明度 κ は物体ごとに、「見せるもの」の各欄で変えられます(ガス・円盤風・エンベロープはガス 1 g あたり、小石は小石 1 g あたり)。' },
+      kWhere: '円盤風とエンベロープも同じように、その場の塵の温度で光ります。円盤風は星の光に熱せられた塵の温度、エンベロープは星の光の届き方で決まる温度(円盤の影でも、内側で出し直された光で温まり、星の光が当たる所のおよそ 8 割)です。不透明度 κ は物体ごとに、「見せるもの」の各欄で変えられます(ガス・円盤風・エンベロープはガス 1 g あたり、小石は小石 1 g あたり)。' },
     // (round 18k) the key's bar of the own light's brightness temperature: what takes its colours (app.js renderMatKey; round 18m: by
     // default the gas's colour in shades)
     selfKey: { gas: '円盤(ガスと塵)', peb: '小石', both: '円盤と小石', wind: '円盤風', env: 'エンベロープ', join: '、' },   // (round 20n: wind, env, joined)
@@ -329,7 +329,7 @@ export const WORDS = {
       whole: { short: 'Whole disk', title: 'The whole disk',
         text: 'A disk of gas and dust around a young star, some 30 au in radius: the kind of disk in which planets form. Starlight warms its flared surface; the midplane stays cold. The lines threading it are magnetic field lines, and the faint glow above is a wind. It starts with a Jupiter-mass planet at 10 au and the clock stopped (the play button under Time starts it).' },
       wind: { short: 'Field & wind', title: 'Field and wind',
-        text: 'Field lines threading the disk are wound up by its rotation and open outward. Gas speeds up along them and leaves both faces as a wind; with the field aligned with the rotation, one side blows harder. Seen nearly edge-on, the star is hidden in the disk’s dark lane.' },
+        text: 'Field lines threading the disk are wound up by its rotation and open outward. Gas speeds up along them and leaves both faces as a wind; with the field aligned with the rotation, one side blows harder. Seen nearly edge-on, the star and the inner disk are hidden behind the disk’s dense layers.' },
       snow: { short: 'Snow line', title: 'The snow line',
         text: (n) => `The snow line lies near ${n.snow} au: beyond it, the pebbles at the midplane are coated in ice. They pile up a little just outside it; inside, the ice sublimates and the grains are bare rock.` },   // (round 14a: from the model; the ring went in round 13a)
       planet: { short: 'Planet', title: 'The planet',
@@ -368,7 +368,7 @@ export const WORDS = {
       noteInt: 'No light of a surface lit by the star: the gas and its dust glow by density × temperature × opacity and absorb at the same opacity, drawn as a volume. The temperature is the interior’s, without the surface’s grains heated directly by the starlight. The brightness is the brightness temperature (on a logarithmic scale, the bar in a corner; the colour is the gas’s, in shades): where thick, the temperature at optical depth 1 seen from the camera; where thin, the column density times the temperature.',
       k: 'Opacity κ', kOf: (name, per) => `${name}: opacity of the own emission, per gram of ${per}`, kReset: (name) => `${name}: opacity back to the default`, kDefault: 'Default',
       kSpoken: (n) => `${n.k} square centimetres per gram of ${n.per}`, perGas: 'gas', perPeb: 'pebbles',
-      kWhere: 'The wind and the envelope glow the same way, at the temperature of their grains: the wind’s that of grains the starlight heats, the envelope’s set by how much starlight reaches it (10 K in the disk’s shadow). Each object’s opacity κ is in its settings under Show (per gram of gas for the gas, the wind and the envelope; per gram of pebbles for the pebbles).' },
+      kWhere: 'The wind and the envelope glow the same way, at the temperature of their grains: the wind’s that of grains the starlight heats, the envelope’s set by how much starlight reaches it (in the disk’s shadow warmed by the light given out again within, about 0.8 of the lit envelope’s). Each object’s opacity κ is in its settings under Show (per gram of gas for the gas, the wind and the envelope; per gram of pebbles for the pebbles).' },
     selfKey: { gas: 'disk (gas and dust)', peb: 'pebbles', both: 'disk and pebbles', wind: 'wind', env: 'envelope', join: ', ' },
     cutQ: { T: 'Temperature', rho: 'Density', layers: 'Regions' },
     cutNotes: {

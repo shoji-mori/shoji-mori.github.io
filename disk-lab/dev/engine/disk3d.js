@@ -398,7 +398,13 @@
   // 14 au full width at 20 au, here 1.9 au): a choice of the picture, the owner's. Its light dimmer (G_JET) and in pale
   // yellow (MAT: jet) in the model's look; in the visible look still the red of its lines.
   const JET = { V: 250 * 0.21095 / 12, RL: 0.07, BASE: 0.15, RC: 0.25, CONE: 2.0 * Math.PI / 180, Z0: 0.05, ZMAX: 520, P1: 2.5 * 12, P2: 0.6 * 12, K1: 3.0, K2: 1.2, LOW: 1.5,
-    LOOK: { model: 1, optical: 0.3, mir: 0, mm: 0, co: 0 } };
+    LOOK: { model: 1, optical: 0.3, mir: 0, mm: 0, co: 0 },
+    // (round 20y, the owner's check of the picture against the model: "in the own light the midplane should glow most") with the
+    // model look's own light (see uSelf) none, as in the millimetre look: that picture is the gas and dust's K rho T at a grey opacity
+    // of the millimetre's order, and the jet's dust is depleted (above), its own light there negligible. Until now drawn in its
+    // material's colour at the model look's strength, the one thing of the outflow apart from the brightness temperature's grey
+    SELF: 0 };
+  const jetLookOf = (look, self) => (self ? JET.SELF : JET.LOOK[look] || 0);
   const PUFF = { P: 2 };                  // the wind's puffs: a bundle's launch period (s of the model's clock; see puffFactor)
   // The envelope: the parent cloud, in solid-body rotation, collapses onto the star and the disk (Ulrich 1976). Each
   // parcel falls from rest far away on a parabolic orbit (zero energy) that keeps its angular momentum, sqrt(G M r_c)
@@ -1882,6 +1888,16 @@ uniform float uLum;     // the star's luminosity relative to its own (the outbur
 uniform float uExposure;
 uniform float uStar;    // the star's glow relative to quiescence (an outburst brightens it)
 uniform float uStarOcc; // (round 20t) the star's share seen past the disk, taken by the script once a frame (see starOccNow)
+// (Round 20v, the owner: "in the starlit mode an edge-on disk should hide, by its optical depth, the inner disk and the wind too,
+// near the plane above all") uOccW: how far the camera is in the disk's shadow cone, 1 - starOcc, from the script (0 outside the
+// model look lit by the star, with the cut open, from above the cone, and in the cut tail's build). Within it the disk gas's
+// extinction is the visible light's (OPT_K times the model's translucent one, as the skin's light and the stars behind already
+// had): what lies behind the disk's dense layers, the inner disk, the wind's and the jet's bases, the planets, the pebbles, is
+// hidden as the star is. The envelope keeps its translucent one (at visible depth, tried, it dimmed afar's cavity walls everywhere at
+// the cone's edge, 14 degrees). Above the cone, as before. (Taken in the shader's own march step and start, tried first, it made
+// the GPU lose its context in the visible look at the wind's place in check.js's identity block, three runs of three: here in the
+// gas's sample, from a uniform)
+uniform float uOccW;
 // The look: 0 the model's quantities as they are (the gas and small grains filling the disk, translucent, in the
 // colours of temperature); or as observed: 1 scattered light (optical and near-infrared: the disk is opaque, only its
 // irradiated surface scatters starlight, more forward than back, so the near side is brighter and an edge-on disk
@@ -2344,6 +2360,14 @@ const vec3 MM_COL = vec3(1.0, 0.42, 0.12);
 // (the map's column is in au, so both scale as 1 / r_c: 8 au to the sixth round, 30 au since; with r_c = 30 au, 1.07e-4
 // and 0.133, written here as the products with r_c so that they follow it, ENV.RC)
 const float ENV_RHO = ${G(3.21e-3 / ENV.RC)}, G_ENV = 70.0, ENV_KSTAR = ${G(3.99 / ENV.RC)};
+// (Round 20w, the owner: "in the own light the envelope's midplane should glow most") ENV_DIFF: the share of the direct heating that
+// reaches the envelope where the starlight does not (the disk's shadow, its own column toward the star) as diffuse light, reprocessed
+// by the inner envelope and the disk. The envelope is thick to the starlight (its column at the visible look's opacity), so the light
+// absorbed inside is given out again all round, and the shadowed envelope is cooler than the lit one, not at the interstellar floor:
+// at 0.3 its temperature about 0.79 of the lit one's (T^5 in the heating). An assumption of the model, not a radiative transfer
+// (Whitney et al. 2003: the flared disk shadows the midplane; how much cooler there is not taken from it). Before, the shadow's
+// envelope was at T_FLOOR, 10 K, its densest part the faintest in the own light
+const float ENV_DIFF = 0.3;
 const vec3 ENV_COL = vec3(0.55, 0.66, 0.95);
 // (Round 7, the owner: "as this shows the model, matter should glow somewhat of itself") In the model's look the envelope
 // also glows with its density, in the colour of its temperature, whatever the starlight, as the disk's gas does (G_GAS):
@@ -2404,7 +2428,8 @@ void envLight(vec3 p, vec3 rd, out vec3 em, out vec3 ex){
   // its absorption at the same K, grey; no light of the starlight's; both by its see-through
   if (uSelf.x > 0.0) {
     float k = uSelfK.z * re * uOpac.w;
-    gEnvJ = k * tempEnv(r, mix(1.0, smoothstep(0.13, 0.2, abs(p.z) / max(R, 1e-3)), gasK()) * exp(-ENV_KSTAR * st.y));
+    float shD = mix(1.0, smoothstep(0.13, 0.2, abs(p.z) / max(R, 1e-3)), gasK()) * exp(-ENV_KSTAR * st.y);
+    gEnvJ = k * tempEnv(r, shD + ENV_DIFF * (1.0 - shD));   // (round 20w: and the shadow's diffuse heating, see ENV_DIFF)
     em = vec3(0.0); ex = vec3(k);
   }
 #endif
@@ -2875,7 +2900,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
 #endif
       skin *= uComp.y;
       // (round 18f: in the model look dimmed by the gas between it and the camera at the visible look's opacity, see SKIN_LOS)
-      if (uLook == 0) skin *= exp(-SKIN_LOS * gTauG);
+      if (uLook == 0) skin *= exp(-SKIN_LOS * (1.0 - uOccW) * gTauG);   // (round 20v: the rest of it in tr, see uOccW)
     }
     // gas with small grains: translucent, glowing with its density in the colour of its temperature (cold
     // midplane; warm only inside the snow line)
@@ -2983,6 +3008,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
 #else
     if (uOpac.x < 1.0) { float j0 = 0.0; seeGas(ds, em, ex, skin, j0); }
 #endif
+    if (uLook == 0 && uOccW > 0.0) { float kV = 1.0 + SKIN_LOS * uOccW; ex *= kV; gDGe *= kV; }   // (round 20v: the blend's too, see uOccW)
   }
 
   // The magnetically driven wind: gas flowing out along the field lines of the solution (density from the
@@ -5080,7 +5106,7 @@ ${BG.LAMPS.map(([x, y, z, , k]) => `      { float t = acos(clamp(dot(dSky, norma
     // (round 20n, the owner: "in the starlight look the background stars must be hidden by the optical depth") the starlit model look's
     // stars and the cloud behind, at the visible light's opacity of the gas, the wind and the envelope in front (seeV), as its scattered
     // light is seen; until now at the march's translucent K_G alone, so that the stars shone through the opaque disk
-    if (uLook == 0 && uSelf.x <= 0.0) bg *= seeV(uOpac.x, gTauG) * exp(-SKIN_LOS * gTauWE);
+    if (uLook == 0 && uSelf.x <= 0.0) { float gV = seeV(uOpac.x, gTauG); bg *= (uOccW > 0.0 ? pow(gV, 1.0 - uOccW) : gV) * exp(-SKIN_LOS * gTauWE); }   // (round 20v: the gas's part in tr, see uOccW)
     col = col * uExposure + tr * bg + sky;
     // asinh stretch of the luminance, as for astronomical images of high dynamic range; hue is kept and
     // channels that run past white roll off toward it
@@ -6244,7 +6270,7 @@ void main(){
     const UWS = uniforms(progWS, ['uResW', 'uLayer0', 'uTime', 'uSeed']);
     const UT3 = uniforms(progT3, ['uRes3', 'uLayer0', 'uTime', 'uSeed', 'uCam', 'uPixA']), US3 = uniforms(progS3, ['uRes3', 'uLayer0', 'uT3']);
     gl.useProgram(progS3); gl.uniform1i(US3.uT3, 5);
-    const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uStarOcc', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
+    const UNAMES = ['uRayB', 'uCtMax', 'uMarch', 'uCoIt', 'uCtIt', 'uCoRec', 'uCoPass', 'uCoG0', 'uCoP', 'uCoDith', 'uProbe', 'uCutA', 'uFacePass', 'uFaceRdy', 'uFaceRes', 'uRes', 'uTime', 'uCam', 'uBasis', 'uTanHalf', 'uRSnow', 'uLum', 'uStarOcc', 'uOccW', 'uExposure', 'uStar', 'uSteps', 'uSeed', 'uPx', 'uClump', 'uVapor', 'uMode', 'uDiskMap', 'uWindMap', 'uSlice', 'uSliceQ', 'uSliceN', 'uSliceR', 'uSliceZ',
       'uNP', 'uPl', 'uPlTrap', 'uPlGap', 'uPlRim', 'uPlV', 'uPlVa', 'uPlG', 'uGapT', 'uThermo', 'uGapR', 'uEnv', 'uEnvMap', 'uSliceOff', 'uSliceFace', 'uLook', 'uComp', 'uTurb3', 'uJit', 'uEnv3', 'uMS', 'uWStr', 'uWindLow', 'uAccMap', 'uAcc', 'uAccV', 'uCoMode', 'uCoV', 'uCoRange', 'uCoK', 'uWindVel', 'uMag', 'uMagAxis', 'uMagE1', 'uMagT', 'uPuffT', 'uPuff', 'uStarK', 'uMat', 'uPlVq', 'uCpd', 'uJet', 'uJetLow', 'uJetT', 'uBg', 'uSky', 'uBgTurn', 'uLit', 'uFx', 'uFocus', 'uSplit', 'uKick0', 'uKickK', 'uKickN', 'uRowOff', 'uCoWinK', 'uCoBin', 'uCoRayN', 'uCoOne', 'uCoRayPx', 'uCoWinS', 'uCoW', 'uAccDraw', 'uGasOuter', 'uMflux', 'uMdotV', 'uMP', 'uWindK', 'uGGas', 'uJetOcc', 'uLstar', 'uExcl', 'uCoEnv', 'uPebH', 'uFast', 'uOpac', 'uStars', 'uSelf', 'uSelfT', 'uSelfK', 'uDbg', 'uDbg2', 'uDbg3'];   // R19DBG
     const U0 = uniforms(prog, UNAMES);
     const progShow = link(SHOW_FS, 'show'), progBloom = link(BLOOM_FS, 'bloom');
@@ -8819,6 +8845,9 @@ void main(){
     // a kick of 639 ms; (2) the time over the band's pixels times the work, from small bands whose kicks were mostly their own
     // part, refused every larger band and lowered the work to 16: a frame of 17 bands, 330 to 400 s)
     const kickT = {}, kickRowsOf = {}, KICK_MS_MIN = 8, KICK_RISE = 2;
+    // (round 20x) KICK_PROBE: the volume's first piece where its band's place has no measure at a measured size and work, at most this many
+    // rows times kicks (the star's rows at K 48 on an M1 Max some 0.18 ms each: under 50 ms), and at most kickFirst's
+    const KICK_PROBE = 256;
     // (round 10a, dev.6: the kicks of a band's first piece where nothing is measured: 4, and 1 within a guarded device's budget
     // (70 ms, or less: the checks' ?gpux) for the first band of a kind after a jump or a switch of look (kickResetAll; kickFresh
     // until a band is done; none of its bands drawn since: kickRowsOf), not after a new size alone: a moving view's scale changes
@@ -8834,10 +8863,42 @@ void main(){
     let kickFirstSet = 0, kickLeast = 0, kickFresh = false;
     const kickFirst = (drawn) => kickFirstSet || (!drawn && kickFresh && gBudget > 0 && gBudget <= 70 ? 1 : 4);
     const kickMs = (key, K) => { const m = kickT[key]; return m && m.w === rW && m.h === rH && m.K === K && m.ts.length ? m.ts : null; };
-    // (the predicted bound of a kick of R rows, ms; 0 where not measured at this size and work)
-    const kickAt = (key, K, R) => { const ts = kickMs(key, K); return ts ? Math.min(...ts.map((x) => x.t * Math.max(1, R / x.rows))) : 0; };
-    // (the most rows whose kick that bound keeps under ms; 0 where none does)
-    const kickRowsFor = (key, K, ms) => { const ts = kickMs(key, K); return ts ? Math.max(0, ...ts.map((x) => (x.t <= ms ? Math.floor(x.rows * ms / x.t) : 0))) : 0; };
+    // (Round 20u) the measures of the band's own place (its first row y0, within half its rows), where there are any, else all;
+    // and of them the dearest. The cheapest of all, before, took one band's cost for another's: on a desktop's stage, taller since
+    // 1.10.0 (900 x 700, 776 rows at scale 1), afar in the visible look a still's upper band of 436 rows cost 17 to 20 ms a kick
+    // and its lower one of 340 rows 0.7 to 1.0, and the upper band's first piece, sized from the lower's, sent its 19 kicks at
+    // once: 330 to 437 ms by its fence, every frame (check.js's flight, the tripwire)
+    // (where the band's place has none yet, the dearest of all too: the cheapest of all there, tried, let a first frame after a look
+    // switch send a piece of 422 ms in the mid-infrared, its later bands sized from its cheapest; the dearest makes that first
+    // picture some 20 % slower, its cheap bands in smaller pieces, check.js's look switch 3.0 s against 2.5 in kicks, at the
+    // desktop's frame, an item failing before already)
+    const kickNear = (ts, y0) => (y0 >= 0 ? ts.filter((x) => x.y0 >= 0 && Math.abs(x.y0 - y0) <= Math.max(BAND_ROWS, x.rows / 2)) : []);
+    // (round 20x: where the band's place has no measure yet, its first piece a probe of at most KICK_PROBE rows times kicks (see the band's
+    // first piece), and its rows (kickRowsFor) the most of the last four's, as before round 20u. Tried there: the fewest rows and the dearest
+    // of all, round 20u's, made a still's frames crawl through their cheap bands, a snapshot of the visible look at full size 86 s against
+    // 36 before, the mid-infrared's 60 against 28; the dearest of all for the first piece alone, 63 and 39 s; a new kind's 4 kicks, 28 and
+    // 29 s, but pieces of 145 to 163 ms on the desktop's frame (4 kicks of 177 to 221 of the star's rows at K 48, some 40 ms each); the
+    // cheapest of all, before round 20u, one of 422 ms in the mid-infrared after a look switch)
+    // (round 20x: the gas line's passes (keys co:...:w, :g) as before, the cheapest of their last four: the dearest made its moments' stills some
+    // 2.6 times slower, m0 at scale 0.2 in 53 s against 23; its pieces were never long, the volume's were)
+    const kickStrict = (key) => !/^co:/.test(key);
+    // (the predicted bound of a kick of R rows from row y0, ms; 0 where not measured at this size and work, or, for the volume, not at
+    // this band's place: the dearest of its place's measures)
+    const kickAt = (key, K, R, y0) => {
+      const ts = kickMs(key, K); if (!ts) return 0;
+      const at = (x) => x.t * Math.max(1, R / x.rows);
+      if (!kickStrict(key)) return Math.min(...ts.slice(-4).map(at));
+      const n = kickNear(ts, y0);
+      return n.length ? Math.max(...n.map(at)) : 0;
+    };
+    // (the most rows from row y0 whose kick that bound keeps under ms; 0 where none does. A band's rows from its own place's measures,
+    // the fewest; where it has none, as before, the most of the last four)
+    const kickRowsFor = (key, K, ms, y0) => {
+      const ts = kickMs(key, K); if (!ts) return 0;
+      const fit = (x) => (x.t <= ms ? Math.floor(x.rows * ms / x.t) : 0);
+      const n = kickStrict(key) ? kickNear(ts, y0) : [];
+      return Math.max(0, n.length ? Math.min(...n.map(fit)) : Math.max(...ts.slice(-4).map(fit)));
+    };
     // (round 10a, the CPU's part: a flush after each piece, one command buffer of at most the aim, as a band drawn whole had;
     // each kick flushed on its own (box.diskSplit({ flush: 'kick' })) cost the GPU nothing measurable on the M1 Max either way)
     let kickFlush = 'piece';
@@ -9006,7 +9067,7 @@ void main(){
         if (j.lastMs >= KICK_MS_MIN) {
           let m = kickT[j.kk];
           if (!m || m.w !== rW || m.h !== rH || m.K !== j.K) m = kickT[j.kk] = { ts: [], w: rW, h: rH, K: j.K, top: 0 };
-          m.ts.push({ t: ms, rows }); if (m.ts.length > 4) m.ts.shift();
+          m.ts.push({ t: ms, rows, y0: j.bd.y0 }); if (m.ts.length > 8) m.ts.shift();   // (round 20u: its place, see kickNear; 8, a few of each band)
           m.top = Math.max(m.top, rows);
         }
         // (and the work of the kind's kicks from the next frame, see kickKOf: twice, where its band covers the frame with room)
@@ -9066,7 +9127,7 @@ void main(){
         // time so predicted is over half the aim: the band's rows cut to it, and where even the least band would be over, the
         // work of a kick halved first, its kind measured anew)
         const known = !!kickMs(j.kk, j.K);
-        let fits = known ? kickRowsFor(j.kk, j.K, 0.5 * aim) : 0;
+        let fits = known ? kickRowsFor(j.kk, j.K, 0.5 * aim, j.y) : 0;
         if (known && fits < BAND_ROWS && j.K > kickK) { j.K = Math.max(kickK, j.K / 2); kickKOf[j.key] = j.K; kickReset(j.kk); fits = 0; }
         const prev = j.prevRows || kickRowsOf[j.kk] || 0;
         const least = kickLeast || BAND_ROWS;
@@ -9101,15 +9162,16 @@ void main(){
       // at most twice the kicks before, made pieces so small that the phone frame's mid-infrared cost 1.9 times its frame drawn
       // whole, its pieces' fences counted many times)
       const more = Math.max(1, perKick > 0 ? Math.min(want, Math.floor(aim / (KICK_RISE * perKick))) : 1);
-      const t1 = kickAt(j.kk, j.K, bd.y1 - bd.y0), rows1 = bd.y1 - bd.y0;
+      const t1 = kickAt(j.kk, j.K, bd.y1 - bd.y0, bd.y0), rows1 = bd.y1 - bd.y0;
       // (round 10a, dev.6: the gas line's band's first piece too at twice the measured cost a kick: its kicks' work varies more, a
       // step halved up to five times where the gas changes within it, so a band through the disk costs more than one measured
       // above it. On a desktop's frame (moment 0, scale 0.8, 546 rows) first pieces of 7 kicks so sized took 109 to 137 ms, the
       // aim 60)
       const rise1 = lookNow === 'co' ? KICK_RISE : 1;
       const drawn = (j.prevRows || kickRowsOf[j.kk] || 0) > 0;
-      const fit = t1 > 0 ? Math.max(1, Math.floor(aim / (rise1 * t1))) : kickFirst(drawn);
-      const first = Math.min(fit, t1 > 0 && rows1 <= kickT[j.kk].top ? needOf(j.kk) : kickFirst(drawn));
+      const probe = t1 > 0 || !kickStrict(j.kk) || !kickMs(j.kk, j.K) ? kickFirst(drawn) : Math.min(kickFirst(drawn), Math.max(1, Math.floor(KICK_PROBE / rows1)));   // (round 20x)
+      const fit = t1 > 0 ? Math.max(1, Math.floor(aim / (rise1 * t1))) : probe;
+      const first = Math.min(fit, t1 > 0 && rows1 <= kickT[j.kk].top ? needOf(j.kk) : probe);
       const n = Math.min(kickMax(j.K) - bd.k, kickEach ? 1 : bd.k === 0 ? first : more);
       gl.uniform1i(j.U.uSplit, 1); gl.uniform1f(j.U.uKickK, j.K); gl.uniform1f(j.U.uRowOff, bd.y0);
       // (the band's rows from the bottom of the state's sets, for all the piece's kicks; and the state's unit, its texture bound
@@ -9419,7 +9481,7 @@ void main(){
       gl.uniform4fv(U.uMP, MPV); gl.uniform1f(U.uWindK, WIND_GAIN.k);   // (round 14a: the model's parameters, see CONST_GLSL; the wind's brightness, box.diskWindGain)
       gl.uniform1f(U.uExposure, expo);   // brighter starlight, compressed by the stretch
       gl.uniform1f(U.uStar, starL);
-      gl.uniform1f(U.uStarOcc, starOccNow());   // (round 20t: see starOccNow)
+      { const so = starOccNow(); gl.uniform1f(U.uStarOcc, so); gl.uniform1f(U.uOccW, starTab ? 1 - so : 0); }   // (round 20t: see starOccNow; round 20v: uOccW)
       // the dipole: tilted toward the azimuth the star has turned to (it turns with the star, MAG.SPIN)
       const phS = (MAG.SPIN * time) % (2 * Math.PI), sT = Math.sin(MAG.TILT), cT = Math.cos(MAG.TILT);
       const mAx = [sT * Math.cos(phS), sT * Math.sin(phS), cT], e1 = [Math.cos(phS) - sT * mAx[0], Math.sin(phS) - sT * mAx[1], -sT * mAx[2]], e1n = Math.hypot(...e1);
@@ -9439,7 +9501,7 @@ void main(){
       // and its see-through, opt.opac[4]: the jet only shines, so the factor dims its light, 1 to 0.05. On uJet, whose only other
       // use in the shaders is to ask whether there is a jet (uJet > 0, which no factor of OPAC changes): no shader changes, and at
       // 1 the uniform is the one of before to the bit)
-      gl.uniform1f(U.uJet, jetAmp * jetAmp * (3 - 2 * jetAmp) * (JET.LOOK[lookNow] || 0) * opt.opac[4]);
+      gl.uniform1f(U.uJet, jetAmp * jetAmp * (3 - 2 * jetAmp) * jetLookOf(lookNow, selfOn()) * opt.opac[4]);   // (round 20y: and the own light's, JET.SELF)
       gl.uniform1f(U.uJetLow, 1 - (1 - 1 / JET.LOW) * asymSm());
       gl.uniform1f(U.uJetT, time % 3600);
       stepsU = fastNow ? Math.round(opt.steps * (camD < 10 ? 2 : 1) * FAST.K) || 1 : Math.round(opt.steps * (camD < 10 ? 2 : 1));   // (round 16a: FAST.K of it on a moving picture's frame)
@@ -11465,7 +11527,7 @@ void main(){
     // radius (au), its cavity's half angle (rad) and r_c (au)
     box.diskProbe = (R, z = 0, phi) => {
       R = Math.max(Number(R) || 0, 1e-3); z = Number(z) || 0;
-      const jet = jetAmp * jetAmp * (3 - 2 * jetAmp) * (JET.LOOK[lookNow] || 0);
+      const jet = jetAmp * jetAmp * (3 - 2 * jetAmp) * jetLookOf(lookNow, selfOn());
       const P0 = probeJS(R, z, lnTauJS(R, z), gapLnAll(R), lumNow, asymSm(), accW(), jet, exclOn && windShareJS(R, z, asymSm(), envLnRho0) < 0.5);
       return { ...P0, zS: zOfTau(R, 0), rTI: NONIDEAL.R_TI, lum: lumNow,
         snow: { R: rSn, inside: R < rSn },
