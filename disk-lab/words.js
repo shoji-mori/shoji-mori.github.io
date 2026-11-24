@@ -228,6 +228,10 @@ export const WORDS = {
       fromLink: (n) => `リンクから ${n} 場面を開きました(「動きと発表」)。`,
       loaded: (n) => `${n} 場面を開きました。`,
       restored: '前の場面に戻しました。',
+      keepFailed: '場面を端末に保存できませんでした。元の場面を引き続き表示します。',
+      changedElsewhere: '別のタブで場面が更新されました。最新の並びを表示しました。もう一度編集してください。',
+      twoOwn: '現在の並びと控えに、それぞれ自作の場面があります。現在の並びをファイルに保存してから「全て外す」を選ぶと、別の並びを開けます。',
+      visitOnly: '変更はこのタブにあります。端末に保存できなかったので、必要な場面はファイルに保存してください。',
       loadFailed: 'Disk Lab の場面の並びのファイルではありません。',
       presentHint: '→ で次の場面へ · Esc で終わり',
       last: '最後の場面です。'
@@ -523,6 +527,10 @@ export const WORDS = {
       fromLink: (n) => (n === 1 ? 'One scene opened from the link (under “Moves and talks”).' : `${n} scenes opened from the link (under “Moves and talks”).`),
       loaded: (n) => (n === 1 ? 'One scene opened.' : `${n} scenes opened.`),
       restored: 'Your earlier scenes are back.',
+      keepFailed: 'The scenes could not be saved on this device. Your current scenes are still open.',
+      changedElsewhere: 'Another tab changed the scenes. The latest list is open. Please repeat your edit.',
+      twoOwn: 'The current list and its backup both hold your own scenes. Save the current list as a file and remove its scenes before opening another list.',
+      visitOnly: 'Your changes are open in this tab. Device storage was unavailable. Save the scenes as a file to keep them.',
       loadFailed: 'This file is not a list of scenes from Disk Lab.',
       presentHint: '→ for the next scene · Esc to end',
       last: 'This is the last scene.'

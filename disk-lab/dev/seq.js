@@ -101,6 +101,38 @@ export function checkSeq(o) {
 // nothing for an empty list. Returns what the copy is to hold: cur, or prev as it was
 export const stashFor = (cur, prev) => (cur && cur.keys && cur.keys.length && !(prev && prev.src === 'own') ? cur : prev || null);
 
+// Serialize the synchronous localStorage update across tabs. Older browsers can serialize it
+// in an IndexedDB read/write transaction. A denied lock leaves the visit usable in memory.
+export function sceneWriter(name, locks, idb) {
+  if (locks) return async (edit) => {
+    let entered = false;
+    try { return await locks.request(name, () => { entered = true; return edit(true); }); }
+    catch (err) { if (entered) throw err; return edit(false); }
+  };
+  let opening;
+  return async (edit) => {
+    if (!idb) return edit(false);
+    if (!opening) opening = new Promise((resolve, reject) => {
+      const req = idb.open(name, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('writes');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    let tx;
+    try { tx = (await opening).transaction('writes', 'readwrite'); }
+    catch { opening = null; return edit(false); }
+    return new Promise((resolve, reject) => {
+      let entered = false, result;
+      tx.objectStore('writes').get(0).onsuccess = () => {
+        entered = true;
+        try { result = edit(true); } catch (err) { reject(err); }
+      };
+      tx.oncomplete = () => resolve(result);
+      tx.onabort = () => { if (entered) resolve(result); else resolve(edit(false)); };
+    });
+  };
+}
+
 // A sequence in a link's fragment: '#seq=' and a letter for the encoding, then the JSON in base64url: z, deflate-raw; d, deflate
 // (where the browser has CompressionStream but not that format: not verified for every browser, see the design's section 2.2);
 // j, the JSON as it is.

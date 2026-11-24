@@ -11,8 +11,8 @@ pages, with a view transition (DESIGN.md, section 12). Why it is built this way:
     python3 ver2/tools/disk-lab-v2/serve.py          # from the repository root; no-store, 127.0.0.1 only
     open http://127.0.0.1:8642/disk-lab/
 
-The page reads `/fonts/inter-latin-*.woff2` and `/images/favicon.svg` from the site's root, so serve the repository
-root (as GitHub Pages does).
+Serve the repository root as GitHub Pages does. The page uses `/fonts/inter-latin-*.woff2` and three files under
+`/images/` — `favicon-wave.svg`, `favicon-wave-32.png` and `apple-touch-icon-wave.png`.
 
 URL parameters:
 
@@ -20,7 +20,7 @@ URL parameters:
 | --- | --- |
 | `lang=en` / `lang=ja` | language (otherwise the visit's choice, `sessionStorage['site-language']`, then the browser's) |
 | `place=whole` … `afar` | start at a place (`whole wind snow planet mm heat deadzone star afar`) |
-| `el az d look mode field ann asym marks waves slice sq p tx ty tz speed paused t com cov ms` | a view, as "Copy a link" writes it (the same keys as the archived preview page's links). `sq` is `T`, `rho` or `layers` (the Regions); an old link's `tau` opens the temperature, `none` the density. A `mode` with one of the bits 1 and 2 turns on both (the gas with its dust); bit 64 is the jet (round 8). `marks` the flow arrows (the gas's option since round 8). (Round 15a) `ann`, the annotations: 1 all of them (as before), 0 none, else the sum of those shown: 2 the snow line's name, 4 the planet's label, 8 the scale bar, 16 the cut's lines and colour bar, 32 the gas line's colour bar, 64 the model look's key of the colours (`ann=118`: all but the scale bar); the rail's View has a checkbox for each, the A key hides them all and brings back those shown. Without `paused` the clock starts stopped (round 15a: `data-paused`) |
+| `el az d look mode field ann asym marks waves slice sq p pi tx ty tz speed paused t com cov ms` | a view, as "Copy a link" writes it (the same keys as the archived preview page's links). `sq` is `T`, `rho` or `layers` (the Regions); an old link's `tau` opens the temperature, `none` the density. `pi` selects the followed planet by its zero-based index (default 0). A `mode` with one of the bits 1 and 2 turns on both (the gas with its dust); bit 64 is the jet (round 8). `marks` the flow arrows (the gas's option since round 8). (Round 15a) `ann`, the annotations: 1 all of them (as before), 0 none, else the sum of those shown: 2 the snow line's name, 4 the planet's label, 8 the scale bar, 16 the cut's lines and colour bar, 32 the gas line's colour bar, 64 the model look's key of the colours (`ann=118`: all but the scale bar); the rail's View has a checkbox for each, the A key hides them all and brings back those shown. Without `paused` the clock starts stopped (round 15a: `data-paused`) |
 | `lit=fx` | the starlight's shading in the model look tied to the finish's level as before 2026-11-03 (off at Auto on guarded devices); without it the shading is drawn at every level |
 | `bg=off` / `bg=cloud` | the background: none, or the dark molecular cloud of a star-forming region (round 8; the stars, the default, are not written) |
 | `pl=3:1:1,8:0:0.1` | the planets: orbital radius (au, 0.05 to 20 since round 7), on (1) or off (0), and mass in Jupiter masses (round 8: 10 Earth masses to 3; without it, 1), up to four |
@@ -60,6 +60,12 @@ URL parameters:
 A link's view and settings win over those kept on the device (below); the CO look's key stays `look=co` (shown as the gas
 line since round 9).
 
+The single-view link and its QR code carry only the view. Use the scene list's share control to include its scenes.
+On this device, the current scenes and their backup are saved together. The page reads the separate backup from
+older builds. Older tabs keep their own storage. If one holds a different list, use the earlier-version file buttons
+to recover its scenes or backup. If another tab has changed the list while you were editing, the page reopens the latest list and asks
+you to repeat the edit. An imported playback speed applies to that visit.
+
 ## Files
 
 | file | what |
@@ -92,6 +98,9 @@ In the page's console (a visible window gives frame times too):
 `await c.zoomPacing()` the frame intervals while the wheel zooms in and out (DESIGN.md, section 7).
 `ver2/tools/disk-lab-v2/frame.html?w=390&h=760&src=/disk-lab/%3Flang%3Dja` shows the page at a phone's size in
 a desktop window. With `serve.py --save-dir DIR`, `c.run({ save: 'check.json' })` writes the results there.
+Saves require the origin of the local page, including its port. The server accepts 127.0.0.1, localhost and named
+subdomains of localhost for checks with separate browser storage. The frame and engine selectors accept the current
+build, dev and local copies under `/_refs/<name>/disk-lab/`.
 In that frame, `const t = await import('/ver2/tools/disk-lab-v2/touch-check.js'); await t.run(frames[0])` plays
 synthetic two-finger gestures on the picture and reports how far each moved the view (round 8, DESIGN.md section 21).
 
@@ -162,6 +171,11 @@ to publish (the public build, the version line, the engine's SHA-256, the caches
     node ver2/tools/disk-lab-v2/link-check.mjs
     node ver2/tools/disk-lab-v2/release-check.mjs     # and with --release before a version is published
 
+The local server's request checks, capture receipts and WebP publication rules can be checked offline
+with the Python standard library. This uses temporary files and a stand-in for the converter.
+
+    python3 ver2/tools/disk-lab-v2/file-tools-check.py
+
 The engine's own checks (ver2/tools/disk-check's state matrix, on v2's engine, with the states close to the star):
 
     const e = await import('/ver2/tools/disk-lab-v2/engine-check.js');
@@ -205,10 +219,14 @@ Mac, about the centre (look at it: the view of round 15a sits otherwise than the
     sips -c 900 1714 /tmp/disk-stills/whole-en-wide.png --out /tmp/og-crop.png
     sips -z 630 1200 -s format jpeg -s formatOptions 86 /tmp/og-crop.png --out disk-lab/og.jpg
 
-(Round 20r) `stills-webp.sh` also writes `stills/SOURCE.txt`, the SHA-256 of the engine and of `places.js` the stills were drawn
-with (run it right after stills.html), and `release-check.mjs --release` fails while they are not the released ones: the stills
-of 1.9.10 and 1.10.0 were published from before their pictures changed. To see which stills a change moved, before converting
-them (the published ones are compared):
+`stills.html` saves a `.png.json` beside each PNG with SHA-256 digests of that PNG and of the exact engine and places
+sources used for the capture. Keep each pair together. `stills-webp.sh` verifies the pairs before conversion. For a
+complete set from one revision it writes the captured source hashes and the hash of each WebP to `stills/SOURCE.txt`.
+Captures from different revisions or a PNG that no longer matches its record stop conversion before any output is replaced.
+A partial set or old PNGs without capture records can still be converted for inspection and are marked incomplete.
+Empty input returns an error. The release check verifies every expected filename, the WebP header and length, the
+recorded per-file hashes when available, and the source revision.
+To see which stills a change moved, compare the PNGs with the published WebPs before converting them.
 
     python3 ver2/tools/disk-lab-v2/stills-compare.py /tmp/disk-stills /tmp/stills-sheet.png
 
@@ -218,8 +236,7 @@ published stills and add a line `same with engine <ten> places <ten>` (the first
 ## Publishing
 
 `disk-lab/` is published as it is, at `/disk-lab/` (indexed: robots, canonical and Open Graph tags in `index.html`;
-`og.jpg`, 1200 x 630, is the whole disk's still). It needs `/fonts/` and `/images/favicon.svg` at the site's root, and
-uses relative paths otherwise. Bump the `?v=` of
+`og.jpg`, 1200 x 630, is the whole disk's still). Include the fonts and icons listed under “Run it” at the site's root. Bump the `?v=` of
 `disk-lab.css` and `app.js` in `index.html`, and of the modules `app.js` imports (`places.js`, `words.js`, `quality.js`,
 `capture.js`, `seq.js`, `qr.js`, `mp4.js`), when they change (the page is served with the site's caching, and a new `app.js` with an
 old module cached would fail); `release-check.mjs` (below) finds one that changed and kept its tag.
@@ -282,7 +299,7 @@ DESIGN.md, section 22.
 "Moves and talks", a section of the rail closed until opened: six moves played with one click from the view as it is (an orbit,
 edge-on to face-on, from afar to the star, along the disk to the planet, the clock sped up, each look in turn) at a pace chosen;
 scenes of one's own ("Add this view": the view, the look, the cut, what is shown, the clock), renamed, reordered, removed,
-played one after another, kept on the device (localStorage `disk-lab-seq`), saved as a JSON file and opened again, or shared as a
+played one after another, kept on the device (current and previous lists together in localStorage `disk-lab-scene-lists`), saved as a JSON file and opened again, or shared as a
 `#seq=` link (deflate-raw and base64url in the fragment; `seq.js` checks every value of a file or a link); and "Present": the
 picture alone, full screen, the scenes (with none of one's own, the nine places) stepped through with a presentation clicker's
 keys (→ ↓ Page Down Enter the next, ← ↑ Page Up Backspace the one before, Home and End, Space the clock, B or . a black screen, F
@@ -291,7 +308,9 @@ path, `box.diskPath(view, { speed, dur, rho, turns })` (van Wijk and Nuij's zoom
 its measure, on smooth ramps; 'diskpath' events tell its start, arrival or stop), a flight to the guard: drawn at the moving scale
 within the budget, the still on arrival refined to the level as after any flight. The engine's clock for the picture is one,
 `nowMs` (the flights, the fades, the look's dip), the page's own with `box.diskManual(true)` and `box.diskAdvance(dt)` for an
-exporter. `diskLab.talk` gives the scenes, a link, the moves and the presenter to scripts. DESIGN.md, section 25.
+exporter. Older installations can supply the first lists from `disk-lab-seq` and `disk-lab-seq-prev`. If an older tab edits either
+of them later, its list can be downloaded from Moves and talks. The development build has its own storage prefix.
+`diskLab.talk` gives the scenes, a link, the moves and the presenter to scripts. DESIGN.md, section 25.
 
 ## Tilt to look in (round 12b)
 
@@ -324,7 +343,7 @@ The visitor's settings and view (the look and its map, what is shown and its opt
 the planets, a quality chosen, the place, the angle and distance, the point looked at; round 13a: the model look's colours, as
 `col`, written as in a link; round 14a: the model's parameters, as `mp`, and the wind's brightness, as `wb`, written as in a link) are kept in localStorage `disk-lab-settings` a moment after each change and on leaving, and taken
 back at the next start without a link (a link without `col=` has the default colours, one without `mp=` and `wb=` the default parameters and brightness). "Reset all" at the top of the rail
-forgets them (`diskLab.resetAll()`). `disk-lab-session` records how the visit went
+forgets them (`diskLab.resetAll()`). During a video export, `await diskLab.resetAll()` waits for cancellation and applies the defaults after the video releases the view. `disk-lab-session` records how the visit went
 (`starting`, `live`, `changing`, `lost`, `stuck`, `failed`, `blocked`, `still`, `left`): after one that ended `starting`,
 `changing`, `lost`, `stuck`, `failed` or `blocked`, the next visit starts with safe settings and throws the kept ones
 away. check.js starts from Reset and leaves both as after a visit that went well.
@@ -529,7 +548,7 @@ For the owner's trials of how long a picture takes to be drawn; the page passes 
 
 ## Every switch, at a glance (round 17b)
 
-All the address's switches the page reads besides a view's keys (`lang`, `place`, `el az d tx ty tz p look mode field ann asym
+All the address's switches the page reads besides a view's keys (`lang`, `place`, `el az d tx ty tz p pi look mode field ann asym
 marks waves slice sq speed paused t com cov ms roll`, `bg`, `stars`, `pl`, `pmd`, `col`, `mp`, `wb`, `op`, `#seq=`, above), each with where it is
 described. A switch for development compares or tries something on the development build, a switch for checks serves the checks;
 neither is written by "Copy a link". A value the page or the engine cannot read is passed over (`link-check.mjs`,

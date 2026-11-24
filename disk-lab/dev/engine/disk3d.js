@@ -2326,7 +2326,10 @@ vec3 seeT(float f, float tau, float d, vec3 exds){ return f >= 1.0 ? exp(-exds) 
 // (round 20n, the owner: "in the starlight look the background stars must be hidden by the optical depth") the stars' share behind a
 // component in the starlit model look: at the visible light's opacity, (1 + SKIN_LOS) times the march's (K_OCC over K_G), as its
 // scattered light is seen (SKIN_LOS), blended by its see-through; 1 with SKIN_THRU, as before
-float seeV(float f, float tau){ return f >= 1.0 ? exp(-SKIN_LOS * tau) : seeB(f, (1.0 + SKIN_LOS) * tau) / seeB(f, tau); }
+float seeV(float f, float tau){
+  if (f >= 1.0) return exp(-SKIN_LOS * (1.0 - uOccW) * tau);
+  return seeB(f, (1.0 + SKIN_LOS) * tau) / seeB(f, (1.0 + SKIN_LOS * uOccW) * tau);
+}
 // (Round 15b, the owner: "changing L* should change every observed look") uLstar: the star's luminosity over its default (the
 // parameter L*, lumBase in the script; 1 with data-lscale="0", the page's ?lscale=0, as before). The starlight the visible look
 // scatters (the disk's skin and its diffuse part, the wind's and the envelope's light) is in proportion to it; the star's own glow
@@ -2391,8 +2394,14 @@ const vec4 ENV_M = vec4(ENV_TRY.x, ENV_TRY.y / R_C, ENV_TRY.z, ENV_TRY.w);
 // the planets' disks and the magnetosphere's gas going with the gas's. At 1, 1, 1, 1 the picture is the one of before, to the bit
 uniform vec4 uOpac;
 // (the gas's sample: its light weighed by its share seen, its extinction over the step the blend's, grey; gDGe that depth)
+// (1.11.1) The blend at the opacity of this view: in the starlit model look within the disk's shadow cone the gas absorbs at the
+// visible light's (k = 1 + SKIN_LOS uOccW, see uOccW), so its column gTauG and the step's gDG are taken k times here, and its
+// extinction given back over k: the gas's sample multiplies it by k after this, as for an opaque gas (round 20v's place, kept: with
+// that factor taken before seeGas and passed to it the GPU lost its context in check.js's identity block, 4 runs in 4, as round 20v's
+// first form). k is 1 elsewhere, the blend as before to the bit
 void seeGas(float ds, inout vec3 em, inout vec3 ex, inout vec3 skin, inout float j){
-  float w = seeW(uOpac.x, gTauG), d = -log(seeB(uOpac.x, gTauG + gDG) / seeB(uOpac.x, gTauG));
+  float k = uLook == 0 && uOccW > 0.0 ? 1.0 + SKIN_LOS * uOccW : 1.0, tau = k * gTauG;
+  float w = seeW(uOpac.x, tau), d = -log(seeB(uOpac.x, tau + k * gDG) / seeB(uOpac.x, tau)) / k;
   em *= w; skin *= w; j *= w; ex = vec3(d / max(ds, 1e-6)); gDGe = d;
 }
 vec3 tcolor(float T);   // (defined below, with the temperature palette)
@@ -3008,7 +3017,7 @@ void sampleDisk(vec3 p, vec3 rd, float xPrev, float ds, inout vec3 wq, out vec3 
 #else
     if (uOpac.x < 1.0) { float j0 = 0.0; seeGas(ds, em, ex, skin, j0); }
 #endif
-    if (uLook == 0 && uOccW > 0.0) { float kV = 1.0 + SKIN_LOS * uOccW; ex *= kV; gDGe *= kV; }   // (round 20v: the blend's too, see uOccW)
+    if (uLook == 0 && uOccW > 0.0) { float kV = 1.0 + SKIN_LOS * uOccW; ex *= kV; gDGe *= kV; }   // (round 20v: the blend's too, see uOccW and seeGas)
   }
 
   // The magnetically driven wind: gas flowing out along the field lines of the solution (density from the
@@ -5106,7 +5115,7 @@ ${BG.LAMPS.map(([x, y, z, , k]) => `      { float t = acos(clamp(dot(dSky, norma
     // (round 20n, the owner: "in the starlight look the background stars must be hidden by the optical depth") the starlit model look's
     // stars and the cloud behind, at the visible light's opacity of the gas, the wind and the envelope in front (seeV), as its scattered
     // light is seen; until now at the march's translucent K_G alone, so that the stars shone through the opaque disk
-    if (uLook == 0 && uSelf.x <= 0.0) { float gV = seeV(uOpac.x, gTauG); bg *= (uOccW > 0.0 ? pow(gV, 1.0 - uOccW) : gV) * exp(-SKIN_LOS * gTauWE); }   // (round 20v: the gas's part in tr, see uOccW)
+    if (uLook == 0 && uSelf.x <= 0.0) bg *= seeV(uOpac.x, gTauG) * exp(-SKIN_LOS * gTauWE);
     col = col * uExposure + tr * bg + sky;
     // asinh stretch of the luminance, as for astronomical images of high dynamic range; hue is kept and
     // channels that run past white roll off toward it
@@ -5412,6 +5421,24 @@ void main(){
     const k = gapK(a, q), y = Math.abs(R - a);
     return y >= k.dR2 ? 0 : y <= k.dR1 ? 1 : (1.32 - 4 * y / (a * k.k4)) / (1 - k.smin);
   };
+  // Quantize the fade for the table cache. At full amplitude the gap retains its finite model density.
+  const gapDepth = (p) => (Math.round(p.amp * 10000) / 10000) * gapK(p.a, p.q).depth;
+  function fillGapTable(planets, gapTD) {
+    const dln = Math.log(2000) / (GT_N - 1), ln0 = Math.log(0.02);
+    for (let j = 0; j < GT_N; j++) {
+      const R = Math.exp(ln0 + j * dln);
+      let lf = 0, sl = 0;
+      for (const p of planets) {
+        // (the factor 1 - d s(R) and its share of d ln Sigma / d ln R, -R d s'(R) / (1 - d s); s' is -/+ 4 / (k4 a (1 - smin))
+        // on the walls outside and inside the orbit, 0 elsewhere)
+        const k = gapK(p.a, p.q), y = Math.abs(R - p.a);
+        if (p.d <= 0 || y >= k.dR2) continue;
+        const sh = gapShape(R, p.a, p.q), ds = y <= k.dR1 ? 0 : -Math.sign(R - p.a) * 4 / (k.k4 * p.a * (1 - k.smin));
+        lf += Math.log(1 - p.d * sh); sl += -R * p.d * ds / (1 - p.d * sh);
+      }
+      gapTD[2 * j] = lf; gapTD[2 * j + 1] = sl;
+    }
+  }
   const gapLnJS = (R, d, a = PLANET.A, q = PLANET.Q) => (d > 0 ? Math.log(1 - d * gapShape(R, a, q)) : 0);
   // The pebbles' response to a gap of depth d: the fraction filtered out of it (1.08 d, at most 0.99), in the gas's gap a
   // tenth wider, and the pressure maximum outside it (P ∝ Σ R^-7/4 at the midplane, with the edge cutoff and the other
@@ -6170,7 +6197,7 @@ void main(){
     if (!gl || !fbHalf) {
       box.dataset.fallbackError = !gl ? 'no WebGL2 context' : gl.isContextLost() ? 'the WebGL2 context was lost as it was made (too many open?)'
         : 'no float render targets (' + (gl.getSupportedExtensions() || []).filter((e) => /color_buffer|float/i.test(e)).join(', ') + ')';
-      box.classList.add('disk-fallback'); return;
+      box.classList.add('disk-fallback'); return false;
     }
     if (!reuse) box.prepend(canvas);
     const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -7719,7 +7746,7 @@ void main(){
       const tNow = performance.now();
       planets.forEach((p) => {
         // (round 6: the gap's depth is its profile's, 1 - Sigma_min / Sigma_0, from every distance and in every look)
-        const d = Math.round(p.amp * gapK(p.a, p.q).depth * 10000) / 10000;
+        const d = gapDepth(p);
         if (d !== p.dSet || p.a !== p.aSet || p.q !== p.qSet || (p.rough && !plDrag)) {
           if (plDrag && p.aSet > 0 && tNow - plFullT < PL_FULL_MS) {
             if (p.rim) { const f = p.a / p.aSet; p.rim = { ...p.rim, R: p.rim.R * f, end: p.rim.end * f }; }
@@ -7752,20 +7779,7 @@ void main(){
         act.forEach((p, i) => plLightAll.set(p.light, 128 * i));
         const on = act.filter((p) => p.d > 0);
         gapR = on.length ? [Math.min(...on.map((p) => p.a - 1.02 * gapK(p.a, p.q).dR2)), Math.max(...on.map((p) => p.a + 1.02 * gapK(p.a, p.q).dR2))] : [1e9, 0];
-        const dln = Math.log(2000) / (GT_N - 1), ln0 = Math.log(0.02);
-        for (let j = 0; j < GT_N; j++) {
-          const R = Math.exp(ln0 + j * dln);
-          let lf = 0, sl = 0;
-          for (const p of act) {
-            // (the factor 1 - d s(R) and its share of d ln Sigma / d ln R, -R d s'(R) / (1 - d s); s' is -/+ 4 / (k4 a (1 - smin))
-            // on the walls outside and inside the orbit, 0 elsewhere)
-            const k = gapK(p.a, p.q), y = Math.abs(R - p.a);
-            if (p.d <= 0 || y >= k.dR2) continue;
-            const sh = gapShape(R, p.a, p.q), ds = y <= k.dR1 ? 0 : -Math.sign(R - p.a) * 4 / (k.k4 * p.a * (1 - k.smin));
-            lf += Math.log(1 - p.d * sh); sl += -R * p.d * ds / (1 - p.d * sh);
-          }
-          gapTD[2 * j] = lf; gapTD[2 * j + 1] = sl;
-        }
+        fillGapTable(act, gapTD);
         const unit = gl.getParameter(gl.ACTIVE_TEXTURE);   // (the passes bind on the unit they find active: leave it so)
         gl.activeTexture(gl.TEXTURE13); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 128, PLANETS.MAX, gl.RED, gl.FLOAT, plLightAll);
         gl.activeTexture(gl.TEXTURE14); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, GT_N, 1, gl.RG, gl.FLOAT, gapTD);
@@ -9849,7 +9863,9 @@ void main(){
       // moved, a flight, a drag or a touch (viewMoving), which the state alone does not tell: it gives a flight's end.
       // clock: the clock's rate for the view, clockK, 1 far out and slower zoomed in)
       // (round 9: bands, the number of bands its volume was drawn in)
-      box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12, acc: accN, accMax: ACC_MAX, moving: viewMoving() ? 1 : 0, clock: clockK(), bands: job.n, held: Math.round(heldNow), ...(job.split ? { kicks: job.kicks || 0, bandPieces: job.bandPieces || 0 } : {}), ...(job.fast ? { fast: job.fast } : {}) } }));
+      // (round 20z: key, the kind the frame was drawn as, its look ':F' for the volume's shader: in a look switch's first 300 ms, the
+      // switch's dip, the look before is still drawn, and the page's ramp counted those frames as the new look's)
+      box.dispatchEvent(new CustomEvent('diskframe', { detail: { time, years: time / 12, acc: accN, accMax: ACC_MAX, moving: viewMoving() ? 1 : 0, clock: clockK(), bands: job.n, held: Math.round(heldNow), key: job.key, ...(job.split ? { kicks: job.kicks || 0, bandPieces: job.bandPieces || 0 } : {}), ...(job.fast ? { fast: job.fast } : {}) } }));
       };
       // (a script's frame: its first band sent by the script, once the work before it is done and measured; see above)
       if (pre && adaptRows > 0) { job.defer = true; gl.flush(); return; }
@@ -10964,12 +10980,14 @@ void main(){
       ac.abort(); watchers.forEach((w) => w.disconnect()); clearTimeout(resizeTimer); stopTour(true); hush(); clearTimeout(toastTimer);
       overlay.remove(); toast.remove(); hint.remove(); descEl.remove(); keysEl.remove(); clearTimeout(hintT); stillShown(false);
       try {
-        init(box, canvas, restoredTime);
+        if (!init(box, canvas, restoredTime)) throw new Error(box.dataset.fallbackError);
         box.diskSet({ ...st, fly: 0 });
         box.dispatchEvent(new CustomEvent('diskstate', { detail: box.diskState() }));
       } catch (err) {
         box.querySelectorAll(':scope > canvas, :scope > .disk-overlay').forEach((el) => el.remove());
         box.dataset.fallbackError = String((err && err.message) || err).slice(0, 240); box.classList.add('disk-fallback'); console.error(err);
+        lostEvent(true, { msg: box.dataset.fallbackError });
+        return;
       }
       lostEvent(false);
     }, on);
@@ -12195,6 +12213,7 @@ void main(){
         if (snapK !== 1) { snapK = 1; opt.scale = sc0; resize(); } else if (opt.scale !== sc0) { opt.scale = sc0; rescale(); }
       }
     };
+    return true;
   }
   // Panels narrower than 700 px keep the static picture: a finger drag would fight page scrolling,
   // and phone GPUs should not pay for the ray march.

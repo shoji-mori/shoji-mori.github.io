@@ -7,17 +7,23 @@
 // the default framebuffer (flipped to the 2D canvas's rows), done at the same moment, right after the frames that
 // diskSnapshot draws and before the browser presents them. Every other drawImage is left alone.
 
-export async function snapshot(box, opts = {}) {
+// Multiple imports (including a tool's unversioned copy) can operate on the same realm's prototypes.
+const captureQueue = Symbol.for('disk-lab.captureQueue');
+export function snapshot(box, opts = {}) {
+  return framed(box, opts);
+}
+
+async function captureVolume(box, opts, realm) {
   const canvas = box.querySelector(':scope > canvas');
   const gl = canvas && canvas.getContext('webgl2');
   if (!gl || typeof box.diskSnapshot !== 'function') return null;
-  const proto = CanvasRenderingContext2D.prototype, drawImage = proto.drawImage;
+  const proto = realm.CanvasRenderingContext2D.prototype, drawImage = proto.drawImage;
   proto.drawImage = function (src, ...args) {
     if (src !== canvas || args.length !== 2) return drawImage.call(this, src, ...args);
     const w = canvas.width, h = canvas.height, px = new Uint8Array(w * h * 4), row = w * 4;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
-    const img = new ImageData(w, h);
+    const img = new realm.ImageData(w, h);
     for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * row, (h - y) * row), y * row);
     this.putImageData(img, args[0], args[1]);
   };
@@ -43,10 +49,17 @@ export function cropFor(w, h, ratio) {
 // would cut away, is moved into the crop's lower left corner: for the time of the snapshot, the engine's copy of its overlay
 // (the SVG of the lines and labels it serializes before drawing it on the picture) has its scale bar groups shifted; the
 // labels stay where the picture puts them. Ratio 0: the snapshot as it is.
-export async function framed(box, opts = {}, ratio = 0) {
-  if (!(ratio > 0)) return snapshot(box, opts);
+export function framed(box, opts = {}, ratio = 0) {
+  const realm = box.ownerDocument?.defaultView || globalThis;
+  const prior = realm[captureQueue] || Promise.resolve();
+  const result = prior.then(() => captureFrame(box, opts, ratio, realm));
+  realm[captureQueue] = result.then(() => {}, () => {});
+  return result;
+}
+async function captureFrame(box, opts, ratio, realm) {
+  if (!(ratio > 0)) return captureVolume(box, opts, realm);
   const canvas = box.querySelector(':scope > canvas');
-  const proto = XMLSerializer.prototype, serialize = proto.serializeToString;
+  const proto = realm.XMLSerializer.prototype, serialize = proto.serializeToString;
   proto.serializeToString = function (node, ...args) {
     if (canvas && node && node.classList && node.classList.contains('disk-overlay')) {
       // (the overlay's viewBox is the stage's CSS pixels; the canvas, at this moment, the snapshot's pixels)
@@ -60,11 +73,11 @@ export async function framed(box, opts = {}, ratio = 0) {
     return serialize.call(this, node, ...args);
   };
   let c;
-  try { c = await snapshot(box, opts); } finally { proto.serializeToString = serialize; }
+  try { c = await captureVolume(box, opts, realm); } finally { proto.serializeToString = serialize; }
   if (!c) return c;
   const r = cropFor(c.width, c.height, ratio);
   if (r.w === c.width && r.h === c.height) return c;
-  const out = document.createElement('canvas'); out.width = r.w; out.height = r.h;
+  const out = realm.document.createElement('canvas'); out.width = r.w; out.height = r.h;
   out.getContext('2d').drawImage(c, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
   return out;
 }

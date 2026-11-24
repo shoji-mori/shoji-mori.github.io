@@ -4,20 +4,20 @@
 // engine through the engine's public API and events.
 // See DESIGN.md for the reasons behind each choice.
 import { PLACES, placeById, placeState, fitDistance } from './places.js?v=389a9cd3e3';
-import { WORDS } from './words.js?v=9512a4b7b3';
+import { WORDS } from './words.js?v=76d7114937';
 import { probe, calibrate, govern, scaleFor, MIN_SCALE } from './quality.js?v=05d0e32989';
-import { snapshot, toPng, framed, cropFor } from './capture.js?v=e48ec134ec';
-import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor } from './seq.js?v=a06fcbfa44';
+import { snapshot, toPng, framed, cropFor } from './capture.js?v=0ced47c1fa';
+import { SEQ_V, SEQ_MAX, PACES, keyFrom, checkSeq, seqToHash, seqFromHash, stashFor, sceneWriter } from './seq.js?v=bdba4fa0e2';
 import { qrEncode, qrSvg, qrBytes, qrCapacity } from './qr.js?v=7b591f35b8';
 import { mp4Parts } from './mp4.js?v=4e35f951d3';
 
-const ENGINE_SRC = 'engine/disk3d.js?v=c91475e503';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
+const ENGINE_SRC = 'engine/disk3d.js?v=52315e4eb9';   // ?v= the first ten characters of the engine's SHA-256 (engine/SOURCE.txt)
 // The version, shown small at the foot of the rail and in the About dialog: MAJOR.MINOR, raised a little with each update
 // of the public page (MINOR for new features or physics, a third number for small fixes). History: CHANGELOG.md.
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.11.0-dev.72', RELEASED = '2026-11-24';
+const VERSION = '1.11.1-dev.76', RELEASED = '2026-11-24';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -33,6 +33,7 @@ const KEY = (k) => STORE + k;
 const CITE_URL = 'https://shoji-mori.github.io/disk-lab/', CITE_YEAR = 2026;
 // The quality the viewer may fix (render scale; Auto: the governor, and the sharpening of still pictures)
 const QUALITY = { low: 0.35, mid: 0.55, high: 0.8, full: 1 };
+const validQuality = k => k === 'auto' || (typeof k === 'string' && Object.hasOwn(QUALITY, k));
 // (round 8) the engine's finish for each level (its opt.fx: 0 none, 1 the starlight's shading, the tone and the depth's haze,
 // 2 also the glow of the bright parts); Auto by the scale calibrated at the start (DESIGN.md, section 21)
 const FX_OF = { low: 0, mid: 1, high: 2, full: 2 };
@@ -292,6 +293,7 @@ function goPlace(i, { fly = true } = {}) {
 
 // Has the view been moved away from the place? (the elevation, the distance, the point looked at, the cut, following the
 // planet; the azimuth against the engine's slow turn of the view since the arrival)
+const placeAzAt = (s) => target.az + (s.p || reduce ? 0 : SPIN_DEG * (s.time - target.time));
 function away() {
   if (!target || !live()) return false;
   const s = S();
@@ -299,8 +301,7 @@ function away() {
   if (Math.abs(s.el - target.el) > 1.5 || Math.abs(Math.log(s.d / target.d)) > 0.12) return true;
   if (Math.hypot(s.tx, s.ty, s.tz) > 0.03 * s.d) return true;
   if (Math.abs((((s.roll || 0) - (target.roll || 0)) % 360 + 540) % 360 - 180) > 3) return true;   // (round 18a: rolled away)
-  const drift = s.p || reduce ? 0 : SPIN_DEG * (s.time - target.time);
-  const daz = ((s.az - target.az - drift) % 360 + 540) % 360 - 180;
+  const daz = ((s.az - placeAzAt(s)) % 360 + 540) % 360 - 180;
   return Math.abs(daz) > 3;
 }
 
@@ -651,7 +652,14 @@ rail.addEventListener('click', (e) => {
   if (b.dataset.pal) { palToggle(b.dataset.pal); return; }   // (round 18d: a component's palette, nothing of the state changed)
   const s = S();
   // (a component may be more than one of the engine's bits, the gas with its dust: on if any is, and all turn together)
-  if (b.dataset.bit) { const bit = Number(b.dataset.bit), m = s.mode & bit ? s.mode & ~bit : s.mode | bit; box.diskSet({ mode: m, ...((m & 16) && !s.planets.some((p) => p[1]) ? { planets: [...s.planets.filter((p) => roomFor([[3, 1, 1]], p[0], -1, p[2]) || !p[1]), [3, 1, 1]].slice(-4) } : {}) }); }
+  if (b.dataset.bit) {
+    const bit = Number(b.dataset.bit), mode = s.mode & bit ? s.mode & ~bit : s.mode | bit;
+    const change = { mode };
+    if (bit === 16 && (mode & 16) && !s.planets.some((p) => p[1])) {
+      change.planets = s.planets.length ? s.planets.map(([a, on, mass], i) => [a, i === 0 ? 1 : on, mass]) : [[3, 1, 1]];
+    }
+    box.diskSet(change);
+  }
   else if (b.dataset.opt === 'field') box.diskField(!s.field);
   else if (b.dataset.opt === 'marks') box.diskSet({ marks: s.marks ? 0 : 1 });
   else if (b.dataset.opt === 'asym') box.diskSet({ asym: s.asym ? 0 : 1 });
@@ -1593,7 +1601,7 @@ let quality = 'full', qCap = 1, qChosen = false, bestCap = 1;
 // (a level chosen: kept with the settings since round 9, for the visit before)
 // (round 10a: after a bad end, not applied this once; kept, keptQuality, for the safe start's "restore")
 let keptQuality = null;
-{ let k = saved && saved.quality; try { k = k || sessionStorage.getItem(KEY('disk-lab-quality')); } catch { /* none */ } if (k && (k === 'auto' || QUALITY[k])) { keptQuality = k; if (!crashed) { quality = k; qChosen = true; } } }
+{ let k = saved && saved.quality; try { k = validQuality(k) ? k : sessionStorage.getItem(KEY('disk-lab-quality')); } catch { /* none */ } if (validQuality(k)) { keptQuality = k; if (!crashed) { quality = k; qChosen = true; } } }
 const qualityButtons = ['auto', 'low', 'mid', 'high', 'full'].map((k) => {
   const b = el('button', { type: 'button', 'data-quality': k, 'aria-pressed': String(k === quality) });
   $('qualityGroup').append(b);
@@ -1630,6 +1638,7 @@ function applyFixed() {
 }
 // the visitor's choice (kept for the visit); applyQuality: the level applied, chosen or the default
 function setQuality(k) {
+  if (!validQuality(k)) return;
   qChosen = true; keeping = keeping || calibrated;   // (round 10a: a choice made after a safe start is kept)
   if (calibrated) guardAfresh();   // (round 10a: see guardAfresh)
   flogAdd({ k: 'set', q: k });
@@ -2017,9 +2026,10 @@ playBtn.addEventListener('click', () => {
 // ---------- sharing ----------
 const LINK_KEYS = ['el', 'az', 'd', 'mode', 'field', 'ann', 'asym', 'marks', 'waves', 'slice', 'sq', 'p', 'look', 'speed', 'paused'];
 function linkFor(s) {
-  const u = new URL(location.href); u.search = '';
+  const u = new URL(location.pathname, location.href);
   u.searchParams.set('place', PLACES[placeI].id);
   for (const k of LINK_KEYS) u.searchParams.set(k, String(s[k]));
+  if (s.pi) u.searchParams.set('pi', String(s.pi));
   if (s.tx || s.ty || s.tz) for (const k of ['tx', 'ty', 'tz']) u.searchParams.set(k, String(s[k]));
   if (s.roll) u.searchParams.set('roll', String(s.roll));   // (round 18a: the camera's roll, degrees, when not 0)
   if (s.look === 'co') { u.searchParams.set('com', s.coMode); u.searchParams.set('cov', String(s.coV)); }
@@ -2063,7 +2073,7 @@ async function copyLink() {
 // data-version, for checks.
 const QR_VERSION = 18, QR_BYTES = qrCapacity(QR_VERSION), QR_PUBLIC = new URL(CITE_URL);
 const qrOver = $('qrOver');
-let qrFrom = null;   // (the button to give the focus back to, when opened from the rail)
+let qrFrom = null, qrPending = null;   // the opening request and the button to return focus to
 const qrOpen = () => !qrOver.hidden;
 const qrHref = (href) => {
   const u = new URL(href);
@@ -2071,13 +2081,17 @@ const qrHref = (href) => {
 };
 async function qrShow(inTalk) {
   if (!live()) return;
-  if (!inTalk && qrOpen()) { qrClose(); return; }   // (the rail's button again: closed)
+  if (qrOpen() || qrPending) { qrClose(); return; }
   const w = T().qr, at = PLACES[placeI].id;
   let href, said;
   if (inTalk && seq.keys.length) {
     const u = new URL(location.pathname, location.href); u.searchParams.set('lang', L());
-    href = qrHref(u.href + await seqToHash(seqOut())); said = w.scenes(seq.keys.length);
-    if (!presenting) return;   // (the presenter left while the link was made)
+    const request = {}, scenes = seqOut();
+    qrPending = request;
+    try {
+      href = qrHref(u.href + await seqToHash(scenes)); said = w.scenes(scenes.keys.length);
+      if (qrPending !== request || !presenting) return;
+    } finally { if (qrPending === request) qrPending = null; }
   } else { href = qrHref(linkFor(S())); said = w.view; }
   if (qrBytes(href).length > QR_BYTES) {
     const u = new URL(href); u.search = ''; u.hash = ''; u.searchParams.set('place', at); u.searchParams.set('lang', L());
@@ -2096,6 +2110,7 @@ async function qrShow(inTalk) {
   if (!inTalk) $('qrClose').focus();
 }
 function qrClose() {
+  qrPending = null;
   if (!qrOpen()) return;
   qrOver.hidden = true; $('qrCode').replaceChildren();
   if (qrFrom && qrFrom.isConnected && qrFrom.focus) qrFrom.focus();
@@ -2104,9 +2119,9 @@ function qrClose() {
 qrOver.addEventListener('click', (e) => { if (e.target === qrOver || e.target.closest('#qrClose')) qrClose(); });
 // (Esc outside the presenter; in it, the presenter's keys close the code first; and the code closed as the presenter starts or ends)
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && qrOpen() && !presenting) { e.preventDefault(); qrClose(); } });
-new MutationObserver(() => qrClose()).observe(lab, { attributes: true, attributeFilter: ['data-present'] });
 let saving = false;
 let exporting = null;   // (round 11b: the video being made, see exportVideo; saving is set with it)
+let exportRequest = null;   // The caller can cancel while the browser checks codec support.
 // (round 7, the owner: "offering a resolution when saving is a good idea") The saved picture's size: as the screen (its
 // pixels, up to twice the CSS size), twice that each way, or 3840 px wide (4K), within what the GPU allows (diskSnapMax:
 // the largest texture, renderbuffer and viewport, and 8192 px) and at most SAVE_MPX million pixels. The volume is drawn
@@ -2266,7 +2281,7 @@ function credit(c) {
 const linkMode = (m) => (Number.isInteger(m) && (m & 3) ? m | 3 : m);
 // a link's state: the place first, then any of the engine's keys (diskSet checks every value)
 function stateFromLink() {
-  const NUM = ['p', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'roll', 'mode', 'field', 'speed', 'paused', 'slice', 'ann', 'ms', 'asym', 'marks', 'waves'];   // (round 18a: roll)
+  const NUM = ['p', 'pi', 'el', 'az', 'd', 'tx', 'ty', 'tz', 'roll', 'mode', 'field', 'speed', 'paused', 'slice', 'ann', 'ms', 'asym', 'marks', 'waves'];
   const st = {};
   for (const k of NUM) if (q.has(k)) st[k] = q.get(k);
   if (st.mode != null) st.mode = linkMode(Number(st.mode));
@@ -2603,7 +2618,7 @@ async function start() {
   const safeLink = (st) => { if (!st || !crashed) return st; const o = avoided(st); if (!avoid) { if (o.look && o.look !== 'model') o.look = 'model'; if (o.slice != null) o.slice = 0; } return o; };
   const linked = safeLink(stateFromLink()) || (crashed || q.has('place') ? null : keptState());
   if (linked) { const s0 = S(); guardSwitch(keyOf({ ...s0, ...linked, slice: linked.slice != null ? Number(linked.slice) : s0.slice })); box.diskSet(linked); }
-  if (linked && linked.place) { const i = PLACES.findIndex((p) => p.id === linked.place); if (i >= 0) { placeI = i; renderPlace(); } }
+  if (linked && linked.place) restoreKeptPlace(linked.place);
   defaults = { ...DEF0, quality: guarded ? 'auto' : 'full' };
   // (round 10a: after a safe start the kept settings are not written over until the visitor does something, so that they are
   // still there to be offered back, or to come back by themselves at the next visit)
@@ -2672,7 +2687,12 @@ box.addEventListener('diskframe', (e) => {
   // (the intervals between frames of one still picture, at one scale, are what a frame of it costs; a complete picture
   // may be sharpened)
   // (round 9: held, the time the frame waited for the frame rate's cap, is not its cost)
-  const { acc = 0, accMax = 0, bands = 1, held = 0, kicks = 0 } = e.detail, now = performance.now() - held;
+  const { acc = 0, accMax = 0, bands = 1, held = 0, kicks = 0, key = '' } = e.detail, now = performance.now() - held;
+  // (round 20z) a frame of another kind than the guard's: in a look switch's first 300 ms (the dip) the engine still draws the look
+  // before, and the ramp took those frames, at the scales it was setting, for the new look's picture: from the switch's first rung
+  // (0.16 in the visible look on the desktop's frame) to 1 within 0.3 s, so that the new look's first frame came at scale 1, 2.1 s of
+  // GPU and 2.9 s after the click (check.js: the first picture after a look switch, in kicks against drawn whole)
+  const other = !!key && key.replace(/:F$/, '') !== gc.key;
   // (round 7: an interval after a complete still picture, or after the page was hidden, is a rest, not a frame's cost:
   // counted, the first frame after the clock started again took the scale to its floor)
   if (lastIdle) lastFrame = 0;
@@ -2682,7 +2702,7 @@ box.addEventListener('diskframe', (e) => {
   if (moveFrom && gc.still) gc.still = 0;
   if (!moveFrom && !S().paused && lastFrame && now - lastFrame < 5000) picMs = picMs ? 0.6 * picMs + 0.4 * (now - lastFrame) : now - lastFrame;
   else if (moveFrom) picMs = 0;
-  if (stillStep(acc, accMax)) { if (quality === 'auto') scaleTo(capStill()); else applyFixed(); picMs = 0; sync(); }
+  if (!other && stillStep(acc, accMax)) { if (quality === 'auto') scaleTo(capStill()); else applyFixed(); picMs = 0; sync(); }
   applyFixed();
   if (skipFrames > 0) { skipFrames--; costs.length = 0; }
   else guardFixed(lastFrame ? now - lastFrame : 0, acc, accMax, kicks ? Math.max(2, bands) : bands);   // (in kicks: no piece is the frame)
@@ -2831,7 +2851,7 @@ function settingsNow() {
   // (round 13a: col, the model look's colours as a link writes them, '' for the defaults; see COL-LINK)
   // (round 14a: mp, the model's parameters as a link writes them, '' for the defaults, see MP-LINK; wb, the wind's brightness)
   // (round 20f: sk0, the own light's default opacity of the day, see keptState)
-  return talkHeld({ v: 1, place: PLACES[placeI].id, ...pick(s, DEF_KEYS), ...pick(s, VIEW_KEYS), quality: qChosen ? quality : null, col: colDef ? colToLink(cols, colDef) : '',
+  return talkHeld({ v: 1, place: PLACES[placeI].id, ...(target ? { placeAz: placeAzAt(s) } : {}), ...pick(s, DEF_KEYS), ...pick(s, VIEW_KEYS), quality: qChosen ? quality : null, col: colDef ? colToLink(cols, colDef) : '',
     mp: parDef ? mpToLink(params, parDef) : '', wb: windGain !== 1 ? mpNum(windGain) : '', sk0: SELFK_DEF, mk: markShown ? 1 : 0 });   // (round 20n: mk, the site's mark)   // (round 11a: see talkHeld)
 }
 function keepNow() {
@@ -2855,6 +2875,15 @@ function keptState() {
   return Object.keys(st).length > 1 ? st : null;
 }
 function resetAll() {
+  exportRequest = null;
+  tiltSet(false, reduce ? 'reduced' : 'off');
+  if (exporting) {
+    const ex = exporting;
+    ex.cancelled = true;
+    // Apply the defaults after the video gives back the view and settings.
+    if (!ex.resetDone) ex.resetDone = new Promise(resolve => { ex.restored = resolve; }).then(resetAll);
+    return ex.resetDone;
+  }
   if (!live() || !defaults) return;
   guardAfresh(true);   // (round 10a)
   try { localStorage.removeItem(SET); sessionStorage.removeItem(KEY('disk-lab-quality')); } catch { /* nothing kept */ }
@@ -2940,6 +2969,7 @@ function tiltEase(d) {
 const TILT_KEY = KEY('disk-lab-tilt');
 const TILT_DEV = MOBILE && typeof DeviceOrientationEvent !== 'undefined' && q.get('tilt') !== '0';
 let tiltOn = false, tiltListening = false, tiltF = null, tiltG0 = null, tiltT = 0, tiltGot = false, tiltBusyT = 0, tiltWatch = 0, tiltBtn = null, tiltNoteEl = null, tiltOnce = null;
+let tiltRequest = null;
 // the screen's turn (degrees) for the sensor's frame
 const tiltTurn = () => { const o = screen.orientation; return o && typeof o.angle === 'number' ? o.angle : Number(window.orientation) || 0; };
 // let go: the view moved otherwise (within 0.3 s of a frame that said so), a move, the scenes' Play, the presenter, not live
@@ -2971,6 +3001,7 @@ function tiltListen(on) {
 }
 // The setting on or off (why: the word to say), kept on this device. Off: the offset taken away at once (the state's view).
 function tiltSet(on, why) {
+  tiltRequest = null;
   tiltOn = !!on && TILT_DEV && !reduce;
   clearTimeout(tiltWatch); tiltTouchOff();
   tiltListen(tiltOn);
@@ -2983,11 +3014,14 @@ function tiltSet(on, why) {
 }
 // iOS: the permission asked within the gesture (the call made before anything is awaited); elsewhere nothing to ask
 async function tiltAsk() {
+  if (tiltRequest || !TILT_DEV || reduce) return;
+  const request = {}; tiltRequest = request;
   const DOE = window.DeviceOrientationEvent;
   if (DOE && typeof DOE.requestPermission === 'function') {
     tiltSay('asking');
     let r = 'error';
     try { r = await DOE.requestPermission(); } catch { /* not from a gesture, or no sensor: said as failed */ }
+    if (tiltRequest !== request) return;
     if (r !== 'granted') { tiltSet(false, r === 'denied' ? 'denied' : 'failed'); return; }
   }
   tiltSet(true, 'on');
@@ -3003,7 +3037,10 @@ function tiltKept() {
     if (!tiltOn || tiltGot) return;
     if (!asks) { tiltSet(false, 'none'); return; }
     tiltSay('touch');
-    tiltOnce = (e) => { if (tiltBtn && tiltBtn.contains(e.target)) return; tiltTouchOff(); if (tiltOn && !tiltGot) tiltAsk(); };
+    tiltOnce = (e) => {
+      if (tiltBtn?.contains(e.target) || $('resetAll')?.contains(e.target)) return;
+      tiltTouchOff(); if (tiltOn && !tiltGot) tiltAsk();
+    };
     addEventListener('touchend', tiltOnce, true); addEventListener('click', tiltOnce, true);
   }, 2000);
 }
@@ -3014,7 +3051,7 @@ function tiltInit() {
   const sec = $('recentre') && ($('recentre').closest('details') || $('recentre').closest('.rail-sec'));
   if (!sec) return;
   tiltBtn = el('button', { type: 'button', class: 'chip', id: 'tiltSwitch', 'data-tilt': '', 'aria-pressed': 'false', 'aria-describedby': 'tiltNote',
-    disabled: reduce, onclick: () => { if (tiltOn) tiltSet(false); else tiltAsk(); } },
+    disabled: reduce, onclick: () => { if (tiltOn || tiltRequest) tiltSet(false); else tiltAsk(); } },
   el('span', { class: 'en', lang: 'en' }, WORDS.en.tilt.label), el('span', { class: 'ja', lang: 'ja' }, WORDS.ja.tilt.label));
   tiltNoteEl = el('p', { class: 'rail-note', id: 'tiltNote' });
   // (round 15a: with the view's chips, before the annotations' group)
@@ -3024,12 +3061,10 @@ function tiltInit() {
   let kept = false;
   try { kept = localStorage.getItem(TILT_KEY) === '1'; } catch { /* not kept */ }
   if (kept) tiltKept(); else tiltSay('off');
-  // (the view moved otherwise: from the engine's frames; the screen turned or the page shown again: the rest afresh; Reset all:
-  // off, as at the first visit)
+  // (the view moved otherwise: from the engine's frames; the screen turned or the page shown again: the rest afresh)
   box.addEventListener('diskframe', (e) => { if (e.detail && e.detail.moving) tiltBusyT = performance.now(); });
   if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', tiltAfresh); else addEventListener('orientationchange', tiltAfresh);
   document.addEventListener('visibilitychange', tiltAfresh);
-  $('resetAll').addEventListener('click', () => { if (tiltOn) tiltSet(false); });
 }
 tiltInit();
 
@@ -3265,6 +3300,16 @@ function showSafe() {
 }
 function hideSafe() { clearTimeout(safeTimer); stageSafe.hidden = true; }
 // the settings kept before the safe start, back: the place, the look, the view, what is shown, the quality chosen
+function restoreKeptPlace(id) {
+  const place = placeById(id);
+  if (!place) return;
+  placeI = PLACES.indexOf(place);
+  const s = S();
+  target = { ...placeState(place, s.mode, aspect()), time: s.time };
+  // The visit's clock starts afresh. Older settings have only the place's original azimuth.
+  if (Number.isFinite(saved.placeAz)) target.az = saved.placeAz;
+  renderPlace();
+}
 function restoreKept() {
   hideSafe();
   if (!live()) return;
@@ -3273,7 +3318,7 @@ function restoreKept() {
     const s0 = S();
     guardSwitch(keyOf({ ...s0, ...st, slice: st.slice != null ? Number(st.slice) : s0.slice }));
     box.diskSet({ ...st, fly: reduce ? 0 : 1 });
-    if (st.place) { const i = PLACES.findIndex((p) => p.id === st.place); if (i >= 0) { placeI = i; target = { ...S(), time: S().time }; renderPlace(); } }
+    if (st.place) restoreKeptPlace(st.place);
   }
   if (colDef) { cols = keptCols(); applyCols(); }   // (round 13a: the colours kept, as at a start without a link)
   if (keptQuality) { qChosen = true; applyQuality(keptQuality); }
@@ -3335,41 +3380,93 @@ function logText(l) {
 // arrival refined to the level chosen (the ramp), as after any flight. The look the presenter chose is kept while flying (no switch
 // to the model look): a scene's look, cut and line map are set before the flight where they cost less than what is shown, on
 // arrival where they cost more (the guard's factors), so that no flight is dearer than both its ends. DESIGN.md, section 25.
-const SEQ_KEY = KEY('disk-lab-seq'), SEQ_PREV = KEY('disk-lab-seq-prev'), HOLD_S = 3;
+const SEQ_KEY = KEY('disk-lab-scene-lists'), OLD_SEQ = KEY('disk-lab-seq'), SEQ_PREV = KEY('disk-lab-seq-prev'), HOLD_S = 3;
+const activeSceneRaw = () => localStorage.getItem(SEQ_KEY) ?? localStorage.getItem(OLD_SEQ);
 const seqNew = () => ({ v: SEQ_V, app: 'disk-lab', engine: '', made: '', pace: 'normal', keys: [] });
-let seq = checkSeq(readJSON(SEQ_KEY)) || seqNew();
+function storedSeq(raw) {
+  try { return checkSeq(JSON.parse(raw)); } catch { return null; }
+}
+let seqStored = null, seqGeneration = 0;
+try { seqStored = activeSceneRaw(); } catch { /* private storage */ }
+let seq = storedSeq(seqStored) || seqNew();
+let sceneLocks, sceneDB;
+try { sceneLocks = navigator.locks; if (!sceneLocks) sceneDB = window.indexedDB; } catch { /* storage disabled */ }
+const lockScenes = sceneWriter(SEQ_KEY, sceneLocks, sceneDB);
+let sceneWrite = Promise.resolve(), sceneOpenId = 0;
+const writeScenes = edit => (sceneWrite = lockScenes(edit));
 const talk = $('talk'), seqList = $('seqList');
 // (review of round 11a) The pace is the presenter's, kept apart from the scenes (choosing it is not an edit of them); a link or a
 // file carries it, and opening one takes it for this visit
 const PACE_KEY = KEY('disk-lab-pace');
-let pace = (() => { try { const v = localStorage.getItem(PACE_KEY); return Object.prototype.hasOwnProperty.call(PACES, v) ? v : seq.pace; } catch { return seq.pace; } })();
+let pace = (() => { try { const v = localStorage.getItem(PACE_KEY); if (Object.hasOwn(PACES, v)) return v; } catch { /* private storage */ } return 'normal'; })();
 const paceK = () => PACES[pace] || 1;
 // the scenes kept on this device, marked with where they came from (own, link, file); a link's fragment, once the scenes are
 // changed, taken out of the address, so that a reload keeps the change
+function clearSeqHash(hash) {
+  if (/^#seq=/.test(hash) && location.hash === hash) history.replaceState(null, '', location.pathname + location.search);
+}
 function seqKeep() {
-  try { localStorage.setItem(SEQ_KEY, JSON.stringify(seq)); } catch { /* not kept: this visit's only */ }
-  if (/^#seq=/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+  const next = JSON.parse(JSON.stringify(seq)), generation = seqGeneration, hash = location.hash;
+  return writeScenes((writable) => {
+    if (generation !== seqGeneration) return;
+    if (writable) {
+      try {
+        const current = activeSceneRaw();
+        if (current !== seqStored) {
+          ++seqGeneration; seqStored = current; seq = storedSeq(current) || seqNew();
+          stopPlay(); renderTalk(true); note(T().talk.changedElsewhere, 5000);
+          return;
+        }
+        saveScenePair(next, seqPrev());
+        clearSeqHash(hash); return;
+      } catch { /* keep the edit open so it can be saved as a file */ }
+    }
+    note(T().talk.visitOnly, 5000);
+  });
 }
-function seqChanged() { seqKeep(); renderTalk(); }
-// (review of round 11a: SEQ_PREV was written and never read, and a pace or a rename counted as the edit that pushed one's own list
-// out. Now) a list from a link or a file takes the place of the list here only after the copy (SEQ_PREV) is made, unless the copy
-// already holds one's own list (seq.js, stashFor); "Restore my earlier scenes" swaps the two back
-const seqPrev = () => checkSeq(readJSON(SEQ_PREV));
-function seqReplace(o, src) {
-  if (JSON.stringify(o.keys) === JSON.stringify(seq.keys)) return;   // (the same list again, as a reload of its link)
-  const prev = seqPrev(), keep = stashFor(seq, prev);
-  try { if (keep && keep !== prev) localStorage.setItem(SEQ_PREV, JSON.stringify(keep)); } catch { /* not kept */ }
-  stopPlay();
-  seq = { ...o, src };
-  pace = o.pace || pace;   // (for this visit; the pace kept on the device is the presenter's own choice)
-  seqChanged();
+function seqChanged() { seqKeep(); renderTalk(true); }
+// New tabs atomically replace or swap both lists. Leave both legacy keys to any still-open older tabs.
+const seqPrev = () => {
+  const record = readJSON(SEQ_KEY) ?? readJSON(OLD_SEQ);
+  return record && Object.hasOwn(record, 'previous') ? checkSeq(record.previous) : checkSeq(readJSON(SEQ_PREV));
+};
+function saveScenePair(next, previous) {
+  const raw = JSON.stringify({ ...next, previous });
+  localStorage.setItem(SEQ_KEY, raw);
+  seqStored = raw;
 }
-function seqRestore() {
-  const prev = seqPrev();
-  if (!prev) return;
-  stopPlay();
-  try { if (seq.keys.length) localStorage.setItem(SEQ_PREV, JSON.stringify(seq)); else localStorage.removeItem(SEQ_PREV); } catch { /* not kept */ }
-  seq = prev; seqChanged(); note(T().talk.restored);
+function replaceSceneLists(incoming, src, hash, openId) {
+  return writeScenes((writable) => {
+    if (openId !== sceneOpenId || (src === 'link' && hash !== location.hash)) return false;
+    let raw = seqStored;
+    try { raw = activeSceneRaw(); } catch { writable = false; }
+    const current = raw === seqStored ? seq : storedSeq(raw) || seqNew(), prev = seqPrev();
+    const restore = !incoming, next = restore ? prev : { ...incoming, src };
+    if (!next) return false;
+    if (!restore && JSON.stringify(next.keys) === JSON.stringify(current.keys)) {
+      if (current !== seq) { ++seqGeneration; seq = current; seqStored = raw; stopPlay(); }
+      pace = next.pace;
+      if (raw !== null && JSON.stringify(storedSeq(raw)?.keys) === JSON.stringify(next.keys)) clearSeqHash(hash);
+      renderTalk(true);
+      return true;
+    }
+    if (!restore && current.src === 'own' && current.keys.length && prev?.src === 'own' && JSON.stringify(current.keys) !== JSON.stringify(prev.keys)) {
+      note(T().talk.twoOwn, 6000); return false;
+    }
+    const backup = restore ? (current.keys.length ? current : null) : stashFor(current, prev);
+    let saved = false;
+    if (writable) {
+      try { saveScenePair(next, backup); saved = true; } catch { /* an existing list must stay recoverable */ }
+    }
+    if (!saved && (backup || current.keys.length || seq.keys.length)) { note(T().talk.keepFailed, 5000); return false; }
+    stopPlay(); ++seqGeneration; seq = next;
+    if (!restore) pace = next.pace;
+    if (saved) clearSeqHash(hash);
+    renderTalk(true); return true;
+  });
+}
+async function seqRestore() {
+  if (await replaceSceneLists(null, null, location.hash, ++sceneOpenId)) note(T().talk.restored);
 }
 const seqOut = () => ({ ...seq, pace, engine: ENGINE_SRC.split('v=')[1], made: new Date().toISOString().slice(0, 10) });
 // a scene of a place, as goPlace sets it (its distance fitted to the stage now; round 11b: or to a video's frame, asp)
@@ -3532,18 +3629,47 @@ async function playScenes() {
 // is. A second press within 0.4 s of the one before, while flying: there at once. The idle rest is off while presenting; the
 // screen is kept awake where the browser can (Screen Wake Lock).
 let presenting = false, sceneI = -1, sceneMoved = false, lastPress = 0, wasFull = false, hudT = 0, ctlT = 0, wakeLock = null;
+let wakeRequest = null, fullClaim = null, fullExit = null;
 const presentHud = $('presentHud');
 const fullEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
 function fullscreen(on) {
-  const de = document.documentElement, f = on ? de.requestFullscreen || de.webkitRequestFullscreen : document.exitFullscreen || document.webkitExitFullscreen;
-  if (!f || !!fullEl() === on) return;
-  try { const p = f.call(on ? de : document, on ? { navigationUI: 'hide' } : undefined); if (p && p.catch) p.catch(() => {}); } catch { /* the window, then */ }
+  const de = document.documentElement;
+  const f = on ? de.requestFullscreen || de.webkitRequestFullscreen : document.exitFullscreen || document.webkitExitFullscreen;
+  if (!f || fullExit || (on ? fullEl() || fullClaim : fullEl() !== de || !fullClaim)) return;
+  const request = {};
+  if (on) fullClaim = request;
+  else fullExit = request;
+  const failed = () => {
+    if (on && fullClaim === request) fullClaim = null;
+    if (!on && fullExit === request) fullExit = null;
+  };
+  try {
+    const result = on ? f.call(de, { navigationUI: 'hide' }) : f.call(document);
+    if (result && result.then) result.then(fullChanged, failed);
+    else request.legacy = true;   // Older WebKit reports completion through events alone.
+  } catch { failed(); }
+}
+function fullChanged() {
+  const full = fullEl();
+  if (fullExit && full !== document.documentElement) {
+    fullExit = fullClaim = null; wasFull = false;
+    if (presenting && !full) fullscreen(true);   // A new talk started during the old talk's exit.
+  } else if (full && !presenting) {
+    fullscreen(false);   // A request from a finished talk was granted late.
+  } else if (!full && wasFull) {
+    fullClaim = null;
+    if (presenting) present(false);   // The browser's Esc also leaves the presenter.
+  }
+  wasFull = !!full && presenting;
 }
 function present(on) {
   on = !!on;
-  if (on === presenting || (on && !live())) return;
+  if (on === presenting || (on && (!live() || exporting))) return;
+  if (on) exportRequest = null;
+  qrClose();
   stopPlay();
   presenting = on; sceneI = -1; sceneMoved = false;
+  wasFull = on && !!fullEl();
   lab.toggleAttribute('data-present', on); flogAdd({ k: 'set', present: on ? 1 : 0 });
   // (the focus off the rail's button: Space or Enter must not press a hidden button meanwhile)
   if (on && document.activeElement && document.activeElement !== document.body && document.activeElement.blur) document.activeElement.blur();
@@ -3556,10 +3682,10 @@ function present(on) {
 let fullOnce = false;
 const fullAgain = () => { if (presenting && fullOnce && !fullEl()) { fullOnce = false; fullscreen(true); } };
 window.addEventListener('pointerdown', fullAgain, { capture: true, passive: true });
-for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => {
-  const full = !!fullEl();
-  if (presenting && wasFull && !full) present(false);   // (the browser's Esc left full screen: the presenter too)
-  wasFull = full && presenting;
+for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, fullChanged);
+document.addEventListener('webkitfullscreenerror', () => {
+  if (fullExit?.legacy) fullExit = null;
+  else if (fullClaim?.legacy && !fullEl()) fullClaim = null;
 });
 function black(on) { lab.toggleAttribute('data-black', !!on); }
 // the scene's name and its number, for 4 s
@@ -3570,13 +3696,25 @@ function hud(caption, count) {
   if (caption || count) hudT = setTimeout(() => presentHud.classList.remove('on'), 4000);
 }
 async function keepAwake(on) {
+  if (!on) {
+    wakeRequest = null;
+    const lock = wakeLock; wakeLock = null;
+    if (lock) try { await lock.release(); } catch { /* the browser may have released it already */ }
+    return;
+  }
+  if (wakeLock || wakeRequest || !navigator.wakeLock || document.visibilityState !== 'visible') return;
+  const request = {}; wakeRequest = request;
   try {
-    if (on && !wakeLock && navigator.wakeLock && document.visibilityState === 'visible') { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
-    else if (!on && wakeLock) { const w = wakeLock; wakeLock = null; await w.release(); }
-  } catch { wakeLock = null; }
+    const lock = await navigator.wakeLock.request('screen');
+    if (wakeRequest !== request || !presenting || document.hidden) { await lock.release(); return; }
+    wakeLock = lock;
+    lock.addEventListener('release', () => { if (wakeLock === lock) wakeLock = null; });
+  } catch { /* the system may decline a screen lock */ }
+  finally { if (wakeRequest === request) wakeRequest = null; }
 }
-document.addEventListener('visibilitychange', () => { if (presenting && !document.hidden) keepAwake(true); });
+document.addEventListener('visibilitychange', () => { if (presenting) keepAwake(!document.hidden); });
 function goScene(i) {
+  qrClose();
   const list = live() ? scenes() : [];
   if (!list.length) return;
   i = Math.max(0, Math.min(list.length - 1, i));
@@ -3597,7 +3735,7 @@ window.addEventListener('keydown', (e) => {
   const k = e.key, step = { ArrowRight: 1, ArrowDown: 1, PageDown: 1, Enter: 1, ArrowLeft: -1, ArrowUp: -1, PageUp: -1, Backspace: -1 }[k];
   let used = true;
   if (e.repeat && (step || k === ' ' || k === 'q' || k === 'Q')) { /* (a key held: one step) */ }
-  else if (qrOpen() && (k === 'Escape' || k === 'q' || k === 'Q')) qrClose();   // (round 11c: the code closed first)
+  else if ((qrOpen() || qrPending) && (k === 'Escape' || k === 'q' || k === 'Q')) qrClose();   // (round 11c: the code closed first)
   else if (step) { qrClose(); goScene(sceneI + step); }
   else if (k === 'Home') { qrClose(); goScene(0); }
   else if (k === 'End') { qrClose(); goScene(scenes().length - 1); }
@@ -3627,7 +3765,7 @@ $('presentExit').addEventListener('click', () => present(false));
 const moveButtons = MOVES.filter((m) => !reduce || (m !== 'orbit' && m !== 'timelapse')).map((m) => { const b = el('button', { type: 'button', class: 'chip', 'data-move': m, 'aria-pressed': 'false' }); $('moveGroup').append(b); return b; });
 const paceButtons = Object.keys(PACES).map((k) => { const b = el('button', { type: 'button', 'data-pace': k, 'aria-pressed': 'false' }); $('paceGroup').append(b); return b; });
 let clearAt = -1e9;
-function renderTalk() {
+function renderTalk(rebuildRows = false) {
   const w = T().talk;
   moveButtons.forEach((b) => { b.textContent = w.moves[b.dataset.move]; pressed(b, playing === b.dataset.move); });
   paceButtons.forEach((b) => { b.textContent = w.pace[b.dataset.pace]; pressed(b, pace === b.dataset.pace); });
@@ -3635,15 +3773,23 @@ function renderTalk() {
   $('seqPlay').textContent = playing === 'play' ? w.stop : w.play;
   $('seqClear').textContent = performance.now() - clearAt < 4000 ? w.clearAgain : w.clear;
   $('seqClear').disabled = !seq.keys.length;
-  renderSeq();
+  renderSeq(rebuildRows);
   renderExport();   // (round 11b)
 }
-function renderSeq() {
+function renderSeq(rebuildRows = false) {
   const w = T().talk, n = seq.keys.length, cur = presenting || playing === 'play' ? sceneI : -1;
-  $('seqRestore').hidden = !seqPrev();   // (review of round 11a: "Restore my earlier scenes" while the copy holds a list)
+  const previous = seqPrev();
+  $('seqRestore').hidden = !previous;
+  // Older tabs can still edit their own keys. Offer any distinct list as a normal, importable scene file.
+  const known = [seq.keys, previous?.keys];
+  for (const [id, key] of [['seqOldFile', OLD_SEQ], ['seqOldBackup', SEQ_PREV]]) {
+    const old = checkSeq(readJSON(key));
+    $(id).hidden = !old?.keys.length || known.some(keys => JSON.stringify(keys) === JSON.stringify(old.keys));
+    if (old) known.push(old.keys);
+  }
   // (review of round 11a: a scene being renamed is not made again under the typing (the autoplay's next scene, a move's end, the
   // second press of "Remove all"): with the same rows, only which one is current changes)
-  if (seqList.contains(document.activeElement) && seqList.children.length === n) {
+  if (!rebuildRows && seqList.contains(document.activeElement) && seqList.children.length === n) {
     [...seqList.children].forEach((li, i) => { if (i === cur) li.setAttribute('aria-current', 'true'); else li.removeAttribute('aria-current'); });
     return;
   }
@@ -3661,12 +3807,19 @@ function addView() {
   if (!live()) return;
   if (seq.keys.length >= SEQ_MAX) { note(T().talk.full(SEQ_MAX)); return; }
   const at = away() ? null : PLACES[placeI].id, k = keyFrom(S(), { label: at ? T().places[at].short : '', place: at, aspect: aspect() });
-  if (k) { seq.keys.push(k); seqChanged(); }
+  if (k) { if (!seq.keys.length) seq.src = 'own'; seq.keys.push(k); seqChanged(); }
 }
-function moveKey(i, by) {
+function moveKey(i, by, button) {
   const j = i + by;
   if (j < 0 || j >= seq.keys.length) return;
+  const keepFocus = document.activeElement === button;
   [seq.keys[i], seq.keys[j]] = [seq.keys[j], seq.keys[i]]; seqChanged();
+  if (keepFocus) {
+    const row = seqList.children[j];
+    if (!row) return;
+    const arrow = row.querySelector(by < 0 ? '[data-seq-up]' : '[data-seq-down]');
+    (arrow.disabled ? row.querySelector('[data-seq-name]') : arrow).focus();
+  }
 }
 // "Remove all": a second press within 4 s
 function seqClear() {
@@ -3674,8 +3827,10 @@ function seqClear() {
   if (performance.now() - clearAt > 4000) { clearAt = performance.now(); renderTalk(); setTimeout(renderTalk, 4100); return; }
   clearAt = -1e9; seq.keys = []; seqChanged();
 }
-function seqSave() {
-  const out = seqOut(), a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' })), download: `disk-lab-scenes-${out.made}.json` });
+function seqSave(out = seqOut(), prefix = 'disk-lab-scenes') {
+  if (!out) return;
+  const date = new Date().toISOString().slice(0, 10);
+  const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' })), download: `${prefix}-${date}.json` });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
@@ -3688,26 +3843,32 @@ async function seqLink() {
 // a link's scenes (#seq=), at the start and when the fragment changes: shown, the section opened; the list here kept in the copy
 // first (seqReplace)
 async function seqOpenHash() {
+  const openId = ++sceneOpenId;
   if (!/^#seq=/.test(location.hash) || !live()) return;
-  const o = await seqFromHash(location.hash);
+  const hash = location.hash, o = await seqFromHash(hash);
+  if (openId !== sceneOpenId || hash !== location.hash) return;
   if (!o || !o.keys.length) { note(T().talk.linkFailed, 4000); return; }
-  seqReplace(o, 'link'); talk.open = true; renderTalk();
+  if (!await replaceSceneLists(o, 'link', hash, openId)) return;
+  talk.open = true; renderTalk();
   note(T().talk.fromLink(o.keys.length), 5000);
 }
 window.addEventListener('hashchange', seqOpenHash);
+window.addEventListener('storage', e => { if (e.key === SEQ_KEY || e.key === OLD_SEQ || e.key === SEQ_PREV || e.key === null) renderSeq(); });
 talk.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.move) runMove(b.dataset.move);
   else if (b.dataset.pace) { pace = b.dataset.pace; try { localStorage.setItem(PACE_KEY, pace); } catch { /* this visit's only */ } renderTalk(); }
   else if (b.id === 'seqRestore') seqRestore();
-  else if (b.dataset.seqUp != null) moveKey(Number(b.dataset.seqUp), -1);
-  else if (b.dataset.seqDown != null) moveKey(Number(b.dataset.seqDown), 1);
+  else if (b.dataset.seqUp != null) moveKey(Number(b.dataset.seqUp), -1, b);
+  else if (b.dataset.seqDown != null) moveKey(Number(b.dataset.seqDown), 1, b);
   else if (b.dataset.seqRemove != null) { seq.keys.splice(Number(b.dataset.seqRemove), 1); seqChanged(); }
   else if (b.dataset.seqGo != null) { stopPlay(); const i = Number(b.dataset.seqGo); if (seq.keys[i]) { sceneI = i; flyTo(seq.keys[i]); } }
   else if (b.id === 'seqAdd') addView();
   else if (b.id === 'seqPlay') playScenes();
   else if (b.id === 'presentBtn') present(true);
   else if (b.id === 'seqSave') seqSave();
+  else if (b.id === 'seqOldFile') seqSave(checkSeq(readJSON(OLD_SEQ)), 'disk-lab-earlier-version');
+  else if (b.id === 'seqOldBackup') seqSave(checkSeq(readJSON(SEQ_PREV)), 'disk-lab-earlier-backup');
   else if (b.id === 'seqLoad') $('seqFile').click();
   else if (b.id === 'seqLink') seqLink();
   else if (b.id === 'seqClear') seqClear();
@@ -3726,10 +3887,12 @@ $('seqFile').addEventListener('change', async (e) => {
   const f = e.target.files && e.target.files[0];
   e.target.value = '';
   if (!f) return;
+  const openId = ++sceneOpenId, hash = location.hash;
   let o = null;
   try { if (f.size < 1 << 20) o = checkSeq(JSON.parse(await f.text())); } catch { o = null; }
+  if (openId !== sceneOpenId) return;
   if (!o || !o.keys.length) { note(T().talk.loadFailed, 4000); return; }
-  seqReplace(o, 'file'); note(T().talk.loaded(o.keys.length));
+  if (await replaceSceneLists(o, 'file', hash, openId)) note(T().talk.loaded(o.keys.length));
 });
 
 // ---------- the video (round 11b): the scenes or a move, a frame at a time on the engine's own clock ----------
@@ -3968,22 +4131,25 @@ function exShow(c) {
 // Makes the video. o: the choices (what, size, fps, hold), with download (false: not saved, for checks) and keep (the Blob returned).
 // Resolves { ok, frames, bytes, name, ms, perFrame, blob? } or { ok: false, cancelled } or { ok: false, why | error }.
 async function exportVideo(o = {}) {
-  if (exporting || saving) return { ok: false, why: 'busy' };
+  if (exportRequest || exporting || saving) return { ok: false, why: 'busy' };
   if (!VIDEO_OK || reduce || presenting || !live() || 'lost' in lab.dataset || typeof box.diskOut !== 'function') return { ok: false, why: 'unavailable' };
   const opts = { ...exOpt, ...o }, plan = exPlan(opts);
   if (!plan.ok) return { ok: false, why: plan.why, plan };
-  const cfg = await exConfig(plan.size, plan.fps);
+  const request = exportRequest = {};
+  let cfg;
+  try {
+    cfg = await exConfig(plan.size, plan.fps);
+    if (exportRequest !== request) return { ok: false, cancelled: true, frames: 0 };
+  } finally { if (exportRequest === request) exportRequest = null; }
   if (!cfg) return { ok: false, why: 'codec', plan };
-  if (exporting || saving || !live()) return { ok: false, why: 'busy' };
+  if (saving || exporting) return { ok: false, why: 'busy' };
+  if (reduce || presenting || !live() || 'lost' in lab.dataset) return { ok: false, why: 'unavailable' };
   // (what plays stopped, a move's lighter picture ended and a sharpened still left first, with the page's own rules; then the page
   // stands aside: its guard, scale, governor, ramp and settings, until it is put back)
   stopPlay(); clearTimeout(moveTimer); endMoving(); unsharpen();
   const was = { s: S(), scale: box.diskScale(), place: placeI, target, march: box.diskMarch ? box.diskMarch() : null, phase };
   const ex = exporting = { plan, i: 0, sub: 0, phase: 'prepare', cancelled: false, error: null, t0: performance.now(), times: [], bytes: 0, chunks: [], desc: null, kind0: '', perFrame: 0 };
   saving = true;
-  if (gov) gov.pause(true);
-  exCover(true); exProgress();
-  flogAdd({ k: 'set', video: plan.what, size: plan.w + 'x' + plan.h, fps: plan.fps, frames: plan.frames, sub: plan.sub, sc: plan.scaleUsed }, true);
   let enc = null, res, back = false;
   // the page as it was: the clock on the wall again (from where it stands: nothing jumps), the state (a jump, fly: 0, which leaves a
   // path under way; the time before the view, as a scene's), the march's tier, the scale, then the canvas at the box's size (the
@@ -4002,10 +4168,14 @@ async function exportVideo(o = {}) {
     placeI = was.place; target = was.target;
   };
   try {
+    if (gov) gov.pause(true);
+    exCover(true); exProgress();
+    flogAdd({ k: 'set', video: plan.what, size: plan.w + 'x' + plan.h, fps: plan.fps, frames: plan.frames, sub: plan.sub, sc: plan.scaleUsed }, true);
     // (the mark and the credit's font ready before the first frame: each frame is stamped at once, with no wait between frames)
     if (!markImg) { markImg = new Image(); markImg.src = 'logo-white.svg'; }
     try { await markImg.decode(); } catch { /* the credit without the mark */ }
     try { if (document.fonts && document.fonts.load) await document.fonts.load('500 20px Inter'); } catch { /* another font */ }
+    if (ex.cancelled) throw EX_CANCEL;
     enc = new VideoEncoder({
       output: (chunk, meta) => {
         if (exporting !== ex) return;
@@ -4056,6 +4226,7 @@ async function exportVideo(o = {}) {
     putBack();
     ex.phase = 'file'; exProgress();
     await enc.flush();
+    if (ex.cancelled) throw EX_CANCEL;
     if (ex.error) throw new Error(ex.error);
     if (ex.chunks.length !== N) throw new Error(ex.chunks.length + ' frames encoded of ' + N);
     const file = mp4Parts({ width: plan.w, height: plan.h, fps: plan.fps, avcC: ex.desc, samples: ex.chunks, time: Date.now() });
@@ -4071,10 +4242,14 @@ async function exportVideo(o = {}) {
     res = e === EX_CANCEL ? { ok: false, cancelled: true, frames: ex.times.length } : { ok: false, error: String((e && e.message) || e), frames: ex.times.length };
   } finally {
     if (enc && enc.state !== 'closed') { try { enc.close(); } catch { /* closed by an error */ } }
-    putBack();
-    if (live() && !('lost' in lab.dataset)) record(was.phase || 'live');
-    saving = false; exporting = null;
-    exCover(false);
+    try {
+      putBack();
+      if (live() && !('lost' in lab.dataset)) record(was.phase || 'live');
+    } finally {
+      saving = false; exporting = null;
+      ex.restored?.();
+      exCover(false);
+    }
     flogAdd({ k: 'set', video: 0, ok: res && res.ok ? 1 : 0, cancelled: res && res.cancelled ? 1 : undefined, frames: ex.times.length, ms: Math.round(performance.now() - ex.t0), err: res && res.error ? res.error.slice(0, 80) : undefined }, true);
     applyFixed(); guardApply(); govRest();
     renderPlace(); sync(); renderExport();
@@ -4083,7 +4258,13 @@ async function exportVideo(o = {}) {
   }
   return res;
 }
-$('exCancel').addEventListener('click', () => { if (exporting) { exporting.cancelled = true; $('exCancel').disabled = true; exProgress(); } });
+function cancelExport() {
+  if (exportRequest) { exportRequest = null; return true; }
+  if (!exporting) return false;
+  exporting.cancelled = true;
+  return true;
+}
+$('exCancel').addEventListener('click', () => { if (cancelExport()) { $('exCancel').disabled = true; exProgress(); } });
 
 // the panel in "Moves and talks": what (the scenes, or a move), the size, the frame rate, the hold; the plan in one line, or why not
 const exWhat = $('exWhat');
@@ -4169,6 +4350,23 @@ window.addEventListener('focus', wake);
 window.addEventListener('blur', () => armIdle());
 document.addEventListener('visibilitychange', () => { if (!document.hidden) armIdle(); });
 
+function setSceneList(input, persist) {
+  const next = checkSeq(input);
+  if (!next) return false;
+  stopPlay(); seq = next; pace = next.pace || pace;
+  if (persist) seqChanged(); else renderTalk(true);
+  return true;
+}
+// Presentation and export checks need example scenes only for the duration of the check.
+let checkingScenes = false;
+async function withTemporaryScenes(check) {
+  await sceneWrite;
+  if (checkingScenes) throw new Error('A scene check is already running.');
+  checkingScenes = true;
+  const original = seq, originalPace = pace;
+  try { return await check(input => setSceneList(input, false)); }
+  finally { checkingScenes = false; stopPlay(); seq = original; pace = originalPace; renderTalk(true); }
+}
 window.diskLab = {
   diag, PLACES, WORDS,
   state: () => ({ mode, stillReason, place: PLACES[placeI].id, away: away(), sharpened: !!sharpFrom, governor: gov ? gov.state() : null }),
@@ -4182,9 +4380,13 @@ window.diskLab = {
   // (round 9: the guard's state, see guardApply: the budget, what is drawn, a frame of it at scale 1, the cap, the still's
   // scale and bands, and its log of steps)
   guard: () => ({ guarded, budget: GUARD_MS, march: box.diskMarch ? box.diskMarch() : null, modelPerMpx: Math.round(modelPerMpx), key: gc.key, c1: Math.round(gc.c1), measured: gc.measured, cap: gc.cap, still: gc.still, bands: bandsSet, phase, crashed, log: gc.log.slice() }),
-  quality: () => ({ quality, chosen: qChosen, qCap, bestCap, hold: bestHold, scale: live() ? box.diskScale() : 0, paused: live() ? !!S().paused : null, moving: !!moveFrom, sharpened: !!sharpFrom, held: holdSharp, saving }),
-  // (for checks: back to the default, Best not chosen)
-  defaultQuality: () => { qChosen = false; try { sessionStorage.removeItem(KEY('disk-lab-quality')); } catch { /* */ } applyQuality('full'); },
+  quality: () => ({ quality, chosen: qChosen, defaultLevel: defaults?.quality || (guarded ? 'auto' : 'full'), qCap, bestCap, hold: bestHold, scale: live() ? box.diskScale() : 0, paused: live() ? !!S().paused : null, moving: !!moveFrom, sharpened: !!sharpFrom, held: holdSharp, saving }),
+  // Tests can restore the initial safe-start level explicitly. Reset uses the device's normal default.
+  defaultQuality: (level = defaults?.quality || (guarded ? 'auto' : 'full')) => {
+    qChosen = false;
+    try { sessionStorage.removeItem(KEY('disk-lab-quality')); } catch { /* this visit only */ }
+    applyQuality(level === 'auto' ? 'auto' : 'full'); keepSoon();
+  },
   // (for checks: a picture with the mark, as saved)
   stamped: async () => { const c = await shot({}); if (c) await watermark(c); return c; },
   setLook, setLang, setTab: (t) => setTab(t), link: () => (live() ? linkFor(S()) : null), snapshot: (opts) => shot(opts),
@@ -4200,7 +4402,8 @@ window.diskLab = {
   // (round 11a: the talks, for checks: the scenes (a copy; set checks them as a file's), a #seq= link to them, the moves, the
   // presenter and its scene, the flight under way)
   talk: {
-    scenes: () => JSON.parse(JSON.stringify(seq)), setScenes: (o) => { const v = checkSeq(o); if (v) { stopPlay(); seq = v; pace = v.pace || pace; seqChanged(); } return !!v; },
+    whenSaved: () => sceneWrite,
+    scenes: () => JSON.parse(JSON.stringify(seq)), setScenes: (o) => setSceneList(o, true), withTemporaryScenes,
     add: () => addView(), link: async () => { const u = new URL(location.pathname, location.href); u.searchParams.set('lang', L()); return u.href + await seqToHash(seqOut()); },
     move: (name) => runMove(name), play: () => playScenes(), stop: () => stopPlay(), go: (i) => goScene(i), fly: (k) => flyTo(k),
     present: (on) => present(on), state: () => ({ presenting, scene: sceneI, moved: sceneMoved, playing, flying: flying ? flying.id : 0, black: lab.hasAttribute('data-black'), pace, n: seq.keys.length || PLACES.length }),
@@ -4208,7 +4411,7 @@ window.diskLab = {
     // each event comes), cancelled, and its progress while it is made)
     exportVideo: (o) => exportVideo(o),
     exportPlan: (o) => { const p = exPlan({ ...exOpt, ...o }); return { ...p, events: (p.events || []).map((e) => ({ at: e.at, do: e.do, f: e.f })) }; },
-    exportCancel: () => { if (exporting) exporting.cancelled = true; return !!exporting; },
+    exportCancel: cancelExport,
     // (round 11b: with the snapshot's progress, its pieces so far and the last one: slow told from stuck)
     exportState: () => (exporting ? { phase: exporting.phase, i: exporting.i, sub: exporting.sub, frames: exporting.plan.frames, perFrame: exporting.perFrame, bytes: exporting.bytes, encoded: exporting.chunks.length, snap: box.diskSnapLog && box.diskSnapLog() ? (({ pieces, sub, last, ms }) => ({ pieces, sub, last, subMs: ms }))(box.diskSnapLog()) : null } : null)
   }
