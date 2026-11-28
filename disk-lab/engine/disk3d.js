@@ -5314,14 +5314,16 @@ float selfV(float v, float t){
   if (w > ${G(SELF_FIT.UB)}) w = ${G(SELF_FIT.UB)} + ${G(SELF_FIT.SH)} * (1.0 - exp((${G(SELF_FIT.UB)} - w) / ${G(SELF_FIT.SH)}));
   return asinh((uSelfS.x * 0.012 * sinh(7.2 * w) + s) / 0.012) / 7.2;
 }
-vec3 selfSplit(vec3 c, float t){
+vec3 selfSplit(vec3 c, float t, out float share){
+  share = 0.0;
   vec3 s2 = pow(max(c, 0.0), vec3(2.2));
   float y = dot(s2, vec3(0.2126, 0.7152, 0.0722));
   if (!(y > 0.0)) return c;
   float v = pow(y, 1.0 / 2.2);
   vec3 col = s2 * (0.012 * sinh(7.2 * v) / y);
   float gg = dot(uSelfT, uSelfT), qq = dot(uSelfQ, uSelfQ), gq = dot(uSelfT, uSelfQ), det = max(gg * qq - gq * gq, 1e-9);
-  float a = max((dot(uSelfT, col) * qq - dot(uSelfQ, col) * gq) / det, 0.0);
+  float a = max((dot(uSelfT, col) * qq - dot(uSelfQ, col) * gq) / det, 0.0), b = (dot(uSelfQ, col) * gg - dot(uSelfT, col) * gq) / det;
+  share = b > 0.0 ? b * dot(uSelfQ, vec3(0.2126, 0.7152, 0.0722)) / max(a + b * dot(uSelfQ, vec3(0.2126, 0.7152, 0.0722)), 1e-9) : 0.0;
   if (!(a > 0.0)) return c;
   vec3 rest = max(col - a * uSelfT, 0.0);
   float a2 = 0.012 * sinh(7.2 * selfV(asinh(a / 0.012) / 7.2, t));
@@ -5347,7 +5349,10 @@ vec3 selfRange(vec3 c, vec2 uv){
   if (m > 1.0) d = pow(mix(pow(d, vec3(2.2)) / m, vec3(1.0), 1.0 - 1.0 / m), vec3(1.0 / 2.2));
   float k = 0.0;
   for (int i = 0; i < ${PLANETS.MAX + 1}; i++) if (uSelfP[i].w > 0.0) k = max(k, 1.0 - smoothstep(uSelfP[i].z, 1.5 * uSelfP[i].z, length(gl_FragCoord.xy - uSelfP[i].xy)));
-  if (k > 0.0) d = mix(d, selfSplit(c, gl_FragCoord.y / uDev.y), k);
+  // (the split only where the planets' colour has a share of the light: the gas and the sky's blue alone, which the two colours do not
+  // hold, as selfRange's own (the sky split into them left a faint round mark where the sky shows through, the saved picture of the
+  // snow line's place, round 21d))
+  if (k > 0.0) { float share; vec3 e = selfSplit(c, gl_FragCoord.y / uDev.y, share); d = mix(d, e, k * smoothstep(0.0, 0.02, share)); }
   return mix(c, d, clamp(a, 0.0, 1.0));
 }
 void main(){
@@ -10921,7 +10926,9 @@ void main(){
       for (;;) {
         await gpuDone(); if (lost) break;
         const now = performance.now(), ms = now - b0; piece(what, ms, j); sum += ms; mx = Math.max(mx, ms);
-        if (bandJob !== j) break;
+        // (with no band's job, j null (nothing drawn: a page hidden, its picture 1 x 1), there is nothing to step: done. Until 1.12.0
+        // it went on to read j.split and threw, check.js's identity block on a hidden page)
+        if (!j || bandJob !== j) break;
         // (round 10a: a frame in kicks, see SPLIT: its band's time summed, its rows set when it is done (splitStep), the next
         // piece once the band is seen done or not)
         // (the query read at most once a frame: in WebKit each read is a round trip to the GPU's process, see slowSync)
