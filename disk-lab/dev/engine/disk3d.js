@@ -1871,6 +1871,24 @@ void coMarchK0(vec3 ro, vec3 rd, vec2 b, float tCross, out vec4 I0, out vec4 Tr0
   // 1.9-dev.32)
   const SELF_LOOK = { A: 0.11, TK: 1.5, G: 1e-3,
     HUE: [[10, [0.42, 0.50, 0.74]], [30, [0.42, 0.58, 0.90]], [90, [0.55, 0.74, 1.0]], [160, [0.96, 0.96, 0.94]], [350, [1.0, 0.70, 0.46]], [800, [1.0, 0.60, 0.30]], [1500, [1.0, 0.84, 0.45]]] };
+  // (Round 21b, the owner, of the own light: "make it easier to read") The own light's shades by the view's own range (DESIGN.md
+  // section 57.18, its last entries; SR and srAim in the script; round 21c: laid on at the display, selfRange and uSelfR in SHOW_FS,
+  // the volume's shader 1.11.1's to the byte, see there; round 21b had it in the volume's, selfTbR). On the scale above, the same in
+  // every view, a close view is a flat grey: the display's levels of the snow line's place lie within 87 to 162 of 255 and the
+  // planet's within 96 to 129, their tens of kelvin on a scale that reaches 1000 K, and the rings and gaps cannot be read. So by
+  // default the range of T_b in the view (the script measures it on the frames it draws, as it does the exposure) is laid on the
+  // span of the display that the scale above gives to T, 10 to 1000 K: with u = A ln(1 + T_b / TK), that scale's value, the pixel
+  // shows UA + (u - u_lo) (UB - UA) / (u_hi - u_lo), UA and UB its values of 10 and 1000 K. Below the range the line through
+  // nought, u UA / u_lo: no brighter than on the fixed scale (u_lo is never under UA) and black only where nothing glows, so that
+  // the sky and the thin gas stay dark and every temperature keeps a shade of its own. Above it a shoulder, UB + SH (1 - e^-(v -
+  // UB) / SH) for the line's v: what is hotter than the range (the view's hottest hundredth, or what a moving view has just
+  // brought in) stays under white, at most UB + SH: 0.845 of the display, under the finish's glow of the bright parts (BLOOM.T),
+  // so that the gas does not bloom, as it does not on the fixed scale (1500 K 0.76). The brightness still rises with T_b
+  // everywhere, the page's key writes the range at its bar's ticks, and the colour is as before (selfTint: T_b's own, not the
+  // range's). The state's selfr 'fixed' keeps the scale above in every view, to compare views. selfU, selfTofU: u of a
+  // temperature and back
+  const selfU = (T) => SELF_LOOK.A * Math.log1p(Math.max(T, 0) / SELF_LOOK.TK), selfTofU = (u) => SELF_LOOK.TK * Math.expm1(u / SELF_LOOK.A);
+  const SELF_FIT = { UA: +selfU(10).toFixed(6), UB: +selfU(1000).toFixed(6), SH: 0.13 };
   const FS = `#version 300 es
 precision highp float;
 layout(location = 0) out vec4 fragColor;
@@ -5259,7 +5277,79 @@ uniform int uFaceOn;
 uniform vec4 uAccPart;   // (the volume's part of accT, as fractions of it: its size, and the last texel centres)
 uniform vec2 uTexel;     // (a texel of accT)
 uniform float uSoft;     // the tent filter's weight (see above)
+// (round 21c) the own light's shades by the view's own range (see selfRange): uSelfR as round 21b's, x the range's lowest u, y the
+// gain that lays the range on the fixed scale's span, (0, 0) none (the pass as before); uSelfS the own light's exposure on the
+// display (uExposure times uSelf.y over G) and the sky's luminance at the picture's bottom and top
+uniform vec2 uSelfR;
+uniform vec3 uSelfS;
+// (round 21c, the orchestrator) uSelfP: the planets kept out of the range, as round 21b kept them (its range was laid on the own light's
+// T_b alone): each planet's point of light and the planet shown close up with its disk, a circle on the canvas (x, y device px from
+// its bottom left, z its radius), w 1 where there is one; uSelfT the gas's colour at the luminance 1, uSelfQ the planets'. Within a
+// circle the pixel's light is split into the gas's colour and the planets' (least squares, neither negative; the stretch undone,
+// selfSplit): the gas's share laid on the range, the rest kept, the stretch again. Laid on whole with the gas, a disk 80 to 120 K
+// away went past white, pale instead of gold; a whole circle kept out left the gas in it unlaid, a round mark about the planet; the
+// pixels of the planet's colour kept whole, its point a dark speck in the gas laid brighter about it and its disk's edge a pale rim.
+// For the gas's light alone the split gives selfRange's own picture, so the circle leaves no mark
+uniform vec4 uSelfP[${PLANETS.MAX + 1}];
+uniform vec3 uSelfT, uSelfQ;
 ${NOISE_GLSL}
+// (Round 21c) The own light's shades by the view's own range (round 21b's curve, SELF_FIT and SR in the script), laid on here, at
+// the display, and not in the volume's shader: round 21b's selfTbR there made the volume's program another, and check.js's full run
+// lost the GPU's context once in its identity block, as 1.11.1's never had (the shader's lesson, DESIGN.md: its entries of rounds
+// 20v, 21a, 21b and 21c). accT holds the volume's display values: its light L stretched to v = asinh(L / 0.012) / 7.2 (the colour
+// scaled so that its luminance is v^2.2, the hue kept), rolled off past white, each channel to the 1 / 2.2. So v is the luminance
+// of the channels to the 2.2, to the 1 / 2.2 (exact where nothing was rolled off). selfV: v at the picture's height t (0 at its
+// bottom) laid on the range. L = 0.012 sinh(7.2 v), and with the sky's light taken off and the exposure's, the own light's u =
+// A ln(1 + T_b / TK) on the fixed scale (for the gas's light alone exactly as round 21b had it); u through the range's curve, as
+// round 21b's selfTbR: the range's line, below it the line through nought, above it the shoulder; the light of that, with the
+// exposure and the sky again, stretched: v'. (The sky alone, nothing else under it, is kept as it is.) selfRange: the colour
+// scaled by v' / v, as accT's values scale (the hue kept), rolled off past white as the volume's last stage does, and mixed with
+// the pixel as it is by accT's alpha, the volume's share of the pixel (aeW: the star's glare, the magnetosphere and a cut face keep
+// their light), its alpha filtered as its colour is. The rest of the volume's light goes with the gas's, the stars and the cloud's
+// light behind laid on the range too; but about the planets (uSelfP) the gas's share alone (selfSplit, below)
+float selfV(float v, float t){
+  float L = 0.012 * sinh(7.2 * v), s = min(mix(uSelfS.y, uSelfS.z, smoothstep(0.0, 1.0, t)), L);
+  float u = asinh((L - s) / (0.012 * uSelfS.x)) / 7.2;
+  float w = u < uSelfR.x ? u * (${G(SELF_FIT.UA)} / max(uSelfR.x, 1e-6)) : ${G(SELF_FIT.UA)} + (u - uSelfR.x) * uSelfR.y;
+  if (w > ${G(SELF_FIT.UB)}) w = ${G(SELF_FIT.UB)} + ${G(SELF_FIT.SH)} * (1.0 - exp((${G(SELF_FIT.UB)} - w) / ${G(SELF_FIT.SH)}));
+  return asinh((uSelfS.x * 0.012 * sinh(7.2 * w) + s) / 0.012) / 7.2;
+}
+vec3 selfSplit(vec3 c, float t){
+  vec3 s2 = pow(max(c, 0.0), vec3(2.2));
+  float y = dot(s2, vec3(0.2126, 0.7152, 0.0722));
+  if (!(y > 0.0)) return c;
+  float v = pow(y, 1.0 / 2.2);
+  vec3 col = s2 * (0.012 * sinh(7.2 * v) / y);
+  float gg = dot(uSelfT, uSelfT), qq = dot(uSelfQ, uSelfQ), gq = dot(uSelfT, uSelfQ), det = max(gg * qq - gq * gq, 1e-9);
+  float a = max((dot(uSelfT, col) * qq - dot(uSelfQ, col) * gq) / det, 0.0);
+  if (!(a > 0.0)) return c;
+  vec3 rest = max(col - a * uSelfT, 0.0);
+  float a2 = 0.012 * sinh(7.2 * selfV(asinh(a / 0.012) / 7.2, t));
+  vec3 col2 = a2 * uSelfT + rest;
+  float L2 = max(dot(col2, vec3(0.2126, 0.7152, 0.0722)), 1e-7);
+  vec3 d = col2 * (pow(asinh(L2 / 0.012) / 7.2, 2.2) / L2);
+  float m = max(d.r, max(d.g, d.b));
+  if (m > 1.0) d = mix(d / m, vec3(1.0), 1.0 - 1.0 / m);
+  return pow(d, vec3(1.0 / 2.2));
+}
+vec3 selfRange(vec3 c, vec2 uv){
+  float a = texture(uAcc, uv).a;
+  if (uSoft > 0.0) {
+    vec2 h = 0.5 * uTexel, lo = h, hi = uAccPart.zw;
+    float t = texture(uAcc, clamp(uv + vec2(-h.x, -h.y), lo, hi)).a + texture(uAcc, clamp(uv + vec2(h.x, -h.y), lo, hi)).a
+            + texture(uAcc, clamp(uv + vec2(-h.x, h.y), lo, hi)).a + texture(uAcc, clamp(uv + vec2(h.x, h.y), lo, hi)).a;
+    a = mix(a, 0.25 * t, uSoft);
+  }
+  float v = pow(dot(pow(max(c, 0.0), vec3(2.2)), vec3(0.2126, 0.7152, 0.0722)), 1.0 / 2.2);
+  if (!(v > 0.0)) return c;
+  vec3 d = max(c, 0.0) * (selfV(v, gl_FragCoord.y / uDev.y) / v);
+  float m = pow(max(d.r, max(d.g, d.b)), 2.2);
+  if (m > 1.0) d = pow(mix(pow(d, vec3(2.2)) / m, vec3(1.0), 1.0 - 1.0 / m), vec3(1.0 / 2.2));
+  float k = 0.0;
+  for (int i = 0; i < ${PLANETS.MAX + 1}; i++) if (uSelfP[i].w > 0.0) k = max(k, 1.0 - smoothstep(uSelfP[i].z, 1.5 * uSelfP[i].z, length(gl_FragCoord.xy - uSelfP[i].xy)));
+  if (k > 0.0) d = mix(d, selfSplit(c, gl_FragCoord.y / uDev.y), k);
+  return mix(c, d, clamp(a, 0.0, 1.0));
+}
 void main(){
   vec2 uv = min(gl_FragCoord.xy / uDev * uAccPart.xy, uAccPart.zw);
   vec3 c = texture(uAcc, uv).rgb;
@@ -5269,6 +5359,7 @@ void main(){
            + texture(uAcc, clamp(uv + vec2(-h.x, h.y), lo, hi)).rgb + texture(uAcc, clamp(uv + vec2(h.x, h.y), lo, hi)).rgb;
     c = mix(c, 0.25 * t, uSoft);
   }
+  if (uSelfR.y > 0.0) c = selfRange(c, uv);   // (round 21c: see selfRange; with no range the pass as before)
   if (uBloomP.z > 0.0) c += uBloomP.z * texture(uBloom, gl_FragCoord.xy / uDev * uBloomP.xy).rgb;
   if (uTone > 0.0) { vec3 k = clamp(c, 0.0, 1.0); c -= uTone * k * (1.0 - k) * (1.0 - k); }
   if (uFaceOn != 0) { vec4 f = texelFetch(uFace, ivec2(gl_FragCoord.xy), 0); c = c * (1.0 - f.a) + f.rgb; }
@@ -5733,6 +5824,24 @@ void main(){
     return c.map((v) => { const g = Math.pow(v, 1 / 2.2), k = Math.min(1, Math.max(0, g)); return g - TONE * k * (1 - k) * (1 - k); });
   };
   const SELF_KEY = { MIN: 10, MAX: 1500, TICKS: [10, 30, 100, 300, 1000] };
+  // (round 21b) the key's ticks for the own light's shades on a view's own range (lo and hi its ends in u, see SELF_FIT): [place
+  // on the bar, text], the bar as it is (a thick gas at the fixed scale's temperatures) and each temperature at the place of the
+  // fixed scale's of the same shade. The ends, to two figures, where the fixed scale's 10 and 1000 K stand; between them round
+  // temperatures, the rounder first (steps of 5, 2 and 1 times a power of ten, from the coarsest down to 1 K), where their numbers
+  // have room on a bar 150 px wide: a fifth of it from the low end's number and from the high end's with its unit, a sixth from
+  // one another; three at most, as on the fixed scale
+  const selfTicks = (lo, hi) => {
+    const K = SELF_KEY, F = SELF_FIT, g = (F.UB - F.UA) / (hi - lo), at = (T) => Math.log(selfTofU(F.UA + (selfU(T) - lo) * g) / K.MIN) / Math.log(K.MAX / K.MIN);
+    const Tlo = selfTofU(lo), Thi = selfTofU(hi), end = at(Thi), fig = (T) => String(Number(T.toPrecision(2))), out = [[0, fig(Tlo)], [end, fig(Thi)]];
+    for (let p = Math.floor(Math.log10(Thi)); p >= 0 && out.length < 5; p--) for (const m of [5, 2, 1]) {
+      const step = m * 10 ** p;
+      for (let T = Math.ceil(Tlo / step) * step; T < Thi && out.length < 5; T += step) {
+        const u = at(T);
+        if (u >= 0.2 && u <= end - 0.19 && out.every(([v]) => Math.abs(v - u) >= 0.16)) out.push([u, String(T)]);
+      }
+    }
+    return out.sort((a, b) => a[0] - b[0]);
+  };
   // the CO line's displays (see uCoMode): a channel map at a velocity, the mean velocity (moment 1), the integrated
   // intensity (moment 0)
   const CO_MODES = { chan: 0, m1: 1, m0: 2 };
@@ -6336,6 +6445,7 @@ void main(){
     const uShowBloom = gl.getUniformLocation(progShow, 'uBloomP'), uShowTone = gl.getUniformLocation(progShow, 'uTone');
     const uShowDev = gl.getUniformLocation(progShow, 'uDev'), uShowFace = gl.getUniformLocation(progShow, 'uFaceOn'), uShowPart = gl.getUniformLocation(progShow, 'uAccPart');
     const uShowTexel = gl.getUniformLocation(progShow, 'uTexel'), uShowSoft = gl.getUniformLocation(progShow, 'uSoft');
+    const uShowSelfR = gl.getUniformLocation(progShow, 'uSelfR'), uShowSelfS = gl.getUniformLocation(progShow, 'uSelfS'), uShowSelfP = gl.getUniformLocation(progShow, 'uSelfP'), uShowSelfT = gl.getUniformLocation(progShow, 'uSelfT'), uShowSelfQ = gl.getUniformLocation(progShow, 'uSelfQ');   // (round 21c: the own light's range, see SR)
     // (a texel of nothing on units 11 and 12 (the cut face, see faceT) until the face is first drawn, and on unit 12 while
     // faceA is drawn into: the samplers must not point at no texture)
     const noFace = gl.createTexture();
@@ -7360,7 +7470,9 @@ void main(){
       // (round 20n) the own light's opacity of the pebbles (per gram of pebbles), the wind and the envelope (per gram of gas)
       selfkp: SELF.DEF_P, selfkw: SELF.DEF_W, selfke: SELF.DEF_E,
       // (round 18l) the own light's temperature (SELF_T) and the surface's column Sigma_s, g cm^-2 (see SELF)
-      selft: 'colstar', selfnc: SELF.NC_DEF
+      selft: 'colstar', selfnc: SELF.NC_DEF,
+      // (round 21b) the own light's shades: 'view', by the view's own range of T_b, or 'fixed', 10 to 1000 K in every view (see SELF_FIT)
+      selfr: 'view'
     };
     const matLin = new Float32Array(MAT.flatMap(([, hex, k]) => linHex(hex).map((v) => v * k)));   // (round 8, see MAT)
     const dbgV = new Float32Array(16);   // R19DBG
@@ -8354,10 +8466,12 @@ void main(){
       if (lookNow === 'model' && selfOn() && !selfOld) {
         const k = box.diskSelfKey();
         // (round 18m: by default the brightness alone, the disk in shades of its colour; ?selfhue=1 round 18k's)
+        // (round 21b: with the shades by the view's own range, said so, and 'auto' as the gas line's; the range that of the ticks' ends)
+        const fitJ = srOn() ? '、この眺めの範囲に合わせています' : '', fitE = srOn() ? ' fitted to the range in this view' : '';
         return { title: j ? 'Brightness temperature (K)' : '輝度温度(K)',
-          description: selfTcol ? (j ? 'The gas, its dust and the pebbles glow in their own thermal light: brightness and colour show the brightness temperature, the brightness on a logarithmic scale. The other colours are materials.' : 'ガスと塵、小石は自らの熱で光り、明るさと色は輝度温度(明るさは対数の尺度)を示します。ほかの色は物質の種類です。')
-            : (j ? 'The gas, its dust and the pebbles glow in their own thermal light: the brightness shows the brightness temperature, on a logarithmic scale, in shades of the gas\u2019s colour. The other colours are materials.' : 'ガスと塵、小石は自らの熱で光り、明るさが輝度温度(対数の尺度)を、ガスの色の濃淡で示します。ほかの色は物質の種類です。'),
-          units: 'K', min: k.min, max: k.max, rangeMode: 'fixed',
+          description: selfTcol ? (j ? 'The gas, its dust and the pebbles glow in their own thermal light: brightness and colour show the brightness temperature, the brightness on a logarithmic scale' + fitE + '. The other colours are materials.' : 'ガスと塵、小石は自らの熱で光り、明るさと色は輝度温度(明るさは対数の尺度' + fitJ + ')を示します。ほかの色は物質の種類です。')
+            : (j ? 'The gas, its dust and the pebbles glow in their own thermal light: the brightness shows the brightness temperature, on a logarithmic scale' + fitE + ', in shades of the gas\u2019s colour. The other colours are materials.' : 'ガスと塵、小石は自らの熱で光り、明るさが輝度温度(対数の尺度' + fitJ + ')を、ガスの色の濃淡で示します。ほかの色は物質の種類です。'),
+          units: 'K', min: k.fit ? Number(k.ticks[0][1]) : k.min, max: k.fit ? Number(k.ticks[k.ticks.length - 1][1]) : k.max, rangeMode: srOn() ? 'auto' : 'fixed',
           items: k.ticks.map(([u, t]) => ({ label: t + ' K', color: k.colourAt(u) })).concat(MAT.filter(([key]) => !['disk', 'rock', 'ice', 'acc'].includes(key)).map(([, hex, , ja_, en]) => ({ label: j ? en : ja_, color: hex }))) };
       }
       const desc = { model: ['色は物質の種類(円盤、小石、円盤風、エンベロープなど)を、明るさはその量を示します。', 'Colour shows the material (the disk, the pebbles, the wind, the envelope and so on); brightness, how much of it is there.'],
@@ -8789,6 +8903,125 @@ void main(){
       aeTries++;
       if (Math.abs(goal - lnUsed) < 1e-3) { aeFresh = true; return false; }
       aeGoal = goal; aeFresh = false;
+      return true;
+    }
+    // (Round 21b, the owner, of the own light: "make it easier to read") The own light's shades by the view's own range (SELF_FIT;
+    // the state's selfr, SELF_R: 'view' by default). The frames drawn are measured as for the exposure, which rests with the own
+    // light: the same cells (aePass), read back a frame or two later without waiting (reduced motion: at once, in draw).
+    // A reading (srAim) takes each cell's mean display level back through the volume's last stage to its own light's value: the
+    // tint's share of the level (srLevel, read backwards), the stretch, the sky's light off (SR_SKY), the exposure with the
+    // outburst's share as that frame had it (srFrame). (Round 21c: that value is the u the gas has on the fixed scale, the volume's
+    // picture being on the fixed scale in every frame and the range laid on at the display, SHOW_FS's selfRange. Round 21b drew the
+    // range in the volume's shader and read each frame back through the pair it was drawn with; nothing is undone now, and the
+    // range cannot chase its own picture.)
+    // The cells that count: SR.W of the cell or more the volume's (the frame's alpha leaves out the star's glare, the
+    // magnetosphere and a cut face); not on a planet's disk shown close up (srPl: the cells whose middle ray passes within 1.2
+    // of its radius, a cell's half more; its own light is not a temperature, and read as one it would hold the range wide open;
+    // round 21c: at the display it is laid on the range with the gas's, above the range under the shoulder); and at the fixed
+    // scale's low end, 10 K, or above (bare sky and the thin gas outside are not the
+    // view's range). Of these the range is from the 1st to the 99th hundredth (SR.P; the 99th, not the last cell: a planet's
+    // point of light, a star behind thin gas and the cells beside the star's glare are a few cells, and would take the top),
+    // each end the mean of the hundredth of the cells next inside it (SR.PW: one cell's grain does not move an end), its
+    // top at SR.TOP K at most (the dust's sublimation: nothing of the model's is hotter, so what reads hotter is another light),
+    // and at least a factor SR.SPAN in T_b across (a view of one temperature is not stretched into its grain). So the low end is
+    // never under the fixed scale's, and the sky and the thin gas stay as dark as they were. Fewer than SR.N such cells (the
+    // star or a cut face over nearly all, or nothing as warm as 10 K): nothing to measure, and the goal is the fixed scale's own.
+    // With the sky of a star-forming region behind (the state's bg 'cloud'), bare sky is not told from thin gas: the cloud's own
+    // light shows through it, a light that is not the gas's, and read as gas it would be counted under one range and not under the
+    // next, the range going to and fro. There every cell counts, the sky too, and the low end is held at 10 K from below: where
+    // a hundredth of the picture is sky, the low end stays at the fixed scale's and the top alone is the view's.
+    // The goal (srGoLo, srGoHi, in u) moves when an end is off by more than SR.DEAD of the display's value (5 levels of 255: the
+    // cells' means are of 16 samples each and differ a little from frame to frame of one view, and a still must settle), at most
+    // SR.TRIES times for one picture at rest; and a view once measured is not measured again at the other scales its still is refined
+    // through (see srNew). After a moving view's readings, the first reading at rest moves the goal if off by SR.FINE, a level
+    // (srFine), so that the range a view settles on is its own to a part in a hundred whichever way it came there. (Round 21b read
+    // the view at rest again after each move of the goal, through the new range, the finest reading it had: the one before saw the
+    // view through another range, its far ends pressed together. Round 21c's readings are all of the fixed scale's picture: a
+    // reading at rest is the view's own, and the next of the same picture would be the same, so none is taken)
+    // The range in use (srLo, srHi) follows the goal, eased in u over SR.REST s with the clock stopped and the view at rest and
+    // over SR.MOVE s while the view moves or the clock runs; while the view moves every frame that can be is measured and the
+    // goal follows each reading (no band: nothing is averaged then, and its frames are not started over for a reading). Within
+    // SR.SNAP it is the goal itself. (Round 21c: a step of the range does not start a still over, as round 21b's did, its pair in
+    // the frame's signature: the volume's picture is the same, and each frame of the still shows it on the range of its moment.)
+    // Held (srHeld) through an outburst, whose brightening is the point, in the dark half of a look's
+    // dip, and while a picture is saved, which keeps the range it was seen with (a video's frames, on the page's own clock,
+    // follow). With 'fixed', in another look and with the starlight: the fixed scale at once (no pair, see uSelfR in SHOW_FS), from
+    // which the next view's range starts; box.diskSettle starts it from there too, as the exposure from 1
+    const SELF_R = { view: 1, fixed: 0 };
+    const SR = { P: [0.01, 0.99], PW: 0.01, W: 0.85, N: 12, SPAN: 1.5, TOP: 1500, DEAD: 0.02, FINE: 0.004, SNAP: 0.004, REST: 0.15, MOVE: 0.6, TRIES: 8 };
+    // (the sky's light under every pixel, main's end: its luminance at the picture's bottom and top, smoothstep between; under the
+    // cloud's sky 0.6 (0.3 + 0.7 a) of it, srSkyK, taken at its middle. Round 21c: SHOW_FS's selfRange takes it off too, uSelfS)
+    const SR_SKY = [0.2126 * 0.0020 + 0.7152 * 0.0026 + 0.0722 * 0.0050, 0.2126 * 0.0040 + 0.7152 * 0.0056 + 0.0722 * 0.0130];
+    const srSkyK = () => (opt.bg === 'cloud' ? 0.39 : 1);
+    let srLo = SELF_FIT.UA, srHi = SELF_FIT.UB, srGoLo = srLo, srGoHi = srHi, srFresh = false, srTries = 0, srFine = false;   // (srFine: the next reading at rest held to SR.FINE)
+    // srFrame: the last frame's own light's exposure (uExposure times uSelf.y over G); srUsed, srTrack, srGenUsed: that of the frame
+    // being measured, whether the view moved then, and its view's count (aeGen); srPl: the planet shown close up, its place and its
+    // disk's reach (au), null for none; srSeen: what the last reading saw, for checks (box.diskSelfRange). (Round 21c: no pair with
+    // them, the frames being all on the fixed scale)
+    let srFrame = 1, srUsed = srFrame, srTrack = false, srGenUsed = 0, srPl = null, srSeen = null;
+    const srPlP = new Float32Array(4 * (PLANETS.MAX + 1));   // (round 21c: the planets kept out of the range at the display, uSelfP)
+    const srOn = () => selfOn() && !selfOld && opt.selfr === 'view';
+    const srHeld = () => !!burst || lookDip() < 0.5 || (snapping && manualMs === null);
+    const srAt = () => srLo === srGoLo && srHi === srGoHi;
+    const srGain = (lo, hi) => (SELF_FIT.UB - SELF_FIT.UA) / (hi - lo);
+    // (round 21c: the pair for the display pass, uSelfR: none at the fixed scale's own range, where it shows the picture as it is)
+    const srPairNow = () => (srLo === SELF_FIT.UA && srHi === SELF_FIT.UB ? [0, 0] : [srLo, srGain(srLo, srHi)]);
+    // (the display's level of the stretch's level d in the tint's colour, as the volume's last stage: the tint at the luminance 1
+    // times d^2.2, the roll-off past white, the gamma, the luminance of that; d itself for a white gas, up to white)
+    const srLevel = (d, tint) => {
+      let c = tint.map((v) => v * Math.pow(d, 2.2));
+      const m = Math.max(...c);
+      if (m > 1) c = c.map((v) => v / m + (1 - v / m) * (1 - 1 / m));
+      return 0.2126 * Math.pow(c[0], 1 / 2.2) + 0.7152 * Math.pow(c[1], 1 / 2.2) + 0.0722 * Math.pow(c[2], 1 / 2.2);
+    };
+    const srCells = new Float64Array(AE_W * AE_H);
+    // A new goal for the range from the cells read back, of a frame drawn with the own light's exposure e; true when it moved
+    function srAim(px, e, track) {
+      const F = SELF_FIT;
+      const th = Math.tan(opt.fov / 2), asp = rW / rH, cell = th * Math.hypot(1 / AE_H, asp / AE_W), pl = srPl, q = pl ? pl.p.map((v, k) => v - cam[k]) : null, cloud = opt.bg === 'cloud';
+      // (the cells read through the tint's levels: those that count, those mostly the volume's, and the range they give; with too
+      // few of them the fixed scale's own)
+      const read = (tint) => {
+        const lv = Float64Array.from({ length: 65 }, (_, i) => srLevel(0.02 * i, tint));
+        const dOf = (L) => { let j = 0; while (j < 64 && lv[j] < L) j++; return j === 0 ? 0 : 0.02 * (j - (lv[j] > lv[j - 1] ? Math.min(1, Math.max(0, (lv[j] - L) / (lv[j] - lv[j - 1]))) : 0)); };
+        let n = 0, vol = 0;
+        for (let c = 0; c < AE_W * AE_H; c++) {
+          const w = px[4 * c + 2], cx = c % AE_W, cy = (c - cx) / AE_W;
+          if (w < SR.W * 255) continue;
+          vol++;
+          if (pl) {
+            const X = ((2 * cx + 1) / AE_W - 1) * asp * th, Y = ((2 * cy + 1) / AE_H - 1) * th;
+            const d = [0, 1, 2].map((k) => basis.f[k] + X * basis.r[k] + Y * basis.u[k]), t = (q[0] * d[0] + q[1] * d[1] + q[2] * d[2]) / Math.hypot(d[0], d[1], d[2]);
+            if (t > 0 && Math.sqrt(Math.max(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] - t * t, 0)) < pl.r + t * cell) continue;
+          }
+          const ty = (cy + 0.5) / AE_H, sky = (SR_SKY[0] + (SR_SKY[1] - SR_SKY[0]) * ty * ty * (3 - 2 * ty)) * srSkyK();
+          const own = (0.012 * Math.sinh(7.2 * dOf(px[4 * c] / w)) - sky) / e, u = own > 0 ? Math.asinh(own / 0.012) / 7.2 : 0;
+          if (cloud || u >= F.UA) srCells[n++] = u;
+        }
+        let lo = F.UA, hi = F.UB;
+        if (n >= SR.N) {
+          const s = srCells.subarray(0, n).sort(), sMin = SELF_LOOK.A * Math.log(SR.SPAN), top = selfU(SR.TOP);
+          const mean = (p0, p1) => { const a = Math.round(p0 * (n - 1)), b = Math.round(p1 * (n - 1)); let t = 0; for (let i = a; i <= b; i++) t += s[i]; return t / (b - a + 1); };
+          lo = Math.max(F.UA, mean(SR.P[0], SR.P[0] + SR.PW)); hi = Math.min(mean(SR.P[1] - SR.PW, SR.P[1]), top);
+          if (hi - lo < sMin) { lo = Math.max(F.UA, Math.min(0.5 * (lo + hi), top) - 0.5 * sMin); hi = lo + sMin; }
+        }
+        return { n, vol, lo, hi };
+      };
+      // (the tint: the gas's colour; with ?selfhue=1 the colour of T_b, taken at the middle of the range the cells give read as
+      // white, and the cells read again with it: its share of the level lies within 0.95 to 1 along the scale. Round 21b took it at
+      // the middle of the range the frame was drawn with)
+      let r = read(!selfTcol ? selfGasJS() : [1, 1, 1]);
+      if (selfTcol && (r.lo !== F.UA || r.hi !== F.UB)) r = read(selfHueJS(selfTofU(0.5 * (r.lo + r.hi))));
+      const { n, vol, lo, hi } = r;
+      // (how far the goal is from it, in the display's value at the goal's gain)
+      const off = Math.max(Math.abs(lo - srGoLo), Math.abs(hi - srGoHi)) * srGain(srGoLo, srGoHi);
+      srSeen = { n, vol, lo: +selfTofU(lo).toPrecision(4), hi: +selfTofU(hi).toPrecision(4), off: +off.toFixed(4), e: +e.toPrecision(4) };
+      if (track ? off < SR.SNAP : off < (srFine ? SR.FINE : SR.DEAD) || srTries >= SR.TRIES) { srFresh = true; if (!track) srFine = false; return false; }
+      if (!track) srTries++;
+      // (round 21c: a reading at rest is the view's own, so the view is measured with it (srFresh); after a moving view's the next
+      // reading at rest is held to SR.FINE)
+      srFine = track;
+      srGoLo = lo; srGoHi = hi; srFresh = !track;
       return true;
     }
     // The CO line's range for the channel map and moment 0 (the measured frames are shared with the exposure): raised from
@@ -9226,7 +9459,10 @@ void main(){
       // blocking read: a chain of GPU work five frames long where the frames are slow. It now follows a frame or two late,
       // measured on its small target and read back without waiting (aeRead, aeTrack): a short adaptation in view)
       const per = gBudget > 0 ? gC1(kindNow()) * opt.scale * opt.scale : 0;
-      for (let i = 0; reduce && !bandJob && i < 5 && !(per > 0 && (i + 2) * per > gBudget) && W && !lost && ((aeOn() && !aeHeld()) || coOn()); i++) {
+      // (round 21b: and the own light's range, see SR: the frame's exposure is the last drawn's, srFrame. Round 21c: a new goal is
+      // there at once, and the frame drawn after it, the volume's picture the same (it refines the still), shows it at its finish,
+      // which tells the page (diskframe: the key's ticks); its reading, the next, is of the same picture, and moves nothing)
+      for (let i = 0; reduce && !bandJob && i < 5 && !(per > 0 && (i + 2) * per > gBudget) && W && !lost && ((aeOn() && !aeHeld()) || coOn() || (srOn() && !srHeld())); i++) {
         if (aeSync) { gl.deleteSync(aeSync); aeSync = null; }   // a previous frame cannot undo this frame's correction
         aeReady = false;   // (Disk Lab v2: nor a reading already copied back)
         // (round 10a, dev.6: the pieces in flight looked at before the read, and those still in flight known done by its end: the
@@ -9237,7 +9473,7 @@ void main(){
         aePass(); gl.readPixels(0, 0, AE_W, AE_H, gl.RGBA, gl.UNSIGNED_BYTE, aePx); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         slowSync('readPixels ae (reduced motion)', ts);
         gpuDrained(ts);
-        if (aeOn()) { if (!aeAim(aePx, aeLn, false)) break; aeLn = aeGoal; } else { if (!coAim(aePx, coLn)) break; coLn = coGoal; }
+        if (aeOn()) { if (!aeAim(aePx, aeLn, false)) break; aeLn = aeGoal; } else if (srOn()) { if (!srAim(aePx, srFrame, false)) break; } else { if (!coAim(aePx, coLn)) break; coLn = coGoal; }
         drawOnce();
       }
     }
@@ -9370,6 +9606,7 @@ void main(){
         if (v > pVis) { pVis = v; pV = p; pPos = pos; }
       }
       planetGlowSet(pV, pVis);
+      srPl = pVis > 0 ? { p: pPos, r: 1.2 * cpdROut(pV) } : null;   // (round 21b: its disk's cells left out of the own light's range, see SR)
       // the automatic exposure toward its goal (1 when off), eased; held through an outburst and a change of look
       if (!aeOn()) { aeGoal = 0; aeFresh = true; }
       // (eased over 0.15 s, 0.05 s while the view moves, so that the exposure keeps up with a flight toward the star)
@@ -9379,9 +9616,24 @@ void main(){
       if (!aeHeld()) { aeLn += (aeGoal - aeLn) * (reduce || (paused && !viewMoving()) ? 1 : Math.min(1, dtR / (aeTrack && viewMoving() ? 0.05 : 0.15))); if (Math.abs(aeGoal - aeLn) < 1e-3) aeLn = aeGoal; }
       if (!coOn() && !coPending && coSavedKey !== coKey) { coGoal = 0; coFresh = true; }
       coLn += (coGoal - coLn) * (reduce ? 1 : Math.min(1, dtR / 0.15)); if (Math.abs(coGoal - coLn) < 1e-3) coLn = coGoal;
+      // (round 21b) the own light's range toward its goal (see SR), eased in u, faster with the clock stopped and the view at rest;
+      // not while a picture is saved; without it (the fixed scale chosen, the starlight, another look) the fixed scale's own at once
+      if (!srOn()) { srLo = srGoLo = SELF_FIT.UA; srHi = srGoHi = SELF_FIT.UB; srFresh = srFine = false; }
+      else if (!srAt() && !(snapping && manualMs === null)) {
+        const k = reduce ? 1 : Math.min(1, dtR / (paused && !viewMoving() ? SR.REST : SR.MOVE));
+        srLo += (srGoLo - srLo) * k; srHi += (srGoHi - srHi) * k;
+        if (Math.max(Math.abs(srGoLo - srLo), Math.abs(srGoHi - srHi)) * srGain(srGoLo, srGoHi) < SR.SNAP) { srLo = srGoLo; srHi = srGoHi; }
+      }
+      // (the pair for this frame, uSelfR in the display pass: none at the fixed scale's own range, where it shows the picture as it
+      // is; round 21c: not in the volume's shader, nor in the frame's signature, see SR)
+      const srPair = srPairNow();
       // (the star itself keeps its brightness: far brighter than the disk, it stays white whatever the exposure)
       const dS = Math.hypot(cam[0], cam[1], cam[2]), lg = LOOK_GAIN[lookNow] ? Math.pow(LOOK_GAIN[lookNow], ss(8, 60, dS) * (1 - ss(120, 300, dS))) : 1;
       const expo = opt.exposure * lg * Math.exp(aeLn) * Math.pow(burstL(), 0.6) * lookDip(), starL = Math.pow(burstL(), 0.7) * LOOK_STAR[lookNow] * (opt.lscale && lookNow !== 'model' ? lumBase : 1) / (Math.exp(aeLn) * lg);   // (round 15b: L*, see uLstar)
+      // (round 21b) the own light's light per kelvin (uSelf.y, see SELF), and the exposure its own light has on the display in this
+      // frame, uExposure times uSelf.y over G (the outburst's brightening off), for the frame's measurement (srAim) and (round 21c)
+      // for the display pass, which takes it off and puts it back (selfRange)
+      const selfY = SELF.G / Math.pow(burstL(), 0.6), srF = srFrame = expo * selfY / SELF_LOOK.G;
       const envMade = !env3T && envVis > 0; if (envVis > 0) makeEnv3();   // (round 9: made in this frame, a first use; see warmFull)
       // the volume, with the FULL program while the slice or the planet close up shows (the usual one stands in while
       // FULL is still compiling)
@@ -9405,9 +9657,15 @@ void main(){
       const bgK = bgMoves() ? 0 : bgLeft(), bgA = bgMoves() ? 0 : viewOff() + bgK;
       // a still picture (see ACC_MAX): the same state as the last frame, drawn by the same program
       const sig = [time, ...cam, ...basis.f, rW, rH, canvas.width, opt.steps, opt.fov, opt.seed, starL, LOOKS[lookNow], rSn, opt.mode, BG.MODES[opt.bg], bgK, ...compAmp, ...opt.gain,
-        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), parGen, colGen, cpdMdot, ...opt.opac, camRoll, opt.stars, selfOn() ? opt.selfk : 0, ...(selfOn() ? [opt.selfkp, opt.selfkw, opt.selfke] : [0, 0, 0]), selfOn() ? SELF_T[opt.selft] : 0, selfOn() ? opt.selfnc : 0, coLn, expo];   // (round 18l: its temperature and the surface's column, see SELF_T) (round 18i: the own light and its opacity, see SELF; round 20n: the other objects', uSelfK; round 13a: colGen, the materials' colours, see box.diskColours; round 14a: parGen, the model's parameters, see box.diskParams)
+        sliceU, cutA, SLICE_Q[opt.sliceQ] || 0, ...planets.flatMap((p) => [p.a, p.d, p.wake]), ...plGlowD, wavesAmp, pVis, envVis, magVis, msAmp, asymAmp, CO_MODES[opt.coMode], opt.coV, F ? 1 : 0, ...clumps.flatMap((c) => [c.R, c.phi, c.t0, c.amp]), ...vapor.flatMap((v) => [v.amp, v.t0]), parGen, colGen, cpdMdot, ...opt.opac, camRoll, opt.stars, selfOn() ? opt.selfk : 0, ...(selfOn() ? [opt.selfkp, opt.selfkw, opt.selfke] : [0, 0, 0]), selfOn() ? SELF_T[opt.selft] : 0, selfOn() ? opt.selfnc : 0, coLn, expo];   // (round 21c: not the own light's pair, which round 21b had here: see SR) (round 18l: its temperature and the surface's column, see SELF_T) (round 18i: the own light and its opacity, see SELF; round 20n: the other objects', uSelfK; round 13a: colGen, the materials' colours, see box.diskColours; round 14a: parGen, the model's parameters, see box.diskParams)
       // (a new view: the exposure is measured afresh, with its moves counted anew; a new exposure or CO range: measured again)
       const ne = sig.length - 2, viewNew = sig.length !== lastSig.length || sig.some((v, i) => i < ne && v !== lastSig[i]);
+      // (round 21b: what is new for the own light's range, see SR. A new picture: its moves counted anew, SR.TRIES. And of that, a
+      // new picture but for the volume's size, sig[7] and sig[8], the scales a still is refined through: the same view, its
+      // temperatures the same, is not measured again. Round 21c: the range's own steps are not in the signature, and need no reading)
+      const srNew = sig.length !== lastSig.length ? 2 : sig.reduce((m, v, i) => (i < ne && v !== lastSig[i] ? Math.max(m, i === 7 || i === 8 ? 1 : 2) : m), 0);
+      if (srNew) srTries = 0;
+      if (srNew === 2) srFresh = false;
       // (Disk Lab v2) While only the clock moves, the picture is not started over but averaged with the last few frames
       // (an exponential average, the new frame weighted 1/(ema + 1)), the jitter's sequence going on: the march's grain
       // and the static lattice of its jitter (see SHOW_FS) fade as in a still picture. The content hardly moves in a
@@ -9534,7 +9792,7 @@ void main(){
       gl.uniform1f(U.uLit, selfOn() ? 0 : modelAmp * (box.dataset.lit === 'fx' ? Math.min(fxAmp, 1) : 1)); gl.uniform1f(U.uFx, Math.min(fxAmp, 1) * modelAmp);
       // (round 18i) the model look's own light (see SELF): the opacity in the model's units, 0 with the starlight's; the display's light
       // per kelvin over the outburst's exposure (expo above), which its temperature follows (uLum)
-      gl.uniform2f(U.uSelf, selfOn() ? opt.selfk * SELF.SIGMA1 : 0, SELF.G / Math.pow(burstL(), 0.6));
+      gl.uniform2f(U.uSelf, selfOn() ? opt.selfk * SELF.SIGMA1 : 0, selfY);
       gl.uniform3f(U.uSelfK, opt.selfkp * SELF.SIGMA1, opt.selfkw * SELF.SIGMA1, opt.selfke * SELF.SIGMA1);   // (round 20n: the other objects', see uSelfK)
       // (round 18l) its temperature's depth (see selfX): which (SELF_T) and ln(SIGMA1 / 2 Sigma_s) for the column's (none with SELF_OLD)
       gl.uniform2f(U.uSelfT, SELF_T[opt.selft], Math.log(SELF.SIGMA1 / (2 * opt.selfnc)));
@@ -9724,6 +9982,27 @@ void main(){
       // turns it off, to compare)
       gl.uniform2f(uShowTexel, 1 / accT.w, 1 / accT.h);
       gl.uniform1f(uShowSoft, box.dataset.soft === 'off' ? 0 : Math.max(0, 1 - acc / 4));
+      // (round 21c) the own light's range, laid on here (selfRange in SHOW_FS, see SR): this frame's pair, none at the fixed scale's
+      // own range; the own light's exposure in this frame and the sky's light, which the pass takes off and puts back. Kept for
+      // present (a snapshot's picture shown once more, see diskSnapshot)
+      const srK = srSkyK();
+      gl.uniform2f(uShowSelfR, srPair[0], srPair[1]); gl.uniform3f(uShowSelfS, srF, SR_SKY[0] * srK, SR_SKY[1] * srK);
+      // (the planets kept out of it, uSelfP: each point of light within its glow's halo, 16 CSS px (PG_R's reach, its halo e^(-d / 2.6)
+      // spent by then), and the planet shown close up within 1.2 of its disk's radius, srPl, as the range's cells leave them out)
+      srPlP.fill(0);
+      if (srPair[1] > 0 && cam) {
+        const cw = canvas.width, ch = canvas.height, th = Math.tan(opt.fov / 2), asp = cw / ch, dpx = cw / Math.max(1, canvas.clientWidth || cw);
+        const at = (P) => {
+          const q = [P[0] - cam[0], P[1] - cam[1], P[2] - cam[2]], z = q[0] * basis.f[0] + q[1] * basis.f[1] + q[2] * basis.f[2];
+          if (!(z > 1e-6)) return null;
+          return [((q[0] * basis.r[0] + q[1] * basis.r[1] + q[2] * basis.r[2]) / (z * th * asp) * 0.5 + 0.5) * cw, ((q[0] * basis.u[0] + q[1] * basis.u[1] + q[2] * basis.u[2]) / (z * th) * 0.5 + 0.5) * ch, z];
+        };
+        let n = 0;
+        for (let i = 0; i < PLANETS.MAX; i++) { if (!(plGlowD[4 * i + 3] > 0)) continue; const a = at(plGlowD.subarray(4 * i, 4 * i + 3)); if (a) srPlP.set([a[0], a[1], 16 * dpx, 1], 4 * n++); }
+        if (srPl) { const a = at(srPl.p); if (a) srPlP.set([a[0], a[1], Math.max(16 * dpx, srPl.r / (a[2] * th) * 0.5 * ch), 1], 4 * n++); }
+      }
+      gl.uniform4fv(uShowSelfP, srPlP); gl.uniform3fv(uShowSelfT, selfGasJS());
+      { const pi = MAT.findIndex((m) => m[0] === 'planet'), q = Array.from(matLin.subarray(3 * pi, 3 * pi + 3)), y = 0.2126 * q[0] + 0.7152 * q[1] + 0.0722 * q[2]; gl.uniform3fv(uShowSelfQ, q.map((x) => x / Math.max(y, 1e-4))); }
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       if (healthWanted && !healthSync) healthPass({ key: frameKeyOf(F), scale: opt.scale, acc: accN, size: [rW, rH] });   // (round 10a: see HEALTH_FS)
       // the automatic exposure's measurements, one at a time: started on a frame drawn at the exposure's goal, read on a
@@ -9751,6 +10030,28 @@ void main(){
             aeSync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush();
             aeLnUsed = aeNow ? aeLn : coLn; aeGenUsed = aeGen; coGenUsed = coGen; aeKindUsed = aeNow ? 'model' : 'co'; aeTrack = moving;
           } else if (aeNow ? !aeFresh : !coFresh) accN = 0;
+        }
+      }
+      // (round 21b) the own light's range (see SR), by the same measurements, of its own kind ('self': the exposure and the line's
+      // range, which rest with the own light, pass over its readings, and it over theirs): a reading used if it is still this
+      // view's, or the moving view's while it moves, and not while held; the next one started where the view is not yet measured
+      // (srFresh), on the first frame of a picture as the exposure's (while the view moves, on every frame), with that frame's own
+      // exposure kept for it (srF). Not a probe's frame, whose pixels are counts. (Round 21c: on any such frame, the range in use
+      // where it may be: round 21b waited for a frame drawn with the range at its goal, its frames carrying the range)
+      if (!reduce && !probing && srOn()) {
+        const srMove = viewMoving();
+        if (aeReady) {
+          aeReady = false;
+          if (aeKindUsed === 'self' && !srHeld() && (srGenUsed === aeGen || srTrack) && !(srTrack && !srMove)) srAim(aePx, srUsed, srTrack);
+        }
+        if (!aeSync && !srHeld() && (srMove || !srFresh)) {
+          if (acc === 0 || clockOnly) {
+            aePass();
+            gl.bindBuffer(gl.PIXEL_PACK_BUFFER, aeBuf); gl.readPixels(0, 0, AE_W, AE_H, gl.RGBA, gl.UNSIGNED_BYTE, 0); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            aeSync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush();
+            aeKindUsed = 'self'; srUsed = srF; srGenUsed = aeGen; srTrack = srMove;
+          } else if (!srMove) accN = 0;
         }
       }
       const f0 = performance.now(), o0 = f0;
@@ -9831,7 +10132,8 @@ void main(){
           // (round 18l: and with the column depth's temperature the surface's column)
           // (round 18m: the brightness alone by default, in the gas's colour; ?selfhue=1 brightness and colour)
           // (round 20n: the opacity of each object shown, see selfKText)
-          : ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、' + (selfTcol ? '明るさと色は輝度温度(明るさは対数の尺度)です' : '明るさは輝度温度(対数の尺度)です') + '(不透明度 ' + selfKText(true) + ' cm²/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? '、表層の柱密度 ' + +opt.selfnc.toPrecision(2) + ' g/cm²' : '') + ')。', ' Shown in its own thermal light, with no starlight on it: ' + (selfTcol ? 'brightness and colour are the brightness temperature, the brightness on a logarithmic scale' : 'the brightness is the brightness temperature, on a logarithmic scale') + ' (opacity ' + selfKText(false) + ' cm\u00b2/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? ', the surface\u2019s column ' + +opt.selfnc.toPrecision(2) + ' g/cm\u00b2' : '') + ').'] } : {}) }[lookNow];
+          // (round 21b: and its shades on the view's own range, said so; no numbers here, which follow the view: the key has them)
+          : ['星の光で照らさず、ガスと塵がその場の温度で自ら光る姿で、' + (selfTcol ? '明るさと色は輝度温度(明るさは対数の尺度' + (srOn() ? '、この眺めの範囲に合わせる' : '') + ')です' : '明るさは輝度温度(対数の尺度' + (srOn() ? '、この眺めの範囲に合わせる' : '') + ')です') + '(不透明度 ' + selfKText(true) + ' cm²/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? '、表層の柱密度 ' + +opt.selfnc.toPrecision(2) + ' g/cm²' : '') + ')。', ' Shown in its own thermal light, with no starlight on it: ' + (selfTcol ? 'brightness and colour are the brightness temperature, the brightness on a logarithmic scale' : 'the brightness is the brightness temperature, on a logarithmic scale') + (srOn() ? ' fitted to the range in this view' : '') + ' (opacity ' + selfKText(false) + ' cm\u00b2/g' + (opt.selft === 'col' || opt.selft === 'colstar' ? ', the surface\u2019s column ' + +opt.selfnc.toPrecision(2) + ' g/cm\u00b2' : '') + ').'] } : {}) }[lookNow];
       const desc = ja()
         ? '原始惑星系円盤(半径およそ 30 au)のモデルを立体的に描いた図。表層は暖かく、赤道面は冷たく、赤道面に沈んだ塵はスノーラインの外側で氷をまとっています。' + (plShown().length ? plShown().join(' au と ') + ' au に惑星があり、ギャップを開けています。' : '') + (envVis > 0.5 ? '遠くからは、円盤を包むエンベロープと、軸に沿った空洞の明るい壁が見えます。' : '') + (opt.slice ? cutJa + '、切り口に' + QN[0] + 'を色で示しています。' : '') + (LKD ? LKD[0] : '') + (lookNow === 'co' ? 'ガスの輝線で見た姿で、' + CON[0] + 'を示しています。' : '')
         : 'Volume rendering of a model of a protoplanetary disk (some 30 au in radius): warm surface layers, and a cold midplane with settled dust, icy beyond the water snow line.' + (plShown().length ? (plShown().length > 1 ? ' Planets at ' + plShown().join(', ') + ' au open gaps.' : ' A planet at ' + plShown()[0] + ' au opens a gap.') : '') + (envVis > 0.5 ? ' From afar, the infalling envelope shows, with the bright walls of a cavity along the axis.' : '') + (opt.slice ? cutEn + '; the cut faces show ' + QN[1] + ' in colour.' : '') + (LKD ? LKD[1] : '') + (lookNow === 'co' ? ' Seen in an emission line of the gas: ' + CON[1] + '.' : '');
@@ -10220,7 +10522,8 @@ void main(){
     const busy = () => !!(flyV || flyT || path || rollEase) || bgLeft() !== 0 || planets.some((p) => p.amp !== plWant(p)) || envAmp !== ((opt.mode & 32) ? 1 : 0) || sliceU !== (opt.slice ? 1 : 0) || (sliceU > 0 && cutA !== CUT_A[opt.cut])
       || !annDone() || lookNow !== opt.look || glowNow !== opt.glow || waitShown || lookDip() < 1 || fieldAmp !== (showField && lookNow === 'model' ? 1 : 0) || !fadesDone()
       || (!aeHeld() && aeGoal !== aeLn) || coGoal !== coLn           // (the automatic exposure and the CO line's range on their way,
-      || (aeOn() && !aeHeld() && !aeFresh) || (coOn() && !coHold && coSavedKey !== coKey && !coFresh) || !!coPending;  // or finding their levels)
+      || (aeOn() && !aeHeld() && !aeFresh) || (coOn() && !coHold && coSavedKey !== coKey && !coFresh) || !!coPending  // or finding their levels)
+      || (srOn() && (!srAt() || (!srHeld() && !reduce && !srFresh)));   // (round 21b: or the own light's range on its way, or being measured; see SR)
     // Disk Lab v2 (engine-patch.py): at most data-flight (default 2; 0: no limit) frames of this loop unfinished on the
     // GPU. Animation frames come faster than the GPU finishes them, and Chrome then holds frames of work in its queue: a
     // drag reaches the screen late, and every call that must wait for the GPU (the exposure's readback) waits behind the
@@ -11009,17 +11312,28 @@ void main(){
     // az is measured from the planet's azimuth while following it (p = 1)
     box.diskState = () => ({ el: deg(elUser), az: deg(azUser + (follow || reduce ? 0 : opt.spin * time)), d: Math.round(opt.dist * 1000) / 1000, mode: opt.mode, field: showField ? 1 : 0, speed, paused: paused ? 1 : 0, time, slice: opt.slice ? (opt.cut === 'quarter' ? 2 : 1) : 0, sq: opt.sliceQ, p: follow ? 1 : 0, pi: followI, gain: opt.gain.slice(), planets: planets.map((pl) => [pl.a, pl.on ? 1 : 0, pl.m]), ann: opt.ann === ANN.ALL ? 1 : opt.ann, look: opt.look, ms: opt.ms ? 1 : 0, asym: opt.asym ? 1 : 0, marks: opt.marks ? 1 : 0, waves: opt.waves ? 1 : 0, bg: opt.bg, fx: opt.fx, coMode: opt.coMode, coV: opt.coV, coRange: Math.exp(coLn), coRangeFixed: coHold ? 1 : 0,
       tx: Math.round(panV[0] * 1e4) / 1e4, ty: Math.round(panV[1] * 1e4) / 1e4, tz: Math.round(panV[2] * 1e4) / 1e4,
-      cpdMdot, op: opt.opac.slice(), roll: deg(rollUser), stars: opt.stars, glow: opt.glow, selfk: opt.selfk, selfkp: opt.selfkp, selfkw: opt.selfkw, selfke: opt.selfke, selft: opt.selft, selfnc: opt.selfnc });   // (round 20n: selfkp, selfkw, selfke)   // (round 18l: selft, selfnc)   // (round 18i: glow, the model look's light, and selfk, the opacity of its own light, see SELF; round 18a: op, the see-through; round 13e: the planets' disks' accretion rate, M_J/yr, 0 for a tenth of the disk's; see cpdPhys)
+      cpdMdot, op: opt.opac.slice(), roll: deg(rollUser), stars: opt.stars, glow: opt.glow, selfk: opt.selfk, selfkp: opt.selfkp, selfkw: opt.selfkw, selfke: opt.selfke, selft: opt.selft, selfnc: opt.selfnc, selfr: opt.selfr });   // (round 21b: selfr, the own light's shades by the view's range or the fixed scale, see SR)   // (round 20n: selfkp, selfkw, selfke)   // (round 18l: selft, selfnc)   // (round 18i: glow, the model look's light, and selfk, the opacity of its own light, see SELF; round 18a: op, the see-through; round 13e: the planets' disks' accretion rate, M_J/yr, 0 for a tenth of the disk's; see cpdPhys)
     box.diskLegend = () => legendSpec();
     // (round 18k) the own light's key for the page (see SELF_LOOK): old, true with ?selflook=old (the gas's colour, no bar); the bar
     // from min to max K on a log scale, stops [u, css colour] (a thick gas at that T_b on the display), ticks [u, text], colourAt(u)
     // (round 18m: by default the gas's colour in shades, the colour chosen for the gas as it is now; hue, true with ?selfhue=1, round
     // 18k's colours)
+    // (round 21b: fit, true while the shades are on a view's own range (see SR): the bar is the same, and the ticks then say the
+    // temperatures of that range at their shades' places, its ends first and last, see selfTicks; on the fixed scale as before)
     box.diskSelfKey = () => {
       const T = (u) => SELF_KEY.MIN * Math.pow(SELF_KEY.MAX / SELF_KEY.MIN, u), css = (c) => 'rgb(' + c.map((v) => Math.round(255 * Math.min(1, Math.max(0, v)))).join(',') + ')';
-      const gas = selfGasJS(), hue = selfTcol ? selfHueJS : () => gas, show = (t) => selfShowJS(t, hue);
-      return { old: selfOld, hue: selfTcol, min: SELF_KEY.MIN, max: SELF_KEY.MAX, stops: Array.from({ length: 25 }, (_, i) => [i / 24, css(show(T(i / 24)))]),
-        ticks: SELF_KEY.TICKS.map((t) => [Math.log(t / SELF_KEY.MIN) / Math.log(SELF_KEY.MAX / SELF_KEY.MIN), String(t)]), colourAt: (u) => css(show(T(u))) };
+      const gas = selfGasJS(), hue = selfTcol ? selfHueJS : () => gas, show = (t) => selfShowJS(t, hue), fit = srLo !== SELF_FIT.UA || srHi !== SELF_FIT.UB;
+      return { old: selfOld, hue: selfTcol, fit, min: SELF_KEY.MIN, max: SELF_KEY.MAX, stops: Array.from({ length: 25 }, (_, i) => [i / 24, css(show(T(i / 24)))]),
+        ticks: fit ? selfTicks(srLo, srHi) : SELF_KEY.TICKS.map((t) => [Math.log(t / SELF_KEY.MIN) / Math.log(SELF_KEY.MAX / SELF_KEY.MIN), String(t)]), colourAt: (u) => css(show(T(u))) };
+    };
+    // (round 21b) the own light's range, for the page and for checks: on, the shades following the view (the own light drawn, the
+    // state's selfr 'view'); lo and hi, the range in use, K (10 and 1000 on the fixed scale); goal, where it is going; settled, at
+    // its goal with the view measured (true without it); seen, what the last reading saw: the cells that counted (n) of those
+    // mostly the volume's (vol), the range they gave (K), how far that was from the goal (the display's value) and the own
+    // light's exposure in the frame read
+    box.diskSelfRange = () => {
+      const K = (u) => +selfTofU(u).toPrecision(4);
+      return { on: srOn(), lo: K(srLo), hi: K(srHi), goal: [K(srGoLo), K(srGoHi)], settled: !srOn() || (srAt() && srFresh), seen: srSeen };
     };
     // (round 8) the materials' colours of the model's look (see MAT), for the page's key: key, colour (sRGB), names; with
     // { key: '#rrggbb' } or { key: ['#rrggbb', k] } a colour (and its brightness factor) is changed for this page (for trying
@@ -11129,6 +11443,7 @@ void main(){
       // (round 18l) the own light's temperature, a name it knows; the surface's column, as the opacity: positive, three figures, within SELF's
       if (st.selft != null && !own(SELF_T, st.selft)) delete st.selft;
       if (st.selfnc != null) { if (st.selfnc > 0) st.selfnc = Math.min(SELF.NC_MAX, Math.max(SELF.NC_MIN, +st.selfnc.toPrecision(3))); else delete st.selfnc; }
+      if (st.selfr != null && !own(SELF_R, st.selfr)) delete st.selfr;   // (round 21b: the own light's shades, a name it knows)
       return st;
     };
     box.diskSet = (raw) => {
@@ -11195,6 +11510,7 @@ void main(){
       for (const k of SELF_KS) if (st[k] != null) opt[k] = st[k];   // (round 20n: the gas's and the other objects')
       if (st.selft != null) opt.selft = st.selft;   // (round 18l: its temperature and the surface's column, see SELF_T; a still starts over)
       if (st.selfnc != null) opt.selfnc = st.selfnc;
+      if (st.selfr != null) opt.selfr = st.selfr;   // (round 21b: its shades by the view's own range or on the fixed scale, see SR; taken at the next frame)
       if (st.speed) speed = Number(st.speed);
       if (st.paused != null) paused = !!Number(st.paused);
       // a new view: with fly the camera flies there from where it is, otherwise it is there at once
@@ -11653,6 +11969,7 @@ void main(){
     // change of the components stays, as it is meant to)
     const aeRestart = () => {
       aeLn = aeGoal = 0; aeTries = 0; aeLo = -Infinity; aeHi = Infinity; aeFresh = false; aeGen++;
+      srLo = srGoLo = SELF_FIT.UA; srHi = srGoHi = SELF_FIT.UB; srFresh = srFine = false; srTries = 0;   // (round 21b: and the own light's range from the fixed scale's, see SR)
       if (!coHold && !coPending && coSavedKey !== coKey) { coLn = coGoal = 0; coTries = 0; coLo = -Infinity; coHi = Infinity; coFresh = false; coGen++; }
     };
     // (round 9: FULL warmed first, and each frame through the engine's guard and in its bands, each band waited for; the
