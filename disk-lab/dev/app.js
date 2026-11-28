@@ -17,7 +17,7 @@ const ENGINE_SRC = 'engine/disk3d.js?v=136f77a33c';   // ?v= the first ten chara
 // (round 10a) A development build (/disk-lab/dev/, made by ver2/tools/disk-lab-v2/make-dev.sh) carries MAJOR.MINOR-dev.N,
 // N one more with each one published. The same line is written into index.html (every [data-version], and the short tag in
 // the bar, [data-version-tag]) so that it shows without the script, on a page that has stopped too; check.js compares them.
-const VERSION = '1.12.1-dev.79', RELEASED = '2026-11-28';
+const VERSION = '1.12.2-dev.80', RELEASED = '2026-11-28';
 const VERSION_LINE = `Disk Lab v${VERSION} (${RELEASED}) · engine ${ENGINE_SRC.split('v=')[1]}`;
 // (round 14a) The rail's Model section, the model's parameters (DESIGN.md section 34), shown while MODEL_UI is true: the one
 // switch for the public page. The parameters a link carries (mp=) and those kept on this device apply either way, and Reset all
@@ -1762,7 +1762,7 @@ const FACTOR = { model: 1 };   // (the engine's, taken at the start)
 let CUT_F = 3;
 // (the ladder starts at 0.125: at the engine's lowest scale, 0.1, the CO line's mean velocity went black with NaN specks
 // and the context was lost, twice in round 3's checks; 0.12 was safe)
-const STILL_MS = 400, RAMP = 1.25, UP_K = 0.7, UNEVEN = 2, GUARD_HOLD = 1500, GUARD_HOLD_MAX = 24000, LADDER = [0.125, 0.16, 0.2, 0.25, 0.32, 0.4, 0.5, 0.63, 0.8, 1];
+const STILL_MS = 400, RAMP = 1.25, UP_K = 0.7, MOVE_GUARD = 0.85, UNEVEN = 2, GUARD_HOLD = 1500, GUARD_HOLD_MAX = 24000, LADDER = [0.125, 0.16, 0.2, 0.25, 0.32, 0.4, 0.5, 0.63, 0.8, 1];
 let guarded = true, GUARD_MS = 70, calibrated = false;
 // gc: what is drawn now (key), a frame of it at scale 1 (c1, ms), measured or predicted, the last measures (c1 and the
 // scale of each), the cap for running frames, and a still picture's scale (0 until one is chosen)
@@ -1994,9 +1994,15 @@ box.addEventListener('diskgpu', (e) => {
   gc.vals.push(c); gc.scales.push(d.scale);
   if (gc.vals.length > 5) { gc.vals.shift(); gc.scales.shift(); }
   const med = gc.vals.slice().sort((a, b) => a - b)[gc.vals.length >> 1];
-  // (one running frame far over the budget counts at once; otherwise the median of the last five: a light frame's
-  // measure varies by half from one to the next, with the display's own work and the looks for the fence)
-  gc.c1 = d.vol > 2 * GUARD_MS && !d.still ? Math.max(c, med) : med;
+  // (one running frame over the budget counts at once; otherwise the median of the last five: a light frame's
+  // measure varies by half from one to the next, with the display's own work and the looks for the fence. Round 21e: over the
+  // budget, not twice it: on a flight toward the star the model look's cost grows some fifteenfold in five seconds (c1 52 to 807
+  // ms on the desktop's frame), and the median of five, always behind, let frames of 120 to 167 ms through, twenty of them)
+  gc.c1 = d.vol > GUARD_MS && !d.still ? Math.max(c, med) : med;
+  // (round 21e: and while the view moves, the next frame's cost by the last's growth, at most half as much again: near the star a
+  // flight's frames grow faster as it comes in, and the cap set from the last frame was a frame behind, 123 ms against 120)
+  if (moveFrom && !d.still && gc.lastC > 0 && c > gc.lastC) gc.c1 = Math.max(gc.c1, c * Math.min(1.5, c / gc.lastC));
+  gc.lastC = d.still ? 0 : c;
   gc.measured = gc.vals.length >= 3;
   if (gc.measured && gc.key === 'model') modelC1 = gc.c1;   // (round 10a: see guardSwitch)
   const cap0 = gc.cap;
@@ -2005,8 +2011,10 @@ box.addEventListener('diskgpu', (e) => {
   // (a still's frames are refined step by step whatever a frame costs, their pieces bounded by the engine's bands and kicks, see
   // stillStep; round 10a, dev.6: the gas line's too)
   if (d.still) { /* (not lowered) */ }
-  else if (costAt(gc.cap) > GUARD_MS) {
-    gc.cap = stepFor(GUARD_MS);
+  // (round 21e: while the view moves, MOVE_GUARD of the budget: a flight toward the star makes each frame some 5 % dearer than the last,
+  // and a frame predicted just under the budget (105 to 115 ms) was over it when drawn (120 to 139 ms); still above UP_K, the step up's)
+  else if (costAt(gc.cap) > (moveFrom ? MOVE_GUARD : 1) * GUARD_MS) {
+    gc.cap = stepFor((moveFrom ? MOVE_GUARD : 1) * GUARD_MS);
     // (a step up taken back soon: wait twice as long before the next, as Best's quiet steps do)
     if (now - gc.upAt < 4000) gc.hold = Math.min(GUARD_HOLD_MAX, 2 * gc.hold);
     gc.changed = now;
